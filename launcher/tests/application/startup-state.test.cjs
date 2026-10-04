@@ -45,6 +45,50 @@ test("quit waits for the installation transaction and prevents startup continuat
   assert.deepEqual(calls, ["shutdown", "quit"]);
 });
 
+for (const shutdownFails of [false, true]) test(`package smoke follows normal shutdown before closing its window (failure=${shutdownFails})`, async () => {
+  const calls = [];
+  let browserDestroyed = false;
+  let windowDestroyed = false;
+  const sandbox = {
+    Error, shutdownInProgress: false, exitCommitted: false, quitting: false, runtimePreparation: Promise.resolve(),
+    runtimeRootProvider: () => "/fixture/runtime", runtimeHost: { currentOperation: () => null },
+    runtimeSupervisor: { runtimeCommand: () => ({ executable: "/fixture/bun", args: ["--version"], cwd: "/fixture" }),
+      shutdown: async () => calls.push("runtime stopped") },
+    browserHost: { currentOperation: () => null,
+      persistSession: async () => {
+        assert.equal(browserDestroyed, false);
+        assert.equal(windowDestroyed, false);
+        if (shutdownFails) throw new Error("Fixture persistence failure");
+        calls.push("session saved");
+      },
+      destroy: () => { browserDestroyed = true; calls.push("browser closed"); } },
+    browserControl: { close: async () => calls.push("control closed") },
+    mainWindow: { destroy: () => { windowDestroyed = true; calls.push("window closed"); } },
+    app: { isPackaged: true, getVersion: () => "6.0.0", quit: () => {
+      assert.equal(sandbox.exitCommitted, true, "before-quit must not intercept completed shutdown");
+      windowDestroyed = true; calls.push("quit");
+    } },
+    spawnSync: () => ({ status: 0, stdout: "6.0.0\n", stderr: "" }),
+    fs: { mkdirSync() {}, writeFileSync: () => calls.push("verified marker") }, path,
+    process: { platform: "fixture", env: { WEB2HARNESS_SMOKE_FILE: path.resolve("fixture-ready.json") } },
+    logger: { info() {} }, stopCatalogVerificationMonitor() {},
+    showMainWindow() {}, publishOperation() {},
+  };
+  vm.runInNewContext(main.slice(main.indexOf("async function requestQuit()"), main.indexOf("async function start()")), sandbox);
+  const branch = main.slice(main.indexOf("  if (launcherSmokeTest) {"), main.indexOf("  if (IS_DEV_PROFILE) {", main.indexOf("  if (launcherSmokeTest) {")));
+  const result = vm.runInNewContext(`(async () => { const launcherSmokeTest = true; ${branch} })()`, sandbox);
+  if (shutdownFails) {
+    await assert.rejects(result, /could not shut down: Fixture persistence failure/);
+    assert.equal(windowDestroyed, false);
+    assert.equal(browserDestroyed, false);
+    assert.deepEqual(calls, ["verified marker", "runtime stopped"]);
+  } else {
+    await result;
+    assert.deepEqual(calls, ["verified marker", "runtime stopped", "session saved", "browser closed", "control closed", "quit"]);
+    assert.equal(windowDestroyed, true);
+  }
+});
+
 for (const smoke of [false, true]) test(`preparation failure preserves diagnostics only for interactive startup (smoke=${smoke})`, async () => {
   const calls = [];
   const startup = new StartupState();

@@ -14,7 +14,7 @@ const source = fs.readFileSync(script, "utf8");
 const originalRequire = createRequire(script);
 
 function fixture(action) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web2harness-smoke-fixture-"));
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "web2harness-smoke-fixture-"));
   try { action(root); } finally {
     assert.equal(fs.realpathSync(path.dirname(root)), fs.realpathSync(os.tmpdir()));
     assert.ok(path.basename(root).startsWith("web2harness-smoke-fixture-"));

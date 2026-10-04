@@ -1292,10 +1292,10 @@ async function start() {
       packaged: app.isPackaged,
       runtimeVerified: true,
     })}\n`);
-    browserHost.destroy();
-    await browserControl.close();
-    mainWindow.destroy();
-    app.quit();
+    logger.info("launcher.package_smoke_verified");
+    // Use the regular shutdown sequence: persist the browser before destroying its window.
+    const shutdown = await requestQuit();
+    if (!shutdown.ok) throw new Error(`Packaged launcher could not shut down: ${shutdown.message}`);
     return;
   }
   if (IS_DEV_PROFILE) {

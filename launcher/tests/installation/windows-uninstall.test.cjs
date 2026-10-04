@@ -7,7 +7,7 @@ const { registerInstallation, loadInstallation, cleanupTargets, removeOwnedData,
 const { prepareUninstall, finishUninstall, runPowerShell } = require("../../electron/installation/windows-uninstall.cjs");
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web2harness-uninstall-test-"));
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "web2harness-uninstall-test-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const options = { homeDir: root, appData: path.join(root, "AppData"), localAppData: path.join(root, "LocalAppData"),
     installRoot: path.join(root, "install"), ownerPid: process.pid };

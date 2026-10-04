@@ -10,7 +10,7 @@ const { checkPackagedRuntimeReady, preparePackagedRuntime } = require("../../ele
 const { registerInstallation, uninstallInProgress, loadInstallation } = require("../../electron/installation/installation-record.cjs");
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web2harness-setup-test-"));
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "web2harness-setup-test-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const options = { installRoot: path.join(root, "install"), homeDir: path.join(root, "user"),
     appData: path.join(root, "roaming"), localAppData: path.join(root, "local"), version: "6.0.0", ownerPid: process.pid, env: {} };
