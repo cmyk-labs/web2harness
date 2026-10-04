@@ -7,6 +7,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     strategy:
@@ -14,15 +18,10 @@ jobs:
       matrix:
         include:
           - runner: macos-15
-            runtime_asset: web2harness-darwin-arm64.tar.gz
           - runner: macos-15-intel
-            runtime_asset: web2harness-darwin-amd64.tar.gz
           - runner: ubuntu-latest
-            runtime_asset: web2harness-linux-amd64.tar.gz
           - runner: ubuntu-24.04-arm
-            runtime_asset: web2harness-linux-arm64.tar.gz
           - runner: windows-latest
-            runtime_asset: web2harness-windows-amd64.zip
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
@@ -93,18 +92,13 @@ jobs:
           stage="$(mktemp -d)"
           ditto -x -k "$archive" "$stage"
           codesign --verify --deep --strict --verbose=2 "$stage/Web2Harness.app"
-      - name: Archive runtime
-        if: runner.os != 'Windows'
-        run: tar -czf "${{ matrix.runtime_asset }}" -C launcher/build/runtime .
-      - name: Archive Windows runtime
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: Compress-Archive -Path launcher/build/runtime/* -DestinationPath "${{ matrix.runtime_asset }}"
+      - name: Verify terminal installation from the macOS desktop archive
+        if: runner.os == 'macOS'
+        run: node launcher/scripts/smoke-cli-install.cjs
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.runner }}
           path: |
-            ${{ matrix.runtime_asset }}
             launcher/artifacts/*.dmg
             launcher/artifacts/*.zip
             launcher/artifacts/*.exe
@@ -122,24 +116,15 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: launcher
-      - run: bun run licenses
       - uses: actions/download-artifact@v4
         with:
           path: release-assets
+          pattern: release-*
           merge-multiple: true
       - name: Verify release tag matches package version
         run: |
           expected="v$(jq -r .version package.json)"
           test "$GITHUB_REF_NAME" = "$expected"
-      - name: Add licenses and installers
-        run: |
-          cp LICENSE release-assets/LICENSE
-          cp LICENSES/Bun-1.4.0.md release-assets/Bun-1.4.0.md
-          cp LICENSES/libnotify-0.8.7-LGPL-2.1.md release-assets/libnotify-0.8.7-LGPL-2.1.md
-          cp dist/THIRD_PARTY_NOTICES.txt release-assets/THIRD_PARTY_NOTICES.txt
-          cp scripts/install.sh release-assets/install.sh
-          cp scripts/install-launcher.sh release-assets/install-launcher.sh
-          cp scripts/install-launcher.ps1 release-assets/install-launcher.ps1
       - name: Flatten release assets
         run: |
           cd release-assets
@@ -152,6 +137,8 @@ jobs:
             mv "$file" "$name"
           done < <(find . -mindepth 2 -type f -print0 | sort -z)
           find . -mindepth 1 -type d -empty -delete
+      - name: Verify the public asset inventory
+        run: bun run scripts/check-release-assets.ts release-assets "${GITHUB_REF_NAME#v}"
       - name: Create checksums
         run: |
           cd release-assets
@@ -176,58 +163,62 @@ jobs:
             echo "checksums.txt is missing entries for:$missing" >&2
             exit 1
           fi
-      - name: Publish GitHub release
+      - name: Plan publication and protect existing stable releases
+        id: publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPLACE_PREVIEW: ${{ github.event.forced || false }}
+        run: bun run scripts/plan-release.ts
+      - name: Preserve previous release before replacement
+        if: steps.publication.outputs.replace == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          mkdir previous-release
+          cp previous-release.json previous-release/metadata.json
+          if jq -e '.assets | length > 0' previous-release.json >/dev/null; then
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir previous-release
+          fi
+          if [ -f previous-release/checksums.txt ]; then
+            (cd previous-release && sha256sum --check checksums.txt)
+          fi
+      - name: Archive previous publication
+        if: steps.publication.outputs.replace == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: previous-release-${{ github.ref_name }}-${{ github.run_id }}
+          path: previous-release/
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: error
+      - name: Prepare replacement as a draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPLACE_RELEASE: ${{ steps.publication.outputs.replace }}
+          PREVIOUS_RELEASE_ID: ${{ steps.publication.outputs.previousId }}
+          IS_PRERELEASE: ${{ steps.publication.outputs.prerelease }}
+        run: |
           mapfile -d '' release_files < <(find release-assets -type f -print0)
-          test "${#release_files[@]}" -gt 0
-          release_flags=(--latest)
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            release_flags=(--prerelease --latest=false)
+          test "${#release_files[@]}" -eq 8
+          if [ "$REPLACE_RELEASE" = true ]; then
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" > current-release.json
+            test "$(jq -r .id current-release.json)" = "$PREVIOUS_RELEASE_ID"
+            jq -e '.immutable != true and (.draft == true or .prerelease == true)' current-release.json >/dev/null
+            gh release delete "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --yes
           fi
-          if existing_release="$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isPrerelease 2>/dev/null)"; then
-            # A maintainer can stage a final-version tag as a public preview before building it.
-            # Rebuilding its assets must not silently promote that release to old launchers.
-            if jq -e '.isPrerelease == true' <<< "$existing_release" >/dev/null; then
-              release_flags=(--prerelease --latest=false)
-            else
-              release_flags=(--prerelease=false --latest)
-            fi
-            gh release upload "$GITHUB_REF_NAME" "${release_files[@]}" \
-              --repo "$GITHUB_REPOSITORY" \
-              --clobber
-            gh release edit "$GITHUB_REF_NAME" \
-              --repo "$GITHUB_REPOSITORY" \
-              --draft=false \
-              "${release_flags[@]}"
-          else
-            gh release create "$GITHUB_REF_NAME" "${release_files[@]}" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$GITHUB_REF_NAME" \
-              "${release_flags[@]}" \
-              --generate-notes
-          fi
-
-          published_manifest="$(mktemp)"
-          gh release view "$GITHUB_REF_NAME" \
-            --repo "$GITHUB_REPOSITORY" \
-            --json assets \
-            --jq '.assets[] | select(.name != "checksums.txt") | [.name, .digest] | @tsv' \
-            | while IFS=$'\t' read -r name digest; do
-                if [[ "$digest" != sha256:* || -z "${digest#sha256:}" ]]; then
-                  echo "Published asset has no SHA-256 digest: $name" >&2
-                  exit 1
-                fi
-                printf '%s  %s\n' "${digest#sha256:}" "$name"
-              done \
-            | LC_ALL=C sort -k2 > "$published_manifest"
-          test -s "$published_manifest"
-          mv "$published_manifest" release-assets/checksums.txt
-          gh release upload "$GITHUB_REF_NAME" release-assets/checksums.txt \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber
-
+          gh release create "$GITHUB_REF_NAME" "${release_files[@]}" \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
+            --title "Web2Harness ${GITHUB_REF_NAME#v}" \
+            --prerelease="$IS_PRERELEASE" --latest=false \
+            --notes-file .github/release-notes.md
+      - name: Verify uploaded assets and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IS_PRERELEASE: ${{ steps.publication.outputs.prerelease }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets > published-assets.json
+          test "$(jq '.assets | length' published-assets.json)" -eq 8
+          diff <(find release-assets -type f -printf '%f\n' | sort) <(jq -r '.assets[].name' published-assets.json | sort)
           while IFS=$'\t' read -r name digest; do
             if [ "$name" = checksums.txt ]; then continue; fi
             expected="$(awk -v asset="$name" '$2 == asset { print $1 }' release-assets/checksums.txt)"
@@ -246,3 +237,8 @@ jobs:
             --json assets \
             --jq '.assets[] | select(.name == "checksums.txt") | .digest')"
           test "sha256:$local_manifest_digest" = "$remote_manifest_digest"
+
+          latest=true
+          if [ "$IS_PRERELEASE" = true ]; then latest=false; fi
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --draft=false --prerelease="$IS_PRERELEASE" --latest="$latest"

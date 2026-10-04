@@ -23,7 +23,7 @@
 
 ## 环境要求与分发状态
 
-桌面发行包尚待发布，目前可使用已有源码目录。本地生成的安装包不代表已正式发布或完成验收。Windows 安装、修复、升级和移除已实现，正式安装器验收单独记录在[发布手册](release.zh-CN.md)中。
+桌面安装包见 [1.0.0 预发布版](https://github.com/cmyk-labs/web2harness/releases/tag/v1.0.0)。按操作系统和处理器选择一个匹配安装包即可，使用前阅读该版本的验收与签名限制。正式安装器验收单独记录在[发布手册](release.zh-CN.md)中。
 
 | 要求 | 说明 |
 | --- | --- |
@@ -42,6 +42,20 @@
 <a id="installation"></a>
 
 ## 安装与启动
+
+### 选择下载文件
+
+| 设备 | 安装包 |
+| --- | --- |
+| Windows x64 | `web2harness-1.0.0-win-x64.exe` |
+| macOS Apple silicon | `web2harness-1.0.0-mac-arm64.dmg` |
+| macOS Intel | `web2harness-1.0.0-mac-x64.dmg` |
+| Linux x64 | `web2harness-1.0.0-linux-x64.AppImage` |
+| Linux arm64 | `web2harness-1.0.0-linux-arm64.AppImage` |
+
+使用同一发布页的 `checksums.txt` 核对下载文件。macOS 打开 DMG 后将 Web2Harness 复制到「应用程序」；Linux 为 AppImage 添加执行权限后，在受支持的桌面会话中启动。Windows 安装步骤见下文。
+
+macOS ZIP 用于更新及纯终端安装，使用 DMG 时无需额外下载。Source code 归档供开发者使用。高级用户可从[对应版本源码](https://github.com/cmyk-labs/web2harness/tree/v1.0.0/scripts)获取安装脚本，并显式设置 `WEB2HARNESS_REPOSITORY=cmyk-labs/web2harness`。macOS 终端脚本下载完整桌面 ZIP，但仅安装其中的运行时与许可，不安装桌面应用。桌面脚本安装预览版时，还需设置 `WEB2HARNESS_VERSION=1.0.0`，因为自动发现稳定版本不会选中预览版。
 
 ### 已有源码目录
 

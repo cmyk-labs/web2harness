@@ -137,6 +137,17 @@ try {
   const installedManifest = JSON.parse(
     fs.readFileSync(path.join(installedRuntime, "manifest.json"), "utf8"),
   );
+  const repositoryRoot = path.resolve(launcherRoot, "..");
+  for (const relative of ["LICENSE", ...fs.readdirSync(path.join(repositoryRoot, "LICENSES"))
+    .filter(name => fs.statSync(path.join(repositoryRoot, "LICENSES", name)).isFile())
+    .map(name => path.join("LICENSES", name))]) {
+    if (!fs.readFileSync(path.join(installedRuntime, relative)).equals(fs.readFileSync(path.join(repositoryRoot, relative)))) {
+      throw new Error(`Packaged license differs from source: ${relative}`);
+    }
+  }
+  if (fs.statSync(path.join(installedRuntime, "THIRD_PARTY_NOTICES.txt")).size === 0) {
+    throw new Error("Packaged third-party notices are empty");
+  }
   validateRuntimeBundle(installedRuntime, {
     version: expectedVersion,
     platform: process.platform,

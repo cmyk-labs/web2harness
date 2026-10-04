@@ -33,7 +33,6 @@ const expected = [
   ["scripts/prepare-windows-baseline-bun.ps1", `bun-v$Version`],
   [".github/workflows/ci.yml", `bun-version: ${bunVersion}`],
   [".github/workflows/ci.yml", `-Version ${bunVersion}`],
-  [".github/workflows/release.yml", `Bun-${bunVersion}.md`],
   [".github/workflows/release.yml", `-Version ${bunVersion}`],
 ] as const;
 for (const [path, needle] of expected) {
@@ -44,10 +43,10 @@ for (const [path, needle] of expected) {
 if (packageJson.name !== "web2harness" || packageJson.bin?.web2harness !== "./src/cli.ts") {
   throw new Error("package.json must expose the web2harness CLI");
 }
-const releaseWorkflow = readFileSync(resolve(root, ".github/workflows/release.yml"), "utf8");
-for (const arch of ["amd64", "arm64"]) {
-  if (!releaseWorkflow.includes(`runtime_asset: web2harness-linux-${arch}.tar.gz`)) {
-    throw new Error(`release.yml must build the native Linux ${arch} runtime`);
+const releaseWorkflow = readFileSync(resolve(root, ".github/workflows/release.yml"), "utf8").replaceAll("\r\n", "\n");
+for (const runner of ["macos-15", "macos-15-intel", "ubuntu-latest", "ubuntu-24.04-arm", "windows-latest"]) {
+  if (!releaseWorkflow.includes(`runner: ${runner}\n`)) {
+    throw new Error(`release.yml must retain the native build target ${runner}`);
   }
 }
 if (releaseWorkflow.split(`bun-version: ${bunVersion}`).length - 1 !== 2) {

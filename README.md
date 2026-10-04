@@ -78,7 +78,7 @@ A task typically follows **select a Web model → submit a task → receive a we
 
 ## Get started
 
-Have Codex available on your computer and a ChatGPT account you can sign in to. The header buttons download Windows x64, macOS Apple silicon and Linux x64 installers. For macOS Intel, Linux arm64 and checksums, see the [1.0.0 release](https://github.com/cmyk-labs/web2harness/releases/tag/v1.0.0). This is a pre-release; review its validation notes before installing. See the [user guide](docs/user-guide.md) for installation methods and platform requirements, or [run an existing checkout from source](#development).
+Have Codex available on your computer and a ChatGPT account you can sign in to. The header buttons download Windows x64, macOS Apple silicon and Linux x64 installers. Other processors: [macOS Intel](https://github.com/cmyk-labs/web2harness/releases/download/v1.0.0/web2harness-1.0.0-mac-x64.dmg) · [Linux arm64](https://github.com/cmyk-labs/web2harness/releases/download/v1.0.0/web2harness-1.0.0-linux-arm64.AppImage). Choose one matching installer; the [1.0.0 release](https://github.com/cmyk-labs/web2harness/releases/tag/v1.0.0) also provides checksums. This is a pre-release; review its validation notes before installing. See the [user guide](docs/user-guide.md) for installation methods and platform requirements, or [run an existing checkout from source](#development).
 
 1. **Start Web2Harness.** Use a package matching your platform and architecture, or run from source.
 2. **Sign in through the browser.** Open **Connection & Models**, sign in to ChatGPT in the application browser, and run **Check connection**.

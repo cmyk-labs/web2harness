@@ -65,15 +65,17 @@ bun run app:package
 
 [发布工作流](../.github/workflows/release.yml) 在匹配的原生 runner 上构建以下目标。由于启动器包含原生 Bun，跨操作系统打包会被拒绝。
 
-| 原生目标 | 工作流 runner | 运行时归档 | 桌面包后缀 |
+| 原生目标 | 工作流 runner | 安装包后缀 | 更新包后缀 |
 | --- | --- | --- | --- |
-| macOS arm64 | `macos-15` | `web2harness-darwin-arm64.tar.gz` | `-mac-arm64.dmg`、`-mac-arm64.zip` |
-| macOS x64 | `macos-15-intel` | `web2harness-darwin-amd64.tar.gz` | `-mac-x64.dmg`、`-mac-x64.zip` |
-| Linux x64 | `ubuntu-latest` | `web2harness-linux-amd64.tar.gz` | `-linux-x64.AppImage` |
-| Linux arm64 | `ubuntu-24.04-arm` | `web2harness-linux-arm64.tar.gz` | `-linux-arm64.AppImage` |
-| Windows x64 | `windows-latest` | `web2harness-windows-amd64.zip` | `-win-x64.exe` |
+| Windows x64 | `windows-latest` | `-win-x64.exe` | 复用安装包 |
+| macOS arm64 | `macos-15` | `-mac-arm64.dmg` | `-mac-arm64.zip` |
+| macOS x64 | `macos-15-intel` | `-mac-x64.dmg` | `-mac-x64.zip` |
+| Linux x64 | `ubuntu-latest` | `-linux-x64.AppImage` | 复用 AppImage |
+| Linux arm64 | `ubuntu-24.04-arm` | `-linux-arm64.AppImage` | 复用 AppImage |
 
-桌面文件名以 `web2harness-${version}` 开头。x64 的运行时归档使用 `amd64`，桌面包使用 `x64`，不可混用。macOS 配置的最低版本为 13.0。存在构建目标不代表所有支持系统版本均已通过交互验收。
+文件名以 `web2harness-${version}` 开头。仅发布上述七个包及 `checksums.txt`，GitHub 自动提供两个源码归档。不再单独上传运行时归档、安装脚本或许可文件。每个包内保留许可文件，安装脚本保留在对应版本的源码中。macOS 配置的最低版本为 13.0。存在构建目标不代表所有支持系统版本均已通过交互验收。
+
+macOS 终端安装脚本从对应架构的桌面 ZIP 提取运行时，校验 SHA-256 和版本，并保留内嵌许可。它下载完整 ZIP，但仅安装运行时。每个原生 macOS 任务执行 `node launcher/scripts/smoke-cli-install.cjs`，使用真实安装包、独立路径和下载夹具，验证首次安装、重复安装、校验失败拒绝及许可保留。
 
 Windows CI 使用 `scripts/prepare-windows-baseline-bun.ps1` 准备不依赖 AVX2 的 Bun。所选内嵌程序必须报告固定版本；若使用 `WEB2HARNESS_EMBEDDED_BUN`，其值必须是绝对路径。不得通过更新全局 Bun 来改变候选包的内嵌运行时。
 
@@ -206,7 +208,7 @@ macOS 打包通过 `codesign --verify --deep --strict` 验证解压后的 `.app`
 
 包含根许可文件、必要 `LICENSES` 文件和生成的 `THIRD_PARTY_NOTICES.txt`。运行时准备会复制整个许可目录，分发检查必须确认打包后仍存在。修改产品命名或文档时保持现有许可正文和归属文件不变。
 
-发布工作流汇集各平台工件，添加许可/声明和安装脚本，拒绝重复文件名，并生成包含 SHA-256 的 `checksums.txt`。发布后它根据 GitHub 工件摘要重建 manifest、上传并校验已发布工件及 manifest 的摘要。检查最终清单，确认每个预期下载文件均被覆盖。
+发布工作流汇集各平台包，拒绝重复、缺失、非预期或空文件，并在本地生成包含七条 SHA-256 的 `checksums.txt`。八个附件先上传到草稿，与本地清单逐项比较文件名及 GitHub 摘要，全部一致后才公开发布。不匹配必须失败，不得根据已上传字节改写预期校验和来掩盖差异。
 
 安装器与更新器要求预期平台工件和校验条目，并拒绝不匹配。校验和只证明字节与已发布 manifest 一致，不能代替平台签名或发布验收。在真实工件和 manifest 可用前，不得发布猜测的下载 URL 或启用安装指引。
 
@@ -217,10 +219,12 @@ macOS 打包通过 `codesign --verify --deep --strict` 验证解压后的 `.app`
 tag 工作流可在构建完成后自动发布；绿色工作流不会自动强制检查人工账户/安装器证据。稳定发布前必须先完成要求的证据。
 
 - draft 尚未公开，pre-release 是公开预览。更新器和默认启动器安装脚本查询 `/releases/latest`，预览版被排除。源码和 DEV 运行禁用更新。
-- `v1.0.0-rc.1` 等带后缀 tag 自动标记 pre-release；重跑保留已有发布的 pre-release 状态。
+- `v1.0.0-rc.1` 等带后缀 tag 自动标记 pre-release；已有草稿保留其 pre-release 状态。普通重跑不能替换已公开发布的版本。
 - 若使用最终版本 tag 测试且不暴露给稳定更新器，应在推送 tag 前建立 draft 并勾选 **Set as a pre-release**。不得先短暂稳定发布再改标记。
 - 晋级复用已验证的原二进制：取消 **Set as a pre-release** 并选择 **Set as latest release**，或发布更高的已验证稳定版本。二进制改变必须使用新版本。
 - 启动器启动时检查更新，并要求版本更高、平台工件匹配且存在校验 manifest。已运行启动器不会持续轮询发布状态。
+
+例外重发预览版需要维护者明确授权，并强制更新 tag。所有原生构建及检查先完成，工作流归档旧发布元数据和附件并保留 30 天，再删除旧预览版但保留 tag；新文件先上传到草稿，验证后按原预览状态公开。稳定版及不可变发布不能使用此流程。记录新旧提交和摘要；同版本不会触发自动更新。若删除后发布失败，使用归档文件及元数据恢复。每次打 tag 前更新 `.github/release-notes.md`，移除不再适用的候选版本重发说明。
 
 发布说明应包含版本/tag、支持和已测目标、签名状态、重要行为/配置变化、验证缺口、已知问题和恢复步骤。只为该发布确实存在的文件提供安装链接。配置了仓库元数据不代表已有发布。
 

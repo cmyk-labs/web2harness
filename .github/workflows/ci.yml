@@ -78,6 +78,9 @@ jobs:
         run: command -v xvfb-run || (sudo apt-get update && sudo apt-get install -y xvfb)
       - run: bun run app:smoke
         id: package_smoke
+      - name: Verify terminal installation from the macOS desktop archive
+        if: runner.os == 'macOS'
+        run: node launcher/scripts/smoke-cli-install.cjs
       - name: Upload package smoke diagnostics
         if: failure() && steps.package_smoke.outcome == 'failure'
         uses: actions/upload-artifact@v4

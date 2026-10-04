@@ -22,11 +22,11 @@ fi
 
 case "$(uname -m)" in
   arm64) ARCH="arm64" ;;
-  x86_64) ARCH="amd64" ;;
+  x86_64) ARCH="x64" ;;
   *) echo "Unsupported macOS architecture: $(uname -m)" >&2; exit 1 ;;
 esac
 
-ASSET="web2harness-darwin-$ARCH.tar.gz"
+ASSET="web2harness-$VERSION-mac-$ARCH.zip"
 BASE_URL="https://github.com/$REPOSITORY/releases/download/v$VERSION"
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/web2harness.XXXXXX")"
 STAGE_DIR="$LIB_DIR/.stage-$VERSION-$$"
@@ -44,27 +44,26 @@ if [ -z "$EXPECTED" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
   exit 1
 fi
 
-for DOC in LICENSE Bun-1.4.0.md THIRD_PARTY_NOTICES.txt; do
-  curl -fsSL "$BASE_URL/$DOC" -o "$TEMP_DIR/$DOC"
-  DOC_EXPECTED="$(awk -v asset="$DOC" '$2 == asset { print $1 }' "$TEMP_DIR/checksums.txt")"
-  DOC_ACTUAL="$(shasum -a 256 "$TEMP_DIR/$DOC" | awk '{ print $1 }')"
-  if [ -z "$DOC_EXPECTED" ] || [ "$DOC_ACTUAL" != "$DOC_EXPECTED" ]; then
-    echo "SHA-256 verification failed for $DOC" >&2
+ditto -x -k "$TEMP_DIR/$ASSET" "$TEMP_DIR/application"
+BUNDLE_RUNTIME="$TEMP_DIR/application/Web2Harness.app/Contents/Resources/runtime"
+if [ ! -x "$BUNDLE_RUNTIME/bin/web2harness" ] || [ ! -x "$BUNDLE_RUNTIME/runtime/bun" ]; then
+  echo "Desktop archive does not contain a complete CLI runtime" >&2
+  exit 1
+fi
+for DOC in LICENSE LICENSES/Bun-1.4.0.md THIRD_PARTY_NOTICES.txt; do
+  if [ ! -s "$BUNDLE_RUNTIME/$DOC" ]; then
+    echo "Desktop archive is missing required license material: $DOC" >&2
     exit 1
   fi
 done
-
-mkdir -p "$LIB_DIR" "$BIN_DIR" "$DOC_DIR"
-mkdir "$STAGE_DIR"
-tar -xzf "$TEMP_DIR/$ASSET" -C "$STAGE_DIR"
-if [ ! -x "$STAGE_DIR/bin/web2harness" ] || [ ! -x "$STAGE_DIR/runtime/bun" ]; then
-  echo "Runtime archive is incomplete" >&2
-  exit 1
-fi
-if [ "$("$STAGE_DIR/bin/web2harness" --version)" != "$VERSION" ]; then
+if [ "$("$BUNDLE_RUNTIME/bin/web2harness" --version)" != "$VERSION" ]; then
   echo "Runtime archive version does not match $VERSION" >&2
   exit 1
 fi
+
+mkdir -p "$LIB_DIR" "$BIN_DIR" "$DOC_DIR"
+mkdir "$STAGE_DIR"
+cp -R "$BUNDLE_RUNTIME/." "$STAGE_DIR/"
 
 if [ -e "$TARGET_DIR" ]; then
   mv "$TARGET_DIR" "$BACKUP_DIR"
@@ -77,8 +76,8 @@ fi
 ln -sfn "$TARGET_DIR/bin/web2harness" "$BIN_DIR/.web2harness.next"
 mv -f "$BIN_DIR/.web2harness.next" "$BIN_DIR/web2harness"
 rm -f "$BIN_DIR/web2harness.legacy-standalone"
-for DOC in LICENSE Bun-1.4.0.md THIRD_PARTY_NOTICES.txt; do
-  install -m 0644 "$TEMP_DIR/$DOC" "$DOC_DIR/$DOC"
+for DOC in LICENSE LICENSES/Bun-1.4.0.md THIRD_PARTY_NOTICES.txt; do
+  install -m 0644 "$TARGET_DIR/$DOC" "$DOC_DIR/$(basename "$DOC")"
 done
 if [ -e "$BACKUP_DIR" ]; then rm -rf "$BACKUP_DIR"; fi
 

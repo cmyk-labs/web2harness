@@ -65,15 +65,17 @@ bun run app:package
 
 The [release workflow](../.github/workflows/release.yml) builds these targets on matching native runners. Cross-OS packaging is rejected because each launcher contains a native Bun runtime.
 
-| Native target | Workflow runner | Runtime archive | Desktop artifact suffix |
+| Native target | Workflow runner | Installer suffix | Update archive suffix |
 | --- | --- | --- | --- |
-| macOS arm64 | `macos-15` | `web2harness-darwin-arm64.tar.gz` | `-mac-arm64.dmg`, `-mac-arm64.zip` |
-| macOS x64 | `macos-15-intel` | `web2harness-darwin-amd64.tar.gz` | `-mac-x64.dmg`, `-mac-x64.zip` |
-| Linux x64 | `ubuntu-latest` | `web2harness-linux-amd64.tar.gz` | `-linux-x64.AppImage` |
-| Linux arm64 | `ubuntu-24.04-arm` | `web2harness-linux-arm64.tar.gz` | `-linux-arm64.AppImage` |
-| Windows x64 | `windows-latest` | `web2harness-windows-amd64.zip` | `-win-x64.exe` |
+| Windows x64 | `windows-latest` | `-win-x64.exe` | Uses the installer |
+| macOS arm64 | `macos-15` | `-mac-arm64.dmg` | `-mac-arm64.zip` |
+| macOS x64 | `macos-15-intel` | `-mac-x64.dmg` | `-mac-x64.zip` |
+| Linux x64 | `ubuntu-latest` | `-linux-x64.AppImage` | Uses the AppImage |
+| Linux arm64 | `ubuntu-24.04-arm` | `-linux-arm64.AppImage` | Uses the AppImage |
 
-Desktop filenames begin with `web2harness-${version}`. Runtime archives use `amd64` for x64, while desktop artifacts use `x64`; do not interchange their names. The configured macOS minimum is 13.0. A build target is not a claim that interactive acceptance has passed on every supported OS version.
+Filenames begin with `web2harness-${version}`. Publish exactly these seven packages and `checksums.txt`; GitHub adds two source archives automatically. Do not upload separate runtime archives, installer scripts or license files. Licenses remain inside every package, and installer scripts remain in the versioned source. The configured macOS minimum is 13.0. A build target is not a claim that interactive acceptance has passed on every supported OS version.
+
+The macOS terminal installer extracts the runtime from its architecture's desktop ZIP, checks its SHA-256 and version, and preserves the embedded licenses. It downloads the complete ZIP but installs only the runtime. Each native macOS job runs `node launcher/scripts/smoke-cli-install.cjs` against the actual package with isolated paths and fixture downloads: fresh installation, repeat installation, checksum rejection and license preservation must pass.
 
 Windows CI prepares an AVX2-independent Bun using `scripts/prepare-windows-baseline-bun.ps1`. The selected embedded executable must report the pinned version; `WEB2HARNESS_EMBEDDED_BUN`, when used, must be an absolute path. Do not update global Bun to change a candidate's embedded runtime.
 
@@ -206,7 +208,7 @@ macOS packaging verifies the extracted `.app` and embedded runtime with `codesig
 
 Include the root license, required `LICENSES` files, and generated `THIRD_PARTY_NOTICES.txt`. Runtime preparation copies the complete license directory; distribution checks must confirm it survives packaging. Keep the existing license text and attribution files unchanged when editing product naming or documentation.
 
-The publish workflow gathers platform artifacts, adds license/notice and installer assets, rejects duplicate asset names, and creates `checksums.txt` with SHA-256 entries. It then publishes, reconstructs the manifest from GitHub's asset digests, uploads it, and verifies the published asset/manifest digests. Inspect the resulting inventory and confirm every intended downloadable file is covered.
+The publish workflow gathers platform packages, rejects duplicate, missing, unexpected or empty files, and creates `checksums.txt` locally with seven SHA-256 entries. It uploads eight assets to a draft, compares the exact inventory and GitHub digests against the local files, and only then publishes. A mismatch must fail; never rewrite expected checksums from uploaded bytes to hide a discrepancy.
 
 Installers and the updater require the expected platform asset and checksum entry and reject mismatches. Checksums verify bytes against the published manifest; they do not replace platform signing or the release acceptance gates. Do not publish guessed download URLs or enable installation instructions before the actual assets and manifest are available.
 
@@ -217,10 +219,12 @@ Installers and the updater require the expected platform asset and checksum entr
 The tag workflow can publish automatically after its build jobs; manual account/installer evidence is not automatically enforced by a green workflow. Complete the required evidence before stable publication.
 
 - A draft is unpublished; a pre-release is a public preview. Updater and default launcher installers query `/releases/latest`; previews are excluded. Source and DEV runs keep updates disabled.
-- Suffix tags such as `v1.0.0-rc.1` are published as pre-releases automatically. A rerun preserves an existing release's pre-release flag.
+- Suffix tags such as `v1.0.0-rc.1` are published as pre-releases automatically. Existing drafts retain their pre-release flag. Ordinary reruns cannot replace a published release.
 - To test a final-version tag without exposing it to the stable updater, create its draft with **Set as a pre-release** checked before pushing the tag. Do not briefly publish stable and change the flag afterward.
 - Promotion uses the existing validated binaries: clear **Set as a pre-release** and select **Set as latest release**, or publish a newer validated stable version. Changed binaries require a new version.
 - Launchers check at startup and require a newer version, matching platform asset, and checksum manifest. Already-running launchers do not continuously poll for a publication change.
+
+An exceptional preview replacement requires explicit maintainer authorization and a forced tag update. All native builds and checks must finish first. The workflow archives the old metadata and assets for 30 days, deletes the preview without deleting its tag, uploads and verifies a new draft, then republishes with preview status preserved. Stable and immutable releases cannot use this path. Record the old and new revisions and digests; the same version does not trigger an automatic update. If publication fails after deletion, recover from the archived files and metadata. Update `.github/release-notes.md` for each candidate before tagging; remove candidate-specific replacement text when it no longer applies.
 
 Release notes must identify version/tag, supported and tested targets, signing status, important behavior/configuration changes, validation gaps, known issues, and recovery steps. Provide installation links only for files present in that release. Configured repository metadata alone is not evidence that a release exists.
 

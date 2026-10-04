@@ -23,11 +23,14 @@ function fixture(action) {
 }
 
 // Execute the actual harness with fixture processes, never an installer or desktop app.
-function runWindowsHarness(root, { fail = false, exportFails = false } = {}) {
+function runWindowsHarness(root, { fail = false, exportFails = false, damageLicense = false } = {}) {
   const launcher = path.join(root, "launcher");
   const temp = path.join(root, "temp");
   fs.mkdirSync(path.join(launcher, "artifacts"), { recursive: true });
   fs.mkdirSync(temp);
+  fs.mkdirSync(path.join(root, "LICENSES"));
+  fs.writeFileSync(path.join(root, "LICENSE"), "fixture root license");
+  fs.writeFileSync(path.join(root, "LICENSES", "dependency.txt"), "fixture dependency license");
   fs.writeFileSync(path.join(launcher, "package.json"), JSON.stringify({ version: "1.0.0",
     build: { productName: "Web2Harness", nsis: { guid: "fixture" } } }));
   fs.writeFileSync(path.join(launcher, "artifacts", "web2harness-1.0.0-win-x64.exe"), "fixture");
@@ -58,6 +61,11 @@ function runWindowsHarness(root, { fail = false, exportFails = false } = {}) {
       packaged: true, runtimeVerified: true, version: "1.0.0", platform: "win32" }));
     const installed = path.join(profile.coreHome, "versions", "1.0.0-win32-x64");
     fs.mkdirSync(installed, { recursive: true });
+    fs.mkdirSync(path.join(installed, "LICENSES"));
+    fs.copyFileSync(path.join(root, "LICENSE"), path.join(installed, "LICENSE"));
+    fs.writeFileSync(path.join(installed, "LICENSES", "dependency.txt"),
+      damageLicense ? "altered license" : "fixture dependency license");
+    fs.writeFileSync(path.join(installed, "THIRD_PARTY_NOTICES.txt"), "fixture dependency notices");
     fs.writeFileSync(path.join(installed, "manifest.json"), JSON.stringify({ schemaVersion: 2,
       appVersion: "1.0.0", platform: "win32", arch: "x64", files: [{ path: "fixture" }], bundleId: "a".repeat(64) }));
     return { status: 0, stdout: "", stderr: "" };
@@ -107,6 +115,12 @@ test("failed package smoke retains sanitized diagnostics before removing its tem
   const fatal = fs.readFileSync(path.join(reportDirectory, "launcher-fatal.log"), "utf8");
   assert.match(fatal, /fixture fatal error/);
   assert.doesNotMatch(fatal + report, /fixtureSecret|PRIVATE_PROFILE_SENTINEL/);
+}));
+
+test("package smoke rejects a dependency license changed during packaging", () => fixture(root => {
+  const result = runWindowsHarness(root, { damageLicense: true });
+  assert.match(result.thrown?.message, /Packaged license differs from source/);
+  assert.doesNotMatch(result.stdout, /SMOKE_OK/);
 }));
 
 test("diagnostic export failure preserves the original smoke error and owned workspace", () => fixture(root => {
