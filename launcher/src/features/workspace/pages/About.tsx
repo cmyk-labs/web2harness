@@ -1,10 +1,7 @@
-import { useState } from "react";
-import { Button } from "../../../components/Buttons";
-import { copyFor } from "../../../i18n";
 import { messageOf } from "../../../lib/errors";
 import { Row, Section } from "../controls";
 import { translate } from "../labels";
-import { workspaceBusy } from "../status";
+import { UpdateButton } from "../UpdateButton";
 import type { WorkspaceProps } from "../types";
 import { WorkspaceIcon } from "../WorkspaceIcon";
 import { OperatingDiagram } from "./OperatingDiagram";
@@ -19,23 +16,10 @@ export function About({
 }: WorkspaceProps) {
   const language = snapshot.state.language ?? "en";
   const t = translate(language);
-  const copy = copyFor(language);
-  const [updating, setUpdating] = useState(false);
   const links = snapshot.urls;
   const open = (url: string) => {
     if (!url) return;
     void api.openExternal(url).catch((error) => setError(messageOf(error)));
-  };
-  const installUpdate = async () => {
-    setUpdating(true);
-    setError(null);
-    try {
-      await api.installUpdate();
-    } catch (error) {
-      setError(messageOf(error));
-    } finally {
-      setUpdating(false);
-    }
   };
   const platform =
     { win32: "Windows", darwin: "macOS", linux: "Linux" }[snapshot.platform] ??
@@ -141,18 +125,7 @@ export function About({
             "version" in snapshot.update ? snapshot.update.version : undefined
           }
         >
-          <Button
-            disabled={
-              updating || workspaceBusy(browser, operation) ||
-              snapshot.startup.status !== "ready" ||
-              snapshot.update.status !== "available"
-            }
-            onClick={() => void installUpdate()}
-          >
-            {snapshot.update.status === "available"
-              ? `${copy.updateAvailable} ${snapshot.update.version}`
-              : copy.updating}
-          </Button>
+          <UpdateButton api={api} snapshot={snapshot} browser={browser} operation={operation} setError={setError} />
         </Row>
       )}
     </>

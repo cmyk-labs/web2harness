@@ -127,6 +127,7 @@ function finishUninstall(options) {
   const paths = recordPaths(options.appData, options.installRoot);
   fs.rmSync(paths.lock, { force: true });
   if (record.purge) {
+    require("./windows-shortcuts.cjs").removeSetupAssets(paths.directory);
     fs.unlinkSync(paths.profile);
     fs.rmdirSync(paths.directory);
     const parent = path.dirname(paths.directory);

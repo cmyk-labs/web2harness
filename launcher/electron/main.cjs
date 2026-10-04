@@ -1244,6 +1244,7 @@ async function start() {
       ? runtimeBundlePaths(updaterRuntimeRoot, process.platform).executable
       : null,
     logsDirectory: app.getPath("logs"),
+    getLanguage: () => stateStore.read().language,
     publish: (state) => send("launcher:update-state", state),
     logger,
   });

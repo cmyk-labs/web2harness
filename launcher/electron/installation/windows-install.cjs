@@ -7,6 +7,28 @@ const { resolveLauncherProfile } = require("../profile.cjs");
 const { APP_ID, OWNER_FILE, assertPlainPath, identity, recordPaths, readJson, loadInstallation,
   registerInstallation, validateRecord } = require("./installation-record.cjs");
 const { ensurePackagedRuntime, installedRuntimePath } = require("./runtime-install.cjs");
+const { stageShortcutIcon } = require("./windows-shortcuts.cjs");
+
+async function stage(services, name, action) {
+  const start = Date.now();
+  services.onProgress?.({ stage: name, status: "running", elapsedMs: 0 });
+  try {
+    const result = await action();
+    services.onProgress?.({ stage: name, status: "completed", elapsedMs: Date.now() - start });
+    return result;
+  } catch (error) {
+    services.onProgress?.({ stage: name, status: "failed", elapsedMs: Date.now() - start });
+    throw error;
+  }
+}
+
+async function updateIcons(options, services) {
+  if (!options.shortcutIconSource) return;
+  await stage(services, "updating-shortcuts", async () => {
+    const icon = stageShortcutIcon(options);
+    await services.setShortcutIcons(options.installRoot, icon);
+  });
+}
 
 function locations(options) {
   const record = recordPaths(options.appData, options.installRoot);
@@ -105,11 +127,13 @@ async function rollbackInstall(options, services) {
   const { paths, journal } = loadTransaction(options);
   if (!journal) return;
   if (journal.status === "prepared") {
-    await services.assertLauncherClosed(path.join(options.installRoot, "Web2Harness.exe"));
-    restoreDirectory(options.installRoot, path.join(paths.transaction, "application"), journal.hadApplication);
-    restoreDirectory(runtimeRoot(journal), path.join(paths.transaction, "runtime"), journal.hadRuntime);
-    metadataPaths(journal, paths).forEach((file, index) => restoreFile(file, journal.metadata[index]));
-    await services.restoreRegistration(paths.registration);
+    await stage(services, "recovering-installation", async () => {
+      await services.assertLauncherClosed(path.join(options.installRoot, "Web2Harness.exe"));
+      restoreDirectory(options.installRoot, path.join(paths.transaction, "application"), journal.hadApplication);
+      restoreDirectory(runtimeRoot(journal), path.join(paths.transaction, "runtime"), journal.hadRuntime);
+      metadataPaths(journal, paths).forEach((file, index) => restoreFile(file, journal.metadata[index]));
+      await services.restoreRegistration(paths.registration);
+    });
   }
   discardTransaction(paths);
 }
@@ -139,16 +163,18 @@ async function beginInstall(options, services) {
     ownerPid: options.ownerPid, record, status: "preparing" };
   try {
     save(paths, journal);
-    await services.stopRuntime(record);
-    await services.captureRegistration(paths.registration);
+    await stage(services, "stopping-runtime", () => services.stopRuntime(record));
+    await stage(services, "saving-registration", () => services.captureRegistration(paths.registration));
     journal.metadata = metadataPaths(journal, paths).map(snapshotFile);
     journal.hadApplication = fs.existsSync(options.installRoot);
     journal.hadRuntime = fs.existsSync(runtimeRoot(journal));
     for (const [target, name, exists] of [[options.installRoot, "application", journal.hadApplication],
       [runtimeRoot(journal), "runtime", journal.hadRuntime]]) {
       if (!exists) continue;
-      inspectTree(target);
-      fs.cpSync(target, path.join(paths.transaction, name), { recursive: true, force: false, errorOnExist: true });
+      await stage(services, `saving-${name}`, () => {
+        inspectTree(target);
+        fs.cpSync(target, path.join(paths.transaction, name), { recursive: true, force: false, errorOnExist: true });
+      });
     }
     journal.status = "prepared";
     save(paths, journal);
@@ -157,21 +183,31 @@ async function beginInstall(options, services) {
     discardTransaction(paths);
     throw error;
   }
+  // From this point registration may change; retain the prepared journal on failure
+  // so NSIS can restore the original shortcuts along with the application.
+  await updateIcons(options, services);
+  journal.replacementStartedAt = Date.now();
+  save(paths, journal);
+  services.onProgress?.({ stage: "replacing-application", status: "running", elapsedMs: 0 });
 }
 
 async function commitInstall(options, services) {
   const { paths, journal } = loadTransaction(options);
   if (!journal || journal.status !== "prepared" || journal.targetVersion !== options.version) throw new Error("Setup has no prepared transaction");
+  if (Number.isSafeInteger(journal.replacementStartedAt) && journal.replacementStartedAt <= Date.now()) {
+    services.onProgress?.({ stage: "replacing-application", status: "completed", elapsedMs: Date.now() - journal.replacementStartedAt });
+  }
   await services.assertLauncherClosed(path.join(options.installRoot, "Web2Harness.exe"));
-  const installed = ensurePackagedRuntime({
+  await updateIcons(options, services);
+  const installed = await stage(services, "deploying-runtime", () => ensurePackagedRuntime({
     app: { isPackaged: true, getVersion: () => options.version }, coreHome: journal.record.coreHome,
     resourcesPath: path.join(options.installRoot, "resources"), onProgress: services.onProgress,
-  });
-  registerInstallation({ ...options, profile: journal.record });
+  }));
+  await stage(services, "registering-installation", () => registerInstallation({ ...options, profile: journal.record }));
   journal.status = "committed";
   save(paths, journal);
   // Backup cleanup failure must not turn a complete deployment into a failed upgrade.
-  try { discardTransaction(paths); }
+  try { await stage(services, "finishing-installation", () => discardTransaction(paths)); }
   catch { fs.rmSync(paths.lock, { force: true }); }
   return installed;
 }

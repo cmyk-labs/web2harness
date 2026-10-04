@@ -141,6 +141,11 @@
 !else
   Var W2HSetupOwnerPid
   Var W2HSetupStarted
+  Var W2HUpdateMode
+  LangString W2HUpdating 1033 "Updating Web2Harness"
+  LangString W2HUpdating 2052 "正在更新 Web2Harness"
+  LangString W2HUpdateDetails 1033 "Please wait. The application will reopen when installation finishes."
+  LangString W2HUpdateDetails 2052 "请稍候，安装完成后将自动重新打开应用。"
   LangString W2HPreparing 1033 "Preparing and verifying application components..."
   LangString W2HPreparing 2052 "正在准备并校验应用运行组件..."
   LangString W2HSetupFailure 1033 "Installation did not complete. See the details below."
@@ -148,18 +153,68 @@
   LangString W2HRecoveryFailure 1033 "Automatic recovery did not complete. Recovery files were retained. Run this installer again before starting Web2Harness."
   LangString W2HRecoveryFailure 2052 "自动恢复未完成，已保留恢复文件。请重新运行本安装程序后再启动 Web2Harness。"
 
+  !macro customInit
+    StrCpy $W2HUpdateMode "0"
+    ${GetParameters} $0
+    ClearErrors
+    ${GetOptions} $0 "/W2HUPDATE" $1
+    ${IfNot} ${Errors}
+      StrCpy $W2HUpdateMode "1"
+      ${GetOptions} $0 "/W2HLANG=" $1
+      ${If} $1 == "zh-CN"
+        StrCpy $LANGUAGE 2052
+      ${ElseIf} $1 == "en"
+        StrCpy $LANGUAGE 1033
+      ${EndIf}
+      SetAutoClose true
+    ${EndIf}
+  !macroend
+
+  !macro customPageAfterChangeDir
+    !define MUI_PAGE_CUSTOMFUNCTION_SHOW W2HProgressShow
+  !macroend
+
+  !macro customFinishPage
+    !define MUI_PAGE_CUSTOMFUNCTION_PRE W2HFinishPre
+    !ifndef HIDE_RUN_AFTER_FINISH
+      !define MUI_FINISHPAGE_RUN
+      !define MUI_FINISHPAGE_RUN_FUNCTION W2HStartApp
+    !endif
+    !insertmacro MUI_PAGE_FINISH
+  !macroend
+
   !macro customHeader
+    Function W2HProgressShow
+      ${If} $W2HUpdateMode == "1"
+        !insertmacro MUI_HEADER_TEXT "$(W2HUpdating)" "$(W2HUpdateDetails)"
+      ${EndIf}
+    FunctionEnd
+
+    Function W2HFinishPre
+      ${If} $W2HUpdateMode == "1"
+        ; The detached worker, not the finish-page checkbox, restarts updates.
+        Abort
+      ${EndIf}
+    FunctionEnd
+
+    Function W2HStartApp
+      ${If} ${isUpdated}
+        StrCpy $1 "--updated"
+      ${Else}
+        StrCpy $1 ""
+      ${EndIf}
+      ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "$1"
+    FunctionEnd
+
     Function W2HSetupRollback
       ${If} $W2HSetupStarted == "1"
         SetOutPath "$PLUGINSDIR\web2harness-setup"
-        nsExec::ExecToStack /TIMEOUT=600000 '"$PLUGINSDIR\web2harness-setup\bun.exe" "$PLUGINSDIR\web2harness-setup\install.cjs" rollback --install-root "$INSTDIR" --app-data "$APPDATA" --local-app-data "$LOCALAPPDATA" --owner-pid "$W2HSetupOwnerPid" --version "${VERSION}"'
+        nsExec::ExecToLog /TIMEOUT=600000 '"$PLUGINSDIR\web2harness-setup\bun.exe" "$PLUGINSDIR\web2harness-setup\install.cjs" rollback --install-root "$INSTDIR" --app-data "$APPDATA" --local-app-data "$LOCALAPPDATA" --owner-pid "$W2HSetupOwnerPid" --version "${VERSION}" --language "$LANGUAGE" --nsis-output'
         Pop $0
-        Pop $1
         ${If} $0 == "0"
           StrCpy $W2HSetupStarted "0"
         ${Else}
-          DetailPrint "$1"
-          MessageBox MB_OK|MB_ICONSTOP "$(W2HRecoveryFailure)$\r$\n$1" /SD IDOK
+          MessageBox MB_OK|MB_ICONSTOP "$(W2HRecoveryFailure)" /SD IDOK
         ${EndIf}
       ${EndIf}
     FunctionEnd
@@ -194,16 +249,15 @@
       SetOutPath "$PLUGINSDIR\web2harness-setup"
       File /oname=bun.exe "${PROJECT_DIR}\build\runtime\runtime\bun.exe"
       File /oname=install.cjs "${PROJECT_DIR}\build\uninstall\install.cjs"
+      File /oname=shortcut.ico "${PROJECT_DIR}\..\assets\brand\icon.ico"
       SetDetailsView show
       SetDetailsPrint both
       DetailPrint "$(W2HPreparing)"
       StrCpy $W2HSetupStarted "1"
-      nsExec::ExecToStack /TIMEOUT=600000 '"$PLUGINSDIR\web2harness-setup\bun.exe" "$PLUGINSDIR\web2harness-setup\install.cjs" begin --install-root "$INSTDIR" --app-data "$APPDATA" --local-app-data "$LOCALAPPDATA" --owner-pid "$W2HSetupOwnerPid" --version "${VERSION}"'
+      nsExec::ExecToLog /TIMEOUT=600000 '"$PLUGINSDIR\web2harness-setup\bun.exe" "$PLUGINSDIR\web2harness-setup\install.cjs" begin --install-root "$INSTDIR" --app-data "$APPDATA" --local-app-data "$LOCALAPPDATA" --owner-pid "$W2HSetupOwnerPid" --version "${VERSION}" --shortcut-icon-source "$PLUGINSDIR\web2harness-setup\shortcut.ico" --language "$LANGUAGE" --nsis-output'
       Pop $0
-      Pop $1
       ${If} $0 != "0"
-        DetailPrint "$1"
-        MessageBox MB_OK|MB_ICONSTOP "$(W2HSetupFailure)$\r$\n$1" /SD IDOK
+        MessageBox MB_OK|MB_ICONSTOP "$(W2HSetupFailure)" /SD IDOK
         Call W2HSetupRollback
         SetErrorLevel 1
         Abort
@@ -221,12 +275,10 @@
     SetDetailsView show
     SetDetailsPrint both
     DetailPrint "$(W2HPreparing)"
-    nsExec::ExecToStack /TIMEOUT=600000 '"$PLUGINSDIR\web2harness-setup\bun.exe" "$PLUGINSDIR\web2harness-setup\install.cjs" commit --install-root "$INSTDIR" --app-data "$APPDATA" --local-app-data "$LOCALAPPDATA" --owner-pid "$W2HSetupOwnerPid" --version "${VERSION}"'
+    nsExec::ExecToLog /TIMEOUT=600000 '"$PLUGINSDIR\web2harness-setup\bun.exe" "$PLUGINSDIR\web2harness-setup\install.cjs" commit --install-root "$INSTDIR" --app-data "$APPDATA" --local-app-data "$LOCALAPPDATA" --owner-pid "$W2HSetupOwnerPid" --version "${VERSION}" --shortcut-icon-source "$PLUGINSDIR\web2harness-setup\shortcut.ico" --language "$LANGUAGE" --nsis-output'
     Pop $0
-    Pop $1
     ${If} $0 != "0"
-      DetailPrint "$1"
-      MessageBox MB_OK|MB_ICONSTOP "$(W2HSetupFailure)$\r$\n$1" /SD IDOK
+      MessageBox MB_OK|MB_ICONSTOP "$(W2HSetupFailure)" /SD IDOK
       Call W2HSetupRollback
       SetErrorLevel 1
       Abort

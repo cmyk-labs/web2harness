@@ -284,6 +284,8 @@ export function LauncherShell({
       >
         <div className="sidebar-clip">
           <WorkspaceSidebar
+            api={api!}
+            setError={setError}
             openRepository={() => {
               void api!.openExternal(snapshot.urls.github)
                 .catch((error) => setError(messageOf(error)));

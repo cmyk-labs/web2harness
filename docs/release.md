@@ -119,6 +119,10 @@ Installation and application startup use the same temporary data directories. On
 
 The startup check allows 45 seconds for the application to start, verify its runtime, and exit through the normal shutdown sequence. Windows silent installation has a separate 120-second limit; the embedded runtime version check has a 30-second limit. A readiness marker alone is insufficient: a failed or stalled shutdown must fail the check.
 
+Windows update acceptance must also exercise the in-app path on the disposable OS. Check the blue sidebar action, active-task blocking, download failure and retry, then the independent installer progress window in English and Chinese. The update path must skip configuration and finish pages and reopen the app exactly once after success; failure/cancellation must preserve recovery behavior. Test both an older updater such as 1.0.1 (which still invokes silent installation) and the new visible updater. Manual installation and `/S /currentuser` must retain their normal behavior.
+
+During replacement, inspect both desktop and Start Menu shortcut icons and confirm their icon files remain available outside the application directory. Test a user-deleted shortcut, an unrelated same-name target, rollback after icon migration, same-version repair, and full-data uninstall. Review `setup-timings.jsonl` for backup, application replacement and runtime verification/copy durations. Source tests, private `.lnk` fixtures and a successful NSIS compilation do not establish Explorer rendering, wizard flow or real update acceptance.
+
 Shell entry points must be committed with Git mode `100755`. Linux workflows check executable permissions immediately after checkout. When reinitializing a repository on Windows, explicitly restore the executable bits; local Windows checks cannot verify POSIX execution permissions.
 
 <a id="startup-integrity"></a>

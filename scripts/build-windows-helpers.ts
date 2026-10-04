@@ -20,6 +20,7 @@ if (process.platform === "win32") {
     resolve(import.meta.dir, "../launcher/build/runtime/runtime/bun.exe"), "test",
     "./launcher/tests/installation/windows-install.test.cjs", "./launcher/tests/installation/runtime-install.test.cjs",
     "./launcher/tests/installation/windows-uninstall.test.cjs",
+    "./launcher/tests/installation/windows-shortcuts.test.cjs", "./launcher/tests/installation/update-windows.test.cjs",
   ], { cwd: resolve(import.meta.dir, ".."), stdout: "inherit", stderr: "inherit" });
   if (regression.exitCode !== 0) throw new Error("Embedded Bun installation regression failed; package creation stopped");
   console.log(`Built and checked independent Windows setup helpers: ${output}`);

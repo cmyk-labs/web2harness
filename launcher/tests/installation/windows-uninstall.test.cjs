@@ -61,6 +61,9 @@ test("ordinary uninstall detaches while preserving runtime, browser data, prefer
 
 test("explicit purge removes both owned data roots and its own record, never Codex or sibling files", async t => {
   const f = fixture(t);
+  const setupDirectory = recordPaths(f.options.appData, f.options.installRoot).directory;
+  fs.writeFileSync(path.join(setupDirectory, `shortcut-${"a".repeat(64)}.ico`), "fixture-icon");
+  fs.writeFileSync(path.join(setupDirectory, "setup-timings.jsonl"), "fixture-timing");
   const other = path.join(f.root, "web2harness-user-project.txt");
   fs.writeFileSync(other, "keep");
   await prepareUninstall({ ...f.options, purge: true }, f.services);
@@ -68,6 +71,7 @@ test("explicit purge removes both owned data roots and its own record, never Cod
   assert.equal(fs.existsSync(f.profile.userData), false);
   assert.equal(fs.existsSync(f.record.installerCache), false);
   finishUninstall(f.options);
+  assert.equal(fs.existsSync(setupDirectory), false);
   assert.equal(fs.existsSync(recordPaths(f.options.appData, f.options.installRoot).profile), false);
   assert.equal(fs.readFileSync(other, "utf8"), "keep");
   assert.equal(fs.readFileSync(path.join(f.profile.codexHome, "auth.json"), "utf8"), "private-fixture-auth");

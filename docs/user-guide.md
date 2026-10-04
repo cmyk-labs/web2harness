@@ -231,7 +231,7 @@ Records are stored locally by hashed account identity; the page shows the last i
 
 The page explicitly reports **Official usage period unconfirmed**: the current model documentation and verified DEV model menu do not provide this account’s complete Chat model-period boundaries. Rolling counts are auxiliary local statistics, not an implementation of official quota periods. Do not infer the official start from the first local record, your local midnight, Monday, or Work/Codex usage data.
 
-**Official published conversation limits** retains the latest explicit counts found, with their scope, verification date and source links. Omission from a later article alone does not invalidate an earlier published number. The following references were checked on 2026-10-05; this is a verification date, not their publication date:
+**Official published conversation limits** retains the latest explicit counts found, with their scope, verification date and source links. **Plan reference** defaults to **Pro $200** and can be changed manually; this only selects the reference table and does not change the identified account or local usage records. Omission from a later article alone does not invalidate an earlier published number. The following references were checked on 2026-10-05; this is a verification date, not their publication date:
 
 | Plan reference | Model | Published allowance |
 | --- | --- | --- |
@@ -263,7 +263,7 @@ Activity reflects the current browser and application observations; it does not 
 
 The GitHub icon beside **Web2Harness** in the sidebar opens the current project repository. **About** presents the project slogan, capabilities, version, operating system and license. Its operating diagram shows how Codex, Web2Harness and ChatGPT Web exchange requests and results, with a brief explanation of each tool mode. Documentation, GitHub and project-license links open in the system browser. Third-party notices remain in the repository and distribution; there is no separate shortcut on this page.
 
-When a release is available, the update action appears on **About**. Preferences remains focused on conversations, window behavior and experimental features. Overview and Diagnostics continue to show connection and runtime status.
+When a release is available, a small blue update button appears at the bottom of the sidebar with the target version. **About** provides the same action. Both show downloading/installing states and are unavailable while a task is running. Preferences remains focused on conversations, window behavior and experimental features. Overview and Diagnostics continue to show connection and runtime status.
 
 <a id="update"></a>
 
@@ -278,6 +278,10 @@ Finish active tasks and record the current version, installation method, and mod
 | Registered Windows package | Follow the Windows installer procedure above. Runtime preparation is part of setup completion. A failed deployment with attempted recovery is not a successful update. |
 
 After the update, check the browser connection and active mode, follow catalog-refresh instructions, and review the history preference before a sensitive task. Formal release and installer validation remain separate from ordinary use; developers must use the isolated environments specified in the [release manual](release.md).
+
+On Windows, in-app updates download and verify the package before closing the app. The installer then displays a separate progress window, skips repeated configuration and the finish checkbox, and the updater reopens the app after successful installation. Installation details report actual stages and their durations; file progress is specific to each stage, not a whole-install estimate. Manual installation and `/S` silent installation remain supported. An older installed updater, including 1.0.1, still uses its original silent flow for the update that replaces it; the visible flow applies to subsequent updates.
+
+Shortcut icons are stored outside the replaced application directory. Setup updates only existing shortcuts targeting this installation and preserves user-deleted shortcuts during normal upgrades. Icon recovery alone does not indicate installation completion. Local stage timings are stored in `%APPDATA%\Web2Harness-installations\<installation-key>\setup-timings.jsonl`; full data removal also removes these records and icon assets. No system icon-cache reset is required.
 
 <a id="disconnect-and-uninstall"></a>
 

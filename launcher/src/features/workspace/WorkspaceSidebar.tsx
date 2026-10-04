@@ -11,6 +11,8 @@ import { interactionName, modeName, pageName, translate } from "./labels";
 import { workspaceBusy, workspaceReady, workspaceTone } from "./status";
 import type { WorkspacePage } from "./types";
 import { WorkspaceIcon } from "./WorkspaceIcon";
+import { UpdateButton } from "./UpdateButton";
+import type { WorkspaceProps } from "./types";
 
 export function WorkspaceSidebar({
   page,
@@ -22,6 +24,8 @@ export function WorkspaceSidebar({
   onLanguageChange,
   changingLanguage,
   openRepository,
+  api,
+  setError,
 }: {
   page: WorkspacePage;
   navigate: (page: WorkspacePage) => void;
@@ -32,6 +36,8 @@ export function WorkspaceSidebar({
   onLanguageChange: (language: Language) => void;
   changingLanguage: boolean;
   openRepository: () => void;
+  api: WorkspaceProps["api"];
+  setError: WorkspaceProps["setError"];
 }) {
   const t = translate(snapshot.state.language ?? "en");
   const busy = workspaceBusy(browser, operation);
@@ -107,6 +113,7 @@ export function WorkspaceSidebar({
           </section>
         ))}
       </nav>
+      <UpdateButton api={api} snapshot={snapshot} browser={browser} operation={operation} setError={setError} sidebar />
       <div className="sidebar-footer">
         <div
           className="side-status"

@@ -60,13 +60,17 @@ function updateMac(job) {
   launch("/usr/bin/open", [job.target]);
 }
 
-function updateWindows(job) {
+function updateWindows(job, runInstaller = spawnSync, relaunch = launch) {
   requireFile(job.source, "Windows installer");
-  const result = spawnSync(job.source, ["/S"], { encoding: "utf8", timeout: 15 * 60_000, windowsHide: true });
+  // NSIS owns the progress window while the old launcher is being replaced.
+  const language = job.language === "zh-CN" ? "zh-CN" : "en";
+  const result = runInstaller(job.source, ["/currentuser", "--updated", "/W2HUPDATE", `/W2HLANG=${language}`], {
+    encoding: "utf8", windowsHide: false,
+  });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`Windows installer exited with code ${result.status}`);
   requireFile(job.target, "Installed Windows launcher");
-  launch(job.target);
+  relaunch(job.target);
 }
 
 function shellQuote(value) {
@@ -141,4 +145,5 @@ async function main() {
   }
 }
 
-void main().catch(() => process.exit(1));
+if (require.main === module) void main().catch(() => process.exit(1));
+module.exports = { updateWindows };

@@ -159,7 +159,7 @@ function findMacApplication(root) {
   return application;
 }
 
-function buildJob({ version, platform, executablePath, assetPath, stagingRoot, tempRoot, logPath }) {
+function buildJob({ version, platform, executablePath, assetPath, stagingRoot, tempRoot, logPath, language }) {
   if (platform === "darwin") {
     return {
       version,
@@ -180,6 +180,7 @@ function buildJob({ version, platform, executablePath, assetPath, stagingRoot, t
       logPath,
       source: assetPath,
       target: executablePath,
+      language: language === "zh-CN" ? "zh-CN" : "en",
     };
   }
   if (platform === "linux") {
@@ -256,6 +257,7 @@ function createUpdateController({
   logsDirectory,
   publish,
   logger,
+  getLanguage = () => "en",
   repository = configuredRepository(),
   dependencies = {},
 }) {
@@ -346,6 +348,7 @@ function createUpdateController({
           stagingRoot,
           tempRoot,
           logPath: path.join(logsDirectory, "update-worker.log"),
+          language: getLanguage(),
         });
         const jobPath = path.join(tempRoot, "job.json");
         fs.writeFileSync(jobPath, `${JSON.stringify(job)}\n`, { mode: 0o600 });

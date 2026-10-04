@@ -55,6 +55,36 @@ async function previousInstall(f) {
   return preparePackagedRuntime(f.runtimeOptions);
 }
 
+test("shortcut migration precedes file replacement and survives a failed migration through rollback", async t => {
+  const f = fixture(t); await previousInstall(f);
+  const progress = [], icons = [];
+  f.options.shortcutIconSource = path.resolve(__dirname, "../../../assets/brand/icon.ico");
+  f.services.onProgress = event => progress.push(event);
+  f.services.setShortcutIcons = (root, icon) => {
+    assert.equal(root, f.options.installRoot);
+    assert.equal(JSON.parse(fs.readFileSync(locations(f.options).journal)).status, "prepared");
+    icons.push(icon);
+  };
+  await beginInstall(f.options, f.services);
+  assert.equal(icons.length, 1);
+  assert.equal(fs.readFileSync(path.join(f.options.installRoot, "Web2Harness.exe"), "utf8"), "old");
+  f.application("new");
+  await commitInstall(f.options, f.services);
+  assert.deepEqual(icons, [icons[0], icons[0]]);
+  for (const name of ["saving-application", "updating-shortcuts", "replacing-application", "deploying-runtime", "finishing-installation"]) {
+    assert.ok(progress.some(event => event.stage === name && event.status === "completed" && event.elapsedMs >= 0));
+  }
+  f.resetRegistration();
+  f.services.setShortcutIcons = () => { throw new Error("fixture shortcut failure"); };
+  await assert.rejects(beginInstall(f.options, f.services), /fixture shortcut failure/);
+  assert.equal(JSON.parse(fs.readFileSync(locations(f.options).journal)).status, "prepared");
+  assert.ok(progress.some(event => event.stage === "updating-shortcuts" && event.status === "failed"));
+  await rollbackInstall(f.options, f.services);
+  assert.equal(f.registration(), "old-registration");
+  assert.equal(fs.existsSync(locations(f.options).transaction), false);
+  assert.equal(fs.existsSync(icons[0]), true);
+});
+
 test("installer prepares a fresh runtime before first startup, without editing Codex", async t => {
   const f = fixture(t);
   await beginInstall(f.options, f.services);

@@ -283,7 +283,10 @@ await page.evaluate(()=>window.__fixture.patch({codexCatalogVerified:true}));
 await nav('Usage & Diagnostics');
 check('Usage is automatic with no enable or account-check button',await page.getByText('Always on automatically. The account is identified on the first send.',{exact:true}).count()===1&&await page.getByRole('button',{name:'Check usage tracking',exact:true}).count()===0);
 check('Empty local counts start at zero and show each model',await page.locator('.metric').innerText()==='0 turns'&&await page.locator('.panel .usage-table tbody tr').count()===3);
-await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_200');
+check('Plan reference defaults to Pro 200 before any manual selection',await page.getByRole('combobox',{name:'Plan reference'}).inputValue()==='pro_200');
+await page.getByRole('combobox',{name:'Plan reference'}).click();
+await page.screenshot({path:out+'/plan-menu-en.png'});
+await page.keyboard.press('Escape');
 check('Pro 200 shows the post-October-29 reference with source and daily uncertainty',await page.locator('.official-limits .usage-table tbody').innerText()==='GPT-6 Pro\tWeekly\t100 (notice transcript)\nGPT-5.6 Sol Pro\tDaily\t170 (prior reference)\nBoth Pro models combined\tDaily\t200 (prior reference)\nGPT-5.6 Sol\t—\tNo fixed count published'&&(await page.locator('.official-limits').innerText()).includes('Reference from 2026-10-30')&&(await page.locator('.official-limits').innerText()).includes('applicability after 2026-10-30 is unconfirmed'));
 await page.getByRole('button',{name:'Subscriber notice (transcript)',exact:true}).click();
 check('New weekly count links to the notice transcript rather than a page omitting it',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='openExternal'&&call[1]==='https://community.openai.com/t/pro-200-is-fine-please-don-t-improve-it/1402079')));
@@ -302,6 +305,9 @@ await page.locator('.language-toggle').click();await page.getByRole('region',{na
 check('Chinese usage shows model counters and period uncertainty',await page.getByText('官方周期未确认',{exact:true}).count()===1&&await page.getByRole('columnheader',{name:'最近 24 小时',exact:true}).count()===1);
 check('Chinese policy gives the future reference date and distinguishes unconfirmed daily values',await page.getByText('2026-10-30 起参考',{exact:true}).count()===1&&(await page.locator('.official-limits').innerText()).includes('100 （通知转录）')&&(await page.locator('.official-limits').innerText()).includes('2026-10-30 后是否继续适用待确认'));
 await page.waitForTimeout(250);await page.screenshot({path:out+'/usage-zh.png',fullPage:true});
+await page.getByRole('combobox',{name:'套餐参考'}).click();
+await page.screenshot({path:out+'/plan-menu-zh.png'});
+await page.keyboard.press('Escape');
 await page.setViewportSize({width:390,height:1050});await page.waitForTimeout(250);
 check('Chinese usage fits narrow windows',await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
 await page.screenshot({path:out+'/usage-zh-mobile.png',fullPage:true});
@@ -402,11 +408,46 @@ check('About retains the project license but omits X and the third-party shortcu
 check('About uses one compact page header without a repeated logo',await page.locator('.about-header h1').textContent()==='About'&&await page.locator('.about-header .brand-mark').count()===0&&await page.locator('.about-header').evaluate(el=>el.getBoundingClientRect().height<80));
 check('The operating diagram identifies three components and preserves tool boundaries',await page.locator('.operating-node').count()===3&&await page.locator('.operating-connector').count()===2&&await page.locator('.operating-modes > div').count()===3&&(await page.locator('.operating-loop').innerText()).includes('Codex sandbox and approval rules'));
 await page.evaluate(()=>window.__fixture.emitUpdate({status:'available',version:'1.0.1'}));
-await page.getByRole('button',{name:'Update to 1.0.1',exact:true}).click();
+await page.locator('.row').getByRole('button',{name:'Update to v1.0.1',exact:true}).click();
 check('About retains the existing update action',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='installUpdate')));
+check('Sidebar displays a blue version update action',await page.locator('.sidebar-update').textContent()==='Update to v1.0.1'&&await page.locator('.sidebar-update').evaluate(el=>getComputedStyle(el).backgroundColor==='rgba(51, 156, 255, 0.14)'));
+await page.getByRole('navigation').getByRole('button',{name:'About',exact:true}).focus();
+await page.keyboard.press('Tab');
+check('Sidebar update is keyboard accessible',await page.locator('.sidebar-update').evaluate(el=>el===document.activeElement&&getComputedStyle(el).outlineWidth==='2px'));
+const beforeSidebarUpdate=await page.evaluate(()=>window.__fixture.calls.filter(c=>c[0]==='installUpdate').length);
+await page.locator('.sidebar-update').click();
+check('Sidebar invokes the same update API once',await page.evaluate(()=>window.__fixture.calls.filter(c=>c[0]==='installUpdate').length)===beforeSidebarUpdate+1);
+await page.evaluate(()=>window.__fixture.emitOperation({status:'running',name:'fixture',message:'Busy'}));
+await page.waitForFunction(()=>document.querySelector('.sidebar-update')?.disabled&&document.querySelector('.row button')?.disabled);
+check('Both update entries are disabled during an operation',await page.locator('.sidebar-update').isDisabled()&&await page.locator('.row button').isDisabled());
+await page.evaluate(()=>window.__fixture.emitOperation({status:'completed',name:'fixture',message:'Done'}));
+await page.waitForFunction(()=>!document.querySelector('.sidebar-update')?.disabled);
+await page.evaluate(()=>window.__fixture.emitBrowser({status:'running'}));
+await page.waitForFunction(()=>document.querySelector('.sidebar-update')?.disabled);
+check('Browser turns block sidebar updates',await page.locator('.sidebar-update').isDisabled());
+await page.evaluate(()=>window.__fixture.emitBrowser({status:'ready'}));
+await page.waitForFunction(()=>!document.querySelector('.sidebar-update')?.disabled);
+for(const language of ['en','zh-CN']) {
+ if(language==='zh-CN') { await page.locator('.language-toggle').click();await page.getByRole('region',{name:'关于',exact:true}).waitFor(); }
+ for(const width of [1440,760]) {
+  await page.setViewportSize({width,height:1050});await waitLayout();
+  if(await page.locator('.app-shell:not(.is-sidebar-open)').count()) { await page.locator('.app-titlebar .icon-button').first().click();await waitLayout(); }
+  check(`Update notice fits sidebar ${language} ${width}`,await page.locator('.sidebar-update').evaluate(el=>el.scrollWidth<=el.clientWidth&&el.getBoundingClientRect().bottom<=innerHeight));
+  await page.screenshot({path:`${out}/update-${language}-${width}.png`});
+ }
+ await page.setViewportSize({width:1440,height:1050});await waitLayout();
+}
+await page.locator('.language-toggle').click();await page.getByRole('region',{name:'About',exact:true}).waitFor();
 await page.evaluate(()=>window.__fixture.emitUpdate({status:'downloading',version:'1.0.1'}));
+await page.waitForFunction(()=>document.querySelector('.sidebar-update')?.textContent==='Downloading update…');
 check('Downloading update cannot be started twice',await page.locator('.row button').isDisabled());
+check('Sidebar shows download progress state',await page.locator('.sidebar-update').isDisabled()&&await page.locator('.sidebar-update').textContent()==='Downloading update…');
+await page.evaluate(()=>window.__fixture.emitUpdate({status:'installing',version:'1.0.1'}));
+await page.waitForFunction(()=>document.querySelector('.sidebar-update')?.textContent==='Installing update…');
+check('Sidebar shows installation progress state',await page.locator('.sidebar-update').isDisabled()&&await page.locator('.sidebar-update').textContent()==='Installing update…');
 await page.evaluate(()=>window.__fixture.emitUpdate({status:'disabled'}));
+await page.waitForFunction(()=>!document.querySelector('.sidebar-update'));
+check('Sidebar update stays hidden when no update is available',await page.locator('.sidebar-update').count()===0);
 await page.getByRole('button',{name:'Documentation',exact:true}).focus();
 await page.keyboard.press('Tab');
 check('Keyboard focus is visible on resource controls',await page.getByRole('button',{name:'GitHub repository',exact:true}).evaluate(el=>el===document.activeElement&&getComputedStyle(el).outlineWidth==='2px'));

@@ -193,7 +193,7 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
                   {t("此账户记录起始", "Account tracking since")} · {new Date(usage.trackingSince).toLocaleString(language)}
                 </p>}
               </div>
-              <OfficialLimits language={language} api={api} plan={usage?.plan ?? null} />
+              <OfficialLimits language={language} api={api} />
             </div>
           </>
         )}

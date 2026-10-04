@@ -2,14 +2,13 @@ import { useState } from "react";
 import policy from "../../../electron/limits/limits-policy.json";
 import { Button } from "../../components/Buttons";
 import { translate } from "../workspace/labels";
-import type { LimitsApi, LimitsSnapshot } from "./limits-types";
+import type { LimitsApi } from "./limits-types";
 
-export function OfficialLimits({ language, api, plan }: {
-  language: "en" | "zh-CN"; api: LimitsApi; plan: LimitsSnapshot["plan"];
+export function OfficialLimits({ language, api }: {
+  language: "en" | "zh-CN"; api: LimitsApi;
 }) {
   const t = translate(language);
-  const [selection, setSelection] = useState<string | null>(null);
-  const tier = selection ?? (plan === "pro_100" || plan === "pro_200" ? plan : "other");
+  const [tier, setTier] = useState("pro_200");
   const hasProReference = tier === "pro_100" || tier === "pro_200";
   const unspecified = t("未公开固定次数", "No fixed count published");
   const shared = t("两种 Pro 模型共享", "Both Pro models combined");
@@ -40,7 +39,7 @@ export function OfficialLimits({ language, api, plan }: {
     </div>
     <label className="official-plan">
       <span>{t("套餐参考", "Plan reference")}</span>
-      <select value={tier} onChange={event => setSelection(event.target.value)}>
+      <select value={tier} onChange={event => setTier(event.target.value)}>
         <option value="other">{t("其他／未识别套餐", "Other / unidentified plan")}</option>
         <option value="pro_100">Pro $100</option>
         <option value="pro_200">Pro $200</option>
