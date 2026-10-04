@@ -8,7 +8,11 @@ const { prepareUninstall, finishUninstall, runPowerShell } = require("../../elec
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "web2harness-uninstall-test-"));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  t.after(() => {
+    assert.equal(path.dirname(fs.realpathSync(root)), fs.realpathSync(os.tmpdir()));
+    assert.match(path.basename(root), /^web2harness-uninstall-test-/);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
   const options = { homeDir: root, appData: path.join(root, "AppData"), localAppData: path.join(root, "LocalAppData"),
     installRoot: path.join(root, "install"), ownerPid: process.pid };
   const profile = { coreHome: path.join(root, ".web2harness"), codexHome: path.join(root, ".codex"), userData: path.join(options.appData, "Web2Harness") };
@@ -29,6 +33,12 @@ test("ordinary uninstall detaches while preserving runtime, browser data, prefer
   const f = fixture(t);
   fs.mkdirSync(path.join(f.profile.userData, "Partitions"));
   fs.writeFileSync(path.join(f.profile.userData, "Partitions", "fixture-cookie"), "fixture-cookie");
+  const stagingFiles = ["secrets/runtime-key-0123456789abcdef0123456789abcdef.tmp", "passkey-login/transfer-fixture/storage-state.json"];
+  for (const relative of stagingFiles) {
+    const file = path.join(f.profile.userData, relative);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "private-fixture-transfer");
+  }
   await prepareUninstall(f.options, f.services);
   assert.deepEqual(f.calls, ["assertLauncherClosed", "preflightIntegration", "stopRuntime", "removeIntegration", "removeAutostart", "assertLauncherClosed"]);
   assert.equal(uninstallInProgress(f.options.appData, f.options.installRoot), true);
@@ -41,6 +51,9 @@ test("ordinary uninstall detaches while preserving runtime, browser data, prefer
   assert.equal(state.autoStart, false);
   assert.equal(state.coreSetupComplete, false);
   finishUninstall(f.options);
+  for (const relative of stagingFiles) {
+    assert.equal(fs.readFileSync(path.join(f.profile.userData, relative), "utf8"), "private-fixture-transfer");
+  }
   assert.equal(fs.readFileSync(path.join(f.record.installerCache, "installer.exe"), "utf8"), "fixture-installer-cache");
   assert.equal(uninstallInProgress(f.options.appData, f.options.installRoot), false);
   assert.equal(fs.readFileSync(path.join(f.profile.codexHome, "auth.json"), "utf8"), "private-fixture-auth");
@@ -59,6 +72,40 @@ test("explicit purge removes both owned data roots and its own record, never Cod
   assert.equal(fs.readFileSync(other, "utf8"), "keep");
   assert.equal(fs.readFileSync(path.join(f.profile.codexHome, "auth.json"), "utf8"), "private-fixture-auth");
 });
+
+for (const populated of [false, true]) test(`full uninstall accepts application staging directories (populated=${populated})`, async t => {
+  const f = fixture(t);
+  for (const directory of ["secrets", "passkey-login"]) fs.mkdirSync(path.join(f.profile.userData, directory));
+  if (populated) {
+    fs.writeFileSync(path.join(f.profile.userData, "secrets", "runtime-key-0123456789abcdef0123456789abcdef.tmp"), "private-fixture-transfer");
+    const transfer = path.join(f.profile.userData, "passkey-login", "transfer-fixture");
+    fs.mkdirSync(transfer);
+    fs.writeFileSync(path.join(transfer, "storage-state.json"), "private-fixture-session");
+  }
+  await prepareUninstall({ ...f.options, purge: true }, f.services);
+  finishUninstall(f.options);
+  assert.equal(fs.existsSync(f.profile.userData), false);
+  assert.equal(fs.existsSync(f.profile.coreHome), false);
+  assert.equal(fs.existsSync(f.record.installerCache), false);
+  assert.equal(fs.existsSync(recordPaths(f.options.appData, f.options.installRoot).profile), false);
+  assert.equal(fs.readFileSync(path.join(f.profile.codexHome, "auth.json"), "utf8"), "private-fixture-auth");
+});
+
+for (const directory of ["secrets", "passkey-login"]) {
+  for (const nested of [false, true]) test(`full uninstall rejects redirected ${directory} (nested=${nested}) before mutations`, async t => {
+    const f = fixture(t);
+    const staging = path.join(f.profile.userData, directory);
+    if (nested) fs.mkdirSync(staging);
+    fs.symlinkSync(f.profile.codexHome, nested ? path.join(staging, "redirected") : staging,
+      process.platform === "win32" ? "junction" : "dir");
+    await assert.rejects(prepareUninstall({ ...f.options, purge: true }, f.services), /link/);
+    assert.deepEqual(f.calls, ["assertLauncherClosed"]);
+    assert.equal(fs.readFileSync(path.join(f.profile.codexHome, "auth.json"), "utf8"), "private-fixture-auth");
+    assert.ok(fs.existsSync(path.join(f.profile.coreHome, "config.json")));
+    assert.ok(fs.existsSync(path.join(f.profile.userData, OWNER_FILE)));
+    assert.equal(uninstallInProgress(f.options.appData, f.options.installRoot), false);
+  });
+}
 
 for (const stage of ["assertLauncherClosed", "preflightIntegration", "stopRuntime", "removeIntegration"]) {
   test(`failure in ${stage} prevents data removal and leaves recovery evidence`, async t => {

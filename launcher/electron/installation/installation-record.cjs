@@ -13,6 +13,8 @@ const CORE_ENTRIES = new Set([
 ]);
 const DESKTOP_ENTRIES = new Set([
   OWNER_FILE, "launcher-state.json", "window-state.json", "limits.json", "logs",
+  // RuntimeHost stages MCP credentials and passkey transfers under desktop userData.
+  "secrets", "passkey-login",
   "Partitions", "Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache", "DawnWebGPUCache",
   "Local Storage", "Session Storage", "IndexedDB", "Service Worker", "Network", "blob_storage",
   "Preferences", "Local State", "Cookies", "Cookies-journal", "Network Persistent State",

@@ -95,10 +95,10 @@ bun run smoke
 
 ### Windows 内嵌 Bun 回归
 
-Windows 的 `app:package` 包含启动器 `build:runtime`，后者调用 `scripts/build-windows-helpers.ts`。该脚本构建独立安装/卸载 helper，然后使用包内实际 Bun 执行两套共享安装测试：
+Windows 的 `app:package` 包含启动器 `build:runtime`，后者调用 `scripts/build-windows-helpers.ts`。该脚本构建独立安装/卸载 helper，然后使用包内实际 Bun 执行共享安装、运行时部署及卸载测试：
 
 ```powershell
-& .\launcher\build\runtime\runtime\bun.exe test ./launcher/tests/installation/windows-install.test.cjs ./launcher/tests/installation/runtime-install.test.cjs
+& .\launcher\build\runtime\runtime\bun.exe test ./launcher/tests/installation/windows-install.test.cjs ./launcher/tests/installation/runtime-install.test.cjs ./launcher/tests/installation/windows-uninstall.test.cjs
 ```
 
 此门禁是强制步骤，失败即停止打包。`bun run verify` 在 Node 下执行启动器测试，不能替代内嵌 Bun 门禁。覆盖全新部署、同版本替换/修复、复制和回执失败、重复取消，以及 setup 进程未回滚退出后的重试。不得用仅加载 helper 的探针替代。夹具仍不能满足真实 NSIS 验收。
@@ -186,7 +186,7 @@ Shell 入口脚本必须以 Git 模式 `100755` 提交。Linux 工作流在检�
 | 升级/覆盖和静默升级 | 保留数据与集成，不出现清理页。拒绝通用 `--delete-app-data`；普通静默卸载始终保留数据。 |
 | 卸载准备失败或程序文件忙 | 删除前停止；恢复忙碌程序文件并保留卸载注册以便重试。 |
 
-覆盖活动启动器/任务、孤立运行时 drain、路由/hook 被改动、归属缺失/损坏、自定义根目录、未知文件、junction、权限/锁定和部分清理重试。不得终止未验证归属的进程。卸载 helper 必须从私有临时目录运行，即使已安装运行时不可用；退出后仍可访问正常/失败启动路径。
+覆盖活动启动器/任务、孤立运行时 drain、路由/hook 被改动、归属缺失/损坏、自定义根目录、未知文件、junction、权限/锁定和部分清理重试。包括凭据和登录中转创建的桌面 `secrets`、`passkey-login` 目录为空及存在文件两种情况：普通卸载保留，明确清理数据时删除。若目录自身或内部存在链接，必须在集成或数据变更前停止清理。不得终止未验证归属的进程。卸载 helper 必须从私有临时目录运行，即使已安装运行时不可用；退出后仍可访问正常/失败启动路径。
 
 <a id="platform-acceptance"></a>
 

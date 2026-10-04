@@ -14,11 +14,12 @@ if (process.platform === "win32") {
     target: "bun", format: "cjs", minify: true, outdir: output, naming: "install.cjs",
   });
   if (!setup.success) throw new Error(setup.logs.map(log => log.message).join("; "));
-  // Run the shared setup/deployment tests with the exact runtime shipped in NSIS.
+  // Run the shared setup, deployment and uninstall tests with the runtime shipped in NSIS.
   // Node-only tests do not cover Bun filesystem compatibility (e.g. cpSync).
   const regression = Bun.spawnSync([
     resolve(import.meta.dir, "../launcher/build/runtime/runtime/bun.exe"), "test",
     "./launcher/tests/installation/windows-install.test.cjs", "./launcher/tests/installation/runtime-install.test.cjs",
+    "./launcher/tests/installation/windows-uninstall.test.cjs",
   ], { cwd: resolve(import.meta.dir, ".."), stdout: "inherit", stderr: "inherit" });
   if (regression.exitCode !== 0) throw new Error("Embedded Bun installation regression failed; package creation stopped");
   console.log(`Built and checked independent Windows setup helpers: ${output}`);

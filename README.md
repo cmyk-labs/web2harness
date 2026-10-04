@@ -134,7 +134,7 @@ User-visible features, fixes, and compatibility changes are recorded by version,
 
 | Version | Date | Changes |
 | --- | --- | --- |
-| 1.0.0 | 2026-10-04 | Initial Web2Harness version. Adds account-aware Web models and reasoning efforts to Codex, defaults to native tools, and supports conversation reuse, saved chat history, and context management. Includes MCP Bridge and Browser-only modes, an English and Simplified Chinese desktop workspace, connection settings, runtime controls, and diagnostics. Provides native packaging for Windows, macOS, and Linux, with runtime preparation during Windows setup and lightweight warm-start checks. Installer publication is pending. |
+| 1.0.0 | 2026-10-04 | Initial Web2Harness version. Adds account-aware Web models and reasoning efforts to Codex, defaults to native tools, and supports conversation reuse, saved chat history, and context management. Includes MCP Bridge and Browser-only modes, an English and Simplified Chinese desktop workspace, connection settings, runtime controls, and diagnostics. Provides native packaging for Windows, macOS, and Linux, with runtime preparation during Windows setup and lightweight warm-start checks. |
 
 <a id="documentation"></a>
 

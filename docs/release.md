@@ -95,10 +95,10 @@ The smoke checks version identity, manifest, absence of ephemeral build paths, t
 
 ### Windows embedded Bun regression
 
-Windows `app:package` includes `launcher`'s `build:runtime`, which runs `scripts/build-windows-helpers.ts`. That script builds the independent setup/uninstall helpers and runs both shared installation suites with the exact Bun binary embedded in the package:
+Windows `app:package` includes `launcher`'s `build:runtime`, which runs `scripts/build-windows-helpers.ts`. That script builds the independent setup/uninstall helpers and runs the shared installation, runtime-deployment and uninstall suites with the exact Bun binary embedded in the package:
 
 ```powershell
-& .\launcher\build\runtime\runtime\bun.exe test ./launcher/tests/installation/windows-install.test.cjs ./launcher/tests/installation/runtime-install.test.cjs
+& .\launcher\build\runtime\runtime\bun.exe test ./launcher/tests/installation/windows-install.test.cjs ./launcher/tests/installation/runtime-install.test.cjs ./launcher/tests/installation/windows-uninstall.test.cjs
 ```
 
 This gate is mandatory and stops package creation on failure. `bun run verify` runs launcher tests under Node; that result does not replace the embedded-Bun gate. Verify fresh deployment, same-version replacement/repair, copy and receipt failures, repeated cancellation, and retry after a setup process exits without rollback. Do not replace these tests with helper load-only probes. Fixtures still do not satisfy actual NSIS acceptance.
@@ -186,7 +186,7 @@ Run these cases on a disposable Windows test OS, including interactive and silen
 | Upgrade/overwrite and silent upgrade | Preserve data/integration without a cleanup page. Generic `--delete-app-data` is rejected; silent ordinary uninstall retains data. |
 | Failed uninstall preparation or busy program files | Stop before removal; restore busy program files and keep uninstall registration available for retry. |
 
-Cover active launcher/tasks, orphan runtime drain, changed routes/hooks, missing/corrupt ownership, custom roots, unknown files, junctions, permissions/locks, and partial-cleanup retry. Never terminate an unverified process. The uninstall helper must work from its private temporary directory even when the installed runtime is unavailable; normal/failed startup must remain reachable after it exits.
+Cover active launcher/tasks, orphan runtime drain, changed routes/hooks, missing/corrupt ownership, custom roots, unknown files, junctions, permissions/locks, and partial-cleanup retry. Include empty and populated desktop `secrets` and `passkey-login` directories created by credential and login transfers: ordinary uninstall preserves them, while explicit data cleanup removes them. Links at or inside these directories must stop cleanup before integration or data changes. Never terminate an unverified process. The uninstall helper must work from its private temporary directory even when the installed runtime is unavailable; normal/failed startup must remain reachable after it exits.
 
 <a id="platform-acceptance"></a>
 
