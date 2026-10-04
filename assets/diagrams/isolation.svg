@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="930" viewBox="0 0 1000 930" role="img" lang="en" aria-labelledby="diagram-title diagram-description">
+<title id="diagram-title">One implementation, two isolated environments</title>
+<desc id="diagram-description">Regular use and DEV execute the same application code with independent configuration, credentials, browser state, processes and workspaces. Dashed links mean code reuse, not communication between environments.</desc>
+<style >text{font-family:Arial, "Microsoft YaHei", "Noto Sans CJK SC", sans-serif}</style>
+<defs ><marker id="arrow-request" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-return" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-error" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#9C4B4B"/></marker>
+<marker id="arrow-dependency" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#64748B"/></marker></defs>
+<rect x="0" y="0" width="1000" height="930" fill="#FFFFFF"/>
+<text x="26" y="45" font-size="25" fill="#18324F" font-weight="600" text-anchor="start" data-fit="main title" data-fit-x="24" data-fit-y="16" data-fit-width="952" data-fit-height="40">One implementation, two isolated environments</text>
+<line x1="24" y1="66" x2="976" y2="66" stroke="#CBD5E1" stroke-width="1"/>
+<g id="regular" data-group="regular"><rect x="20" y="280" width="460" height="365" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+<text x="36" y="306" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="regular label" data-fit-x="34" data-fit-y="290" data-fit-width="432" data-fit-height="345">Regular use — protected</text></g>
+<g id="dev" data-group="dev"><rect x="520" y="280" width="460" height="365" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+<text x="536" y="306" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="dev label" data-fit-x="534" data-fit-y="290" data-fit-width="432" data-fit-height="345">DEV acceptance — task-owned</text></g>
+<path id="regular-code" data-edge="regular-code" data-from="shared-code" data-to="regular" d="M 360 195 L 360 235 L 250 235 L 250 280" fill="none" stroke="#64748B" stroke-width="1.6" stroke-linejoin="miter" stroke-dasharray="6 4" marker-end="url(#arrow-dependency)"/>
+<path id="dev-code" data-edge="dev-code" data-from="shared-code" data-to="dev" d="M 640 195 L 640 235 L 750 235 L 750 280" fill="none" stroke="#64748B" stroke-width="1.6" stroke-linejoin="miter" stroke-dasharray="6 4" marker-end="url(#arrow-dependency)"/>
+<g id="shared-code" data-node="shared-code"><rect x="220" y="90" width="560" height="105" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="500" y="135" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="shared-code title" data-fit-x="234" data-fit-y="100" data-fit-width="532" data-fit-height="85">Shared application implementation</text>
+<text x="500" y="163" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="shared-code body" data-fit-x="234" data-fit-y="100" data-fit-width="532" data-fit-height="85">Responses, browser adapter, tools and lifecycle</text></g>
+<g id="production-state" data-node="production-state"><rect x="45" y="350" width="410" height="250" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="250" y="437.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="production-state title" data-fit-x="59" data-fit-y="360" data-fit-width="382" data-fit-height="230">Existing user environment</text>
+<text x="250" y="465.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="production-state body" data-fit-x="59" data-fit-y="360" data-fit-width="382" data-fit-height="230">Regular application / Codex configuration</text>
+<text x="250" y="485.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="production-state body" data-fit-x="59" data-fit-y="360" data-fit-width="382" data-fit-height="230">User login and browser profile</text>
+<text x="250" y="505.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="production-state body" data-fit-x="59" data-fit-y="360" data-fit-width="382" data-fit-height="230">Owned processes, endpoints and services</text>
+<text x="250" y="525.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="production-state body" data-fit-x="59" data-fit-y="360" data-fit-width="382" data-fit-height="230">Active tasks and project workspaces</text></g>
+<g id="dev-state" data-node="dev-state"><rect x="545" y="350" width="410" height="250" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="750" y="437.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="dev-state title" data-fit-x="559" data-fit-y="360" data-fit-width="382" data-fit-height="230">Independent DEV environment</text>
+<text x="750" y="465.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="dev-state body" data-fit-x="559" data-fit-y="360" data-fit-width="382" data-fit-height="230">DEV application / CODEX_HOME</text>
+<text x="750" y="485.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="dev-state body" data-fit-x="559" data-fit-y="360" data-fit-width="382" data-fit-height="230">Independent login and browser profile</text>
+<text x="750" y="505.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="dev-state body" data-fit-x="559" data-fit-y="360" data-fit-width="382" data-fit-height="230">Verified DEV processes and endpoints</text>
+<text x="750" y="525.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="dev-state body" data-fit-x="559" data-fit-y="360" data-fit-width="382" data-fit-height="230">Dedicated disposable fixture workspace</text></g>
+<g id="remote-isolation" data-node="remote-isolation"><rect x="20" y="710" width="960" height="90" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="500" y="747.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="remote-isolation title" data-fit-x="34" data-fit-y="720" data-fit-width="932" data-fit-height="70">MCP Bridge: verify remote isolation too</text>
+<text x="500" y="775.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="remote-isolation body" data-fit-x="34" data-fit-y="720" data-fit-width="932" data-fit-height="70">User confirms the DEV tunnel; verify the actual DEV connector binding before connecting.</text></g>
+<g data-edge-label="regular-code"><rect x="175.11" y="222" width="89.78" height="26" fill="#FFFFFF"/>
+<text x="220" y="239" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="regular-code label" data-fit-x="140" data-fit-y="225" data-fit-width="160" data-fit-height="20">Same code</text></g>
+<g data-edge-label="dev-code"><rect x="735.11" y="222" width="89.78" height="26" fill="#FFFFFF"/>
+<text x="780" y="239" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="dev-code label" data-fit-x="700" data-fit-y="225" data-fit-width="160" data-fit-height="20">Same code</text></g>
+<line x1="24" y1="844" x2="976" y2="844" stroke="#CBD5E1"/>
+<text x="26" y="870" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 1" data-fit-x="24" data-fit-y="856" data-fit-width="952" data-fit-height="52">Dashed links mean code reuse. DEV must not modify or stop the protected regular environment.</text>
+<text x="26" y="896" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 2" data-fit-x="24" data-fit-y="856" data-fit-width="952" data-fit-height="52">CPU, network capacity and same-account quota can remain shared; isolated state does not reserve capacity.</text>
+</svg>

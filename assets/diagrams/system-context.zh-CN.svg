@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="660" viewBox="0 0 1000 660" role="img" lang="zh-CN" aria-labelledby="diagram-title diagram-description">
+<title id="diagram-title">模型在哪里推理，工具在哪里执行</title>
+<desc id="diagram-description">Codex、Web2Harness、浏览器及本地工具都在用户计算机内。网页与原生模型使用不同的远端推理路径，箭头表示请求与响应通道。</desc>
+<style >text{font-family:Arial, "Microsoft YaHei", "Noto Sans CJK SC", sans-serif}</style>
+<defs ><marker id="arrow-request" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-return" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-error" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#9C4B4B"/></marker>
+<marker id="arrow-dependency" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#64748B"/></marker></defs>
+<rect x="0" y="0" width="1000" height="660" fill="#FFFFFF"/>
+<text x="26" y="45" font-size="25" fill="#18324F" font-weight="600" text-anchor="start" data-fit="main title" data-fit-x="24" data-fit-y="16" data-fit-width="952" data-fit-height="40">模型在哪里推理，工具在哪里执行</text>
+<line x1="24" y1="66" x2="976" y2="66" stroke="#CBD5E1" stroke-width="1"/>
+<g id="local" data-group="local"><rect x="20" y="85" width="580" height="440" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+<text x="36" y="111" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="local label" data-fit-x="34" data-fit-y="95" data-fit-width="552" data-fit-height="420">用户计算机</text></g>
+<g id="remote" data-group="remote"><rect x="650" y="85" width="330" height="440" fill="#EDF2F7" stroke="#CBD5E1" stroke-width="1.4" stroke-dasharray="7 5"/>
+<text x="666" y="111" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="remote label" data-fit-x="664" data-fit-y="95" data-fit-width="302" data-fit-height="420">远端服务</text></g>
+<path id="responses" data-edge="responses" data-from="codex" data-to="bridge" d="M 245 195 L 355 195" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<path id="execution" data-edge="execution" data-from="codex" data-to="tools" d="M 150 245 L 150 365" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<path id="web-route" data-edge="web-route" data-from="bridge" data-to="browser" d="M 457 245 L 457 365" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<path id="native-route" data-edge="native-route" data-from="bridge" data-to="native" d="M 560 195 L 695 195" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<path id="web-inference" data-edge="web-inference" data-from="browser" data-to="web" d="M 560 415 L 695 415" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<g id="codex" data-node="codex"><rect x="55" y="145" width="190" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="150" y="187.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="codex title" data-fit-x="69" data-fit-y="155" data-fit-width="162" data-fit-height="80">Codex</text>
+<text x="150" y="215.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="codex body" data-fit-x="69" data-fit-y="155" data-fit-width="162" data-fit-height="80">任务与审批</text></g>
+<g id="bridge" data-node="bridge"><rect x="355" y="145" width="205" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="457.5" y="187.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="bridge title" data-fit-x="369" data-fit-y="155" data-fit-width="177" data-fit-height="80">Web2Harness</text>
+<text x="457.5" y="215.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="bridge body" data-fit-x="369" data-fit-y="155" data-fit-width="177" data-fit-height="80">本地请求路由</text></g>
+<g id="tools" data-node="tools"><rect x="55" y="365" width="190" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="150" y="407.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="tools title" data-fit-x="69" data-fit-y="375" data-fit-width="162" data-fit-height="80">工具／工作区</text>
+<text x="150" y="435.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="tools body" data-fit-x="69" data-fit-y="375" data-fit-width="162" data-fit-height="80">Codex 沙箱</text></g>
+<g id="browser" data-node="browser"><rect x="355" y="365" width="205" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="457.5" y="407.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="browser title" data-fit-x="369" data-fit-y="375" data-fit-width="177" data-fit-height="80">应用内浏览器</text>
+<text x="457.5" y="435.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="browser body" data-fit-x="369" data-fit-y="375" data-fit-width="177" data-fit-height="80">ChatGPT 任务页面</text></g>
+<g id="native" data-node="native"><rect x="695" y="145" width="245" height="100" fill="#EDF2F7" stroke="#18324F" stroke-width="1.4"/>
+<text x="817.5" y="187.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="native title" data-fit-x="709" data-fit-y="155" data-fit-width="217" data-fit-height="80">原生模型后端</text>
+<text x="817.5" y="215.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="native body" data-fit-x="709" data-fit-y="155" data-fit-width="217" data-fit-height="80">原有 Codex 服务路径</text></g>
+<g id="web" data-node="web"><rect x="695" y="365" width="245" height="100" fill="#EDF2F7" stroke="#18324F" stroke-width="1.4"/>
+<text x="817.5" y="407.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="web title" data-fit-x="709" data-fit-y="375" data-fit-width="217" data-fit-height="80">ChatGPT Web</text>
+<text x="817.5" y="435.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="web body" data-fit-x="709" data-fit-y="375" data-fit-width="217" data-fit-height="80">网页模型推理</text></g>
+<g data-edge-label="responses"><rect x="255.18" y="172" width="89.64" height="46" fill="#FFFFFF"/>
+<text x="300" y="189" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="responses label" data-fit-x="255" data-fit-y="175" data-fit-width="90" data-fit-height="40">Responses</text>
+<text x="300" y="209" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="responses label" data-fit-x="255" data-fit-y="175" data-fit-width="90" data-fit-height="40">API</text></g>
+<g data-edge-label="execution"><rect x="77.11" y="292" width="145.78" height="26" fill="#FFFFFF"/>
+<text x="150" y="309" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="execution label" data-fit-x="70" data-fit-y="295" data-fit-width="160" data-fit-height="20">获准工具／执行结果</text></g>
+<g data-edge-label="web-route"><rect x="396.29" y="292" width="121.42" height="26" fill="#FFFFFF"/>
+<text x="457" y="309" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="web-route label" data-fit-x="377" data-fit-y="295" data-fit-width="160" data-fit-height="20">Web 请求／回复</text></g>
+<g data-edge-label="native-route"><rect x="590.16" y="182" width="73.68" height="26" fill="#FFFFFF"/>
+<text x="627" y="199" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="native-route label" data-fit-x="571" data-fit-y="185" data-fit-width="112" data-fit-height="20">原生模型</text></g>
+<g data-edge-label="web-inference"><rect x="590.16" y="402" width="73.68" height="26" fill="#FFFFFF"/>
+<text x="627" y="419" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="web-inference label" data-fit-x="571" data-fit-y="405" data-fit-width="112" data-fit-height="20">网页交互</text></g>
+<line x1="24" y1="574" x2="976" y2="574" stroke="#CBD5E1"/>
+<text x="26" y="600" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 1" data-fit-x="24" data-fit-y="586" data-fit-width="952" data-fit-height="52">双向箭头表示请求与响应通道。模型不会直接执行本地工具。</text>
+<text x="26" y="626" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 2" data-fit-x="24" data-fit-y="586" data-fit-width="952" data-fit-height="52">无论使用哪种工具模式，工具执行、沙箱与审批都由 Codex 负责。</text>
+</svg>

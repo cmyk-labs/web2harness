@@ -1,0 +1,350 @@
+{
+  "schemaVersion": 1,
+  "locale": "en",
+  "kind": "workflow",
+  "width": 1000,
+  "height": 1040,
+  "title": "Web conversations: reuse and requested compaction",
+  "description": "Ordinary requests check conversation identity and page availability before reuse. Compaction is a separate Codex request, not a mandatory phase of each turn.",
+  "groups": [
+    {
+      "id": "ordinary",
+      "x": 20,
+      "y": 90,
+      "width": 620,
+      "height": 790,
+      "label": "Ordinary task and tool-result requests",
+      "style": "local"
+    },
+    {
+      "id": "compaction",
+      "x": 670,
+      "y": 90,
+      "width": 310,
+      "height": 790,
+      "label": "Only when Codex requests compaction",
+      "style": "local"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "eligible",
+      "x": 220,
+      "y": 165,
+      "width": 220,
+      "height": 120,
+      "title": "Can this page be reused?",
+      "body": [
+        "Matching identity and usable page"
+      ],
+      "style": "decision"
+    },
+    {
+      "id": "reuse",
+      "x": 80,
+      "y": 355,
+      "width": 210,
+      "height": 100,
+      "title": "Reuse retained page",
+      "body": [
+        "Continue task context"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "create",
+      "x": 405,
+      "y": 355,
+      "width": 210,
+      "height": 100,
+      "title": "Create a page",
+      "body": [
+        "First request / mismatch",
+        "Page unavailable"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "execute",
+      "x": 220,
+      "y": 515,
+      "width": 220,
+      "height": 90,
+      "title": "Run the model turn",
+      "body": [
+        "Keep task ownership"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "retain",
+      "x": 220,
+      "y": 715,
+      "width": 220,
+      "height": 105,
+      "title": "Retain the conversation",
+      "body": [
+        "Await the next request"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "compact-request",
+      "x": 710,
+      "y": 165,
+      "width": 230,
+      "height": 100,
+      "title": "Compaction requested",
+      "body": [
+        "Separate Codex request"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "checkpoint",
+      "x": 710,
+      "y": 355,
+      "width": 230,
+      "height": 100,
+      "title": "Create a checkpoint",
+      "body": [
+        "Route-specific summary path"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "retire",
+      "x": 710,
+      "y": 555,
+      "width": 230,
+      "height": 90,
+      "title": "Retire the old epoch",
+      "body": [
+        "Finish owned cleanup"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "new-epoch",
+      "x": 710,
+      "y": 755,
+      "width": 230,
+      "height": 105,
+      "title": "New conversation",
+      "body": [
+        "First request uses compacted context"
+      ],
+      "style": "default"
+    }
+  ],
+  "edges": [
+    {
+      "id": "yes",
+      "from": "eligible",
+      "to": "reuse",
+      "points": [
+        [
+          275,
+          285
+        ],
+        [
+          275,
+          305
+        ],
+        [
+          185,
+          305
+        ],
+        [
+          185,
+          355
+        ]
+      ],
+      "label": "Yes",
+      "labelX": 185,
+      "labelY": 320,
+      "labelWidth": 90
+    },
+    {
+      "id": "no",
+      "from": "eligible",
+      "to": "create",
+      "points": [
+        [
+          385,
+          285
+        ],
+        [
+          385,
+          305
+        ],
+        [
+          510,
+          305
+        ],
+        [
+          510,
+          355
+        ]
+      ],
+      "label": "No",
+      "labelX": 510,
+      "labelY": 320,
+      "labelWidth": 90
+    },
+    {
+      "id": "reused",
+      "from": "reuse",
+      "to": "execute",
+      "points": [
+        [
+          185,
+          455
+        ],
+        [
+          185,
+          480
+        ],
+        [
+          275,
+          480
+        ],
+        [
+          275,
+          515
+        ]
+      ]
+    },
+    {
+      "id": "created",
+      "from": "create",
+      "to": "execute",
+      "points": [
+        [
+          510,
+          455
+        ],
+        [
+          510,
+          480
+        ],
+        [
+          385,
+          480
+        ],
+        [
+          385,
+          515
+        ]
+      ]
+    },
+    {
+      "id": "finished",
+      "from": "execute",
+      "to": "retain",
+      "points": [
+        [
+          330,
+          605
+        ],
+        [
+          330,
+          715
+        ]
+      ],
+      "label": "Turn completes",
+      "labelX": 330,
+      "labelY": 660,
+      "labelWidth": 165
+    },
+    {
+      "id": "next-request",
+      "from": "retain",
+      "to": "eligible",
+      "points": [
+        [
+          220,
+          760
+        ],
+        [
+          40,
+          760
+        ],
+        [
+          40,
+          215
+        ],
+        [
+          220,
+          215
+        ]
+      ],
+      "label": "Next request in this task",
+      "labelX": 130,
+      "labelY": 760,
+      "labelWidth": 140
+    },
+    {
+      "id": "compact",
+      "from": "compact-request",
+      "to": "checkpoint",
+      "points": [
+        [
+          825,
+          265
+        ],
+        [
+          825,
+          355
+        ]
+      ],
+      "label": "Summarize",
+      "labelX": 825,
+      "labelY": 310,
+      "labelWidth": 150
+    },
+    {
+      "id": "checkpoint-ready",
+      "from": "checkpoint",
+      "to": "retire",
+      "points": [
+        [
+          825,
+          455
+        ],
+        [
+          825,
+          555
+        ]
+      ],
+      "label": "Checkpoint ready",
+      "labelX": 825,
+      "labelY": 505,
+      "labelWidth": 155
+    },
+    {
+      "id": "after-cleanup",
+      "from": "retire",
+      "to": "new-epoch",
+      "points": [
+        [
+          825,
+          645
+        ],
+        [
+          825,
+          755
+        ]
+      ],
+      "label": "Next task request",
+      "labelX": 825,
+      "labelY": 700,
+      "labelWidth": 150
+    }
+  ],
+  "notes": [
+    "Identity includes thread, model route ID and family, effort, provider settings and compaction epoch; all must remain compatible.",
+    "Applies to eligible retained Sol / Pro routes. Luna, browser-only and fresh-per-turn policies use other paths.",
+    "Saving chat history is independent of reuse. The architecture manual describes each compaction path and fallback."
+  ]
+}

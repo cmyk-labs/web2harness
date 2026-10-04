@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1130" viewBox="0 0 1000 1130" role="img" lang="en" aria-labelledby="diagram-title diagram-description">
+<title id="diagram-title">Native Tools: execution and result return</title>
+<desc id="diagram-description">One successful tool round trip, followed by a final answer. Read messages from top to bottom. Browser replies always return through Web2Harness to Codex.</desc>
+<style >text{font-family:Arial, "Microsoft YaHei", "Noto Sans CJK SC", sans-serif}</style>
+<defs ><marker id="arrow-request" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-return" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-error" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#9C4B4B"/></marker>
+<marker id="arrow-dependency" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#64748B"/></marker></defs>
+<rect x="0" y="0" width="1000" height="1130" fill="#FFFFFF"/>
+<text x="26" y="45" font-size="25" fill="#18324F" font-weight="600" text-anchor="start" data-fit="main title" data-fit-x="24" data-fit-y="16" data-fit-width="952" data-fit-height="40">Native Tools: execution and result return</text>
+<line x1="24" y1="66" x2="976" y2="66" stroke="#CBD5E1" stroke-width="1"/>
+<line id="tools-line" x1="90" y1="175" x2="90" y2="1020" stroke="#CBD5E1" stroke-width="1.3" stroke-dasharray="5 5"/>
+<line id="codex-line" x1="290" y1="175" x2="290" y2="1020" stroke="#CBD5E1" stroke-width="1.3" stroke-dasharray="5 5"/>
+<line id="bridge-line" x1="500" y1="175" x2="500" y2="1020" stroke="#CBD5E1" stroke-width="1.3" stroke-dasharray="5 5"/>
+<line id="browser-line" x1="710" y1="175" x2="710" y2="1020" stroke="#CBD5E1" stroke-width="1.3" stroke-dasharray="5 5"/>
+<line id="web-line" x1="915" y1="175" x2="915" y2="1020" stroke="#CBD5E1" stroke-width="1.3" stroke-dasharray="5 5"/>
+<path id="message-1" data-edge="message-1" data-from="codex-line" data-to="bridge-line" d="M 290 239 L 500 239" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="message-2" data-edge="message-2" data-from="bridge-line" data-to="browser-line" d="M 500 297 L 710 297" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="message-3" data-edge="message-3" data-from="browser-line" data-to="web-line" d="M 710 355 L 915 355" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="message-4" data-edge="message-4" data-from="web-line" data-to="browser-line" d="M 915 413 L 710 413" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" stroke-dasharray="6 4" marker-end="url(#arrow-return)"/>
+<path id="message-5" data-edge="message-5" data-from="browser-line" data-to="bridge-line" d="M 710 471 L 500 471" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" stroke-dasharray="6 4" marker-end="url(#arrow-return)"/>
+<path id="message-6" data-edge="message-6" data-from="bridge-line" data-to="codex-line" d="M 500 529 L 290 529" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" stroke-dasharray="6 4" marker-end="url(#arrow-return)"/>
+<path id="message-7" data-edge="message-7" data-from="codex-line" data-to="tools-line" d="M 290 587 L 90 587" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="message-8" data-edge="message-8" data-from="tools-line" data-to="codex-line" d="M 90 645 L 290 645" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" stroke-dasharray="6 4" marker-end="url(#arrow-return)"/>
+<path id="message-9" data-edge="message-9" data-from="codex-line" data-to="bridge-line" d="M 290 703 L 500 703" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="message-10" data-edge="message-10" data-from="bridge-line" data-to="browser-line" d="M 500 761 L 710 761" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="message-11" data-edge="message-11" data-from="browser-line" data-to="web-line" d="M 710 819 L 915 819" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="message-12" data-edge="message-12" data-from="web-line" data-to="browser-line" d="M 915 877 L 710 877" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" stroke-dasharray="6 4" marker-end="url(#arrow-return)"/>
+<path id="message-13" data-edge="message-13" data-from="browser-line" data-to="bridge-line" d="M 710 935 L 500 935" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" stroke-dasharray="6 4" marker-end="url(#arrow-return)"/>
+<path id="message-14" data-edge="message-14" data-from="bridge-line" data-to="codex-line" d="M 500 993 L 290 993" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" stroke-dasharray="6 4" marker-end="url(#arrow-return)"/>
+<g id="tools" data-node="tools"><rect x="12" y="90" width="156" height="85" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="90" y="138.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="tools title" data-fit-x="26" data-fit-y="100" data-fit-width="128" data-fit-height="65">Local tools</text></g>
+<g id="codex" data-node="codex"><rect x="212" y="90" width="156" height="85" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="290" y="138.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="codex title" data-fit-x="226" data-fit-y="100" data-fit-width="128" data-fit-height="65">Codex</text></g>
+<g id="bridge" data-node="bridge"><rect x="422" y="90" width="156" height="85" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="500" y="138.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="bridge title" data-fit-x="436" data-fit-y="100" data-fit-width="128" data-fit-height="65">Web2Harness</text></g>
+<g id="browser" data-node="browser"><rect x="632" y="90" width="156" height="85" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="710" y="138.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="browser title" data-fit-x="646" data-fit-y="100" data-fit-width="128" data-fit-height="65">Browser</text></g>
+<g id="web" data-node="web"><rect x="837" y="90" width="156" height="85" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="915" y="126.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="web title" data-fit-x="851" data-fit-y="100" data-fit-width="128" data-fit-height="65">ChatGPT</text>
+<text x="915" y="150.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="web title" data-fit-x="851" data-fit-y="100" data-fit-width="128" data-fit-height="65">Web</text></g>
+<g data-edge-label="message-1"><rect x="323.86" y="188" width="142.28" height="46" fill="#FFFFFF"/>
+<text x="395" y="205" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-1 label" data-fit-x="299" data-fit-y="191" data-fit-width="192" data-fit-height="40">1. Context and tool</text>
+<text x="395" y="225" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-1 label" data-fit-x="299" data-fit-y="191" data-fit-width="192" data-fit-height="40">definitions</text></g>
+<g data-edge-label="message-2"><rect x="534.42" y="256" width="141.16" height="26" fill="#FFFFFF"/>
+<text x="605" y="273" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-2 label" data-fit-x="509" data-fit-y="259" data-fit-width="192" data-fit-height="20">2. Prepare the turn</text></g>
+<g data-edge-label="message-3"><rect x="747.31" y="314" width="130.38" height="26" fill="#FFFFFF"/>
+<text x="812.5" y="331" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-3 label" data-fit-x="719" data-fit-y="317" data-fit-width="187" data-fit-height="20">3. Submit prompt</text></g>
+<g data-edge-label="message-4"><rect x="718.47" y="372" width="188.06" height="26" fill="#FFFFFF"/>
+<text x="812.5" y="389" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-4 label" data-fit-x="719" data-fit-y="375" data-fit-width="187" data-fit-height="20">4. Structured tool request</text></g>
+<g data-edge-label="message-5"><rect x="523.22" y="430" width="163.56" height="26" fill="#FFFFFF"/>
+<text x="605" y="447" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-5 label" data-fit-x="509" data-fit-y="433" data-fit-width="192" data-fit-height="20">5. Collected web reply</text></g>
+<g data-edge-label="message-6"><rect x="318.47" y="488" width="153.06" height="26" fill="#FFFFFF"/>
+<text x="395" y="505" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-6 label" data-fit-x="299" data-fit-y="491" data-fit-width="192" data-fit-height="20">6. Validated tool call</text></g>
+<g data-edge-label="message-7"><rect x="95.62" y="546" width="188.76" height="26" fill="#FFFFFF"/>
+<text x="190" y="563" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-7 label" data-fit-x="99" data-fit-y="549" data-fit-width="182" data-fit-height="20">7. Approval and execution</text></g>
+<g data-edge-label="message-8"><rect x="96.11" y="604" width="187.78" height="26" fill="#FFFFFF"/>
+<text x="190" y="621" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-8 label" data-fit-x="99" data-fit-y="607" data-fit-width="182" data-fit-height="20">8. Actual execution result</text></g>
+<g data-edge-label="message-9"><rect x="317.77" y="652" width="154.46" height="46" fill="#FFFFFF"/>
+<text x="395" y="669" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-9 label" data-fit-x="299" data-fit-y="655" data-fit-width="192" data-fit-height="40">9. Tool result in next</text>
+<text x="395" y="689" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-9 label" data-fit-x="299" data-fit-y="655" data-fit-width="192" data-fit-height="40">request</text></g>
+<g data-edge-label="message-10"><rect x="527.91" y="720" width="154.18" height="26" fill="#FFFFFF"/>
+<text x="605" y="737" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-10 label" data-fit-x="509" data-fit-y="723" data-fit-width="192" data-fit-height="20">10. Continue context</text></g>
+<g data-edge-label="message-11"><rect x="732.54" y="778" width="159.92" height="26" fill="#FFFFFF"/>
+<text x="812.5" y="795" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-11 label" data-fit-x="719" data-fit-y="781" data-fit-width="187" data-fit-height="20">11. Submit tool result</text></g>
+<g data-edge-label="message-12"><rect x="749.48" y="836" width="126.04" height="26" fill="#FFFFFF"/>
+<text x="812.5" y="853" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-12 label" data-fit-x="719" data-fit-y="839" data-fit-width="187" data-fit-height="20">12. Final answer</text></g>
+<g data-edge-label="message-13"><rect x="527.28" y="894" width="155.44" height="26" fill="#FFFFFF"/>
+<text x="605" y="911" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-13 label" data-fit-x="509" data-fit-y="897" data-fit-width="192" data-fit-height="20">13. Collected answer</text></g>
+<g data-edge-label="message-14"><rect x="295.72" y="952" width="198.56" height="26" fill="#FFFFFF"/>
+<text x="395" y="969" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="message-14 label" data-fit-x="299" data-fit-y="955" data-fit-width="192" data-fit-height="20">14. Final Responses output</text></g>
+<line x1="24" y1="1044" x2="976" y2="1044" stroke="#CBD5E1"/>
+<text x="26" y="1070" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 1" data-fit-x="24" data-fit-y="1056" data-fit-width="952" data-fit-height="52">Solid arrows: submit or execute. Dashed arrows: return results. Tool request/result steps repeat as needed.</text>
+<text x="26" y="1096" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 2" data-fit-x="24" data-fit-y="1056" data-fit-width="952" data-fit-height="52">This is the successful Native Tools path. Repeated requests can reuse the same eligible web conversation.</text>
+</svg>

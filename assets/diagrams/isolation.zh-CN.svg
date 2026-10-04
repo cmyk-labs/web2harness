@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="930" viewBox="0 0 1000 930" role="img" lang="zh-CN" aria-labelledby="diagram-title diagram-description">
+<title id="diagram-title">同一套实现，两套隔离环境</title>
+<desc id="diagram-description">常规使用与 DEV 运行相同应用代码，但配置、凭据、浏览器状态、进程和工作区独立。虚线表示代码复用，不表示环境间通信。</desc>
+<style >text{font-family:Arial, "Microsoft YaHei", "Noto Sans CJK SC", sans-serif}</style>
+<defs ><marker id="arrow-request" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-return" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-error" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#9C4B4B"/></marker>
+<marker id="arrow-dependency" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#64748B"/></marker></defs>
+<rect x="0" y="0" width="1000" height="930" fill="#FFFFFF"/>
+<text x="26" y="45" font-size="25" fill="#18324F" font-weight="600" text-anchor="start" data-fit="main title" data-fit-x="24" data-fit-y="16" data-fit-width="952" data-fit-height="40">同一套实现，两套隔离环境</text>
+<line x1="24" y1="66" x2="976" y2="66" stroke="#CBD5E1" stroke-width="1"/>
+<g id="regular" data-group="regular"><rect x="20" y="280" width="460" height="365" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+<text x="36" y="306" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="regular label" data-fit-x="34" data-fit-y="290" data-fit-width="432" data-fit-height="345">常规使用：受保护环境</text></g>
+<g id="dev" data-group="dev"><rect x="520" y="280" width="460" height="365" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+<text x="536" y="306" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="dev label" data-fit-x="534" data-fit-y="290" data-fit-width="432" data-fit-height="345">DEV 验收：本次测试资源</text></g>
+<path id="regular-code" data-edge="regular-code" data-from="shared-code" data-to="regular" d="M 360 195 L 360 235 L 250 235 L 250 280" fill="none" stroke="#64748B" stroke-width="1.6" stroke-linejoin="miter" stroke-dasharray="6 4" marker-end="url(#arrow-dependency)"/>
+<path id="dev-code" data-edge="dev-code" data-from="shared-code" data-to="dev" d="M 640 195 L 640 235 L 750 235 L 750 280" fill="none" stroke="#64748B" stroke-width="1.6" stroke-linejoin="miter" stroke-dasharray="6 4" marker-end="url(#arrow-dependency)"/>
+<g id="shared-code" data-node="shared-code"><rect x="220" y="90" width="560" height="105" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="500" y="135" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="shared-code title" data-fit-x="234" data-fit-y="100" data-fit-width="532" data-fit-height="85">共享应用实现</text>
+<text x="500" y="163" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="shared-code body" data-fit-x="234" data-fit-y="100" data-fit-width="532" data-fit-height="85">Responses、浏览器适配器、工具与生命周期</text></g>
+<g id="production-state" data-node="production-state"><rect x="45" y="350" width="410" height="250" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="250" y="437.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="production-state title" data-fit-x="59" data-fit-y="360" data-fit-width="382" data-fit-height="230">用户现有环境</text>
+<text x="250" y="465.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="production-state body" data-fit-x="59" data-fit-y="360" data-fit-width="382" data-fit-height="230">常规应用与 Codex 配置</text>
+<text x="250" y="485.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="production-state body" data-fit-x="59" data-fit-y="360" data-fit-width="382" data-fit-height="230">用户登录与浏览器配置</text>
+<text x="250" y="505.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="production-state body" data-fit-x="59" data-fit-y="360" data-fit-width="382" data-fit-height="230">对应进程、端点与服务</text>
+<text x="250" y="525.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="production-state body" data-fit-x="59" data-fit-y="360" data-fit-width="382" data-fit-height="230">正在使用的任务与项目工作区</text></g>
+<g id="dev-state" data-node="dev-state"><rect x="545" y="350" width="410" height="250" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="750" y="437.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="dev-state title" data-fit-x="559" data-fit-y="360" data-fit-width="382" data-fit-height="230">独立 DEV 环境</text>
+<text x="750" y="465.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="dev-state body" data-fit-x="559" data-fit-y="360" data-fit-width="382" data-fit-height="230">DEV 应用与 CODEX_HOME</text>
+<text x="750" y="485.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="dev-state body" data-fit-x="559" data-fit-y="360" data-fit-width="382" data-fit-height="230">独立登录与浏览器配置</text>
+<text x="750" y="505.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="dev-state body" data-fit-x="559" data-fit-y="360" data-fit-width="382" data-fit-height="230">核实归属的 DEV 进程与端点</text>
+<text x="750" y="525.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="dev-state body" data-fit-x="559" data-fit-y="360" data-fit-width="382" data-fit-height="230">独立、可丢弃的测试工作区</text></g>
+<g id="remote-isolation" data-node="remote-isolation"><rect x="20" y="710" width="960" height="90" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="500" y="747.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="remote-isolation title" data-fit-x="34" data-fit-y="720" data-fit-width="932" data-fit-height="70">MCP Bridge：还须核验远端隔离</text>
+<text x="500" y="775.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="remote-isolation body" data-fit-x="34" data-fit-y="720" data-fit-width="932" data-fit-height="70">连接前由用户确认隧道属于 DEV，并核验实际 DEV 连接器绑定。</text></g>
+<g data-edge-label="regular-code"><rect x="183.16" y="222" width="73.68" height="26" fill="#FFFFFF"/>
+<text x="220" y="239" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="regular-code label" data-fit-x="140" data-fit-y="225" data-fit-width="160" data-fit-height="20">相同代码</text></g>
+<g data-edge-label="dev-code"><rect x="743.16" y="222" width="73.68" height="26" fill="#FFFFFF"/>
+<text x="780" y="239" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="dev-code label" data-fit-x="700" data-fit-y="225" data-fit-width="160" data-fit-height="20">相同代码</text></g>
+<line x1="24" y1="844" x2="976" y2="844" stroke="#CBD5E1"/>
+<text x="26" y="870" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 1" data-fit-x="24" data-fit-y="856" data-fit-width="952" data-fit-height="52">虚线表示代码复用。开发操作不得修改或停止受保护的常规环境。</text>
+<text x="26" y="896" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 2" data-fit-x="24" data-fit-y="856" data-fit-width="952" data-fit-height="52">CPU、网络容量及同账号额度仍可能共享；数据隔离不等于独占运行容量。</text>
+</svg>

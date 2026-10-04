@@ -1,0 +1,67 @@
+diff --git a/out/util/electronGet.js b/out/util/electronGet.js
+index a941f9d20c10ca58a84b9a600b0df468631aae01..adf5ad0fd727d8237fbcd39c942c8094561e633b 100644
+--- a/out/util/electronGet.js
++++ b/out/util/electronGet.js
+@@ -8,6 +8,7 @@ exports.downloadElectronArtifact = downloadElectronArtifact;
+ exports.getBinariesMirrorUrl = getBinariesMirrorUrl;
+ const get = require("@electron/get");
+ const get_1 = require("@electron/get");
++const { EnvHttpProxyAgent } = require("undici");
+ const builder_util_1 = require("builder-util");
+ const _7zip_1 = require("../toolsets/7zip");
+ const multiProgress_1 = require("electron-publish/out/multiProgress");
+@@ -190,6 +191,14 @@ async function extractArchive(file, dir) {
+         await release().catch(err => builder_util_1.log.warn({ err }, "failed to release lockfile"));
+     }
+ }
++// Backport the upstream @electron/get v5 proxy and Fetch timeout integration.
++let proxyInitialized = false;
++function initializeProxyOnce() {
++    if (!proxyInitialized) {
++        get.initializeProxy();
++        proxyInitialized = true;
++    }
++}
+ async function downloadArtifactToFile(config, label) {
+     var _a, _b, _c, _d;
+     // Serialize concurrent downloads of the same artifact across vitest workers to prevent @electron/get's
+@@ -210,10 +219,10 @@ async function downloadArtifactToFile(config, label) {
+     });
+     let lastLoggedMilestone = -1;
+     const state = { bar: undefined };
++    initializeProxyOnce();
+     const downloadOptions = {
+-        timeout: { request: 10 * 60 * 1000 }, // prevent indefinite hang on stalled connections
++        signal: AbortSignal.timeout(10 * 60 * 1000), // prevent indefinite hang on stalled connections
+         ...config.downloadOptions,
+-        agent: (_b = (_a = config.downloadOptions) === null || _a === void 0 ? void 0 : _a.agent) !== null && _b !== void 0 ? _b : (0, builder_util_1.buildGotProxyAgent)(),
+         getProgressCallback: info => {
+             // @electron/get passes downloadOptions (including this callback) to its internal
+             // SHASUMS256.txt validation download. That file is tiny (<1 MB) and fires at 100%
+@@ -254,10 +263,12 @@ async function downloadArtifactToFile(config, label) {
+                     if (e instanceof builder_util_runtime_1.HttpError) {
+                         return e.isServerError();
+                     }
+-                    if (typeof ((_a = e === null || e === void 0 ? void 0 : e.response) === null || _a === void 0 ? void 0 : _a.statusCode) === "number") {
+-                        return e.response.statusCode >= 500;
++                    const status = e?.response?.status ?? e?.response?.statusCode;
++                    if (typeof status === "number") {
++                        return status >= 500;
+                     }
+-                    return typeof (e === null || e === void 0 ? void 0 : e.code) === "string" && ["ENOTFOUND", "ETIMEDOUT", "ECONNRESET", "EPIPE", "ENOENT"].includes(e.code);
++                    const code = e?.code ?? e?.cause?.code;
++                    return typeof code === "string" && ["ENOTFOUND", "ETIMEDOUT", "ECONNRESET", "EPIPE", "ENOENT"].includes(code);
+                 },
+             });
+         }
+@@ -473,7 +484,9 @@ function buildElectronArtifactConfig(options) {
+                     customDir: customDir || undefined,
+                     customFilename: customFilename || undefined,
+                 },
+-                ...(strictSSL === false ? { downloadOptions: { https: { rejectUnauthorized: false } } } : {}),
++                ...(strictSSL === false ? { downloadOptions: { dispatcher: new EnvHttpProxyAgent({
++                    connect: { rejectUnauthorized: false }, requestTls: { rejectUnauthorized: false },
++                }) } } : {}),
+             };
+             if (overridePlatform != null) {
+                 artifactConfig.platform = overridePlatform;

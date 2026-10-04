@@ -1,0 +1,155 @@
+<p align="center">
+  <img src="assets/readme/hero.svg" width="960" alt="WEB2HARNESS · CHATGPT WEB × CODEX — Reason with web models. Get it done in Codex. Your ChatGPT plan. Your Codex workflow. Put your available web models to work.">
+</p>
+
+**Web2Harness** — Bring ChatGPT web models into Codex, keep your native tools and existing workflow, and make the most of the web model usage available on your ChatGPT account to get more real work done.
+
+<p align="center">
+  <a href="#installation"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · Release pending"></a>&nbsp;
+  <a href="#installation"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · Release pending"></a>&nbsp;
+  <a href="#installation"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · Release pending"></a>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
+  <a href="#how-it-works">How it works</a> · <a href="#get-started">Get started</a> · <a href="#modes">Tool modes</a> · <a href="#features">Features</a> · <a href="#development">From source</a> · <a href="#faq">FAQ</a>
+</p>
+
+<div id="overview"></div>
+<a id="features"></a>
+
+## What you can do
+
+Select a **(Web)** model in Codex to use your signed-in ChatGPT account for repository analysis, code changes, command checks, and local file tasks. Work stays in Codex, and tools remain subject to the active task's sandbox and approval rules.
+
+| Feature | What it provides |
+| --- | --- |
+| Web models and reasoning effort | Adds the Web models available to your account alongside native Codex models, with the efforts each route supports. |
+| Tool execution | The web model can request file reads, code changes, or commands; Codex executes tools permitted for the active task. |
+| Conversation continuity | Eligible routes reuse the task's web conversation across tool round trips and follow-up questions, reducing repeated context transfer. |
+| History and context | New configurations save chats to ChatGPT history by default; context budgets and compaction follow model and account capabilities. |
+| Images and attachments | Automatic interaction supports task images; optional experiments send large context or selected skills as text attachments. |
+| Model switching and subagents | Use native and Web models within a task, with subagent delegation governed by the selected compatibility protocol. |
+| Desktop management | Sign in, configure modes, check connections, inspect runtime health, and export safe logs in the application. |
+
+Available models and efforts depend on the signed-in account and browser checks. See the [configuration and model reference](docs/reference.md); the application does not add account quota or unlock unavailable models.
+
+[Watch the demonstration](#demo) · [Get started](#get-started) · [Browse the manuals](#documentation)
+
+<a id="modes"></a>
+
+## Choose a tool mode
+
+Start with **Native Tools + Automatic interaction**.
+
+| Mode | How tasks run | Required setup |
+| --- | --- | --- |
+| **Native Tools, default** | Sends web requests automatically and returns validated tool requests to Codex for execution. | ChatGPT sign-in and applied configuration; no MCP connector or tunnel. |
+| **MCP Bridge** | Connects requests to the active Codex task through a ChatGPT connector, tunnel, and local MCP service. | Additional tunnel credentials and a matching connector; supports automatic or manual interaction. |
+| **Browser-only, available through CLI** | Returns web model answers without local tool execution. | CLI configuration and an available browser session. |
+
+**Automatic and Manual describe browser interaction.** Automatic sends prompts through the application; Manual asks the operator to paste and send them in ChatGPT and requires MCP Bridge. Follow the [user guide](docs/user-guide.md) for configuration.
+
+<a id="demo"></a>
+
+## Demonstration and task examples
+
+The recording shows selecting a Web model and reasoning effort in Codex, then using native tools to inspect a project.
+
+<p align="center">
+  <img src="assets/demos/demo.gif" width="960" alt="Selecting a Web model and reasoning effort in Codex, then inspecting a project with native tools">
+</p>
+
+After connecting, try this in Codex:
+
+> List this project's top-level files and explain its main entry points and startup flow. Do not change files yet.
+
+For a task that changes files, state the goal and acceptance criteria:
+
+> Inspect this project's startup flow and fix one reproducible issue. Run the relevant tests, then explain the changes, test results, and anything that remains unverified.
+
+A task typically follows **select a Web model → submit a task → receive a web answer or tool request → approve and execute in Codex → return results and continue reasoning**. It may require several tool round trips. Assess completion through actual file changes, command output, and test results.
+
+<div id="get-started"><a id="quick-start"></a></div>
+<a id="installation"></a>
+
+## Get started
+
+Have Codex available on your computer and a ChatGPT account you can sign in to. The header buttons lead to these installation instructions; a locally built package does not establish a public release. See the [user guide](docs/user-guide.md) for installation methods and platform requirements, or [run an existing checkout from source](#development).
+
+1. **Start Web2Harness.** Use a package matching your platform and architecture, or run from source.
+2. **Sign in through the browser.** Open **Connection & Models**, sign in to ChatGPT in the application browser, and run **Check connection**.
+3. **Apply configuration.** Select **Native Tools** and **Automatic**, then choose **Apply configuration**.
+4. **Choose a Web model.** Refresh the Codex model catalog or restart the affected client as prompted. Select a model marked **(Web)** and one of its supported reasoning efforts.
+5. **Run a task.** Start with the read-only example above and confirm that the answer and tool results return to Codex. Keep Web2Harness running while the integration is in use.
+
+A successful setup preserves native Codex models and adds available Web models. If a step fails, use [troubleshooting](docs/troubleshooting.md) to identify the failing layer.
+
+<a id="how-it-works"></a>
+
+## How it works
+
+![Codex accesses ChatGPT Web through the local Web2Harness service; Codex retains tool execution.](assets/diagrams/system-context.svg)
+
+Web2Harness manages browser sessions and translates between Codex requests and web model responses. The default Native Tools mode returns validated tool requests to Codex, and tool results become input to subsequent reasoning. MCP Bridge transports tool requests through a connector and tunnel.
+
+See [architecture](docs/architecture.md) for component responsibilities, request sequences, conversation reuse, and data boundaries.
+
+<a id="development"></a>
+
+## Run from source
+
+The source repository is [cmyk-labs/web2harness](https://github.com/cmyk-labs/web2harness). Source development requires Bun 1.4.0. Node.js 22.12.0 or later is also required. From the root of an existing checkout:
+
+```bash
+bun install --frozen-lockfile
+bun install --cwd launcher --frozen-lockfile
+bun run app
+```
+
+For code changes or fix validation, launch the independent DEV profile:
+
+```bash
+bun run dev:launcher
+```
+
+See the [development guide](docs/development.md) for environment setup, independent sign-in, and isolated acceptance. Packaging and installer acceptance are covered in the [release manual](docs/release.md).
+
+<a id="faq"></a>
+
+## FAQ
+
+- **Can I still use native Codex models?** Yes; Web models are additional entries. Native requests also pass through the local service while it manages the route. Before discontinuing the application, remove its integration as described in the [user guide](docs/user-guide.md).
+- **Does saving history guarantee reuse of the same web chat?** These settings are independent. History controls whether ChatGPT retains the chat; reuse also depends on the mode, task ownership, and context continuity.
+- **Why do my models and effort choices differ from someone else's?** The catalog follows account capabilities. Instant and Thinking may have separate entries when their context budgets differ. Exact mappings are in the [configuration and model reference](docs/reference.md).
+
+<a id="documentation"></a>
+
+## Documentation
+
+Start with the user guide. Go directly to troubleshooting for a failure, and consult the other manuals as needed.
+
+| What you need | Manual |
+| --- | --- |
+| Installation, connection, mode setup, daily use, upgrades, and removal | [User guide](docs/user-guide.md) |
+| Startup, model catalog, task execution, or installation failures | [Troubleshooting](docs/troubleshooting.md) |
+| Setting defaults, model efforts, context budgets, commands, and storage | [Configuration and model reference](docs/reference.md) |
+| Components, request flow, conversation lifecycle, and permission boundaries | [Architecture](docs/architecture.md) |
+| Source development, contributions and review, isolated tests, naming, and documentation maintenance | [Development manual](docs/development.md) |
+| Builds, packages, acceptance, publication, rollback, and security maintenance | [Release manual](docs/release.md) |
+
+See [Contributing and review](docs/development.md#contributing) for submissions, [Report a vulnerability](docs/release.md#vulnerability-reporting) for private reports, and the [repository instructions](AGENTS.md) for automated work.
+
+
+<a id="project-notes"></a>
+
+## Project notes
+
+Web2Harness is an independent open-source research project for technical research, learning, and experimentation. It is not recommended for production use and is not affiliated with, authorized, sponsored, or endorsed by OpenAI. Its browser integration depends on ChatGPT interface and service behavior. Use accounts that you own or are authorized to use, subject to applicable service terms and workspace policies.
+
+The project continues development from [miuuyy/codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web) at commit `7579422`, the 6.0.0 code baseline dated September 23, 2026. Web2Harness maintains its own application identity, documentation, and release lifecycle.
+
+The project is distributed under the [MIT License](LICENSE). The original copyright notice and MIT license are preserved in [LICENSES/codex-chatgpt-web-MIT.txt](LICENSES/codex-chatgpt-web-MIT.txt). The root license identifies subsequent Web2Harness contributions. The research positioning does not change the permissions in the license.

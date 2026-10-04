@@ -1,0 +1,171 @@
+.about-header,
+.about-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.about-header {
+  flex-wrap: wrap;
+}
+
+.about-header h1 {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -.018em;
+}
+
+.about-version {
+  color: var(--color-text-tertiary);
+  font: var(--text-xs)/1.5 var(--font-mono);
+}
+
+.about-statement {
+  padding: 28px 0 32px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.workspace-ui .content .about-kicker {
+  margin: 0 0 16px;
+  color: var(--color-accent);
+  font: 11px/1.5 var(--font-mono);
+  letter-spacing: .12em;
+}
+
+.about-kicker span { margin: 0 8px; }
+
+.workspace-ui .content .about-statement h2 {
+  margin: 0;
+  font-size: clamp(26px, 3vw, 38px);
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: -.025em;
+}
+
+.about-statement h2 span { color: var(--color-accent); }
+
+.workspace-ui .content .about-description {
+  max-width: 72ch;
+  margin: 20px 0 0;
+  font-size: var(--text-base);
+  line-height: 1.8;
+  text-wrap: pretty;
+}
+
+.about-capabilities {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  padding: 32px 0 8px;
+}
+
+.about-capabilities svg { margin-bottom: 16px; color: var(--color-accent); }
+.workspace-ui .about-capabilities p { margin-top: 8px; }
+
+.about-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.about-links button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: color var(--duration-micro) ease, border-color var(--duration-micro) ease;
+}
+
+.about-links button:hover:not(:disabled) { border-color: var(--color-border-accent); color: var(--color-accent); }
+.about-links button > span:last-child { color: var(--color-text-tertiary); }
+
+.about-footer {
+  flex-wrap: wrap;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.operating-diagram {
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background-control);
+}
+
+.operating-diagram figcaption {
+  margin-bottom: 24px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.operating-route {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) minmax(0, 1fr) minmax(0, .8fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.operating-node {
+  display: flex;
+  min-width: 0;
+  min-height: 108px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 12px;
+  border: 1px solid var(--color-border-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-background-surface);
+  text-align: center;
+}
+
+.operating-node strong { font-size: var(--text-sm); }
+.operating-node span { color: var(--color-text-secondary); font-size: var(--text-xs); }
+.operating-connector { display: grid; gap: 12px; color: var(--color-text-tertiary); }
+.operating-connector span { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: var(--text-xs); }
+.operating-connector i { flex: none; font-size: 20px; font-style: normal; }
+
+.workspace-ui .content .operating-loop {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+  line-height: 1.8;
+}
+
+.operating-modes { margin: 16px 0 0; }
+.operating-modes > div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; padding: 10px 0; }
+.operating-modes dt { font-weight: 600; font-size: var(--text-sm); }
+.operating-modes dd { margin: 0; color: var(--color-text-secondary); font-size: var(--text-sm); }
+
+@media (max-width: 1050px) {
+  .operating-route { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .operating-node { min-height: 80px; }
+  .operating-connector { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .operating-connector span { justify-content: center; }
+  .operating-connector i { transform: rotate(90deg); }
+}
+
+@media (max-width: 560px) {
+  .about-header { align-items: flex-start; gap: 12px; }
+  .about-header h1 { font-size: 26px; }
+  .about-version { font-size: 11px; padding-top: 8px; }
+  .about-capabilities { grid-template-columns: 1fr; gap: 24px; }
+  .about-statement { padding-block: 28px; }
+  .operating-diagram { padding: 16px; }
+  .operating-modes > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}

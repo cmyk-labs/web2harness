@@ -1,0 +1,90 @@
+:root {
+  color-scheme: dark;
+
+  --blue-100: #99ceff;
+  --blue-300: #339cff;
+  --blue-900: #00284d;
+  --gray-0: #ffffff;
+  --gray-100: #ededed;
+  --gray-300: #afafaf;
+  --gray-500: #5d5d5d;
+  --gray-600: #414141;
+  --gray-700: #303030;
+  --gray-750: #282828;
+  --gray-800: #212121;
+  --gray-900: #181818;
+  --gray-1000: #0d0d0d;
+  --green-300: #40c977;
+  --orange-300: #ff8549;
+  --red-300: #ff6764;
+  --red-400: #fa423e;
+
+  /* Graphite surfaces and neutral selection; status colors retain semantic meaning. */
+  --color-background-surface-under: #111418;
+  --color-background-surface: #1b1f24;
+  --color-background-sidebar: #15191e;
+  --color-background-elevated: #252b32;
+  --color-background-control: rgb(255 255 255 / 3%);
+  --color-background-control-hover: rgb(255 255 255 / 7%);
+  --color-background-control-active: rgb(255 255 255 / 10%);
+  --color-background-button-secondary: rgb(255 255 255 / 5%);
+  --color-background-button-secondary-hover: rgb(255 255 255 / 8%);
+  --color-background-status-success: rgb(4 184 76 / 16%);
+  --color-background-status-warning: rgb(255 133 73 / 12%);
+  --color-background-status-error: rgb(250 66 62 / 13%);
+
+  --color-text-primary: #f0f1f2;
+  --color-text-secondary: #b9c0c9;
+  --color-text-tertiary: #939da9;
+  --color-text-disabled: rgb(255 255 255 / 32%);
+  --color-accent: #d8dce2;
+  --color-accent-ink: #1b1f24;
+  --color-background-accent: rgb(216 220 226 / 8%);
+  --color-border-accent: rgb(216 220 226 / 40%);
+  --color-text-accent: var(--color-accent);
+  --color-text-success: var(--green-300);
+  --color-text-warning: var(--orange-300);
+  --color-text-error: var(--red-300);
+
+  --color-icon-primary: rgb(255 255 255 / 90%);
+  --color-icon-secondary: rgb(255 255 255 / 70%);
+  --color-icon-tertiary: rgb(255 255 255 / 50%);
+  --color-border: rgb(197 207 220 / 13%);
+  --color-border-light: rgb(197 207 220 / 8%);
+  --color-border-heavy: rgb(197 207 220 / 24%);
+  --color-border-focus: var(--color-accent);
+
+  --font-ui-latin: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-ui: var(--font-ui-latin);
+  --font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-title: 30px;
+
+  --height-titlebar: 46px;
+  --height-row: 42px;
+  --height-control: 38px;
+  --sidebar-width: 252px;
+  --content-width: 960px;
+  --settings-width: 960px;
+  --space-page: clamp(24px, 4vw, 64px);
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-round: 999px;
+
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --duration-micro: 140ms;
+  --duration-panel: 220ms;
+}
+
+/* Use one Simplified Chinese family before per-glyph system fallback.
+   This affects the launcher only; the embedded browser owns its own document. */
+:root:lang(zh-CN) {
+  --font-ui: "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}

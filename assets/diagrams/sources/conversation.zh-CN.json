@@ -1,0 +1,350 @@
+{
+  "schemaVersion": 1,
+  "locale": "zh-CN",
+  "kind": "workflow",
+  "width": 1000,
+  "height": 1040,
+  "title": "网页会话：正常复用与按需压缩",
+  "description": "普通请求先核验会话身份和页面可用性，再决定复用或新建。压缩由独立的 Codex 请求触发，不是每轮必经步骤。",
+  "groups": [
+    {
+      "id": "ordinary",
+      "x": 20,
+      "y": 90,
+      "width": 620,
+      "height": 790,
+      "label": "普通任务／工具结果请求",
+      "style": "local"
+    },
+    {
+      "id": "compaction",
+      "x": 670,
+      "y": 90,
+      "width": 310,
+      "height": 790,
+      "label": "仅在 Codex 请求压缩时",
+      "style": "local"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "eligible",
+      "x": 220,
+      "y": 165,
+      "width": 220,
+      "height": 120,
+      "title": "能否复用已有页面？",
+      "body": [
+        "身份匹配且页面可用"
+      ],
+      "style": "decision"
+    },
+    {
+      "id": "reuse",
+      "x": 80,
+      "y": 355,
+      "width": 210,
+      "height": 100,
+      "title": "复用保留页面",
+      "body": [
+        "继续该任务上下文"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "create",
+      "x": 405,
+      "y": 355,
+      "width": 210,
+      "height": 100,
+      "title": "创建新页面",
+      "body": [
+        "首次请求／身份不匹配",
+        "或原页面不可用"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "execute",
+      "x": 220,
+      "y": 515,
+      "width": 220,
+      "height": 90,
+      "title": "执行模型轮次",
+      "body": [
+        "保持任务归属"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "retain",
+      "x": 220,
+      "y": 715,
+      "width": 220,
+      "height": 105,
+      "title": "保留网页会话",
+      "body": [
+        "等待下一次请求"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "compact-request",
+      "x": 710,
+      "y": 165,
+      "width": 230,
+      "height": 100,
+      "title": "收到压缩请求",
+      "body": [
+        "Codex 单独发起"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "checkpoint",
+      "x": 710,
+      "y": 355,
+      "width": 230,
+      "height": 100,
+      "title": "生成上下文检查点",
+      "body": [
+        "按路由使用摘要路径"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "retire",
+      "x": 710,
+      "y": 555,
+      "width": 230,
+      "height": 90,
+      "title": "结束旧上下文周期",
+      "body": [
+        "完成自有资源清理"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "new-epoch",
+      "x": 710,
+      "y": 755,
+      "width": 230,
+      "height": 105,
+      "title": "首次请求创建新会话",
+      "body": [
+        "携带压缩后的上下文"
+      ],
+      "style": "default"
+    }
+  ],
+  "edges": [
+    {
+      "id": "yes",
+      "from": "eligible",
+      "to": "reuse",
+      "points": [
+        [
+          275,
+          285
+        ],
+        [
+          275,
+          305
+        ],
+        [
+          185,
+          305
+        ],
+        [
+          185,
+          355
+        ]
+      ],
+      "label": "是",
+      "labelX": 185,
+      "labelY": 320,
+      "labelWidth": 90
+    },
+    {
+      "id": "no",
+      "from": "eligible",
+      "to": "create",
+      "points": [
+        [
+          385,
+          285
+        ],
+        [
+          385,
+          305
+        ],
+        [
+          510,
+          305
+        ],
+        [
+          510,
+          355
+        ]
+      ],
+      "label": "否",
+      "labelX": 510,
+      "labelY": 320,
+      "labelWidth": 90
+    },
+    {
+      "id": "reused",
+      "from": "reuse",
+      "to": "execute",
+      "points": [
+        [
+          185,
+          455
+        ],
+        [
+          185,
+          480
+        ],
+        [
+          275,
+          480
+        ],
+        [
+          275,
+          515
+        ]
+      ]
+    },
+    {
+      "id": "created",
+      "from": "create",
+      "to": "execute",
+      "points": [
+        [
+          510,
+          455
+        ],
+        [
+          510,
+          480
+        ],
+        [
+          385,
+          480
+        ],
+        [
+          385,
+          515
+        ]
+      ]
+    },
+    {
+      "id": "finished",
+      "from": "execute",
+      "to": "retain",
+      "points": [
+        [
+          330,
+          605
+        ],
+        [
+          330,
+          715
+        ]
+      ],
+      "label": "本轮完成",
+      "labelX": 330,
+      "labelY": 660,
+      "labelWidth": 165
+    },
+    {
+      "id": "next-request",
+      "from": "retain",
+      "to": "eligible",
+      "points": [
+        [
+          220,
+          760
+        ],
+        [
+          40,
+          760
+        ],
+        [
+          40,
+          215
+        ],
+        [
+          220,
+          215
+        ]
+      ],
+      "label": "同任务下一次请求",
+      "labelX": 130,
+      "labelY": 760,
+      "labelWidth": 140
+    },
+    {
+      "id": "compact",
+      "from": "compact-request",
+      "to": "checkpoint",
+      "points": [
+        [
+          825,
+          265
+        ],
+        [
+          825,
+          355
+        ]
+      ],
+      "label": "生成摘要",
+      "labelX": 825,
+      "labelY": 310,
+      "labelWidth": 150
+    },
+    {
+      "id": "checkpoint-ready",
+      "from": "checkpoint",
+      "to": "retire",
+      "points": [
+        [
+          825,
+          455
+        ],
+        [
+          825,
+          555
+        ]
+      ],
+      "label": "检查点就绪",
+      "labelX": 825,
+      "labelY": 505,
+      "labelWidth": 155
+    },
+    {
+      "id": "after-cleanup",
+      "from": "retire",
+      "to": "new-epoch",
+      "points": [
+        [
+          825,
+          645
+        ],
+        [
+          825,
+          755
+        ]
+      ],
+      "label": "后续任务请求",
+      "labelX": 825,
+      "labelY": 700,
+      "labelWidth": 150
+    }
+  ],
+  "notes": [
+    "会话身份包括线程、模型路由 ID 及家族、强度、提供方设置与压缩周期；复用须保持兼容。",
+    "仅适用于支持保留复用的 Sol／Pro 路由；Luna、仅浏览器及每轮新建策略使用其他路径。",
+    "保存聊天历史与复用互相独立。各路由的压缩方式及回退条件见架构手册。"
+  ]
+}

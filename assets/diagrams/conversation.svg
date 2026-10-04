@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1040" viewBox="0 0 1000 1040" role="img" lang="en" aria-labelledby="diagram-title diagram-description">
+<title id="diagram-title">Web conversations: reuse and requested compaction</title>
+<desc id="diagram-description">Ordinary requests check conversation identity and page availability before reuse. Compaction is a separate Codex request, not a mandatory phase of each turn.</desc>
+<style >text{font-family:Arial, "Microsoft YaHei", "Noto Sans CJK SC", sans-serif}</style>
+<defs ><marker id="arrow-request" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-return" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-error" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#9C4B4B"/></marker>
+<marker id="arrow-dependency" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#64748B"/></marker></defs>
+<rect x="0" y="0" width="1000" height="1040" fill="#FFFFFF"/>
+<text x="26" y="45" font-size="25" fill="#18324F" font-weight="600" text-anchor="start" data-fit="main title" data-fit-x="24" data-fit-y="16" data-fit-width="952" data-fit-height="40">Web conversations: reuse and requested compaction</text>
+<line x1="24" y1="66" x2="976" y2="66" stroke="#CBD5E1" stroke-width="1"/>
+<g id="ordinary" data-group="ordinary"><rect x="20" y="90" width="620" height="790" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+<text x="36" y="116" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="ordinary label" data-fit-x="34" data-fit-y="100" data-fit-width="592" data-fit-height="770">Ordinary task and tool-result requests</text></g>
+<g id="compaction" data-group="compaction"><rect x="670" y="90" width="310" height="790" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+<text x="686" y="116" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="compaction label" data-fit-x="684" data-fit-y="100" data-fit-width="282" data-fit-height="770">Only when Codex requests</text>
+<text x="686" y="137" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="compaction label" data-fit-x="684" data-fit-y="100" data-fit-width="282" data-fit-height="770">compaction</text></g>
+<path id="yes" data-edge="yes" data-from="eligible" data-to="reuse" d="M 275 285 L 275 305 L 185 305 L 185 355" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="no" data-edge="no" data-from="eligible" data-to="create" d="M 385 285 L 385 305 L 510 305 L 510 355" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="reused" data-edge="reused" data-from="reuse" data-to="execute" d="M 185 455 L 185 480 L 275 480 L 275 515" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="created" data-edge="created" data-from="create" data-to="execute" d="M 510 455 L 510 480 L 385 480 L 385 515" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="finished" data-edge="finished" data-from="execute" data-to="retain" d="M 330 605 L 330 715" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="next-request" data-edge="next-request" data-from="retain" data-to="eligible" d="M 220 760 L 40 760 L 40 215 L 220 215" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="compact" data-edge="compact" data-from="compact-request" data-to="checkpoint" d="M 825 265 L 825 355" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="checkpoint-ready" data-edge="checkpoint-ready" data-from="checkpoint" data-to="retire" d="M 825 455 L 825 555" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="after-cleanup" data-edge="after-cleanup" data-from="retire" data-to="new-epoch" d="M 825 645 L 825 755" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<g id="eligible" data-node="eligible"><rect x="220" y="165" width="220" height="120" fill="#F4F6F8" stroke="#18324F" stroke-width="2"/>
+<text x="330" y="195.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="eligible title" data-fit-x="234" data-fit-y="175" data-fit-width="192" data-fit-height="100">Can this page be</text>
+<text x="330" y="219.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="eligible title" data-fit-x="234" data-fit-y="175" data-fit-width="192" data-fit-height="100">reused?</text>
+<text x="330" y="247.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="eligible body" data-fit-x="234" data-fit-y="175" data-fit-width="192" data-fit-height="100">Matching identity and</text>
+<text x="330" y="267.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="eligible body" data-fit-x="234" data-fit-y="175" data-fit-width="192" data-fit-height="100">usable page</text></g>
+<g id="reuse" data-node="reuse"><rect x="80" y="355" width="210" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="185" y="385.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="reuse title" data-fit-x="94" data-fit-y="365" data-fit-width="182" data-fit-height="80">Reuse retained</text>
+<text x="185" y="409.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="reuse title" data-fit-x="94" data-fit-y="365" data-fit-width="182" data-fit-height="80">page</text>
+<text x="185" y="437.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="reuse body" data-fit-x="94" data-fit-y="365" data-fit-width="182" data-fit-height="80">Continue task context</text></g>
+<g id="create" data-node="create"><rect x="405" y="355" width="210" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="510" y="387.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="create title" data-fit-x="419" data-fit-y="365" data-fit-width="182" data-fit-height="80">Create a page</text>
+<text x="510" y="415.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="create body" data-fit-x="419" data-fit-y="365" data-fit-width="182" data-fit-height="80">First request / mismatch</text>
+<text x="510" y="435.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="create body" data-fit-x="419" data-fit-y="365" data-fit-width="182" data-fit-height="80">Page unavailable</text></g>
+<g id="execute" data-node="execute"><rect x="220" y="515" width="220" height="90" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="330" y="552.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="execute title" data-fit-x="234" data-fit-y="525" data-fit-width="192" data-fit-height="70">Run the model turn</text>
+<text x="330" y="580.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="execute body" data-fit-x="234" data-fit-y="525" data-fit-width="192" data-fit-height="70">Keep task ownership</text></g>
+<g id="retain" data-node="retain"><rect x="220" y="715" width="220" height="105" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="330" y="748" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="retain title" data-fit-x="234" data-fit-y="725" data-fit-width="192" data-fit-height="85">Retain the</text>
+<text x="330" y="772" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="retain title" data-fit-x="234" data-fit-y="725" data-fit-width="192" data-fit-height="85">conversation</text>
+<text x="330" y="800" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="retain body" data-fit-x="234" data-fit-y="725" data-fit-width="192" data-fit-height="85">Await the next request</text></g>
+<g id="compact-request" data-node="compact-request"><rect x="710" y="165" width="230" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="825" y="195.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="compact-request title" data-fit-x="724" data-fit-y="175" data-fit-width="202" data-fit-height="80">Compaction</text>
+<text x="825" y="219.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="compact-request title" data-fit-x="724" data-fit-y="175" data-fit-width="202" data-fit-height="80">requested</text>
+<text x="825" y="247.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="compact-request body" data-fit-x="724" data-fit-y="175" data-fit-width="202" data-fit-height="80">Separate Codex request</text></g>
+<g id="checkpoint" data-node="checkpoint"><rect x="710" y="355" width="230" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="825" y="387.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="checkpoint title" data-fit-x="724" data-fit-y="365" data-fit-width="202" data-fit-height="80">Create a checkpoint</text>
+<text x="825" y="415.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="checkpoint body" data-fit-x="724" data-fit-y="365" data-fit-width="202" data-fit-height="80">Route-specific summary</text>
+<text x="825" y="435.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="checkpoint body" data-fit-x="724" data-fit-y="365" data-fit-width="202" data-fit-height="80">path</text></g>
+<g id="retire" data-node="retire"><rect x="710" y="555" width="230" height="90" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="825" y="592.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="retire title" data-fit-x="724" data-fit-y="565" data-fit-width="202" data-fit-height="70">Retire the old epoch</text>
+<text x="825" y="620.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="retire body" data-fit-x="724" data-fit-y="565" data-fit-width="202" data-fit-height="70">Finish owned cleanup</text></g>
+<g id="new-epoch" data-node="new-epoch"><rect x="710" y="755" width="230" height="105" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="825" y="790" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="new-epoch title" data-fit-x="724" data-fit-y="765" data-fit-width="202" data-fit-height="85">New conversation</text>
+<text x="825" y="818" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="new-epoch body" data-fit-x="724" data-fit-y="765" data-fit-width="202" data-fit-height="85">First request uses</text>
+<text x="825" y="838" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="new-epoch body" data-fit-x="724" data-fit-y="765" data-fit-width="202" data-fit-height="85">compacted context</text></g>
+<g data-edge-label="yes"><rect x="164.12" y="307" width="41.76" height="26" fill="#FFFFFF"/>
+<text x="185" y="324" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="yes label" data-fit-x="140" data-fit-y="310" data-fit-width="90" data-fit-height="20">Yes</text></g>
+<g data-edge-label="no"><rect x="493.11" y="307" width="33.78" height="26" fill="#FFFFFF"/>
+<text x="510" y="324" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="no label" data-fit-x="465" data-fit-y="310" data-fit-width="90" data-fit-height="20">No</text></g>
+<g data-edge-label="finished"><rect x="269.64" y="647" width="120.72" height="26" fill="#FFFFFF"/>
+<text x="330" y="664" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="finished label" data-fit-x="247.5" data-fit-y="650" data-fit-width="165" data-fit-height="20">Turn completes</text></g>
+<g data-edge-label="next-request"><rect x="56.13" y="737" width="147.74" height="46" fill="#FFFFFF"/>
+<text x="130" y="754" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="next-request label" data-fit-x="60" data-fit-y="740" data-fit-width="140" data-fit-height="40">Next request in this</text>
+<text x="130" y="774" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="next-request label" data-fit-x="60" data-fit-y="740" data-fit-width="140" data-fit-height="40">task</text></g>
+<g data-edge-label="compact"><rect x="779.34" y="297" width="91.32" height="26" fill="#FFFFFF"/>
+<text x="825" y="314" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="compact label" data-fit-x="750" data-fit-y="300" data-fit-width="150" data-fit-height="20">Summarize</text></g>
+<g data-edge-label="checkpoint-ready"><rect x="758.69" y="492" width="132.62" height="26" fill="#FFFFFF"/>
+<text x="825" y="509" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="checkpoint-ready label" data-fit-x="747.5" data-fit-y="495" data-fit-width="155" data-fit-height="20">Checkpoint ready</text></g>
+<g data-edge-label="after-cleanup"><rect x="757.22" y="687" width="135.56" height="26" fill="#FFFFFF"/>
+<text x="825" y="704" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="after-cleanup label" data-fit-x="750" data-fit-y="690" data-fit-width="150" data-fit-height="20">Next task request</text></g>
+<line x1="24" y1="928" x2="976" y2="928" stroke="#CBD5E1"/>
+<text x="26" y="954" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 1" data-fit-x="24" data-fit-y="940" data-fit-width="952" data-fit-height="78">Identity includes thread, model route ID and family, effort, provider settings and compaction epoch; all must remain compatible.</text>
+<text x="26" y="980" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 2" data-fit-x="24" data-fit-y="940" data-fit-width="952" data-fit-height="78">Applies to eligible retained Sol / Pro routes. Luna, browser-only and fresh-per-turn policies use other paths.</text>
+<text x="26" y="1006" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 3" data-fit-x="24" data-fit-y="940" data-fit-width="952" data-fit-height="78">Saving chat history is independent of reuse. The architecture manual describes each compaction path and fallback.</text>
+</svg>

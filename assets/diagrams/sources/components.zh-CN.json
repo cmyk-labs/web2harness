@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 1,
+  "locale": "zh-CN",
+  "kind": "architecture",
+  "width": 1000,
+  "height": 855,
+  "title": "本地组件职责与工具传输",
+  "description": "Responses 服务把适配器解析的原生工具请求，或轮次代理接收的 MCP 请求返回 Codex。桌面应用拥有浏览器，适配器负责编排轮次。",
+  "groups": [
+    {
+      "id": "runtime",
+      "x": 245,
+      "y": 85,
+      "width": 505,
+      "height": 625,
+      "label": "本地集成服务与进程",
+      "style": "local"
+    },
+    {
+      "id": "desktop",
+      "x": 780,
+      "y": 85,
+      "width": 210,
+      "height": 200,
+      "label": "桌面应用",
+      "style": "local"
+    },
+    {
+      "id": "cloud",
+      "x": 780,
+      "y": 330,
+      "width": 210,
+      "height": 225,
+      "label": "ChatGPT Web",
+      "style": "remote"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "codex",
+      "x": 30,
+      "y": 145,
+      "width": 170,
+      "height": 100,
+      "title": "Codex",
+      "body": [
+        "执行获准工具"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "responses",
+      "x": 270,
+      "y": 145,
+      "width": 200,
+      "height": 100,
+      "title": "Responses 服务",
+      "body": [
+        "路由与 SSE 输出"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "adapter",
+      "x": 520,
+      "y": 145,
+      "width": 200,
+      "height": 100,
+      "title": "ChatGPT 适配器",
+      "body": [
+        "编排网页轮次",
+        "校验原生工具请求"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "browser",
+      "x": 795,
+      "y": 155,
+      "width": 180,
+      "height": 100,
+      "title": "浏览器宿主",
+      "body": [
+        "Electron 任务页面"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "broker",
+      "x": 520,
+      "y": 370,
+      "width": 200,
+      "height": 105,
+      "title": "轮次代理",
+      "body": [
+        "绑定活动 Codex 任务",
+        "限定当前工具清单"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "mcp",
+      "x": 270,
+      "y": 370,
+      "width": 200,
+      "height": 120,
+      "title": "MCP 服务",
+      "body": [
+        "令牌校验／私有 RPC",
+        "独立 stdio 进程"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "tunnel",
+      "x": 270,
+      "y": 580,
+      "width": 200,
+      "height": 100,
+      "title": "隧道客户端",
+      "body": [
+        "主动建立出站连接"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "chatgpt",
+      "x": 795,
+      "y": 395,
+      "width": 180,
+      "height": 130,
+      "title": "网页模型",
+      "body": [
+        "网页回复",
+        "可选 MCP 连接器"
+      ],
+      "style": "remote"
+    }
+  ],
+  "edges": [
+    {
+      "id": "codex-api",
+      "from": "codex",
+      "to": "responses",
+      "points": [
+        [
+          200,
+          195
+        ],
+        [
+          270,
+          195
+        ]
+      ],
+      "label": "API",
+      "labelX": 235,
+      "labelY": 195,
+      "labelWidth": 45,
+      "bidirectional": true
+    },
+    {
+      "id": "adapter-api",
+      "from": "responses",
+      "to": "adapter",
+      "points": [
+        [
+          470,
+          195
+        ],
+        [
+          520,
+          195
+        ]
+      ],
+      "bidirectional": true
+    },
+    {
+      "id": "host-control",
+      "from": "adapter",
+      "to": "browser",
+      "points": [
+        [
+          720,
+          195
+        ],
+        [
+          795,
+          195
+        ]
+      ],
+      "label": "CDP / HTTP",
+      "labelX": 757,
+      "labelY": 195,
+      "labelWidth": 60,
+      "bidirectional": true
+    },
+    {
+      "id": "web-io",
+      "from": "browser",
+      "to": "chatgpt",
+      "points": [
+        [
+          885,
+          255
+        ],
+        [
+          885,
+          395
+        ]
+      ],
+      "label": "网页交互",
+      "labelX": 885,
+      "labelY": 307,
+      "labelWidth": 150,
+      "bidirectional": true
+    },
+    {
+      "id": "optional-mcp",
+      "from": "chatgpt",
+      "to": "tunnel",
+      "points": [
+        [
+          795,
+          460
+        ],
+        [
+          770,
+          460
+        ],
+        [
+          770,
+          630
+        ],
+        [
+          470,
+          630
+        ]
+      ],
+      "label": "可选 MCP 调用／结果",
+      "labelX": 615,
+      "labelY": 630,
+      "labelWidth": 240,
+      "bidirectional": true
+    },
+    {
+      "id": "stdio",
+      "from": "tunnel",
+      "to": "mcp",
+      "points": [
+        [
+          370,
+          580
+        ],
+        [
+          370,
+          490
+        ]
+      ],
+      "label": "stdio",
+      "labelX": 370,
+      "labelY": 535,
+      "labelWidth": 95,
+      "bidirectional": true
+    },
+    {
+      "id": "private-rpc",
+      "from": "mcp",
+      "to": "broker",
+      "points": [
+        [
+          470,
+          422
+        ],
+        [
+          520,
+          422
+        ]
+      ],
+      "bidirectional": true
+    },
+    {
+      "id": "tool-items",
+      "from": "broker",
+      "to": "responses",
+      "points": [
+        [
+          620,
+          370
+        ],
+        [
+          620,
+          305
+        ],
+        [
+          370,
+          305
+        ],
+        [
+          370,
+          245
+        ]
+      ],
+      "label": "工具请求／回执",
+      "labelX": 497,
+      "labelY": 305,
+      "labelWidth": 200,
+      "bidirectional": true
+    }
+  ],
+  "notes": [
+    "原生工具使用适配器与 Responses 通道；MCP Bridge 另用连接器、隧道、MCP 服务和轮次代理。",
+    "下方箭头表示应用调用及结果，不表示网络建连方向；隧道客户端主动出站连接。",
+    "两条路径都经 Responses 将工具请求返回 Codex。浏览器和连接器不会增加本地操作权限。"
+  ]
+}

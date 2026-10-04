@@ -1,0 +1,134 @@
+{
+  "name": "web2harness-launcher",
+  "version": "6.0.0",
+  "private": true,
+  "description": "Desktop control center for Web2Harness",
+  "author": "cmyk-labs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cmyk-labs/web2harness.git",
+    "directory": "launcher"
+  },
+  "homepage": "https://github.com/cmyk-labs/web2harness",
+  "bugs": {
+    "url": "https://github.com/cmyk-labs/web2harness/issues"
+  },
+  "web2harnessRepository": "cmyk-labs/web2harness",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "bun run scripts/dev.cjs",
+    "audit": "bun audit",
+    "typecheck": "tsc --noEmit",
+    "build:renderer": "vite build",
+    "build": "bun run typecheck && bun run build:renderer",
+    "build:runtime": "bun run scripts/prepare-runtime.cjs && bun run ../scripts/build-windows-helpers.ts",
+    "package": "bun run build && bun run build:runtime && bun run scripts/package.cjs",
+    "package:mac": "bun run build && bun run build:runtime && bun run scripts/package.cjs --mac",
+    "package:win": "bun run build && bun run build:runtime && bun run scripts/package.cjs --win",
+    "package:linux": "bun run build && bun run build:runtime && bun run scripts/package.cjs --linux",
+    "smoke:package": "bun run scripts/smoke-package.cjs",
+    "test": "node scripts/test.cjs",
+    "test:workspace": "cd .. && node launcher/scripts/smoke-workspace.mjs",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "motion": "^12.42.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "41.10.7",
+    "electron-builder": "26.15.3",
+    "typescript": "^5.9.3",
+    "undici": "7.29.1",
+    "vite": "^6.0.0"
+  },
+  "overrides": {
+    "@electron/get": "5.1.0",
+    "@xmldom/xmldom": "0.8.15",
+    "fast-uri": "3.1.8"
+  },
+  "build": {
+    "appId": "dev.web2harness.launcher",
+    "productName": "Web2Harness",
+    "artifactName": "web2harness-${version}-${os}-${arch}.${ext}",
+    "asar": true,
+    "asarUnpack": [
+      "assets/linux-appimage-runner.sh"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "shared/**",
+      {
+        "from": "../assets/brand",
+        "to": "assets",
+        "filter": ["icon.png", "iconTemplate.png", "iconTemplate@2x.png"]
+      },
+      {
+        "from": "packaging/linux",
+        "to": "assets",
+        "filter": ["linux-appimage-runner.sh"]
+      },
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/runtime",
+        "to": "runtime"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "../assets/brand/icon.png",
+      "minimumSystemVersion": "13.0",
+      "hardenedRuntime": true,
+      "signIgnore": [
+        "[/\\\\]Contents[/\\\\]Resources[/\\\\]runtime[/\\\\]runtime[/\\\\]bun$"
+      ],
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "../assets/brand/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "category": "Development",
+      "icon": "../assets/brand/icon.png",
+      "target": [
+        "AppImage"
+      ]
+    },
+    "nsis": {
+      "include": "packaging/windows/windows-installer.nsh",
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": ["en_US", "zh_CN"],
+      "guid": "8b7be269-ac7f-4ab6-82e9-71408ffa370b",
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true
+    }
+  },
+  "patchedDependencies": {
+    "app-builder-lib@26.15.3": "patches/app-builder-lib@26.15.3.patch"
+  }
+}

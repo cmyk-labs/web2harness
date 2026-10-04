@@ -1,0 +1,380 @@
+{
+  "schemaVersion": 1,
+  "locale": "en",
+  "kind": "sequence",
+  "width": 1000,
+  "height": 1130,
+  "title": "Native Tools: execution and result return",
+  "description": "One successful tool round trip, followed by a final answer. Read messages from top to bottom. Browser replies always return through Web2Harness to Codex.",
+  "groups": [],
+  "nodes": [
+    {
+      "id": "tools",
+      "x": 12,
+      "y": 90,
+      "width": 156,
+      "height": 85,
+      "title": "Local tools",
+      "body": [],
+      "style": "default"
+    },
+    {
+      "id": "codex",
+      "x": 212,
+      "y": 90,
+      "width": 156,
+      "height": 85,
+      "title": "Codex",
+      "body": [],
+      "style": "default"
+    },
+    {
+      "id": "bridge",
+      "x": 422,
+      "y": 90,
+      "width": 156,
+      "height": 85,
+      "title": "Web2Harness",
+      "body": [],
+      "style": "default"
+    },
+    {
+      "id": "browser",
+      "x": 632,
+      "y": 90,
+      "width": 156,
+      "height": 85,
+      "title": "Browser",
+      "body": [],
+      "style": "default"
+    },
+    {
+      "id": "web",
+      "x": 837,
+      "y": 90,
+      "width": 156,
+      "height": 85,
+      "title": "ChatGPT Web",
+      "body": [],
+      "style": "default"
+    }
+  ],
+  "lifelines": [
+    {
+      "id": "tools-line",
+      "x": 90,
+      "y1": 175,
+      "y2": 1020
+    },
+    {
+      "id": "codex-line",
+      "x": 290,
+      "y1": 175,
+      "y2": 1020
+    },
+    {
+      "id": "bridge-line",
+      "x": 500,
+      "y1": 175,
+      "y2": 1020
+    },
+    {
+      "id": "browser-line",
+      "x": 710,
+      "y1": 175,
+      "y2": 1020
+    },
+    {
+      "id": "web-line",
+      "x": 915,
+      "y1": 175,
+      "y2": 1020
+    }
+  ],
+  "edges": [
+    {
+      "id": "message-1",
+      "from": "codex-line",
+      "to": "bridge-line",
+      "points": [
+        [
+          290,
+          239
+        ],
+        [
+          500,
+          239
+        ]
+      ],
+      "label": "1. Context and tool definitions",
+      "labelX": 395,
+      "labelY": 211,
+      "labelWidth": 192,
+      "style": "request"
+    },
+    {
+      "id": "message-2",
+      "from": "bridge-line",
+      "to": "browser-line",
+      "points": [
+        [
+          500,
+          297
+        ],
+        [
+          710,
+          297
+        ]
+      ],
+      "label": "2. Prepare the turn",
+      "labelX": 605,
+      "labelY": 269,
+      "labelWidth": 192,
+      "style": "request"
+    },
+    {
+      "id": "message-3",
+      "from": "browser-line",
+      "to": "web-line",
+      "points": [
+        [
+          710,
+          355
+        ],
+        [
+          915,
+          355
+        ]
+      ],
+      "label": "3. Submit prompt",
+      "labelX": 812.5,
+      "labelY": 327,
+      "labelWidth": 187,
+      "style": "request"
+    },
+    {
+      "id": "message-4",
+      "from": "web-line",
+      "to": "browser-line",
+      "points": [
+        [
+          915,
+          413
+        ],
+        [
+          710,
+          413
+        ]
+      ],
+      "label": "4. Structured tool request",
+      "labelX": 812.5,
+      "labelY": 385,
+      "labelWidth": 187,
+      "style": "return"
+    },
+    {
+      "id": "message-5",
+      "from": "browser-line",
+      "to": "bridge-line",
+      "points": [
+        [
+          710,
+          471
+        ],
+        [
+          500,
+          471
+        ]
+      ],
+      "label": "5. Collected web reply",
+      "labelX": 605,
+      "labelY": 443,
+      "labelWidth": 192,
+      "style": "return"
+    },
+    {
+      "id": "message-6",
+      "from": "bridge-line",
+      "to": "codex-line",
+      "points": [
+        [
+          500,
+          529
+        ],
+        [
+          290,
+          529
+        ]
+      ],
+      "label": "6. Validated tool call",
+      "labelX": 395,
+      "labelY": 501,
+      "labelWidth": 192,
+      "style": "return"
+    },
+    {
+      "id": "message-7",
+      "from": "codex-line",
+      "to": "tools-line",
+      "points": [
+        [
+          290,
+          587
+        ],
+        [
+          90,
+          587
+        ]
+      ],
+      "label": "7. Approval and execution",
+      "labelX": 190,
+      "labelY": 559,
+      "labelWidth": 182,
+      "style": "request"
+    },
+    {
+      "id": "message-8",
+      "from": "tools-line",
+      "to": "codex-line",
+      "points": [
+        [
+          90,
+          645
+        ],
+        [
+          290,
+          645
+        ]
+      ],
+      "label": "8. Actual execution result",
+      "labelX": 190,
+      "labelY": 617,
+      "labelWidth": 182,
+      "style": "return"
+    },
+    {
+      "id": "message-9",
+      "from": "codex-line",
+      "to": "bridge-line",
+      "points": [
+        [
+          290,
+          703
+        ],
+        [
+          500,
+          703
+        ]
+      ],
+      "label": "9. Tool result in next request",
+      "labelX": 395,
+      "labelY": 675,
+      "labelWidth": 192,
+      "style": "request"
+    },
+    {
+      "id": "message-10",
+      "from": "bridge-line",
+      "to": "browser-line",
+      "points": [
+        [
+          500,
+          761
+        ],
+        [
+          710,
+          761
+        ]
+      ],
+      "label": "10. Continue context",
+      "labelX": 605,
+      "labelY": 733,
+      "labelWidth": 192,
+      "style": "request"
+    },
+    {
+      "id": "message-11",
+      "from": "browser-line",
+      "to": "web-line",
+      "points": [
+        [
+          710,
+          819
+        ],
+        [
+          915,
+          819
+        ]
+      ],
+      "label": "11. Submit tool result",
+      "labelX": 812.5,
+      "labelY": 791,
+      "labelWidth": 187,
+      "style": "request"
+    },
+    {
+      "id": "message-12",
+      "from": "web-line",
+      "to": "browser-line",
+      "points": [
+        [
+          915,
+          877
+        ],
+        [
+          710,
+          877
+        ]
+      ],
+      "label": "12. Final answer",
+      "labelX": 812.5,
+      "labelY": 849,
+      "labelWidth": 187,
+      "style": "return"
+    },
+    {
+      "id": "message-13",
+      "from": "browser-line",
+      "to": "bridge-line",
+      "points": [
+        [
+          710,
+          935
+        ],
+        [
+          500,
+          935
+        ]
+      ],
+      "label": "13. Collected answer",
+      "labelX": 605,
+      "labelY": 907,
+      "labelWidth": 192,
+      "style": "return"
+    },
+    {
+      "id": "message-14",
+      "from": "bridge-line",
+      "to": "codex-line",
+      "points": [
+        [
+          500,
+          993
+        ],
+        [
+          290,
+          993
+        ]
+      ],
+      "label": "14. Final Responses output",
+      "labelX": 395,
+      "labelY": 965,
+      "labelWidth": 192,
+      "style": "return"
+    }
+  ],
+  "notes": [
+    "Solid arrows: submit or execute. Dashed arrows: return results. Tool request/result steps repeat as needed.",
+    "This is the successful Native Tools path. Repeated requests can reuse the same eligible web conversation."
+  ]
+}

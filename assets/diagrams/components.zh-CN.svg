@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="855" viewBox="0 0 1000 855" role="img" lang="zh-CN" aria-labelledby="diagram-title diagram-description">
+<title id="diagram-title">本地组件职责与工具传输</title>
+<desc id="diagram-description">Responses 服务把适配器解析的原生工具请求，或轮次代理接收的 MCP 请求返回 Codex。桌面应用拥有浏览器，适配器负责编排轮次。</desc>
+<style >text{font-family:Arial, "Microsoft YaHei", "Noto Sans CJK SC", sans-serif}</style>
+<defs ><marker id="arrow-request" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-return" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-error" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#9C4B4B"/></marker>
+<marker id="arrow-dependency" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#64748B"/></marker></defs>
+<rect x="0" y="0" width="1000" height="855" fill="#FFFFFF"/>
+<text x="26" y="45" font-size="25" fill="#18324F" font-weight="600" text-anchor="start" data-fit="main title" data-fit-x="24" data-fit-y="16" data-fit-width="952" data-fit-height="40">本地组件职责与工具传输</text>
+<line x1="24" y1="66" x2="976" y2="66" stroke="#CBD5E1" stroke-width="1"/>
+<g id="runtime" data-group="runtime"><rect x="245" y="85" width="505" height="625" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+<text x="261" y="111" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="runtime label" data-fit-x="259" data-fit-y="95" data-fit-width="477" data-fit-height="605">本地集成服务与进程</text></g>
+<g id="desktop" data-group="desktop"><rect x="780" y="85" width="210" height="200" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+<text x="796" y="111" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="desktop label" data-fit-x="794" data-fit-y="95" data-fit-width="182" data-fit-height="180">桌面应用</text></g>
+<g id="cloud" data-group="cloud"><rect x="780" y="330" width="210" height="225" fill="#EDF2F7" stroke="#CBD5E1" stroke-width="1.4" stroke-dasharray="7 5"/>
+<text x="796" y="356" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="cloud label" data-fit-x="794" data-fit-y="340" data-fit-width="182" data-fit-height="205">ChatGPT Web</text></g>
+<path id="codex-api" data-edge="codex-api" data-from="codex" data-to="responses" d="M 200 195 L 270 195" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<path id="adapter-api" data-edge="adapter-api" data-from="responses" data-to="adapter" d="M 470 195 L 520 195" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<path id="host-control" data-edge="host-control" data-from="adapter" data-to="browser" d="M 720 195 L 795 195" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<path id="web-io" data-edge="web-io" data-from="browser" data-to="chatgpt" d="M 885 255 L 885 395" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<path id="optional-mcp" data-edge="optional-mcp" data-from="chatgpt" data-to="tunnel" d="M 795 460 L 770 460 L 770 630 L 470 630" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<path id="stdio" data-edge="stdio" data-from="tunnel" data-to="mcp" d="M 370 580 L 370 490" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<path id="private-rpc" data-edge="private-rpc" data-from="mcp" data-to="broker" d="M 470 422 L 520 422" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<path id="tool-items" data-edge="tool-items" data-from="broker" data-to="responses" d="M 620 370 L 620 305 L 370 305 L 370 245" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)" marker-start="url(#arrow-request)"/>
+<g id="codex" data-node="codex"><rect x="30" y="145" width="170" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="115" y="187.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="codex title" data-fit-x="44" data-fit-y="155" data-fit-width="142" data-fit-height="80">Codex</text>
+<text x="115" y="215.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="codex body" data-fit-x="44" data-fit-y="155" data-fit-width="142" data-fit-height="80">执行获准工具</text></g>
+<g id="responses" data-node="responses"><rect x="270" y="145" width="200" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="370" y="187.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="responses title" data-fit-x="284" data-fit-y="155" data-fit-width="172" data-fit-height="80">Responses 服务</text>
+<text x="370" y="215.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="responses body" data-fit-x="284" data-fit-y="155" data-fit-width="172" data-fit-height="80">路由与 SSE 输出</text></g>
+<g id="adapter" data-node="adapter"><rect x="520" y="145" width="200" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="620" y="177.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="adapter title" data-fit-x="534" data-fit-y="155" data-fit-width="172" data-fit-height="80">ChatGPT 适配器</text>
+<text x="620" y="205.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="adapter body" data-fit-x="534" data-fit-y="155" data-fit-width="172" data-fit-height="80">编排网页轮次</text>
+<text x="620" y="225.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="adapter body" data-fit-x="534" data-fit-y="155" data-fit-width="172" data-fit-height="80">校验原生工具请求</text></g>
+<g id="browser" data-node="browser"><rect x="795" y="155" width="180" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="885" y="197.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="browser title" data-fit-x="809" data-fit-y="165" data-fit-width="152" data-fit-height="80">浏览器宿主</text>
+<text x="885" y="225.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="browser body" data-fit-x="809" data-fit-y="165" data-fit-width="152" data-fit-height="80">Electron 任务页面</text></g>
+<g id="broker" data-node="broker"><rect x="520" y="370" width="200" height="105" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="620" y="405" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="broker title" data-fit-x="534" data-fit-y="380" data-fit-width="172" data-fit-height="85">轮次代理</text>
+<text x="620" y="433" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="broker body" data-fit-x="534" data-fit-y="380" data-fit-width="172" data-fit-height="85">绑定活动 Codex 任务</text>
+<text x="620" y="453" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="broker body" data-fit-x="534" data-fit-y="380" data-fit-width="172" data-fit-height="85">限定当前工具清单</text></g>
+<g id="mcp" data-node="mcp"><rect x="270" y="370" width="200" height="120" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="370" y="412.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="mcp title" data-fit-x="284" data-fit-y="380" data-fit-width="172" data-fit-height="100">MCP 服务</text>
+<text x="370" y="440.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="mcp body" data-fit-x="284" data-fit-y="380" data-fit-width="172" data-fit-height="100">令牌校验／私有 RPC</text>
+<text x="370" y="460.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="mcp body" data-fit-x="284" data-fit-y="380" data-fit-width="172" data-fit-height="100">独立 stdio 进程</text></g>
+<g id="tunnel" data-node="tunnel"><rect x="270" y="580" width="200" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="370" y="622.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="tunnel title" data-fit-x="284" data-fit-y="590" data-fit-width="172" data-fit-height="80">隧道客户端</text>
+<text x="370" y="650.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="tunnel body" data-fit-x="284" data-fit-y="590" data-fit-width="172" data-fit-height="80">主动建立出站连接</text></g>
+<g id="chatgpt" data-node="chatgpt"><rect x="795" y="395" width="180" height="130" fill="#EDF2F7" stroke="#18324F" stroke-width="1.4"/>
+<text x="885" y="442.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="chatgpt title" data-fit-x="809" data-fit-y="405" data-fit-width="152" data-fit-height="110">网页模型</text>
+<text x="885" y="470.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="chatgpt body" data-fit-x="809" data-fit-y="405" data-fit-width="152" data-fit-height="110">网页回复</text>
+<text x="885" y="490.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="chatgpt body" data-fit-x="809" data-fit-y="405" data-fit-width="152" data-fit-height="110">可选 MCP 连接器</text></g>
+<g data-edge-label="codex-api"><rect x="215.17" y="182" width="39.66" height="26" fill="#FFFFFF"/>
+<text x="235" y="199" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="codex-api label" data-fit-x="212.5" data-fit-y="185" data-fit-width="45" data-fit-height="20">API</text></g>
+<g data-edge-label="host-control"><rect x="728.28" y="172" width="57.44" height="46" fill="#FFFFFF"/>
+<text x="757" y="189" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="host-control label" data-fit-x="727" data-fit-y="175" data-fit-width="60" data-fit-height="40">CDP /</text>
+<text x="757" y="209" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="host-control label" data-fit-x="727" data-fit-y="175" data-fit-width="60" data-fit-height="40">HTTP</text></g>
+<g data-edge-label="web-io"><rect x="848.16" y="294" width="73.68" height="26" fill="#FFFFFF"/>
+<text x="885" y="311" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="web-io label" data-fit-x="810" data-fit-y="297" data-fit-width="150" data-fit-height="20">网页交互</text></g>
+<g data-edge-label="optional-mcp"><rect x="536.02" y="617" width="157.96" height="26" fill="#FFFFFF"/>
+<text x="615" y="634" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="optional-mcp label" data-fit-x="495" data-fit-y="620" data-fit-width="240" data-fit-height="20">可选 MCP 调用／结果</text></g>
+<g data-edge-label="stdio"><rect x="345.27" y="522" width="49.46" height="26" fill="#FFFFFF"/>
+<text x="370" y="539" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="stdio label" data-fit-x="322.5" data-fit-y="525" data-fit-width="95" data-fit-height="20">stdio</text></g>
+<g data-edge-label="tool-items"><rect x="438.53" y="292" width="116.94" height="26" fill="#FFFFFF"/>
+<text x="497" y="309" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="tool-items label" data-fit-x="397" data-fit-y="295" data-fit-width="200" data-fit-height="20">工具请求／回执</text></g>
+<line x1="24" y1="743" x2="976" y2="743" stroke="#CBD5E1"/>
+<text x="26" y="769" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 1" data-fit-x="24" data-fit-y="755" data-fit-width="952" data-fit-height="78">原生工具使用适配器与 Responses 通道；MCP Bridge 另用连接器、隧道、MCP 服务和轮次代理。</text>
+<text x="26" y="795" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 2" data-fit-x="24" data-fit-y="755" data-fit-width="952" data-fit-height="78">下方箭头表示应用调用及结果，不表示网络建连方向；隧道客户端主动出站连接。</text>
+<text x="26" y="821" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 3" data-fit-x="24" data-fit-y="755" data-fit-width="952" data-fit-height="78">两条路径都经 Responses 将工具请求返回 Codex。浏览器和连接器不会增加本地操作权限。</text>
+</svg>

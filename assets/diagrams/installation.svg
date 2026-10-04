@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1140" viewBox="0 0 1000 1140" role="img" lang="en" aria-labelledby="diagram-title diagram-description">
+<title id="diagram-title">Windows: installation prepares, startup checks</title>
+<desc id="diagram-description">Installation prepares or reuses a verified runtime and commits the transaction. Failures or normal cancellation before commit roll back; interrupted processes recover on the next installer run. Startup performs a read-only readiness check.</desc>
+<style >text{font-family:Arial, "Microsoft YaHei", "Noto Sans CJK SC", sans-serif}</style>
+<defs ><marker id="arrow-request" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-return" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#18324F"/></marker>
+<marker id="arrow-error" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#9C4B4B"/></marker>
+<marker id="arrow-dependency" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="#64748B"/></marker></defs>
+<rect x="0" y="0" width="1000" height="1140" fill="#FFFFFF"/>
+<text x="26" y="45" font-size="25" fill="#18324F" font-weight="600" text-anchor="start" data-fit="main title" data-fit-x="24" data-fit-y="16" data-fit-width="952" data-fit-height="40">Windows: installation prepares, startup checks</text>
+<line x1="24" y1="66" x2="976" y2="66" stroke="#CBD5E1" stroke-width="1"/>
+<g id="installer" data-group="installer"><rect x="20" y="85" width="960" height="255" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+<text x="36" y="111" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="installer label" data-fit-x="34" data-fit-y="95" data-fit-width="932" data-fit-height="235">Installer: fresh install, upgrade or repair</text></g>
+<g id="exceptions" data-group="exceptions"><rect x="20" y="395" width="960" height="205" fill="#FFFFFF" stroke="#9C4B4B" stroke-width="1.4" stroke-dasharray="7 5"/>
+<text x="36" y="421" font-size="16" fill="#9C4B4B" font-weight="600" text-anchor="start" data-fit="exceptions label" data-fit-x="34" data-fit-y="405" data-fit-width="932" data-fit-height="185">Pre-commit recovery</text></g>
+<g id="startup" data-group="startup"><rect x="20" y="665" width="960" height="335" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+<text x="36" y="691" font-size="16" fill="#18324F" font-weight="600" text-anchor="start" data-fit="startup label" data-fit-x="34" data-fit-y="675" data-fit-width="932" data-fit-height="315">Starting the registered desktop application</text></g>
+<path id="recovered" data-edge="recovered" data-from="recover" data-to="snapshot" d="M 245 232 L 290 232" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="prepared" data-edge="prepared" data-from="snapshot" data-to="prepare" d="M 495 232 L 540 232" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="runtime-ready" data-edge="runtime-ready" data-from="prepare" data-to="commit" d="M 745 232 L 795 232" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="failed" data-edge="failed" data-from="installer" data-to="rollback" d="M 252 340 L 252 465" fill="none" stroke="#9C4B4B" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-error)"/>
+<path id="process-stopped" data-edge="process-stopped" data-from="installer" data-to="interrupted" d="M 742 340 L 742 465" fill="none" stroke="#9C4B4B" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-error)"/>
+<path id="startup-check" data-edge="startup-check" data-from="launch" data-to="check" d="M 300 780 L 370 780" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="check-passed" data-edge="check-passed" data-from="check" data-to="ready" d="M 640 780 L 760 780" fill="none" stroke="#18324F" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-request)"/>
+<path id="check-failed" data-edge="check-failed" data-from="check" data-to="repair" d="M 505 830 L 505 900" fill="none" stroke="#9C4B4B" stroke-width="1.6" stroke-linejoin="miter" marker-end="url(#arrow-error)"/>
+<g id="recover" data-node="recover"><rect x="40" y="160" width="205" height="145" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="142.5" y="203" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="recover title" data-fit-x="54" data-fit-y="170" data-fit-width="177" data-fit-height="125">Check recovery</text>
+<text x="142.5" y="227" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="recover title" data-fit-x="54" data-fit-y="170" data-fit-width="177" data-fit-height="125">records</text>
+<text x="142.5" y="255" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="recover body" data-fit-x="54" data-fit-y="170" data-fit-width="177" data-fit-height="125">Recover interrupted</text>
+<text x="142.5" y="275" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="recover body" data-fit-x="54" data-fit-y="170" data-fit-width="177" data-fit-height="125">setup first</text></g>
+<g id="snapshot" data-node="snapshot"><rect x="290" y="160" width="205" height="145" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="392.5" y="193" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="snapshot title" data-fit-x="304" data-fit-y="170" data-fit-width="177" data-fit-height="125">Prepare</text>
+<text x="392.5" y="217" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="snapshot title" data-fit-x="304" data-fit-y="170" data-fit-width="177" data-fit-height="125">transaction</text>
+<text x="392.5" y="245" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="snapshot body" data-fit-x="304" data-fit-y="170" data-fit-width="177" data-fit-height="125">Verify ownership</text>
+<text x="392.5" y="265" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="snapshot body" data-fit-x="304" data-fit-y="170" data-fit-width="177" data-fit-height="125">Create recovery</text>
+<text x="392.5" y="285" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="snapshot body" data-fit-x="304" data-fit-y="170" data-fit-width="177" data-fit-height="125">snapshot</text></g>
+<g id="prepare" data-node="prepare"><rect x="540" y="160" width="205" height="145" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="642.5" y="193" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="prepare title" data-fit-x="554" data-fit-y="170" data-fit-width="177" data-fit-height="125">Replace and</text>
+<text x="642.5" y="217" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="prepare title" data-fit-x="554" data-fit-y="170" data-fit-width="177" data-fit-height="125">prepare</text>
+<text x="642.5" y="245" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="prepare body" data-fit-x="554" data-fit-y="170" data-fit-width="177" data-fit-height="125">Replace application files</text>
+<text x="642.5" y="265" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="prepare body" data-fit-x="554" data-fit-y="170" data-fit-width="177" data-fit-height="125">Reuse verified runtime</text>
+<text x="642.5" y="285" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="prepare body" data-fit-x="554" data-fit-y="170" data-fit-width="177" data-fit-height="125">or deploy</text></g>
+<g id="commit" data-node="commit"><rect x="795" y="160" width="175" height="145" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="882.5" y="193" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="commit title" data-fit-x="809" data-fit-y="170" data-fit-width="147" data-fit-height="125">Commit</text>
+<text x="882.5" y="217" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="commit title" data-fit-x="809" data-fit-y="170" data-fit-width="147" data-fit-height="125">installation</text>
+<text x="882.5" y="245" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="commit body" data-fit-x="809" data-fit-y="170" data-fit-width="147" data-fit-height="125">Record runtime /</text>
+<text x="882.5" y="265" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="commit body" data-fit-x="809" data-fit-y="170" data-fit-width="147" data-fit-height="125">receipt</text>
+<text x="882.5" y="285" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="commit body" data-fit-x="809" data-fit-y="170" data-fit-width="147" data-fit-height="125">Report success</text></g>
+<g id="rollback" data-node="rollback"><rect x="60" y="465" width="385" height="100" fill="#F4F6F8" stroke="#9C4B4B" stroke-width="1.4"/>
+<text x="252.5" y="507.5" font-size="18" fill="#9C4B4B" font-weight="600" text-anchor="middle" data-fit="rollback title" data-fit-x="74" data-fit-y="475" data-fit-width="357" data-fit-height="80">Failure / normal cancellation</text>
+<text x="252.5" y="535.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="rollback body" data-fit-x="74" data-fit-y="475" data-fit-width="357" data-fit-height="80">Roll back; keep records if recovery fails</text></g>
+<g id="interrupted" data-node="interrupted"><rect x="550" y="465" width="385" height="100" fill="#F4F6F8" stroke="#9C4B4B" stroke-width="1.4"/>
+<text x="742.5" y="507.5" font-size="18" fill="#9C4B4B" font-weight="600" text-anchor="middle" data-fit="interrupted title" data-fit-x="564" data-fit-y="475" data-fit-width="357" data-fit-height="80">Process interruption</text>
+<text x="742.5" y="535.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="interrupted body" data-fit-x="564" data-fit-y="475" data-fit-width="357" data-fit-height="80">Keep records; recover on the next installer run</text></g>
+<g id="launch" data-node="launch"><rect x="50" y="730" width="250" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="175" y="772.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="launch title" data-fit-x="64" data-fit-y="740" data-fit-width="222" data-fit-height="80">Launch from desktop</text>
+<text x="175" y="800.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="launch body" data-fit-x="64" data-fit-y="740" data-fit-width="222" data-fit-height="80">Start the installed application</text></g>
+<g id="check" data-node="check"><rect x="370" y="730" width="270" height="100" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="505" y="762.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="check title" data-fit-x="384" data-fit-y="740" data-fit-width="242" data-fit-height="80">Read-only runtime check</text>
+<text x="505" y="790.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="check body" data-fit-x="384" data-fit-y="740" data-fit-width="242" data-fit-height="80">Manifest, receipt and four entry</text>
+<text x="505" y="810.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="check body" data-fit-x="384" data-fit-y="740" data-fit-width="242" data-fit-height="80">files</text></g>
+<g id="ready" data-node="ready"><rect x="760" y="730" width="200" height="120" fill="#F4F6F8" stroke="#18324F" stroke-width="1.4"/>
+<text x="860" y="762.5" font-size="18" fill="#18324F" font-weight="600" text-anchor="middle" data-fit="ready title" data-fit-x="774" data-fit-y="740" data-fit-width="172" data-fit-height="100">Services ready</text>
+<text x="860" y="790.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="ready body" data-fit-x="774" data-fit-y="740" data-fit-width="172" data-fit-height="100">Browser / initial state</text>
+<text x="860" y="810.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="ready body" data-fit-x="774" data-fit-y="740" data-fit-width="172" data-fit-height="100">ready</text>
+<text x="860" y="830.5" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="ready body" data-fit-x="774" data-fit-y="740" data-fit-width="172" data-fit-height="100">Then show workspace</text></g>
+<g id="repair" data-node="repair"><rect x="370" y="900" width="270" height="75" fill="#F4F6F8" stroke="#9C4B4B" stroke-width="1.4"/>
+<text x="505" y="930" font-size="18" fill="#9C4B4B" font-weight="600" text-anchor="middle" data-fit="repair title" data-fit-x="384" data-fit-y="910" data-fit-width="242" data-fit-height="55">Ask to rerun the installer</text>
+<text x="505" y="958" font-size="15" fill="#334155" font-weight="400" text-anchor="middle" data-fit="repair body" data-fit-x="384" data-fit-y="910" data-fit-width="242" data-fit-height="55">No startup deployment or repair</text></g>
+<g data-edge-label="failed"><rect x="172.88" y="364" width="158.24" height="26" fill="#FFFFFF"/>
+<text x="252" y="381" font-size="14" fill="#9C4B4B" font-weight="400" text-anchor="middle" data-fit="failed label" data-fit-x="139.5" data-fit-y="367" data-fit-width="225" data-fit-height="20">Any pre-commit step</text></g>
+<g data-edge-label="process-stopped"><rect x="669.67" y="364" width="144.66" height="26" fill="#FFFFFF"/>
+<text x="742" y="381" font-size="14" fill="#9C4B4B" font-weight="400" text-anchor="middle" data-fit="process-stopped label" data-fit-x="634.5" data-fit-y="367" data-fit-width="215" data-fit-height="20">Unfinished process</text></g>
+<g data-edge-label="check-passed"><rect x="675.13" y="767" width="49.74" height="26" fill="#FFFFFF"/>
+<text x="700" y="784" font-size="14" fill="#334155" font-weight="400" text-anchor="middle" data-fit="check-passed label" data-fit-x="662.5" data-fit-y="770" data-fit-width="75" data-fit-height="20">Pass</text></g>
+<g data-edge-label="check-failed"><rect x="484.05" y="852" width="41.9" height="26" fill="#FFFFFF"/>
+<text x="505" y="869" font-size="14" fill="#9C4B4B" font-weight="400" text-anchor="middle" data-fit="check-failed label" data-fit-x="465" data-fit-y="855" data-fit-width="80" data-fit-height="20">Fail</text></g>
+<line x1="24" y1="1028" x2="976" y2="1028" stroke="#CBD5E1"/>
+<text x="26" y="1054" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 1" data-fit-x="24" data-fit-y="1040" data-fit-width="952" data-fit-height="78">Exception arrows apply across the installer transaction, including file replacement, validation and commit attempts.</text>
+<text x="26" y="1080" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 2" data-fit-x="24" data-fit-y="1040" data-fit-width="952" data-fit-height="78">A verified existing runtime can be reused. Only a missing or invalid runtime needs staging and deployment.</text>
+<text x="26" y="1106" font-size="14" fill="#64748B" font-weight="400" text-anchor="start" data-fit="note 3" data-fit-x="24" data-fit-y="1040" data-fit-width="952" data-fit-height="78">After successful commit, deferred backup cleanup does not roll back the completed installation.</text>
+</svg>

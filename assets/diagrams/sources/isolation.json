@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "locale": "en",
+  "kind": "isolation",
+  "width": 1000,
+  "height": 930,
+  "title": "One implementation, two isolated environments",
+  "description": "Regular use and DEV execute the same application code with independent configuration, credentials, browser state, processes and workspaces. Dashed links mean code reuse, not communication between environments.",
+  "groups": [
+    {
+      "id": "regular",
+      "x": 20,
+      "y": 280,
+      "width": 460,
+      "height": 365,
+      "label": "Regular use — protected",
+      "style": "local"
+    },
+    {
+      "id": "dev",
+      "x": 520,
+      "y": 280,
+      "width": 460,
+      "height": 365,
+      "label": "DEV acceptance — task-owned",
+      "style": "local"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "shared-code",
+      "x": 220,
+      "y": 90,
+      "width": 560,
+      "height": 105,
+      "title": "Shared application implementation",
+      "body": [
+        "Responses, browser adapter, tools and lifecycle"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "production-state",
+      "x": 45,
+      "y": 350,
+      "width": 410,
+      "height": 250,
+      "title": "Existing user environment",
+      "body": [
+        "Regular application / Codex configuration",
+        "User login and browser profile",
+        "Owned processes, endpoints and services",
+        "Active tasks and project workspaces"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "dev-state",
+      "x": 545,
+      "y": 350,
+      "width": 410,
+      "height": 250,
+      "title": "Independent DEV environment",
+      "body": [
+        "DEV application / CODEX_HOME",
+        "Independent login and browser profile",
+        "Verified DEV processes and endpoints",
+        "Dedicated disposable fixture workspace"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "remote-isolation",
+      "x": 20,
+      "y": 710,
+      "width": 960,
+      "height": 90,
+      "title": "MCP Bridge: verify remote isolation too",
+      "body": [
+        "User confirms the DEV tunnel; verify the actual DEV connector binding before connecting."
+      ],
+      "style": "default"
+    }
+  ],
+  "edges": [
+    {
+      "id": "regular-code",
+      "from": "shared-code",
+      "to": "regular",
+      "points": [
+        [
+          360,
+          195
+        ],
+        [
+          360,
+          235
+        ],
+        [
+          250,
+          235
+        ],
+        [
+          250,
+          280
+        ]
+      ],
+      "label": "Same code",
+      "labelX": 220,
+      "labelY": 235,
+      "labelWidth": 160,
+      "style": "dependency"
+    },
+    {
+      "id": "dev-code",
+      "from": "shared-code",
+      "to": "dev",
+      "points": [
+        [
+          640,
+          195
+        ],
+        [
+          640,
+          235
+        ],
+        [
+          750,
+          235
+        ],
+        [
+          750,
+          280
+        ]
+      ],
+      "label": "Same code",
+      "labelX": 780,
+      "labelY": 235,
+      "labelWidth": 160,
+      "style": "dependency"
+    }
+  ],
+  "notes": [
+    "Dashed links mean code reuse. DEV must not modify or stop the protected regular environment.",
+    "CPU, network capacity and same-account quota can remain shared; isolated state does not reserve capacity."
+  ]
+}

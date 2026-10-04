@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 1,
+  "locale": "en",
+  "kind": "architecture",
+  "width": 1000,
+  "height": 855,
+  "title": "Local components and tool transport",
+  "description": "The Responses service routes native tool requests from the browser adapter and optional MCP requests from the task broker back to Codex. The desktop owns the browser; the adapter coordinates turns.",
+  "groups": [
+    {
+      "id": "runtime",
+      "x": 245,
+      "y": 85,
+      "width": 505,
+      "height": 625,
+      "label": "Local integration services and processes",
+      "style": "local"
+    },
+    {
+      "id": "desktop",
+      "x": 780,
+      "y": 85,
+      "width": 210,
+      "height": 200,
+      "label": "Desktop application",
+      "style": "local"
+    },
+    {
+      "id": "cloud",
+      "x": 780,
+      "y": 330,
+      "width": 210,
+      "height": 225,
+      "label": "ChatGPT Web",
+      "style": "remote"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "codex",
+      "x": 30,
+      "y": 145,
+      "width": 170,
+      "height": 100,
+      "title": "Codex",
+      "body": [
+        "Executes approved tools"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "responses",
+      "x": 270,
+      "y": 145,
+      "width": 200,
+      "height": 100,
+      "title": "Responses service",
+      "body": [
+        "Routing and SSE"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "adapter",
+      "x": 520,
+      "y": 145,
+      "width": 200,
+      "height": 100,
+      "title": "ChatGPT adapter",
+      "body": [
+        "Turn coordination",
+        "Validate tool requests"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "browser",
+      "x": 795,
+      "y": 155,
+      "width": 180,
+      "height": 100,
+      "title": "Browser host",
+      "body": [
+        "Electron task pages"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "broker",
+      "x": 520,
+      "y": 370,
+      "width": 200,
+      "height": 105,
+      "title": "Turn broker",
+      "body": [
+        "Active task binding",
+        "Task tool inventory"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "mcp",
+      "x": 270,
+      "y": 370,
+      "width": 200,
+      "height": 120,
+      "title": "MCP service",
+      "body": [
+        "Token checks / private RPC",
+        "Separate stdio process"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "tunnel",
+      "x": 270,
+      "y": 580,
+      "width": 200,
+      "height": 100,
+      "title": "Tunnel client",
+      "body": [
+        "Outbound connection"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "chatgpt",
+      "x": 795,
+      "y": 395,
+      "width": 180,
+      "height": 130,
+      "title": "Web model",
+      "body": [
+        "Browser replies",
+        "Optional MCP connector"
+      ],
+      "style": "remote"
+    }
+  ],
+  "edges": [
+    {
+      "id": "codex-api",
+      "from": "codex",
+      "to": "responses",
+      "points": [
+        [
+          200,
+          195
+        ],
+        [
+          270,
+          195
+        ]
+      ],
+      "label": "API",
+      "labelX": 235,
+      "labelY": 195,
+      "labelWidth": 45,
+      "bidirectional": true
+    },
+    {
+      "id": "adapter-api",
+      "from": "responses",
+      "to": "adapter",
+      "points": [
+        [
+          470,
+          195
+        ],
+        [
+          520,
+          195
+        ]
+      ],
+      "bidirectional": true
+    },
+    {
+      "id": "host-control",
+      "from": "adapter",
+      "to": "browser",
+      "points": [
+        [
+          720,
+          195
+        ],
+        [
+          795,
+          195
+        ]
+      ],
+      "label": "CDP / HTTP",
+      "labelX": 757,
+      "labelY": 195,
+      "labelWidth": 60,
+      "bidirectional": true
+    },
+    {
+      "id": "web-io",
+      "from": "browser",
+      "to": "chatgpt",
+      "points": [
+        [
+          885,
+          255
+        ],
+        [
+          885,
+          395
+        ]
+      ],
+      "label": "Browser I/O",
+      "labelX": 885,
+      "labelY": 307,
+      "labelWidth": 150,
+      "bidirectional": true
+    },
+    {
+      "id": "optional-mcp",
+      "from": "chatgpt",
+      "to": "tunnel",
+      "points": [
+        [
+          795,
+          460
+        ],
+        [
+          770,
+          460
+        ],
+        [
+          770,
+          630
+        ],
+        [
+          470,
+          630
+        ]
+      ],
+      "label": "Optional MCP calls / results",
+      "labelX": 615,
+      "labelY": 630,
+      "labelWidth": 240,
+      "bidirectional": true
+    },
+    {
+      "id": "stdio",
+      "from": "tunnel",
+      "to": "mcp",
+      "points": [
+        [
+          370,
+          580
+        ],
+        [
+          370,
+          490
+        ]
+      ],
+      "label": "stdio",
+      "labelX": 370,
+      "labelY": 535,
+      "labelWidth": 95,
+      "bidirectional": true
+    },
+    {
+      "id": "private-rpc",
+      "from": "mcp",
+      "to": "broker",
+      "points": [
+        [
+          470,
+          422
+        ],
+        [
+          520,
+          422
+        ]
+      ],
+      "bidirectional": true
+    },
+    {
+      "id": "tool-items",
+      "from": "broker",
+      "to": "responses",
+      "points": [
+        [
+          620,
+          370
+        ],
+        [
+          620,
+          305
+        ],
+        [
+          370,
+          305
+        ],
+        [
+          370,
+          245
+        ]
+      ],
+      "label": "Tool requests / receipts",
+      "labelX": 497,
+      "labelY": 305,
+      "labelWidth": 200,
+      "bidirectional": true
+    }
+  ],
+  "notes": [
+    "Native Tools uses the adapter and Responses path. MCP Bridge additionally uses the connector, tunnel, MCP service and turn broker.",
+    "The lower arrows show application calls and results, not network connection initiation. The tunnel client connects outbound.",
+    "Both paths return tool requests to Codex through Responses. The browser and connector grant no additional local authority."
+  ]
+}

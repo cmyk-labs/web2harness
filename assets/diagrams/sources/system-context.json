@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 1,
+  "locale": "en",
+  "kind": "architecture",
+  "width": 1000,
+  "height": 660,
+  "title": "Where models reason and tools run",
+  "description": "Codex, Web2Harness, its browser and local tools run on the user computer. Web and native inference use separate remote services. Arrows show request and response channels.",
+  "groups": [
+    {
+      "id": "local",
+      "x": 20,
+      "y": 85,
+      "width": 580,
+      "height": 440,
+      "label": "Your computer",
+      "style": "local"
+    },
+    {
+      "id": "remote",
+      "x": 650,
+      "y": 85,
+      "width": 330,
+      "height": 440,
+      "label": "Remote services",
+      "style": "remote"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "codex",
+      "x": 55,
+      "y": 145,
+      "width": 190,
+      "height": 100,
+      "title": "Codex",
+      "body": [
+        "Tasks and approvals"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "bridge",
+      "x": 355,
+      "y": 145,
+      "width": 205,
+      "height": 100,
+      "title": "Web2Harness",
+      "body": [
+        "Local request routing"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "tools",
+      "x": 55,
+      "y": 365,
+      "width": 190,
+      "height": 100,
+      "title": "Tools / workspace",
+      "body": [
+        "Codex sandbox"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "browser",
+      "x": 355,
+      "y": 365,
+      "width": 205,
+      "height": 100,
+      "title": "Application browser",
+      "body": [
+        "ChatGPT task pages"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "native",
+      "x": 695,
+      "y": 145,
+      "width": 245,
+      "height": 100,
+      "title": "Native model service",
+      "body": [
+        "Existing Codex route"
+      ],
+      "style": "remote"
+    },
+    {
+      "id": "web",
+      "x": 695,
+      "y": 365,
+      "width": 245,
+      "height": 100,
+      "title": "ChatGPT Web",
+      "body": [
+        "Web model inference"
+      ],
+      "style": "remote"
+    }
+  ],
+  "edges": [
+    {
+      "id": "responses",
+      "from": "codex",
+      "to": "bridge",
+      "points": [
+        [
+          245,
+          195
+        ],
+        [
+          355,
+          195
+        ]
+      ],
+      "label": "Responses API",
+      "labelX": 300,
+      "labelY": 195,
+      "labelWidth": 90,
+      "bidirectional": true
+    },
+    {
+      "id": "execution",
+      "from": "codex",
+      "to": "tools",
+      "points": [
+        [
+          150,
+          245
+        ],
+        [
+          150,
+          365
+        ]
+      ],
+      "label": "Approved tools / results",
+      "labelX": 150,
+      "labelY": 305,
+      "labelWidth": 160,
+      "bidirectional": true
+    },
+    {
+      "id": "web-route",
+      "from": "bridge",
+      "to": "browser",
+      "points": [
+        [
+          457,
+          245
+        ],
+        [
+          457,
+          365
+        ]
+      ],
+      "label": "Web requests / replies",
+      "labelX": 457,
+      "labelY": 305,
+      "labelWidth": 160,
+      "bidirectional": true
+    },
+    {
+      "id": "native-route",
+      "from": "bridge",
+      "to": "native",
+      "points": [
+        [
+          560,
+          195
+        ],
+        [
+          695,
+          195
+        ]
+      ],
+      "label": "Native models",
+      "labelX": 627,
+      "labelY": 195,
+      "labelWidth": 112,
+      "bidirectional": true
+    },
+    {
+      "id": "web-inference",
+      "from": "browser",
+      "to": "web",
+      "points": [
+        [
+          560,
+          415
+        ],
+        [
+          695,
+          415
+        ]
+      ],
+      "label": "Browser I/O",
+      "labelX": 627,
+      "labelY": 415,
+      "labelWidth": 112,
+      "bidirectional": true
+    }
+  ],
+  "notes": [
+    "Two-headed arrows represent request and response channels. Models do not execute local tools directly.",
+    "Codex retains tool execution, sandbox enforcement and approvals in either tool mode."
+  ]
+}

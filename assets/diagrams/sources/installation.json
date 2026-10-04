@@ -1,0 +1,310 @@
+{
+  "schemaVersion": 1,
+  "locale": "en",
+  "kind": "workflow",
+  "width": 1000,
+  "height": 1140,
+  "title": "Windows: installation prepares, startup checks",
+  "description": "Installation prepares or reuses a verified runtime and commits the transaction. Failures or normal cancellation before commit roll back; interrupted processes recover on the next installer run. Startup performs a read-only readiness check.",
+  "groups": [
+    {
+      "id": "installer",
+      "x": 20,
+      "y": 85,
+      "width": 960,
+      "height": 255,
+      "label": "Installer: fresh install, upgrade or repair",
+      "style": "local"
+    },
+    {
+      "id": "exceptions",
+      "x": 20,
+      "y": 395,
+      "width": 960,
+      "height": 205,
+      "label": "Pre-commit recovery",
+      "style": "exception"
+    },
+    {
+      "id": "startup",
+      "x": 20,
+      "y": 665,
+      "width": 960,
+      "height": 335,
+      "label": "Starting the registered desktop application",
+      "style": "local"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "recover",
+      "x": 40,
+      "y": 160,
+      "width": 205,
+      "height": 145,
+      "title": "Check recovery records",
+      "body": [
+        "Recover interrupted setup first"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "snapshot",
+      "x": 290,
+      "y": 160,
+      "width": 205,
+      "height": 145,
+      "title": "Prepare transaction",
+      "body": [
+        "Verify ownership",
+        "Create recovery snapshot"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "prepare",
+      "x": 540,
+      "y": 160,
+      "width": 205,
+      "height": 145,
+      "title": "Replace and prepare",
+      "body": [
+        "Replace application files",
+        "Reuse verified runtime or deploy"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "commit",
+      "x": 795,
+      "y": 160,
+      "width": 175,
+      "height": 145,
+      "title": "Commit installation",
+      "body": [
+        "Record runtime / receipt",
+        "Report success"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "rollback",
+      "x": 60,
+      "y": 465,
+      "width": 385,
+      "height": 100,
+      "title": "Failure / normal cancellation",
+      "body": [
+        "Roll back; keep records if recovery fails"
+      ],
+      "style": "error"
+    },
+    {
+      "id": "interrupted",
+      "x": 550,
+      "y": 465,
+      "width": 385,
+      "height": 100,
+      "title": "Process interruption",
+      "body": [
+        "Keep records; recover on the next installer run"
+      ],
+      "style": "error"
+    },
+    {
+      "id": "launch",
+      "x": 50,
+      "y": 730,
+      "width": 250,
+      "height": 100,
+      "title": "Launch from desktop",
+      "body": [
+        "Start the installed application"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "check",
+      "x": 370,
+      "y": 730,
+      "width": 270,
+      "height": 100,
+      "title": "Read-only runtime check",
+      "body": [
+        "Manifest, receipt and four entry files"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "ready",
+      "x": 760,
+      "y": 730,
+      "width": 200,
+      "height": 120,
+      "title": "Services ready",
+      "body": [
+        "Browser / initial state ready",
+        "Then show workspace"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "repair",
+      "x": 370,
+      "y": 900,
+      "width": 270,
+      "height": 75,
+      "title": "Ask to rerun the installer",
+      "body": [
+        "No startup deployment or repair"
+      ],
+      "style": "error"
+    }
+  ],
+  "edges": [
+    {
+      "id": "recovered",
+      "from": "recover",
+      "to": "snapshot",
+      "points": [
+        [
+          245,
+          232
+        ],
+        [
+          290,
+          232
+        ]
+      ]
+    },
+    {
+      "id": "prepared",
+      "from": "snapshot",
+      "to": "prepare",
+      "points": [
+        [
+          495,
+          232
+        ],
+        [
+          540,
+          232
+        ]
+      ]
+    },
+    {
+      "id": "runtime-ready",
+      "from": "prepare",
+      "to": "commit",
+      "points": [
+        [
+          745,
+          232
+        ],
+        [
+          795,
+          232
+        ]
+      ]
+    },
+    {
+      "id": "failed",
+      "from": "installer",
+      "to": "rollback",
+      "points": [
+        [
+          252,
+          340
+        ],
+        [
+          252,
+          465
+        ]
+      ],
+      "label": "Any pre-commit step",
+      "labelX": 252,
+      "labelY": 377,
+      "labelWidth": 225,
+      "style": "error"
+    },
+    {
+      "id": "process-stopped",
+      "from": "installer",
+      "to": "interrupted",
+      "points": [
+        [
+          742,
+          340
+        ],
+        [
+          742,
+          465
+        ]
+      ],
+      "label": "Unfinished process",
+      "labelX": 742,
+      "labelY": 377,
+      "labelWidth": 215,
+      "style": "error"
+    },
+    {
+      "id": "startup-check",
+      "from": "launch",
+      "to": "check",
+      "points": [
+        [
+          300,
+          780
+        ],
+        [
+          370,
+          780
+        ]
+      ]
+    },
+    {
+      "id": "check-passed",
+      "from": "check",
+      "to": "ready",
+      "points": [
+        [
+          640,
+          780
+        ],
+        [
+          760,
+          780
+        ]
+      ],
+      "label": "Pass",
+      "labelX": 700,
+      "labelY": 780,
+      "labelWidth": 75
+    },
+    {
+      "id": "check-failed",
+      "from": "check",
+      "to": "repair",
+      "points": [
+        [
+          505,
+          830
+        ],
+        [
+          505,
+          900
+        ]
+      ],
+      "label": "Fail",
+      "labelX": 505,
+      "labelY": 865,
+      "labelWidth": 80,
+      "style": "error"
+    }
+  ],
+  "notes": [
+    "Exception arrows apply across the installer transaction, including file replacement, validation and commit attempts.",
+    "A verified existing runtime can be reused. Only a missing or invalid runtime needs staging and deployment.",
+    "After successful commit, deferred backup cleanup does not roll back the completed installation."
+  ]
+}

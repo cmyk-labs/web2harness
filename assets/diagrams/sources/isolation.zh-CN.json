@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "locale": "zh-CN",
+  "kind": "isolation",
+  "width": 1000,
+  "height": 930,
+  "title": "同一套实现，两套隔离环境",
+  "description": "常规使用与 DEV 运行相同应用代码，但配置、凭据、浏览器状态、进程和工作区独立。虚线表示代码复用，不表示环境间通信。",
+  "groups": [
+    {
+      "id": "regular",
+      "x": 20,
+      "y": 280,
+      "width": 460,
+      "height": 365,
+      "label": "常规使用：受保护环境",
+      "style": "local"
+    },
+    {
+      "id": "dev",
+      "x": 520,
+      "y": 280,
+      "width": 460,
+      "height": 365,
+      "label": "DEV 验收：本次测试资源",
+      "style": "local"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "shared-code",
+      "x": 220,
+      "y": 90,
+      "width": 560,
+      "height": 105,
+      "title": "共享应用实现",
+      "body": [
+        "Responses、浏览器适配器、工具与生命周期"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "production-state",
+      "x": 45,
+      "y": 350,
+      "width": 410,
+      "height": 250,
+      "title": "用户现有环境",
+      "body": [
+        "常规应用与 Codex 配置",
+        "用户登录与浏览器配置",
+        "对应进程、端点与服务",
+        "正在使用的任务与项目工作区"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "dev-state",
+      "x": 545,
+      "y": 350,
+      "width": 410,
+      "height": 250,
+      "title": "独立 DEV 环境",
+      "body": [
+        "DEV 应用与 CODEX_HOME",
+        "独立登录与浏览器配置",
+        "核实归属的 DEV 进程与端点",
+        "独立、可丢弃的测试工作区"
+      ],
+      "style": "default"
+    },
+    {
+      "id": "remote-isolation",
+      "x": 20,
+      "y": 710,
+      "width": 960,
+      "height": 90,
+      "title": "MCP Bridge：还须核验远端隔离",
+      "body": [
+        "连接前由用户确认隧道属于 DEV，并核验实际 DEV 连接器绑定。"
+      ],
+      "style": "default"
+    }
+  ],
+  "edges": [
+    {
+      "id": "regular-code",
+      "from": "shared-code",
+      "to": "regular",
+      "points": [
+        [
+          360,
+          195
+        ],
+        [
+          360,
+          235
+        ],
+        [
+          250,
+          235
+        ],
+        [
+          250,
+          280
+        ]
+      ],
+      "label": "相同代码",
+      "labelX": 220,
+      "labelY": 235,
+      "labelWidth": 160,
+      "style": "dependency"
+    },
+    {
+      "id": "dev-code",
+      "from": "shared-code",
+      "to": "dev",
+      "points": [
+        [
+          640,
+          195
+        ],
+        [
+          640,
+          235
+        ],
+        [
+          750,
+          235
+        ],
+        [
+          750,
+          280
+        ]
+      ],
+      "label": "相同代码",
+      "labelX": 780,
+      "labelY": 235,
+      "labelWidth": 160,
+      "style": "dependency"
+    }
+  ],
+  "notes": [
+    "虚线表示代码复用。开发操作不得修改或停止受保护的常规环境。",
+    "CPU、网络容量及同账号额度仍可能共享；数据隔离不等于独占运行容量。"
+  ]
+}
