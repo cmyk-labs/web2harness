@@ -113,6 +113,10 @@ bun run app:smoke
 
 On Windows this command executes the actual NSIS installer silently with `/S /currentuser` and looks up its installation registration. It must run only in a disposable VM or dedicated test OS. Isolated runtime environment variables do not isolate the installer transaction. Package readiness markers must identify the expected version/platform and verified installed runtime.
 
+Installation and application startup use the same temporary data directories. On failure, the harness exports command results and the application logs through the shared log sanitizer to `output/package-smoke/` before removing its temporary workspace. It excludes browser profiles, credentials and environment dumps. If export fails, the workspace is retained and its path is printed. CI and release builds upload these diagnostic reports for seven days; inspect the fatal log and failure report before retrying. A successful smoke run removes its temporary workspace without publishing diagnostics.
+
+Shell entry points must be committed with Git mode `100755`. Linux workflows check executable permissions immediately after checkout. When reinitializing a repository on Windows, explicitly restore the executable bits; local Windows checks cannot verify POSIX execution permissions.
+
 <a id="startup-integrity"></a>
 
 ## Startup and integrity checks

@@ -26,6 +26,16 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
+      - name: Validate executable shell entry points
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          git ls-files -z -- '*.sh' | while IFS= read -r -d '' script; do
+            if [ ! -x "$script" ]; then
+              printf 'Shell entry point is not executable: %s\n' "$script" >&2
+              exit 1
+            fi
+          done
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -63,6 +73,15 @@ jobs:
         if: runner.os == 'Linux'
         run: command -v xvfb-run || (sudo apt-get update && sudo apt-get install -y xvfb)
       - run: bun run app:smoke
+        id: package_smoke
+      - name: Upload package smoke diagnostics
+        if: failure() && steps.package_smoke.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-smoke-${{ matrix.runner }}-${{ github.run_attempt }}
+          path: output/package-smoke/
+          retention-days: 7
+          if-no-files-found: warn
       - name: Verify embedded macOS runtime signature
         if: runner.os == 'macOS'
         run: codesign --verify --deep --strict launcher/build/runtime/runtime/bun

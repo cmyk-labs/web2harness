@@ -3,6 +3,8 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { validateRuntimeBundle } = require("../electron/installation/runtime-install.cjs");
+const { capturePackageSmokeFailure } = require("./package-smoke-diagnostics.cjs");
+const { redactExportText } = require("../electron/logging.cjs");
 
 const launcherRoot = path.resolve(__dirname, "..");
 const artifactsDirectory = path.join(launcherRoot, "artifacts");
@@ -14,6 +16,8 @@ const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "web2harness-package-smoke
 const markerPath = path.join(scratch, "ready.json");
 const coreHome = path.join(scratch, "core-home");
 let macAppBundle;
+let failure;
+const commands = [];
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -24,10 +28,14 @@ function run(command, args, options = {}) {
     timeout: options.timeout || 45_000,
     windowsHide: true,
   });
+  commands.push({ command, args, status: result.status, signal: result.signal,
+    error: result.error?.message,
+    stdout: result.stdout?.slice(-64 * 1024), stderr: result.stderr?.slice(-64 * 1024) });
   if (result.error) throw result.error;
   if (result.status !== 0) {
     throw new Error(
-      `${command} failed with status ${result.status}: ${result.stderr?.trim() || result.stdout?.trim() || "no output"}`,
+      redactExportText(`${command} failed with status ${result.status}:`
+        + `\n${result.stderr?.trim() || ""}\n${result.stdout?.trim() || ""}`),
     );
   }
 }
@@ -64,6 +72,8 @@ function smokeEnvironment() {
   return {
     ...process.env,
     TMPDIR: scratch,
+    TMP: scratch,
+    TEMP: scratch,
     WEB2HARNESS_LAUNCHER_DATA_DIR: path.join(scratch, "launcher-data"),
     WEB2HARNESS_HOME: coreHome,
     CODEX_HOME: path.join(scratch, "codex-home"),
@@ -100,7 +110,7 @@ try {
     env.APPIMAGE_EXTRACT_AND_RUN = "1";
   } else if (process.platform === "win32") {
     const installer = artifact(/-win-x64\.exe$/, "Windows installer");
-    run(installer, ["/S", "/currentuser"], { timeout: 120_000 });
+    run(installer, ["/S", "/currentuser"], { env, timeout: 120_000 });
     executable = path.join(windowsInstallLocation(), `${launcherManifest.build.productName}.exe`);
     command = executable;
     args = ["--launcher-smoke-test"];
@@ -141,7 +151,8 @@ try {
     || !/^[a-f0-9]{64}$/.test(installedManifest.bundleId)) {
     throw new Error(`Packaged launcher installed the wrong durable runtime: ${JSON.stringify(installedManifest)}`);
   }
-  process.stdout.write(`PACKAGED_LAUNCHER_SMOKE_OK ${process.platform}/${process.arch}\n`);
+} catch (error) {
+  failure = error;
 } finally {
   try {
     if (macAppBundle) {
@@ -153,7 +164,28 @@ try {
       );
       run(launchServices, ["-gc"]);
     }
-  } finally {
+  } catch (error) {
+    failure ??= error;
+  }
+  let retainScratch = false;
+  if (failure) {
+    try {
+      const diagnostics = capturePackageSmokeFailure({ scratch, error: failure, commands,
+        outputDirectory: path.join(launcherRoot, "..", "output", "package-smoke") });
+      process.stderr.write(`Package smoke diagnostics: ${diagnostics}\n`);
+    } catch (error) {
+      retainScratch = true;
+      process.stderr.write(`Could not export smoke diagnostics: ${redactExportText(error.message)}\n`
+        + `Retained smoke directory: ${scratch}\n`);
+    }
+  }
+  if (!retainScratch) {
+    if (fs.realpathSync(path.dirname(scratch)) !== fs.realpathSync(os.tmpdir())
+      || !path.basename(scratch).startsWith("web2harness-package-smoke-")) {
+      throw new Error("Refusing to remove an unowned package smoke directory");
+    }
     fs.rmSync(scratch, { recursive: true, force: true });
   }
 }
+if (failure) throw failure;
+process.stdout.write(`PACKAGED_LAUNCHER_SMOKE_OK ${process.platform}/${process.arch}\n`);

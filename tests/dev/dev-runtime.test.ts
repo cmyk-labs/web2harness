@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { assertSeparateDevHome, devPathContains } from "../../src/dev/isolation";
@@ -76,10 +76,9 @@ test("DEV codex forwards CLI arguments, uses private cwd/home, and preserves pro
     const receipt = JSON.parse(readFileSync(join(dev, "workspace", "receipt.json"), "utf8"));
     expect(receipt).toEqual({
       args: ["-c", 'cli_auth_credentials_store="file"', "--help", "--version", "literal $() & text"],
-      cwd: join(dev, "workspace"), home: join(dev, "codex-home"),
+      cwd: realpathSync(join(dev, "workspace")), home: join(dev, "codex-home"),
     });
     expect(readFileSync(join(production, "config.json"), "utf8")).toBe("production sentinel");
     expect(readFileSync(join(productionCodex, "config.toml"), "utf8")).toBe("production sentinel");
   } finally { rmSync(root, { recursive: true, force: true }); }
 }, 30_000);
-
