@@ -5,9 +5,9 @@
 **Web2Harness** — Bring ChatGPT web models into Codex, keep your native tools and existing workflow, and make the most of the web model usage available on your ChatGPT account to get more real work done.
 
 <p align="center">
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.0.1/web2harness-1.0.1-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 1.0.1"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.0.1/web2harness-1.0.1-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 1.0.1"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.0.1/web2harness-1.0.1-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 1.0.1"></a>
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.0.2/web2harness-1.0.2-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 1.0.2"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.0.2/web2harness-1.0.2-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 1.0.2"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.0.2/web2harness-1.0.2-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 1.0.2"></a>
 </p>
 
 <p align="center">
@@ -78,7 +78,7 @@ A task typically follows **select a Web model → submit a task → receive a we
 
 ## Get started
 
-Have Codex available on your computer and a ChatGPT account you can sign in to. The header buttons download Windows x64, macOS Apple silicon and Linux x64 installers. Other processors: [macOS Intel](https://github.com/cmyk-labs/web2harness/releases/download/v1.0.1/web2harness-1.0.1-mac-x64.dmg) · [Linux arm64](https://github.com/cmyk-labs/web2harness/releases/download/v1.0.1/web2harness-1.0.1-linux-arm64.AppImage). Choose one matching installer; the [1.0.1 release](https://github.com/cmyk-labs/web2harness/releases/tag/v1.0.1) provides checksums and validation notes. This stable release is available through the application's update check. See the [user guide](docs/user-guide.md) for installation methods and platform requirements, or [run an existing checkout from source](#development).
+Have Codex available on your computer and a ChatGPT account you can sign in to. The header buttons download Windows x64, macOS Apple silicon and Linux x64 installers. Other processors: [macOS Intel](https://github.com/cmyk-labs/web2harness/releases/download/v1.0.2/web2harness-1.0.2-mac-x64.dmg) · [Linux arm64](https://github.com/cmyk-labs/web2harness/releases/download/v1.0.2/web2harness-1.0.2-linux-arm64.AppImage). Choose one matching installer; the [1.0.2 release](https://github.com/cmyk-labs/web2harness/releases/tag/v1.0.2) provides checksums and validation notes. This stable release is available through the application's update check. See the [user guide](docs/user-guide.md) for installation methods and platform requirements, or [run an existing checkout from source](#development).
 
 1. **Start Web2Harness.** Use a package matching your platform and architecture, or run from source.
 2. **Sign in through the browser.** Open **Connection & Models**, sign in to ChatGPT in the application browser, and run **Check connection**.
