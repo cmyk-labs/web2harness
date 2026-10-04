@@ -28,9 +28,9 @@ function runWindowsHarness(root, { fail = false, exportFails = false } = {}) {
   const temp = path.join(root, "temp");
   fs.mkdirSync(path.join(launcher, "artifacts"), { recursive: true });
   fs.mkdirSync(temp);
-  fs.writeFileSync(path.join(launcher, "package.json"), JSON.stringify({ version: "6.0.0",
+  fs.writeFileSync(path.join(launcher, "package.json"), JSON.stringify({ version: "1.0.0",
     build: { productName: "Web2Harness", nsis: { guid: "fixture" } } }));
-  fs.writeFileSync(path.join(launcher, "artifacts", "web2harness-6.0.0-win-x64.exe"), "fixture");
+  fs.writeFileSync(path.join(launcher, "artifacts", "web2harness-1.0.0-win-x64.exe"), "fixture");
   const options = { homeDir: path.join(root, "user"), appData: path.join(root, "roaming"),
     localAppData: path.join(root, "local"), installRoot: path.join(root, "installed") };
   for (const location of Object.values(options)) fs.mkdirSync(location);
@@ -55,11 +55,11 @@ function runWindowsHarness(root, { fail = false, exportFails = false } = {}) {
       return { status: 1, stdout: "fixture stdout diagnostic", stderr: "fixture stderr diagnostic" };
     }
     fs.writeFileSync(invocation.env.WEB2HARNESS_SMOKE_FILE, JSON.stringify({ ok: true,
-      packaged: true, runtimeVerified: true, version: "6.0.0", platform: "win32" }));
-    const installed = path.join(profile.coreHome, "versions", "6.0.0-win32-x64");
+      packaged: true, runtimeVerified: true, version: "1.0.0", platform: "win32" }));
+    const installed = path.join(profile.coreHome, "versions", "1.0.0-win32-x64");
     fs.mkdirSync(installed, { recursive: true });
     fs.writeFileSync(path.join(installed, "manifest.json"), JSON.stringify({ schemaVersion: 2,
-      appVersion: "6.0.0", platform: "win32", arch: "x64", files: [{ path: "fixture" }], bundleId: "a".repeat(64) }));
+      appVersion: "1.0.0", platform: "win32", arch: "x64", files: [{ path: "fixture" }], bundleId: "a".repeat(64) }));
     return { status: 0, stdout: "", stderr: "" };
   }
   try {

@@ -1,6 +1,6 @@
 {
   "name": "web2harness",
-  "version": "6.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Bring ChatGPT web models into Codex, keep your native tools and existing workflow, and make the most of the web model usage available on your ChatGPT account to get more real work done.",
   "author": "cmyk-labs",

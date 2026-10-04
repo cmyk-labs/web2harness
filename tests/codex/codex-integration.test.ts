@@ -649,7 +649,7 @@ describe("reversible native Codex route integration", () => {
     expect(() => readFileSync(cachePath, "utf8")).toThrow();
 
     writeFileSync(cachePath, '{"models":["chatgpt-web/high","chatgpt-web/pro"]}\n');
-    installCodexIntegration({ ...nativeConfig("browser-only"), releaseVersion: "6.0.0" });
+    installCodexIntegration({ ...nativeConfig("browser-only"), releaseVersion: "1.0.0" });
     expect(() => readFileSync(cachePath, "utf8")).toThrow();
     expect(readFileSync(configPath, "utf8")).toContain('model = "chatgpt-web/high"');
 

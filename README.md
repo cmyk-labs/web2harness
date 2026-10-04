@@ -126,6 +126,16 @@ See the [development guide](docs/development.md) for environment setup, independ
 - **Does saving history guarantee reuse of the same web chat?** These settings are independent. History controls whether ChatGPT retains the chat; reuse also depends on the mode, task ownership, and context continuity.
 - **Why do my models and effort choices differ from someone else's?** The catalog follows account capabilities. Instant and Thinking may have separate entries when their context budgets differ. Exact mappings are in the [configuration and model reference](docs/reference.md).
 
+<a id="release-history"></a>
+
+## Version history
+
+User-visible features, fixes, and compatibility changes are recorded by version, newest first.
+
+| Version | Date | Changes |
+| --- | --- | --- |
+| 1.0.0 | 2026-10-04 | Initial Web2Harness version. Adds account-aware Web models and reasoning efforts to Codex, defaults to native tools, and supports conversation reuse, saved chat history, and context management. Includes MCP Bridge and Browser-only modes, an English and Simplified Chinese desktop workspace, connection settings, runtime controls, and diagnostics. Provides native packaging for Windows, macOS, and Linux, with runtime preparation during Windows setup and lightweight warm-start checks. Installer publication is pending. |
+
 <a id="documentation"></a>
 
 ## Documentation

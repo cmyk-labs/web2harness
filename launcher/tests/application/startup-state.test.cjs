@@ -64,11 +64,11 @@ for (const shutdownFails of [false, true]) test(`package smoke follows normal sh
       destroy: () => { browserDestroyed = true; calls.push("browser closed"); } },
     browserControl: { close: async () => calls.push("control closed") },
     mainWindow: { destroy: () => { windowDestroyed = true; calls.push("window closed"); } },
-    app: { isPackaged: true, getVersion: () => "6.0.0", quit: () => {
+    app: { isPackaged: true, getVersion: () => "1.0.0", quit: () => {
       assert.equal(sandbox.exitCommitted, true, "before-quit must not intercept completed shutdown");
       windowDestroyed = true; calls.push("quit");
     } },
-    spawnSync: () => ({ status: 0, stdout: "6.0.0\n", stderr: "" }),
+    spawnSync: () => ({ status: 0, stdout: "1.0.0\n", stderr: "" }),
     fs: { mkdirSync() {}, writeFileSync: () => calls.push("verified marker") }, path,
     process: { platform: "fixture", env: { WEB2HARNESS_SMOKE_FILE: path.resolve("fixture-ready.json") } },
     logger: { info() {} }, stopCatalogVerificationMonitor() {},

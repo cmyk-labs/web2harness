@@ -13,7 +13,7 @@ function fixture(t) {
   const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "web2harness-setup-test-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const options = { installRoot: path.join(root, "install"), homeDir: path.join(root, "user"),
-    appData: path.join(root, "roaming"), localAppData: path.join(root, "local"), version: "6.0.0", ownerPid: process.pid, env: {} };
+    appData: path.join(root, "roaming"), localAppData: path.join(root, "local"), version: "1.0.0", ownerPid: process.pid, env: {} };
   const profile = { coreHome: path.join(options.homeDir, ".web2harness"), codexHome: path.join(options.homeDir, ".codex"),
     userData: path.join(options.appData, "Web2Harness") };
   fs.mkdirSync(profile.codexHome, { recursive: true });

@@ -21,7 +21,7 @@ await context.addInitScript(()=>{
  const listeners={};const state={version:1,language:'zh-CN',onboardingComplete:true,browserInteractionMode:'automatic',sidebarOpen:true,sidebarWidth:224,mcpGuideStep:0,sessionRefreshReminderAt:null,mcpRuntimeInstalled:false,mcpSetupComplete:false,coreSetupComplete:true,codexCatalogVerified:true,experimentalContextFiles:false,experimentalContextTripleBudget:false,experimentalSkillAttachments:false,experimentalFreshConversationPerTurn:false,useSavedChats:false,keepRunningOnClose:true,showBrowserDuringTurns:true,autoStart:false,zeroRiskProEnabled:false};
  const browser={status:'ready',authenticated:true,visible:false,tabs:[],activeTabId:'idle',maxTabs:5,zoomFactor:1};
  const status={configured:true,mode:'native-tools',interactionMode:'automatic',runtimeStatus:'ready',credentials:{automatic:false,manual:false},capabilities:{solAvailable:true,proAvailable:true,browserInteractionMode:'automatic'}};
- const snapshot={startup:{status:'ready',stage:'ready',elapsedMs:0},profile:'development',profilePaths:{coreHome:'fixture',codexHome:'fixture',userData:'fixture'},state,browser,connectorName:'DEV fixture',connectorNames:{automatic:'DEV fixture',manual:'Manual fixture'},mcpCredentialsConfigured:false,logs:[{at:'2026-09-30T08:30:00Z',event:'runtime.started',level:'info',detail:{mode:'native-tools',status:'ready',port:12345}},{at:'2026-09-30T08:31:00Z',event:'browser.connection_failed',level:'error',detail:{message:'Fixture connection error',retry:false}}],urls:{github:'https://example.invalid',connectors:'https://example.invalid',tunnels:'https://example.invalid',keys:'https://example.invalid'},platform:'win32',packaged:false,version:'6.0.0',smokePassed:true,operation:null,update:{status:'disabled'}};
+ const snapshot={startup:{status:'ready',stage:'ready',elapsedMs:0},profile:'development',profilePaths:{coreHome:'fixture',codexHome:'fixture',userData:'fixture'},state,browser,connectorName:'DEV fixture',connectorNames:{automatic:'DEV fixture',manual:'Manual fixture'},mcpCredentialsConfigured:false,logs:[{at:'2026-09-30T08:30:00Z',event:'runtime.started',level:'info',detail:{mode:'native-tools',status:'ready',port:12345}},{at:'2026-09-30T08:31:00Z',event:'browser.connection_failed',level:'error',detail:{message:'Fixture connection error',retry:false}}],urls:{github:'https://example.invalid',connectors:'https://example.invalid',tunnels:'https://example.invalid',keys:'https://example.invalid'},platform:'win32',packaged:false,version:'1.0.0',smokePassed:true,operation:null,update:{status:'disabled'}};
  window.__fixture={state,status,snapshot,browser,calls:[],failApply:false,emitStartup:startup=>{snapshot.startup=startup;listeners.onStartupState?.(structuredClone(startup))},emitBrowser:delta=>{Object.assign(browser,delta);listeners.onBrowserState?.(structuredClone(browser))}};
  const boot=new URL(location.href).searchParams;
  state.githubOpened=false;
@@ -346,17 +346,17 @@ check('Ready snapshot replaces startup with the workspace',await page.locator('.
 // Visual review of the shared system and the About page uses the same isolated IPC fixture.
 await nav('About');
 check('About retains both README slogan lines',await page.getByRole('heading',{name:'Reason with web models. Get it done in Codex.',exact:true}).count()===1);
-check('About explains three capabilities and identifies the current build',await page.locator('.about-capabilities section').count()===3&&(await page.locator('.about-footer').innerText()).includes('Windows · v6.0.0 · DEV'));
+check('About explains three capabilities and identifies the current build',await page.locator('.about-capabilities section').count()===3&&(await page.locator('.about-footer').innerText()).includes('Windows · v1.0.0 · DEV'));
 await page.getByRole('button',{name:'Documentation',exact:true}).click();
 check('Documentation opens the localized repository entry through IPC',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='openExternal'&&call[1]==='https://github.com/cmyk-labs/web2harness/blob/main/README.md#documentation')));
 await page.getByRole('button',{name:'Open-source license',exact:true}).click();
 check('About retains the project license but omits X and the third-party shortcut',await page.locator('.about-links button').count()===3&&await page.getByRole('button',{name:/Third-party|Project updates/}).count()===0&&await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='openExternal'&&call[1]==='https://github.com/cmyk-labs/web2harness/blob/main/LICENSE')));
 check('About uses one compact page header without a repeated logo',await page.locator('.about-header h1').textContent()==='About'&&await page.locator('.about-header .brand-mark').count()===0&&await page.locator('.about-header').evaluate(el=>el.getBoundingClientRect().height<80));
 check('The operating diagram identifies three components and preserves tool boundaries',await page.locator('.operating-node').count()===3&&await page.locator('.operating-connector').count()===2&&await page.locator('.operating-modes > div').count()===3&&(await page.locator('.operating-loop').innerText()).includes('Codex sandbox and approval rules'));
-await page.evaluate(()=>window.__fixture.emitUpdate({status:'available',version:'6.0.1'}));
-await page.getByRole('button',{name:'Update to 6.0.1',exact:true}).click();
+await page.evaluate(()=>window.__fixture.emitUpdate({status:'available',version:'1.0.1'}));
+await page.getByRole('button',{name:'Update to 1.0.1',exact:true}).click();
 check('About retains the existing update action',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='installUpdate')));
-await page.evaluate(()=>window.__fixture.emitUpdate({status:'downloading',version:'6.0.1'}));
+await page.evaluate(()=>window.__fixture.emitUpdate({status:'downloading',version:'1.0.1'}));
 check('Downloading update cannot be started twice',await page.locator('.row button').isDisabled());
 await page.evaluate(()=>window.__fixture.emitUpdate({status:'disabled'}));
 await page.getByRole('button',{name:'Documentation',exact:true}).focus();

@@ -217,7 +217,7 @@ macOS 打包通过 `codesign --verify --deep --strict` 验证解压后的 `.app`
 tag 工作流可在构建完成后自动发布；绿色工作流不会自动强制检查人工账户/安装器证据。稳定发布前必须先完成要求的证据。
 
 - draft 尚未公开，pre-release 是公开预览。更新器和默认启动器安装脚本查询 `/releases/latest`，预览版被排除。源码和 DEV 运行禁用更新。
-- `v6.0.0-rc.1` 等带后缀 tag 自动标记 pre-release；重跑保留已有发布的 pre-release 状态。
+- `v1.0.0-rc.1` 等带后缀 tag 自动标记 pre-release；重跑保留已有发布的 pre-release 状态。
 - 若使用最终版本 tag 测试且不暴露给稳定更新器，应在推送 tag 前建立 draft 并勾选 **Set as a pre-release**。不得先短暂稳定发布再改标记。
 - 晋级复用已验证的原二进制：取消 **Set as a pre-release** 并选择 **Set as latest release**，或发布更高的已验证稳定版本。二进制改变必须使用新版本。
 - 启动器启动时检查更新，并要求版本更高、平台工件匹配且存在校验 manifest。已运行启动器不会持续轮询发布状态。

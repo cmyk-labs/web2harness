@@ -51,6 +51,36 @@ test("release comparison and platform assets are strict", () => {
   assert.equal(releaseAssetName("1.2.0", "linux", "ia32"), null);
 });
 
+for (const [platform, arch, suffix] of [
+  ["win32", "x64", "win-x64.exe"],
+  ["darwin", "arm64", "mac-arm64.zip"],
+  ["darwin", "x64", "mac-x64.zip"],
+  ["linux", "x64", "linux-x64.AppImage"],
+  ["linux", "arm64", "linux-arm64.AppImage"],
+]) test(`the first independent release detects later stable updates on ${platform}/${arch}`, async () => {
+  const manifest = require("../../package.json");
+  const { configuredRepository } = require("../../electron/installation/release-config.cjs");
+  const repository = configuredRepository({ env: {}, manifest });
+  assert.equal(repository, "cmyk-labs/web2harness");
+  for (const [version, newer] of [["0.9.9", false], ["1.0.0", false], ["1.0.1", true], ["1.1.0", true], ["2.0.0", true]]) {
+    const controller = createUpdateController({
+      currentVersion: "1.0.0", platform, arch, packaged: true, repository,
+      dependencies: {
+        fetchRelease: async () => ({
+          tag_name: `v${version}`, draft: false, prerelease: false,
+          assets: [`web2harness-${version}-${suffix}`, "checksums.txt"].map(name => ({
+            name, browser_download_url: `https://github.com/${repository}/releases/download/v${version}/${name}`,
+          })),
+        }),
+        spawnWorker: () => assert.fail("Checking a version must not install it"),
+      },
+    });
+    assert.deepEqual(await controller.checkOnce(), newer
+      ? { status: "available", version }
+      : { status: "up-to-date" });
+  }
+});
+
 test("checksums and release URLs bind the exact expected asset", () => {
   const hash = "a".repeat(64);
   assert.equal(expectedChecksum(`${hash}  launcher.zip\n`, "launcher.zip"), hash);

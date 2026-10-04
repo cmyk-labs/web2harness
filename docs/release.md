@@ -217,7 +217,7 @@ Installers and the updater require the expected platform asset and checksum entr
 The tag workflow can publish automatically after its build jobs; manual account/installer evidence is not automatically enforced by a green workflow. Complete the required evidence before stable publication.
 
 - A draft is unpublished; a pre-release is a public preview. Updater and default launcher installers query `/releases/latest`; previews are excluded. Source and DEV runs keep updates disabled.
-- Suffix tags such as `v6.0.0-rc.1` are published as pre-releases automatically. A rerun preserves an existing release's pre-release flag.
+- Suffix tags such as `v1.0.0-rc.1` are published as pre-releases automatically. A rerun preserves an existing release's pre-release flag.
 - To test a final-version tag without exposing it to the stable updater, create its draft with **Set as a pre-release** checked before pushing the tag. Do not briefly publish stable and change the flag afterward.
 - Promotion uses the existing validated binaries: clear **Set as a pre-release** and select **Set as latest release**, or publish a newer validated stable version. Changed binaries require a new version.
 - Launchers check at startup and require a newer version, matching platform asset, and checksum manifest. Already-running launchers do not continuously poll for a publication change.

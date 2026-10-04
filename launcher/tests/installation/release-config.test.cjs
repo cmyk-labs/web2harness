@@ -21,7 +21,7 @@ test("unconfigured or invalid update repositories fail closed without network or
   for (const repository of [null, "", "../web2harness", "https://example.com"]) {
     let calls = 0;
     const controller = createUpdateController({
-      currentVersion: "6.0.0", platform: "win32", arch: "x64", packaged: true, repository,
+      currentVersion: "1.0.0", platform: "win32", arch: "x64", packaged: true, repository,
       dependencies: {
         fetchRelease: async () => { calls++; throw new Error("network must stay unused"); },
         spawnWorker: () => { calls++; throw new Error("worker must stay unused"); },
@@ -35,12 +35,12 @@ test("unconfigured or invalid update repositories fail closed without network or
 
 test("update asset URLs cannot switch repository or smuggle URL authority fields", () => {
   const repository = "fixture-owner/web2harness";
-  const asset = "web2harness-6.0.1-win-x64.exe";
-  const url = `https://github.com/${repository}/releases/download/v6.0.1/${asset}`;
-  assert.equal(validateReleaseAssetUrl(url, "6.0.1", asset, repository), url);
-  assert.throws(() => validateReleaseAssetUrl(url, "6.0.1", asset, null), /not configured/);
+  const asset = "web2harness-1.0.1-win-x64.exe";
+  const url = `https://github.com/${repository}/releases/download/v1.0.1/${asset}`;
+  assert.equal(validateReleaseAssetUrl(url, "1.0.1", asset, repository), url);
+  assert.throws(() => validateReleaseAssetUrl(url, "1.0.1", asset, null), /not configured/);
   for (const invalid of [url.replace("fixture-owner", "other-owner"), `${url}?redirect=elsewhere`, `${url}#fragment`, url.replace("github.com/", "github.com:444/"), url.replace("github.com/", "name@github.com/")]) {
-    assert.throws(() => validateReleaseAssetUrl(invalid, "6.0.1", asset, repository), /unexpected release asset URL/);
+    assert.throws(() => validateReleaseAssetUrl(invalid, "1.0.1", asset, repository), /unexpected release asset URL/);
   }
 });
 
