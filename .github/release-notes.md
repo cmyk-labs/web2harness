@@ -1,10 +1,11 @@
 ## 简体中文
 
-Web2Harness 将 ChatGPT Web 模型接入 Codex，保留原生工具、任务权限和现有工作流。
+Web2Harness 1.0.1（`v1.0.1`，2026-10-05）修复保存历史时的会话复用，并完善用量记录与健康检查。
 
-- 根据账号能力提供 Web 模型及思考强度；默认使用原生工具，支持 MCP Bridge 和仅浏览器模式。
-- 支持会话复用、默认保存聊天历史、上下文管理，以及中英文桌面工作区、连接设置、运行控制和诊断。
-- Windows 在安装阶段准备运行环境，重复启动执行轻量检查；完整卸载识别应用自建目录并保护 Codex 数据。
+- 保存聊天使用时间在前、固定任务名、对话／压缩独立编号的统一名称；只在首次创建时命名，保留后续手动改名。
+- 增量发送前核验远端对话 ID，修复工具往返后页面尺寸失效导致重复新建聊天的问题；上下文压缩可建立并命名独立摘要和后续聊天。
+- 自动记录实际 Web 发送轮次，包含工具结果续发和压缩，按模型展示滚动 24 小时／7 天统计并保留漏记提示。官方公开上限单独展示，注明参考来源、生效日期及待确认内容；本地滚动统计不代表官方周期或剩余额度。
+- 健康检查改用易懂名称和“通过／无需使用／需注意／未通过”状态，原始诊断可展开查看；生产版检查应用配置，DEV 检查独立开发配置。
 
 ### 下载说明
 
@@ -14,19 +15,20 @@ Web2Harness 将 ChatGPT Web 模型接入 Codex，保留原生工具、任务权�
 
 ### 验证与限制
 
-本版本为预发布版。当前发布工作流要求五个平台目标通过完整自动检查、原生打包和包启动检查；macOS 还验证从桌面 ZIP 提取终端运行时、重复安装、哈希拒绝和许可保留。逐项结果见本次 Actions 运行。
+本版本为正式版。维护者已确认人工验收通过。发布工作流另外要求五个平台目标通过完整自动检查、原生打包和包启动检查；macOS 还验证从桌面 ZIP 提取终端运行时、重复安装、哈希拒绝和许可保留。逐项结果见本次 Actions 运行。
 
-本候选包的真实账号交互及安装、升级、修复、完整卸载人工验收尚未完成；自动测试不替代这些验收。Windows 安装包未签名；macOS 使用临时签名，不代表 Developer ID 签名或公证。建议先在独立测试环境验证。恢复需要此前自行保存且已验证的安装包；完整清理前备份所需 Web2Harness 数据。预发布版不会进入默认稳定版更新通道。
+源码完整验证通过（核心 873 项、桌面 449 项；条件跳过分别为 26 和 4 项），界面检查 204 项通过。隔离 DEV 中已验证 GPT-6 Pro/max 的真实工具往返、会话复用、手动名称保留及压缩命名；两个模型共 7 次实际发送计为 7 轮，重启后记录保留。这些是共享运行时验收，不是发布安装包的完整人工验收。
 
-本次按维护者要求重新发布 1.0.0，精简分发文件；同版本安装不会触发自动升级。旧发布元数据和文件保存在本次 Release 工作流的备份工件中，保留 30 天。
+人工验收结论由维护者确认；本记录不将其扩展为每种系统、架构、账号和模式都已验证，也不将共享运行时测试等同于 CI 分发二进制的逐项人工检查。Windows 安装包未签名；macOS 使用临时签名，不代表 Developer ID 签名或公证。遇到问题先停止任务并保留诊断记录；恢复需要此前自行保存且已验证的安装包，降级与数据兼容性须先验证，完整清理前备份所需 Web2Harness 数据。正式版进入默认更新通道；重新启动已安装的应用后检查更新，也可从本页手动下载安装。
 
 ## English
 
-Web2Harness connects ChatGPT web models to Codex while retaining native tools, task permissions and the existing workflow.
+Web2Harness 1.0.1 (`v1.0.1`, 2026-10-05) fixes saved-conversation reuse and improves usage recording and health checks.
 
-- Account-aware Web models and reasoning efforts; Native Tools by default, with MCP Bridge and Browser-only modes.
-- Conversation reuse, saved history by default, context management, and an English / Simplified Chinese desktop workspace with connection settings, runtime controls and diagnostics.
-- Runtime preparation during Windows setup and lightweight warm-start checks. Complete uninstall recognizes application-owned directories and protects Codex data.
+- Saved chats have a timestamp-first name, a stable task name and separate dialogue/compaction sequence numbers. Naming occurs once and preserves later manual renames.
+- Remote conversation IDs are checked before incremental sends. Tool round trips restore the owned page viewport, fixing unintended new chats. Compaction can create named summary and continuation chats.
+- Actual Web sends are recorded automatically, including tool-result continuations and compaction, with per-model rolling 24-hour/seven-day counts and persistent missing-record warnings. Published policy references show sources, effective dates and uncertainty separately; local rolling counts do not establish official periods or remaining allowances.
+- Health checks display readable names and Passed / Not required / Needs attention / Failed statuses, with expandable original diagnostics. Production checks application configuration; DEV checks its isolated development configuration.
 
 ### Downloads
 
@@ -36,8 +38,8 @@ The two macOS `.zip` files support automatic updates and terminal installation; 
 
 ### Validation and limitations
 
-This is a pre-release. Publication requires full automated verification, native packaging and package startup checks on all five targets. macOS additionally checks terminal runtime extraction from the desktop ZIP, repeat installation, hash rejection and license preservation. See the current Actions run for individual results.
+This is a stable release. The maintainer has confirmed that manual acceptance passed. Publication additionally requires full automated verification, native packaging and package startup checks on all five targets. macOS also checks terminal runtime extraction from the desktop ZIP, repeat installation, hash rejection and license preservation. See the current Actions run for individual results.
 
-Authenticated account interaction and manual installation, upgrade, repair and complete-uninstall acceptance remain unexecuted for this candidate; automated checks do not replace them. Windows installers are unsigned; macOS uses ad-hoc signing without Developer ID or notarization. Validate in an isolated environment first. Recovery requires a previously retained and validated installer; back up required Web2Harness data before complete cleanup. Pre-releases are excluded from the default stable update channel.
+Source verification passed: 873 core and 449 desktop tests, with 26 and four conditional skips respectively, plus 204 UI checks. Isolated DEV acceptance covered real GPT-6 Pro/max tool round trips, conversation reuse, manual-name preservation and compaction naming. Seven actual sends across two models produced seven recorded turns and survived restart. This validates the shared runtime, not complete manual acceptance of the published installers.
 
-Version 1.0.0 is republished at the maintainer's request with a reduced asset inventory. Existing installations at the same version will not update automatically. Previous publication metadata and files are retained for 30 days in this Release workflow's backup artifact.
+Manual acceptance is maintainer-confirmed; this record does not extend that confirmation to every OS, architecture, account and mode, or equate shared-runtime tests with individual manual checks of CI-built binaries. Windows installers are unsigned; macOS uses ad-hoc signing without Developer ID or notarization. If a problem occurs, stop tasks and retain diagnostics. Recovery requires a previously retained and validated installer; verify downgrade/data compatibility first and back up required Web2Harness data before complete cleanup. This release enters the default update channel: restart the installed application to check for updates, or download and install manually from this page.

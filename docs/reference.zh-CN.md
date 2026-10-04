@@ -314,6 +314,7 @@ Web2Harness 从原生模型目录模板创建 Web 条目，再写入 Web 路由�
 | 启动器偏好 | `<Electron 用户数据>/launcher-state.json` | `<DEV 主目录>/launcher/launcher-state.json` |
 | 持久浏览器分区 | `persist:web2harness-chatgpt` | `persist:web2harness-dev-chatgpt` |
 | 浏览器宿主描述文件 | `<主目录>/runtime/launcher-browser.json` | `<DEV 主目录>/runtime/launcher-browser.json` |
+| 保存聊天命名记录 | 浏览器宿主描述文件旁的 `conversation-history.json` | DEV 描述文件旁的同名文件 |
 | 受管理 Chrome 会话文件 | 默认 `<主目录>/browser/storage-state.json` | 各环境独立保存，不从常规环境复制 |
 | 受管理自动交互隧道密钥 | `<主目录>/secrets/tunnel-runtime-automatic.key` | DEV 主目录内的相同相对位置 |
 | 受管理手动交互隧道密钥 | `<主目录>/secrets/tunnel-runtime-zero-risk.key` | DEV 主目录内的相同相对位置 |

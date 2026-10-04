@@ -163,6 +163,8 @@ Each task surface is an independent Electron `WebContentsView`. Surfaces share l
 
 The optional fresh-conversation setting gives each automatic native turn a new chat and complete canonical context. Tool rounds and reconnects inside that turn retain the same owner. The setting is inactive in Zero Risk. It trades additional context transfer for independence from a retained follow-up page.
 
+Automatic saved chats bind the remote conversation ID to their owned surface. Retained acquisition and pre-send validation reject a changed ID or home screen. The launcher serializes a private naming ledger beside its descriptor: hashed task identities, short task names, independent dialogue/compaction counters, creation times, conversation IDs, context keys and naming acknowledgements. Registration is idempotent and survives launcher restart; corrupt data is preserved rather than resetting counters. The ledger is not authority to reopen remote history. Renaming uses the exact conversation's history-row menu after a completed reply; cosmetic failure never resubmits a task. Manual Zero Risk preserves its no-DOM-control boundary. The [user guide](user-guide.md#set-conversation-and-context-preferences) describes naming and failure behavior.
+
 Compaction follows an explicit control flow; it does not treat an ordinary task answer as a checkpoint:
 
 - With MCP Bridge, an eligible retained conversation produces a structured checkpoint tied to its exact source identity. Its one-shot compaction control accepts only that checkpoint and cannot invoke the ordinary tool environment.

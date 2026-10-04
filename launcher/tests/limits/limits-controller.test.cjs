@@ -20,6 +20,23 @@ function fixture(t) {
   return { file, options, controller: new LimitsController(file, options), setMode(value) { mode = value; }, setTime(value) { time = value; } };
 }
 
+test("default-on receipts create accounts without setup, while missing sends stay flagged across restart and recheck", async t => {
+  const { file, controller, options, setTime } = fixture(t);
+  assert.equal(controller.enabled(), true);
+  assert.equal(controller.snapshot().totalMessages, 0);
+  assert.equal(controller.record({ receipt: { ...receipt("first"), plan: "unsupported", model: "gpt-5.6-sol" } }), true);
+  assert.equal(controller.record({ trackingError: "account-unavailable" }), false);
+  const restored = new LimitsController(file, options);
+  assert.equal(restored.snapshot().incomplete, true);
+  assert.equal(restored.snapshot().gapAt, START);
+  assert.equal((await restored.setup(async () => config())).incomplete, true);
+  assert.equal(restored.record({ receipt: { ...receipt("second", B), plan: "pro_200" } }), true);
+  assert.equal(restored.snapshot().totalMessages, 1);
+  assert.equal(restored.snapshot().incomplete, true);
+  setTime(START + 7 * 24 * 60 * 60 * 1000);
+  assert.equal(new LimitsController(file, options).snapshot().incomplete, false);
+});
+
 test("lazy corrupt store is explicitly unavailable without crashing or replacing its file", async t => {
   const { file, options } = fixture(t);
   fs.writeFileSync(file, "{corrupt");
@@ -27,7 +44,7 @@ test("lazy corrupt store is explicitly unavailable without crashing or replacing
   const snapshot = controller.snapshot();
   assert.deepEqual({ ...snapshot, error: null }, {
     enabled: false, plan: null, trackingSince: null, checkedAt: null,
-    totalMessages: 0, unknownProMessages: 0, incomplete: false, windows: [], disabledReason: null, error: null,
+    totalMessages: 0, unknownProMessages: 0, incomplete: true, gapAt: null, models: [], windows: [], disabledReason: null, error: null,
   });
   assert.match(snapshot.error, /unavailable.*not valid JSON/);
   assert.equal(controller.enabled(), false);
@@ -37,11 +54,10 @@ test("lazy corrupt store is explicitly unavailable without crashing or replacing
   assert.match(controller.snapshot().error, /history may be incomplete/);
 });
 
-test("setup opts in, restores persisted counts, and preserves counters and sticky errors on failure", async t => {
+test("account checks retain default tracking, restore persisted counts, and preserves counters and sticky errors on failure", async t => {
   const { file, options, controller } = fixture(t);
-  assert.equal(controller.enabled(), false);
+  assert.equal(controller.enabled(), true);
   assert.equal(fs.existsSync(file), false);
-  assert.equal(controller.record({ receipt: receipt("not-opted-in") }), false);
   assert.equal((await controller.setup(async () => config())).enabled, true);
   assert.equal(controller.record({ receipt: receipt("first") }), true);
   const restarted = new LimitsController(file, options);
@@ -66,9 +82,9 @@ test("setup opts in, restores persisted counts, and preserves counters and stick
   finishCheck(config());
   assert.equal((await pending).totalMessages, 2);
   const unsupported = await restarted.setup(async () => config(A, "unsupported"));
-  assert.equal(unsupported.enabled, false);
+  assert.equal(unsupported.enabled, true);
   assert.equal(unsupported.totalMessages, 2);
-  assert.equal(restarted.record({ receipt: receipt("unsupported") }), false);
+  assert.equal(restarted.record({ receipt: receipt("unsupported") }), true);
 });
 
 test("Zero Risk gates setup and receipt writes, including a mode change during detection", async t => {
@@ -97,7 +113,7 @@ test("account mismatch and missing identity report persistent gaps without charg
   assert.equal(controller.record({ receipt: receipt("first", A.toUpperCase()) }), true);
   assert.equal(controller.record({ receipt: receipt("wrong", B) }), false);
   const mismatch = controller.snapshot().error;
-  assert.match(mismatch, /does not match.*not counted.*history may be incomplete.*Check your plan again/);
+  assert.match(mismatch, /does not match.*not counted.*history may be incomplete.*cannot be recovered/);
   assert.equal(controller.snapshot().totalMessages, 1);
   assert.equal(controller.record({ receipt: receipt("first") }), false);
   assert.equal(controller.record({ receipt: receipt("second") }), true);

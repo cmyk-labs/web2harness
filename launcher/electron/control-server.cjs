@@ -1,6 +1,7 @@
 const { createServer } = require("node:http");
 const { randomBytes, timingSafeEqual } = require("node:crypto");
 const { releaseRetainedConversation } = require("./runtime/retained-turn-release.cjs");
+const { validSavedChatTask } = require("../shared/saved-chat.cjs");
 
 const MAX_BODY_BYTES = 16 * 1024;
 const MAX_MANUAL_START_BODY_BYTES = 3 * 1024 * 1024;
@@ -98,6 +99,7 @@ class BrowserControlServer {
     const isTurn = request.url === "/v1/turn/start"
       || request.url === "/v1/turn/heartbeat"
       || request.url === "/v1/turn/usage"
+      || request.url === "/v1/turn/conversation"
       || request.url === "/v1/turn/end";
     const isTurnRelease = request.url === "/v1/turn/release";
     const isSessionInspect = request.url === "/v1/session/inspect";
@@ -183,6 +185,9 @@ class BrowserControlServer {
       }
       if (body.retain !== undefined && typeof body.retain !== "boolean") {
         throw new Error("retain is invalid");
+      }
+      if (body.savedChat !== undefined && (request.url !== "/v1/turn/start" || !validSavedChatTask(body.savedChat))) {
+        throw new Error("savedChat is invalid");
       }
       if (body.connectorBound !== undefined && typeof body.connectorBound !== "boolean") {
         throw new Error("connectorBound is invalid");
@@ -293,6 +298,13 @@ class BrowserControlServer {
         writeJson(response, 200, { ok: true, ...release });
         return;
       }
+      if (request.url === "/v1/turn/conversation") {
+        if (typeof body.conversationId !== "string" || !/^[a-zA-Z0-9-]{1,128}$/.test(body.conversationId)
+          || (body.named !== undefined && typeof body.named !== "boolean")) throw new Error("Saved conversation update is invalid");
+        const update = host.bindSavedConversation(body.traceId, body.helperPid, body.conversationId, body.named === true);
+        writeJson(response, 200, { ok: true, ...update });
+        return;
+      }
       if (request.url === "/v1/turn/usage") {
         if (host.browserInteractionMode() === "manual") throw new Error("Limits tracking is disabled in Zero Risk mode");
         // The same owner check as a heartbeat prevents another helper from charging this tab.
@@ -322,6 +334,7 @@ class BrowserControlServer {
             body.connectorIdentity,
             body.requireRetainedConversation === true,
             acquisition.signal,
+            body.savedChat,
           );
         } finally {
           response.off("close", onClose);

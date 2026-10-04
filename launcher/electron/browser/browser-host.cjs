@@ -3,6 +3,8 @@ const path = require("node:path");
 const { createHash, randomBytes } = require("node:crypto");
 const { clipboard, WebContentsView, powerMonitor, powerSaveBlocker, shell } = require("electron");
 const { writePrivateFileAtomic } = require("../common/atomic-file.cjs");
+const { savedChatId, validSavedChatTask } = require("../../shared/saved-chat.cjs");
+const { SavedChatHistory } = require("./saved-chat-history.cjs");
 const {
   runBrowserHelperOperation,
   verifyConnectorWithBrowserHelper,
@@ -2283,8 +2285,10 @@ class BrowserHost {
     connectorIdentity,
     requireRetainedConversation = false,
     signal,
+    savedChat,
   ) {
     signal?.throwIfAborted();
+    if (savedChat !== undefined && !validSavedChatTask(savedChat)) throw new Error("Invalid saved chat metadata");
     if (this.manualOperation) {
       throw new Error(`ChatGPT browser is busy with ${this.manualOperation}`);
     }
@@ -2316,6 +2320,17 @@ class BrowserHost {
     const existing = sameTrace?.status === "running" ? sameTrace : exactRetained;
     if (existing) {
       const reused = existing.status === "ready";
+      if (reused && existing.savedConversationId
+        && savedChatId(existing.view.webContents.getURL()) !== existing.savedConversationId) {
+        this.removeTurnTab(existing, false);
+        this.logger.warn("browser.saved_conversation_changed", { traceId });
+        const error = new Error("The retained ChatGPT conversation changed. Retry to start with the full Codex context.");
+        error.code = "retained_conversation_unavailable";
+        throw error;
+      }
+      if (savedChat && existing.savedChat && savedChat.taskKey !== existing.savedChat.taskKey) {
+        throw new Error("Saved chat task ownership mismatch");
+      }
       if (existing.status === "running" && existing.helperPid !== helperPid) {
         if (processRunning(existing.helperPid)) {
           throw new Error(`ChatGPT browser turn ${traceId} is owned by another helper process`);
@@ -2338,6 +2353,10 @@ class BrowserHost {
         existing.bootstrapDeadlineAt = Date.now() + TURN_TAB_BOOTSTRAP_TIMEOUT_MS;
       }
       existing.lastHeartbeatAt = Date.now();
+      // The previous helper closed its CDP session between tool rounds. Chromium may have
+      // cleared emulation even though Electron still caches its dimensions; reacquire the
+      // same surface with a fresh viewport contract instead of failing into a new chat.
+      existing.deviceEmulationDirty = true;
       if (!existing.view.webContents.isDestroyed()) {
         existing.view.webContents.setBackgroundThrottling(false);
       }
@@ -2352,6 +2371,7 @@ class BrowserHost {
         tabId: existing.id,
         reused,
         connectorBound: existing.connectorBound === true,
+        ...(existing.savedConversationId ? { expectedConversationId: existing.savedConversationId } : {}),
       };
     }
     if (requireRetainedConversation) {
@@ -2360,6 +2380,8 @@ class BrowserHost {
       throw error;
     }
     const tab = await this.createTurnTab(traceId, helperPid, conversationKey, connectorIdentity, signal);
+    if (savedChat) tab.savedChat = savedChat;
+    tab.chatCreatedAt = Date.now();
     this.selectedTabId = tab.id;
     if (reveal) this.show();
     else this.syncViewVisibility();
@@ -2367,6 +2389,29 @@ class BrowserHost {
     this.logger.info("browser.tab_created", { tabId: tab.id, traceId, tabCount: this.turnTabs.size });
     this.writeDescriptor();
     return { surfaceId: tab.surfaceId, tabId: tab.id, reused: false, connectorBound: false };
+  }
+
+  bindSavedConversation(traceId, helperPid, conversationId, named = false) {
+    requireAutomaticBrowserInspection(this, "Saved chat identity verification");
+    this.heartbeatTurn(traceId, helperPid);
+    const tab = [...this.turnTabs.values()].find(candidate => candidate.traceId === traceId);
+    if (!this.getUseSavedChats() || tab.view.webContents.isDestroyed()
+      || savedChatId(tab.view.webContents.getURL()) !== conversationId
+      || (tab.savedConversationId && tab.savedConversationId !== conversationId)) {
+      throw new Error("Saved conversation identity does not match the owned browser page");
+    }
+    tab.savedConversationId = conversationId;
+    if (!tab.savedChat) return {};
+    try {
+      this.savedChatHistory ??= new SavedChatHistory(path.join(path.dirname(this.descriptorPath), "conversation-history.json"));
+      const record = this.savedChatHistory.bind(conversationId, tab.savedChat, tab.chatCreatedAt, tab.conversationKey);
+      if (named) this.savedChatHistory.markNamed(conversationId);
+      return !named && !record.named ? { conversationTitle: record.title } : {};
+    } catch {
+      // Naming failure cannot retry an accepted task or silently reset numbering.
+      this.logger.warn("browser.saved_chat_naming_unavailable", { traceId });
+      return {};
+    }
   }
 
   async endTurn(
@@ -2405,6 +2450,7 @@ class BrowserHost {
     if (status === "completed"
       && retain
       && tab.conversationKey
+      && (!this.getUseSavedChats?.() || tab.savedConversationId)
       && (!tab.connectorIdentity || connectorBound)) {
       tab.connectorBound = connectorBound === true;
       tab.lastHeartbeatAt = Date.now();

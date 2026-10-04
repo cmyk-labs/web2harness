@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { savedChatId } from "../../../../launcher/shared/saved-chat.cjs";
+import { assertSavedChatIdentity, renameSavedChat } from "./saved-chat";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { detectChatGptLimitsPlan, readChatGptUsageAccount, readChatGptUsageModel, supportsChatGptUsageTracking, type ChatGptUsageModel } from "../limits";
+import { detectChatGptLimitsPlan, readChatGptUsageAccount, readChatGptUsageModel, chatGptUsagePlan, type ChatGptUsageModel } from "../limits";
 import { chromium, type Browser, type BrowserContext, type Locator, type Page, type Request, type Response } from "playwright-core";
 import {
   atomicWriteFile,
@@ -1042,6 +1044,7 @@ export interface BrowserTurn {
   retainConversation?: boolean;
   requireRetainedConversation?: boolean;
   conversationKey?: string;
+  savedChat?: import("../../../../launcher/shared/saved-chat.cjs").SavedChatTask;
   onPreparedSelected?: (reused: boolean) => void | Promise<void>;
   abortSignal?: AbortSignal;
   onHeartbeat?: () => void;
@@ -1508,7 +1511,7 @@ export class ChatGptBrowserWorker {
       // Enable Think during prompt attachment, after fresh connector selection. Ordinary Luna
       // still clears a previous Think selection here; retained Think is checked on every attach.
       if (!mode.thinkEnabled) await setChatGptThinkMode(composerForm, false, captureDiagnostic);
-      return mode;
+      return trackUsage ? { ...mode, usageModel: "gpt-5.6-luna" } : mode;
     }
     const currentEffort = composerForm.locator(CHATGPT_EFFORT_CONTROL_SELECTOR).filter({ visible: true });
     const effortWaitAbort = new AbortController();
@@ -2938,6 +2941,7 @@ export class ChatGptBrowserWorker {
       traceId: turn.traceId,
       helperPid: process.pid,
       ...(turn.conversationKey ? { conversationKey: turn.conversationKey } : {}),
+      ...(turn.savedChat ? { savedChat: turn.savedChat } : {}),
       ...((turn.conversationKey
         && (turn.nativeConnector || turn.capabilities.localToolsEnabled || turn.requireRetainedConversation))
         ? { connectorIdentity: this.config.appName }
@@ -2987,7 +2991,7 @@ export class ChatGptBrowserWorker {
       await turn.onPreparedSelected?.(reused);
       heartbeatTimer = setInterval(sendHeartbeat, LAUNCHER_TURN_HEARTBEAT_INTERVAL_MS);
       heartbeatTimer.unref?.();
-      return await this.runBrowserTurn(turn, surfaceId, undefined, reused, lease.trackUsage === true);
+      return await this.runBrowserTurn(turn, surfaceId, undefined, reused, lease.trackUsage === true, lease.expectedConversationId);
     } catch (error) {
       originalError = error;
       terminal = error instanceof ChatGptCompactionHandoffAccepted
@@ -3038,6 +3042,7 @@ export class ChatGptBrowserWorker {
     maintenancePage?: Page,
     reuseConversation = false,
     trackUsage = false,
+    expectedConversationId?: string,
   ): Promise<string> {
     if (turn.abortSignal?.aborted) throw new DOMException("ChatGPT web turn aborted", "AbortError");
     if ((turn.externalProgress !== undefined) !== (turn.completionFence !== undefined)) {
@@ -3106,6 +3111,7 @@ export class ChatGptBrowserWorker {
       });
       if (!maintenancePage && !launcherSurfaceId) managedPage = page;
       diagnosticPage = page;
+      assertSavedChatIdentity(page, expectedConversationId);
       const rebindLauncherPage = async (
         attempt: number,
         cause: Error,
@@ -3241,10 +3247,10 @@ export class ChatGptBrowserWorker {
       const usageSubmission = async () => {
         if (!trackUsage) return undefined;
         const id = randomUUID();
-        let accountKey: string | undefined;
+        let identity: { accountKey: string; plan: ReturnType<typeof chatGptUsagePlan> } | undefined;
         try {
           const account = await readChatGptUsageAccount(page);
-          if (supportsChatGptUsageTracking(account)) accountKey = account.accountKey;
+          identity = { accountKey: account.accountKey, plan: chatGptUsagePlan(account) };
         } catch {
           // A missing identity is reported as a tracking gap, never charged to the previous account.
         }
@@ -3254,7 +3260,7 @@ export class ChatGptBrowserWorker {
           // Drain these bounded writes before releasing this turn's launcher lease.
           const write = notifyLauncherTurn(this.config.browserHostDescriptorPath!, {
             phase: "usage", traceId: turn.traceId, helperPid: process.pid,
-            ...(accountKey ? { receipt: { id, accountKey, model, at: Date.now() } }
+            ...(identity ? { receipt: { id, ...identity, model, at: Date.now() } }
               : { trackingError: "account-unavailable" as const }),
           }).then(() => {}, () => {
             // Approximate accounting must not turn an already accepted model message into a retry.
@@ -3348,6 +3354,7 @@ export class ChatGptBrowserWorker {
             return turn.onSubmitted?.();
           }, onSendActivated: async () => {
             await this.assertSelectedEffort(page, mode);
+            assertSavedChatIdentity(page, expectedConversationId);
             submissionRejection.begin(page);
             await turn.onSendActivated?.();
           } },
@@ -3379,6 +3386,7 @@ export class ChatGptBrowserWorker {
           : undefined,
       );
       await diagnostics.capture(page, "send-accepted");
+      if (this.config.useSavedChats) expectedConversationId ??= savedChatId(page.url());
 
       let lastHeartbeat = 0;
       let finalText = "";
@@ -3660,6 +3668,26 @@ export class ChatGptBrowserWorker {
         atomicWriteFile(this.config.storageStatePath, `${JSON.stringify(state)}\n`);
       }
       await diagnostics.capture(page, "turn-completed");
+      if (this.config.useSavedChats && launcherSurfaceId) {
+        const conversationId = savedChatId(page.url());
+        if (conversationId) {
+          try {
+            assertSavedChatIdentity(page, expectedConversationId);
+            const update = await notifyLauncherTurn(this.config.browserHostDescriptorPath!, {
+              phase: "conversation", traceId: turn.traceId, helperPid: process.pid, conversationId,
+            });
+            if (update.conversationTitle) {
+              await renameSavedChat(page, conversationId, update.conversationTitle);
+              await notifyLauncherTurn(this.config.browserHostDescriptorPath!, {
+                phase: "conversation", traceId: turn.traceId, helperPid: process.pid, conversationId, named: true,
+              });
+            }
+          } catch {
+            // The answer was already accepted. Never resend it because a cosmetic update failed.
+            console.warn(`[chatgpt-web] saved chat naming unavailable trace=${turn.traceId}`);
+          }
+        }
+      }
       console.info(
         `[chatgpt-web] browser turn ${turn.traceId} completed`
         + ` (markdownChars=${finalText.length}, domFullScans=${responseDomCache.fullScans ?? 0}, domCacheHits=${responseDomCache.cacheHits ?? 0})`,

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { LimitsApi, LimitsSnapshot, LimitsWindow } from "./limits-types";
 
 export function limitNeedsAttention(window: LimitsWindow): boolean {
-  return window.limit > 0 && window.used >= window.limit * 0.75;
+  return window.limit !== null && window.limit > 0 && window.used >= window.limit * 0.75;
 }
 
 // One reader keeps the page and sidebar in sync, including while Limits is closed.

@@ -211,6 +211,12 @@ const en = {
   doctorLoginVerified: "ChatGPT login state has authenticated browser evidence",
   doctorMacServiceLoaded: "macOS background service is loaded",
   doctorMacTunnelRunning: "macOS tunnel service is installed, loaded, and running",
+  doctorDevConfigValid: "Isolated DEV harness configuration is valid",
+  doctorTunnelNotRequired: "This mode does not require an MCP tunnel",
+  doctorDevTunnelConfigured: "DEV tunnel credentials are configured",
+  doctorDevTunnelReady: "Isolated DEV MCP tunnel runtime is ready",
+  doctorDevResponsesReady: "Isolated DEV Responses runtime is ready",
+  doctorNativeTools: "Native Tools uses the active Codex task's tools and permissions; no MCP tunnel is required",
 } as const;
 
 const zh: Record<keyof typeof en, string> = {
@@ -424,6 +430,12 @@ const zh: Record<keyof typeof en, string> = {
   doctorLoginVerified: "已通过浏览器验证 ChatGPT 登录状态",
   doctorMacServiceLoaded: "已加载 macOS 后台服务",
   doctorMacTunnelRunning: "macOS 隧道服务已安装、加载并运行",
+  doctorDevConfigValid: "开发环境配置有效",
+  doctorTunnelNotRequired: "当前模式不需要 MCP 隧道",
+  doctorDevTunnelConfigured: "已配置开发环境的 MCP 隧道凭据",
+  doctorDevTunnelReady: "开发环境的 MCP 隧道已就绪",
+  doctorDevResponsesReady: "本地服务已就绪，可接收 Codex 请求",
+  doctorNativeTools: "使用当前 Codex 任务的工具和权限，无需 MCP 隧道",
 };
 
 export type Copy = typeof en;
@@ -442,6 +454,12 @@ export function localizeRuntimeMessage(
   if (language === "en") return message;
   if (checkId === undefined && message === "Checking ChatGPT connector") return copy.checkingChatGptConnector;
   if (checkId === undefined && message === "Checking local runtime") return copy.checkingLocalRuntime;
+  if (checkId === "dev-profile" && message === "Isolated DEV harness configuration is valid") return copy.doctorDevConfigValid;
+  if (checkId === "dev-tunnel-credentials" && message === "This mode does not require an MCP tunnel") return copy.doctorTunnelNotRequired;
+  if (checkId === "dev-tunnel-credentials" && message === "DEV tunnel credentials are configured") return copy.doctorDevTunnelConfigured;
+  if (checkId === "dev-tunnel-runtime" && message === "Isolated DEV MCP tunnel runtime is ready") return copy.doctorDevTunnelReady;
+  if (checkId === "responses-listener" && message === "Isolated DEV Responses runtime is ready") return copy.doctorDevResponsesReady;
+  if (checkId === "tools" && message === "Native Tools uses the active Codex task's tools and permissions; no MCP tunnel is required") return copy.doctorNativeTools;
   if (checkId === "config") {
     const match = /^Configuration is valid \((.+)\)$/s.exec(message);
     if (match) return copy.doctorConfigValid.replace("{path}", () => match[1]);

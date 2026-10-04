@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><title>Saved chat naming fixture</title>
+<!-- History-row/menu/editor structure observed in isolated DEV on 2026-10-04. -->
+<div role="group" aria-current="page">
+  <a data-interactive-row-link="true" href="/c/owned-chat" aria-label="Original title"><span data-thread-title="true">Original title</span></a>
+  <button aria-label="聊天操作" aria-haspopup="menu" onclick="document.querySelector('[role=menu]').hidden=false">…</button>
+</div>
+<div role="group"><a data-interactive-row-link="true" href="/c/unrelated-chat" aria-label="Other title">Other title</a></div>
+<div role="menu" hidden><button role="menuitem" onclick="openRename()">重命名</button></div>
+<div role="dialog" hidden><input aria-label="聊天标题" placeholder="添加标题…"></div>
+<script>
+  window.renameWrites = [];
+  function openRename() {
+    document.querySelector('[role=menu]').hidden = true;
+    document.querySelector('[role=dialog]').hidden = false;
+    const input = document.querySelector('input');
+    input.value = document.querySelector('a').getAttribute('aria-label');
+    input.focus();
+  }
+  document.querySelector('input').addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      const title = event.target.value;
+      window.renameWrites.push(title);
+      document.querySelector('a').setAttribute('aria-label', title);
+      document.querySelector('[data-thread-title]').textContent = title;
+      document.querySelector('[role=dialog]').hidden = true;
+    }
+  });
+</script>

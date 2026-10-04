@@ -1,10 +1,28 @@
 import { expect, test } from "bun:test";
 import {
   chatGptUsageModelFromAnnouncements,
+  chatGptUsagePlan,
   detectChatGptLimitsPlan,
   readChatGptUsageAccount,
   supportsChatGptUsageTracking,
 } from "../../../src/adapters/chatgpt-web/limits";
+
+test("ordinary Web model families are attributed from selected UI evidence and unknown plans still have receipts", () => {
+  for (const level of ["Instant", "Medium", "High", "Extra High"]) {
+    expect(chatGptUsageModelFromAnnouncements([`5.6 ${level}, 3 of 5.`], false)).toBe("gpt-5.6-sol");
+  }
+  expect(chatGptUsageModelFromAnnouncements(["GPT-5.6 Sol High, 3 of 5."], false)).toBe("gpt-5.6-sol");
+  for (const level of ["即时", "中", "高", "极高"]) {
+    expect(chatGptUsageModelFromAnnouncements([`5.6 ${level}，第 3 项，共 5 项。`], false)).toBe("gpt-5.6-sol");
+  }
+  expect(chatGptUsageModelFromAnnouncements(["GPT-5.6 Luna Think"], false)).toBe("gpt-5.6-luna");
+  for (const labels of [[], ["Latest"], ["5.6 Sol High", "5.6 Luna Think"], ["6 Pro"]]) {
+    expect(chatGptUsageModelFromAnnouncements(labels, false)).toBe("other");
+  }
+  expect(chatGptUsagePlan({ personal: true, planType: "plus" })).toBe("unsupported");
+  expect(chatGptUsagePlan({ personal: false, planType: "pro" })).toBe("unsupported");
+  expect(chatGptUsagePlan({ personal: true, planType: "pro" })).toBe("pro_200");
+});
 
 test("Limits reads exact personal account tiers without inspecting billing UI", async () => {
   for (const [planType, expected] of [["pro", "pro_200"], ["prolite", "pro_100"], ["promax", "unsupported"], ["free", "unsupported"]] as const) {
@@ -20,6 +38,8 @@ test("Limits reads exact personal account tiers without inspecting billing UI", 
 test("Limits identifies actual selected Pro family and keeps missing or conflicting evidence unknown", () => {
   expect(chatGptUsageModelFromAnnouncements(["6 Pro, 5 of 5.", "Use Left and Right arrow keys to adjust power."])).toBe("gpt-6-pro");
   expect(chatGptUsageModelFromAnnouncements(["5.6 Pro, 5 of 5."])).toBe("gpt-5.6-pro");
+  expect(chatGptUsageModelFromAnnouncements(["6 Pro，第 5 项，共 5 项。"])).toBe("gpt-6-pro");
+  expect(chatGptUsageModelFromAnnouncements(["5.6 Pro，第 5 项，共 5 项。"])).toBe("gpt-5.6-pro");
   expect(chatGptUsageModelFromAnnouncements(["GPT-5.6 Sol Pro, 5 of 5."])).toBe("gpt-5.6-pro");
   for (const descriptions of [[], ["Latest"], ["Pro"], ["5.6 Extra High, 4 of 5."],
     ["5.5 Pro"], ["6 Pro", "5.6 Pro"], ["Use 6 Pro"]]) {

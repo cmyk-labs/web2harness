@@ -38,6 +38,7 @@ test("native external-link policy permits exact project destinations and rejects
     TUNNELS_URL: "https://platform.openai.com/settings/organization/tunnels",
     KEYS_URL: "https://platform.openai.com/settings/organization/api-keys",
     LIMITS_SOURCE_URL: "https://example.invalid/limits",
+    LIMITS_SOURCES: require("../../electron/limits/limits-policy.json").sources,
   };
   const start = source.indexOf("const ALLOWED_EXTERNAL_URLS =");
   const allowed = vm.runInNewContext(
@@ -50,10 +51,12 @@ test("native external-link policy permits exact project destinations and rejects
   });
   for (const url of Object.values(projectLinks(GITHUB_URL))) await open(null, url);
   assert.equal(opened.length, 4);
+  for (const url of Object.values(context.LIMITS_SOURCES)) await open(null, url);
+  assert.equal(opened.length, 4 + Object.keys(context.LIMITS_SOURCES).length);
   for (const url of ["https://x.com/example", "https://github.com/another/project", `${GITHUB_URL}/issues`, ""]) {
     await assert.rejects(open(null, url), /not allowlisted/);
   }
-  assert.equal(opened.length, 4);
+  assert.equal(opened.length, 4 + Object.keys(context.LIMITS_SOURCES).length);
 });
 
 test("repository invitation records only successful opening and never completes onboarding", async () => {

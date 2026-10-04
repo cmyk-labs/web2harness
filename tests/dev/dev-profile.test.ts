@@ -46,6 +46,10 @@ test("Bigger Context is disabled by default and read from the isolated DEV runti
       experimentalBiggerContext: true,
     }));
     expect(readDevChatExperimentalFeatures(paths)).toEqual({ contextFiles: true, contextTripleBudget: false });
+    for (const version of [4, 5]) {
+      writeFileSync(paths.configPath, JSON.stringify({ version, experimentalContextFiles: true, experimentalContextTripleBudget: true }));
+      expect(readDevChatExperimentalFeatures(paths)).toEqual({ contextFiles: true, contextTripleBudget: true });
+    }
     writeFileSync(paths.configPath, JSON.stringify({
       version: 3,
       experimentalBiggerContext: "yes",

@@ -10,6 +10,7 @@ import { createProcessLineWriter } from "../process-line-writer";
 import { createBrowserHelperPromptSelection } from "./browser-helper-prompt-selection";
 import { type CompiledChatGptWebPrompt } from "../prompt/compile";
 import { ChatGptMirroredTurnProgress } from "../tools/turn-progress";
+import { validSavedChatTask, type SavedChatTask } from "../../../../launcher/shared/saved-chat.cjs";
 import type { ChatGptExternalTurnProgressSnapshot } from "../tools/turn-progress";
 
 interface RunMessage {
@@ -34,6 +35,7 @@ interface RunMessage {
     retainConversation?: boolean;
     requireRetainedConversation?: boolean;
     conversationKey?: string;
+    savedChat?: SavedChatTask;
     compaction?: boolean;
     captureLunaCheckpoint?: boolean;
     externalProgress?: boolean;
@@ -178,6 +180,9 @@ async function run(message: RunMessage): Promise<void> {
   if (message.turn.conversationKey !== undefined && !/^[a-f0-9]{64}$/.test(message.turn.conversationKey)) {
     throw new Error("Browser helper conversation key is invalid");
   }
+  if (message.turn.savedChat !== undefined && !validSavedChatTask(message.turn.savedChat)) {
+    throw new Error("Browser helper saved chat metadata is invalid");
+  }
   if (message.turn.compaction !== undefined && typeof message.turn.compaction !== "boolean") {
     throw new Error("Browser helper compaction flag is invalid");
   }
@@ -229,6 +234,7 @@ async function run(message: RunMessage): Promise<void> {
     ...(message.turn.retainConversation ? { retainConversation: true } : {}),
     ...(message.turn.requireRetainedConversation ? { requireRetainedConversation: true } : {}),
     ...(message.turn.conversationKey ? { conversationKey: message.turn.conversationKey } : {}),
+    ...(message.turn.savedChat ? { savedChat: message.turn.savedChat } : {}),
     abortSignal: abortController.signal,
     ...(message.turn.compaction ? { compaction: true } : {}),
     ...(progress ? {

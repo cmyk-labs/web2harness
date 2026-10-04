@@ -22,6 +22,7 @@ const { BrowserHost, navigationErrorForLog } = require("./browser/browser-host.c
 const { BrowserControlServer } = require("./control-server.cjs");
 const { LimitsController } = require("./limits/limits-controller.cjs");
 const { SOURCE_URL: LIMITS_SOURCE_URL } = require("./limits/limits-store.cjs");
+const { sources: LIMITS_SOURCES } = require("./limits/limits-policy.json");
 const { releaseRetainedConversation } = require("./runtime/retained-turn-release.cjs");
 const { getAutostart, setAutostart } = require("./autostart.cjs");
 const {
@@ -64,7 +65,7 @@ const TUNNELS_URL = "https://platform.openai.com/settings/organization/tunnels";
 const KEYS_URL = "https://platform.openai.com/settings/organization/api-keys";
 const ALLOWED_EXTERNAL_URLS = new Set([
   ...Object.values(projectLinks(GITHUB_URL)).filter(Boolean),
-  CONNECTORS_URL, TUNNELS_URL, KEYS_URL, LIMITS_SOURCE_URL,
+  CONNECTORS_URL, TUNNELS_URL, KEYS_URL, LIMITS_SOURCE_URL, ...Object.values(LIMITS_SOURCES),
 ]);
 const PACKAGED_RENDERER_URL = pathToFileURL(path.join(__dirname, "..", "dist", "index.html")).href;
 const BRAND_ASSETS_PATH = app.isPackaged

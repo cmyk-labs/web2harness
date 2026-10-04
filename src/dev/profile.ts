@@ -87,7 +87,7 @@ export function readDevChatExperimentalFeatures(
       `Could not read DEV runtime settings from ${paths.configPath}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  if (!value || typeof value !== "object" || Array.isArray(value) || ![3, 4].includes((value as { version?: number }).version ?? 0)) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || ![3, 4, 5].includes((value as { version?: number }).version ?? 0)) {
     throw new Error(`Invalid DEV runtime settings in ${paths.configPath}`);
   }
   const config = value as { experimentalContextFiles?: unknown; experimentalContextTripleBudget?: unknown; experimentalBiggerContext?: unknown };

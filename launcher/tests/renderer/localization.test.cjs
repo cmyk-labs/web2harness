@@ -167,6 +167,12 @@ test("all locales translate known doctor success checks without changing literal
     ["login", "ChatGPT login state has authenticated browser evidence", "doctorLoginVerified"],
     ["service", "macOS background service is loaded", "doctorMacServiceLoaded"],
     ["tunnel-service", "macOS tunnel service is installed, loaded, and running", "doctorMacTunnelRunning"],
+    ["dev-profile", "Isolated DEV harness configuration is valid", "doctorDevConfigValid"],
+    ["dev-tunnel-credentials", "This mode does not require an MCP tunnel", "doctorTunnelNotRequired"],
+    ["dev-tunnel-credentials", "DEV tunnel credentials are configured", "doctorDevTunnelConfigured"],
+    ["dev-tunnel-runtime", "Isolated DEV MCP tunnel runtime is ready", "doctorDevTunnelReady"],
+    ["responses-listener", "Isolated DEV Responses runtime is ready", "doctorDevResponsesReady"],
+    ["tools", "Native Tools uses the active Codex task's tools and permissions; no MCP tunnel is required", "doctorNativeTools"],
   ];
   for (const language of Object.keys(languages)) {
     const copy = copyFor(language);

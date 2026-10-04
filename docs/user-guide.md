@@ -191,6 +191,10 @@ Change these settings after active turns finish. Saving a chat and reusing its c
 | **Context budget → Triple** | Experimental and off. Available with context-file transport; advertises larger context and compaction budgets. Restart the affected Codex client after changing it. It does not increase allowance or guarantee complete model use of the content. |
 | **Skills as files (experimental)** | Off. Uploads explicitly selected Codex skills as named text files during automatic interaction. Other skills load through tools. Skills and images share attachment limits. |
 
+Automatic launcher-hosted saved chats with a Codex thread identity are named after their first completed reply: `YYYY-MM-DD HH:mm · task name · 对话-01`. The short task name comes from the first available human request and remains stable. New dialogue chats increment `对话-02`, `对话-03`; separate summary chats use independent `压缩-01`, `压缩-02` numbers (dialogue / compaction). The timestamp is each chat's creation time in the machine's local timezone. Tool round trips and reconnects keep the title and number. Successful naming happens once, preserving later manual renames. Naming failures are logged without resending the task; an unnamed retained chat can retry naming after a later completed reply. Temporary chats and Zero Risk are not automatically renamed.
+
+Saved-chat continuation checks the exact conversation ID before incremental submission. A changed chat or home screen is rejected; retry to start a new chat with full Codex context. Titles and numbering do not authorize reopening history after a launcher restart. Compaction still starts a new context epoch, and separate summary chats remain saved when history is enabled.
+
 Luna uses rolling checkpoints. Browser-only does not retain browser conversations, and manual interaction follows the operator's handoff. Their continuity differs from retained Sol/Pro routes; see the [architecture manual](architecture.md).
 
 Both saved and temporary chats send prompts, files, and images to ChatGPT. Disabling history does not make processing local. Task images come from Codex's conversation context; earlier images can be attached again, with at most the newest ten complete images retained by the bridge. Start a new Codex task to exclude earlier task images.
@@ -221,9 +225,26 @@ web2harness subagents native
 
 ## Inspect usage and diagnostics
 
-**Usage & Diagnostics → Usage** reports sends observed by this application over a rolling seven-day period, starting when tracking is enabled. External activity or earlier sends can be missing. Shared and model-specific windows overlap; do not add them together. Unattributed Pro messages are listed separately. This is not an official remaining-quota or reset-time display. Manual interaction does not inspect browser usage, although existing local records remain visible.
+**Usage & Diagnostics → Usage** automatically records accepted Web sends in Automatic mode, without an enable switch or an account-check prerequisite. Each accepted send counts as one conversation turn, including tool-result follow-ups and compaction; observing the same send again does not count twice. Counts are grouped by the observed model family (thinking levels combined), with rolling **last 24 hours** and **last 7 days** columns. They do not reset at midnight or at the start of a calendar week, and the overlapping columns must not be added together.
 
-For a failure, run **Usage & Diagnostics → Health checks → Run doctor**, then follow the earliest failed check. After one useful reproduction, select **Logs → Export safe log**. If startup is blocked, use the startup page's details and diagnostic export. Review the exported content before sharing and follow the [support-report checklist](troubleshooting.md#support-report).
+Records are stored locally by hashed account identity; the page shows the last identified account and preserves its start time across restarts. All identified account tiers can record sends. Older records are retained during upgrade; previously unidentified models remain in an unknown/legacy category. Earlier sends and activity outside this application cannot be reconstructed. Missed-send warnings remain for seven days across restarts and account checks. Manual interaction does not inspect browser usage or add automatic records; existing history remains visible.
+
+The page explicitly reports **Official usage period unconfirmed**: the current model documentation and verified DEV model menu do not provide this account’s complete Chat model-period boundaries. Rolling counts are auxiliary local statistics, not an implementation of official quota periods. Do not infer the official start from the first local record, your local midnight, Monday, or Work/Codex usage data.
+
+**Official published conversation limits** retains the latest explicit counts found, with their scope, verification date and source links. Omission from a later article alone does not invalidate an earlier published number. The following references were checked on 2026-10-05; this is a verification date, not their publication date:
+
+| Plan reference | Model | Published allowance |
+| --- | --- | --- |
+| Pro $200 · From 2026-10-30 | GPT-6 Pro | 100/week (subscriber notice transcript) |
+| Pro $200 · From 2026-10-30 | GPT-5.6 Sol Pro | 170/day (prior reference; future applicability unconfirmed) |
+| Pro $200 · From 2026-10-30 | Both Pro models combined | 200/day (prior reference; future applicability unconfirmed) |
+| Pro $100 | Both Pro models combined | 50/week |
+| Business Standard | Both Pro models combined | 15/month |
+| Business Premium | Both Pro models combined | 50/week |
+
+Pro $200 uses the **2026-10-30 onward** reference. The [official tier notice](https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers) confirms that eligible previous allowances end after October 29, but does not print the new count. The 100/week figure comes from a [subscriber’s public transcript of the OpenAI notification](https://community.openai.com/t/pro-200-is-fine-please-don-t-improve-it/1402079); the original email has not been independently verified. Both daily figures and Pro $100 retain the latest explicit [official numeric references](https://help.openai.com/bs-ba/articles/20001354). The daily figures are labeled **prior reference**, with applicability after October 29 unconfirmed; they are not automatically halved. [Business limits](https://help.openai.com/en/articles/12003714-chatgpt-business-models-and-limits) confirms the Business figures. Pro $500 and other unverified models have no fixed count filled in. Choosing a reference plan does not change the logged-in account or local counts. Local rolling counts do not determine official remaining usage or reset times, or trigger quota warnings from these reference values.
+
+For a failure, run **Usage & Diagnostics → Health checks → Run doctor**, then follow the earliest failed check. Checks use descriptive names and show **Passed**, **Not required**, **Needs attention**, or **Failed**. **Not required** means this mode does not need that component; it does not confirm a connection. Expand **Technical details** for the check identifier, original message and additional diagnostics. Production checks **Application configuration**; **Development configuration** appears only in the isolated DEV environment. Passing confirms only the reported configuration/service checks, not a real model or tool task. After one useful reproduction, select **Logs → Export safe log**. If startup is blocked, use the startup page's details and diagnostic export. Review the exported content before sharing and follow the [support-report checklist](troubleshooting.md#support-report).
 
 <a id="runtime-controls"></a>
 

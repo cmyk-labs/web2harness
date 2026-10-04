@@ -215,6 +215,8 @@ export async function runDoctor(): Promise<DoctorReport> {
       message: `Local checks cannot prove that ChatGPT connector ${JSON.stringify(config.appName)} is attached to this tunnel`,
       detail: "Verify it once at https://chatgpt.com/#settings/Plugins while the tunnel is ready.",
     });
+  } else if (config.mode === "native-tools") {
+    checks.push({ id: "tools", status: "ok", message: "Native Tools uses the active Codex task's tools and permissions; no MCP tunnel is required" });
   } else {
     checks.push({ id: "tools", status: "warning", message: "Browser-only mode intentionally has no local tools or MCP tunnel" });
   }

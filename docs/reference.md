@@ -314,6 +314,7 @@ The `compatibility-v1` subagent setting separately changes collaboration metadat
 | Launcher preferences | `<Electron user data>/launcher-state.json` | `<DEV home>/launcher/launcher-state.json` |
 | Persistent browser partition | `persist:web2harness-chatgpt` | `persist:web2harness-dev-chatgpt` |
 | Browser host descriptor | `<home>/runtime/launcher-browser.json` | `<DEV home>/runtime/launcher-browser.json` |
+| Saved-chat naming ledger | `conversation-history.json` beside the browser host descriptor | Same filename beside the DEV descriptor |
 | Managed Chrome session file | `<home>/browser/storage-state.json` by default | Profile-specific; not copied from the regular profile |
 | Managed automatic tunnel key | `<home>/secrets/tunnel-runtime-automatic.key` | Same relative path within the DEV home |
 | Managed manual tunnel key | `<home>/secrets/tunnel-runtime-zero-risk.key` | Same relative path within the DEV home |

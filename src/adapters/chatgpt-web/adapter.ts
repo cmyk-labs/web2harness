@@ -37,6 +37,7 @@ import { TurnBroker, type BrokerToolRequest, type BrokerToolResult, type TurnBro
 import { ChatGptTextFeed, ChatGptTraceFeed, chatGptCompactionSourceExecutionKey, chatGptInstructionLineage, chatGptThreadOwnershipKey, chatGptTurnExecutionKey, chatGptTurnRetryKey, chatGptTurnRoundKey, chatGptTurnSessions, type ChatGptBrowserOutcome, type ChatGptTraceEvent, type ChatGptTurnRuntime, type ChatGptTurnSession } from "./tools/turn-execution";
 import { estimateChatGptWebUsage } from "./usage";
 import { ChatGptThreadEnvironmentStore } from "./prompt/thread-environment";
+import { savedChatTask } from "./conversation/saved-chat-task";
 import {
   ChatGptLunaCheckpointStore,
   type CapturedChatGptLunaCheckpoint,
@@ -493,6 +494,8 @@ export function createChatGptWebAdapter(
       ? { localTools: true, nativeTools: false }
       : resolveChatGptWebModelMode(parsed.modelId, parsed.options.reasoning, turnCapabilities);
     const identity = extractChatGptTurnIdentity(parsed);
+    const savedChat = !manualRequest && provider.chatgptWeb?.useSavedChats === true
+      && retainedLauncherDescriptor ? savedChatTask(parsed) : undefined;
     const captureLunaCheckpoint = parsed.modelId === CHATGPT_WEB_LUNA_MODEL_ID
       && !parsed._compactionRequest
       && Boolean(identity.threadId && identity.turnId);
@@ -772,6 +775,7 @@ export function createChatGptWebAdapter(
         ...(parsed._chatgptModelFamily ? { modelFamily: parsed._chatgptModelFamily } : {}),
         capabilities: turnCapabilities,
         prepare: () => prepareWith(checkpointInput.parsed),
+        ...(savedChat ? { savedChat } : {}),
         ...(resumeInput ? { prepareResume: () => prepareWith(resumeInput) } : {}),
         ...(retainConversation ? { retainConversation: true, conversationKey } : {}),
         abortSignal: browserAbort.signal,
@@ -838,6 +842,7 @@ export function createChatGptWebAdapter(
       ...(parsed._chatgptModelFamily ? { modelFamily: parsed._chatgptModelFamily } : {}),
       capabilities: turnCapabilities,
       prepare: () => prepareWith(checkpointInput.parsed),
+      ...(savedChat ? { savedChat } : {}),
       ...(resumeInput ? { prepareResume: () => prepareWith(resumeInput) } : {}),
       ...(retainConversation ? { retainConversation: true, conversationKey } : {}),
       abortSignal: browserAbort.signal,

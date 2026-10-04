@@ -405,6 +405,7 @@ describe("native-tools adapter emission", () => {
       browserHost: "launcher",
       browserHostDescriptorPath: join(tempRoot, `retention-${fresh}.json`),
       experimentalFreshConversationPerTurn: fresh,
+      useSavedChats: true,
     });
     const turnId = `turn_retention_${fresh}_${Date.now()}`;
     const request = wireRequest(turnId);
@@ -415,6 +416,8 @@ describe("native-tools adapter emission", () => {
     const keys: Array<string | undefined> = [];
     (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
       expect(turn.retainConversation === true).toBe(!fresh);
+      expect(turn.savedChat?.kind).toBe("dialogue");
+      expect(turn.savedChat?.taskKey).toMatch(/^[a-f0-9]{64}$/);
       keys.push(turn.conversationKey);
       const prepared = !fresh && prompts.length > 0 ? await turn.prepareResume!() : await turn.prepare();
       prompts.push(prepared.text);

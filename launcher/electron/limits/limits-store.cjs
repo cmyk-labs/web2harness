@@ -8,20 +8,21 @@ const SOURCE_URL = policy.sourceUrl;
 const SOURCE_DATE = policy.checkedOn;
 const STORE_BOUNDS = Object.freeze({ maxAccounts: 64, maxEvents: 20_000, maxIdBytes: 256, maxFileBytes: 16 * 1024 * 1024 });
 
-// Policy references only: these rolling windows do not describe OpenAI reset times.
+// Legacy rolling statistics only. Published policy counts are separate references;
+// unknown account periods must not become quotas or trigger remaining-usage alerts.
 const OFFICIAL_LIMITS = Object.freeze({
   pro_100: Object.freeze([
-    Object.freeze({ id: "shared-7d", label: "Both Pro models · rolling last 7 days", model: "shared", durationMs: RETENTION_MS, limit: policy.pro_100.combinedWeekly }),
+    Object.freeze({ id: "shared-7d", label: "Both Pro models · rolling last 7 days", model: "shared", durationMs: RETENTION_MS, limit: null }),
   ]),
   pro_200: Object.freeze([
-    Object.freeze({ id: "gpt-6-pro-7d", label: "GPT-6 Pro · rolling last 7 days", model: "gpt-6-pro", durationMs: RETENTION_MS, limit: policy.pro_200.gpt6Weekly }),
-    Object.freeze({ id: "gpt-5.6-pro-24h", label: "GPT-5.6 Pro · rolling last 24 hours", model: "gpt-5.6-pro", durationMs: DAY_MS, limit: policy.pro_200.solDaily }),
-    Object.freeze({ id: "shared-24h", label: "Both Pro models · rolling last 24 hours", model: "shared", durationMs: DAY_MS, limit: policy.pro_200.combinedDaily }),
+    Object.freeze({ id: "gpt-6-pro-7d", label: "GPT-6 Pro · rolling last 7 days", model: "gpt-6-pro", durationMs: RETENTION_MS, limit: null }),
+    Object.freeze({ id: "gpt-5.6-pro-24h", label: "GPT-5.6 Pro · rolling last 24 hours", model: "gpt-5.6-pro", durationMs: DAY_MS, limit: null }),
+    Object.freeze({ id: "shared-24h", label: "Both Pro models · rolling last 24 hours", model: "shared", durationMs: DAY_MS, limit: null }),
   ]),
   unsupported: Object.freeze([]),
 });
 const PLANS = new Set(Object.keys(OFFICIAL_LIMITS));
-const MODELS = new Set(["gpt-6-pro", "gpt-5.6-pro", "pro-unknown", "other"]);
+const MODELS = new Set(["gpt-6-pro", "gpt-5.6-pro", "gpt-5.6-sol", "gpt-5.6-luna", "pro-unknown", "other"]);
 const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const isTime = value => Number.isSafeInteger(value) && value >= 0;
 const isAccountKey = value => typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
@@ -39,8 +40,9 @@ class LimitsStoreError extends Error {
 function assertState(state) {
   const corrupt = () => { throw new LimitsStoreError("LIMITS_CORRUPT_STATE", "Invalid limits store data; the file was not changed."); };
   if (!isObject(state) || !Object.hasOwn(state, "version")) corrupt();
-  if (state.version !== 1) throw new LimitsStoreError("LIMITS_UNSUPPORTED_VERSION", "Unsupported limits store version; the file was not changed.");
-  if (!hasKeys(state, ["version", "activeAccountKey", "accounts"]) || !isObject(state.accounts)) corrupt();
+  if (state.version !== 1 && state.version !== 2) throw new LimitsStoreError("LIMITS_UNSUPPORTED_VERSION", "Unsupported limits store version; the file was not changed.");
+  if (!hasKeys(state, state.version === 1 ? ["version", "activeAccountKey", "accounts"] : ["version", "activeAccountKey", "accounts", "gapAt"])
+    || !isObject(state.accounts) || (state.version === 2 && state.gapAt !== null && !isTime(state.gapAt))) corrupt();
   const entries = Object.entries(state.accounts);
   if (entries.length > STORE_BOUNDS.maxAccounts) corrupt();
   if (state.activeAccountKey === null ? entries.length !== 0
@@ -68,7 +70,7 @@ function readState(filePath) {
   try {
     stat = fs.lstatSync(filePath);
   } catch (cause) {
-    if (cause.code === "ENOENT") return { version: 1, activeAccountKey: null, accounts: {} };
+    if (cause.code === "ENOENT") return { version: 2, activeAccountKey: null, accounts: {}, gapAt: null };
     throw new LimitsStoreError("LIMITS_READ_FAILED", "Could not read the limits store.", { cause });
   }
   if (!stat.isFile() || stat.size > STORE_BOUNDS.maxFileBytes) {
@@ -87,7 +89,8 @@ function readState(filePath) {
     throw new LimitsStoreError("LIMITS_CORRUPT_STATE", "Limits store is not valid JSON; the file was not changed.");
   }
   assertState(state);
-  return state;
+  // Validate before migrating; never replace corrupt or future data.
+  return state.version === 1 ? { ...state, version: 2, gapAt: null } : state;
 }
 
 function retainHistory(state, now) {
@@ -100,7 +103,8 @@ function retainHistory(state, now) {
       changed = true;
     }
   }
-  return changed ? { ...state, accounts } : state;
+  const gapAt = state.gapAt !== null && state.gapAt <= now - RETENTION_MS ? null : state.gapAt;
+  return changed || gapAt !== state.gapAt ? { ...state, accounts, gapAt } : state;
 }
 
 function snapshotAt(state, now) {
@@ -109,15 +113,25 @@ function snapshotAt(state, now) {
   const events = (account?.events ?? []).filter(event => event.at > now - RETENTION_MS && event.at <= now);
   const unknownProMessages = events.filter(event => event.model === "pro-unknown").length;
   return {
-    enabled: plan === "pro_100" || plan === "pro_200",
+    enabled: true,
     plan,
     trackingSince: account?.initializedAt ?? null,
     checkedAt: account?.checkedAt ?? null,
     totalMessages: events.length, // All models in the rolling last 7 days, not a lifetime counter.
     unknownProMessages,
-    incomplete: unknownProMessages > 0,
+    // Missing identity cannot safely be assigned to an account. Keep a profile
+    // warning for seven days, including across account checks and restarts.
+    incomplete: unknownProMessages > 0 || events.some(event => event.model === "other") || state.gapAt !== null,
+    gapAt: state.gapAt,
+    models: [...MODELS].filter(model => ["gpt-6-pro", "gpt-5.6-pro", "gpt-5.6-sol"].includes(model)
+      || events.some(event => event.model === model)).map(model => ({
+      model,
+      last24Hours: events.filter(event => event.model === model && event.at > now - DAY_MS).length,
+      last7Days: events.filter(event => event.model === model).length,
+    })),
     windows: (OFFICIAL_LIMITS[plan] ?? []).map(window => {
-      const recent = events.filter(event => event.at > now - window.durationMs && event.model !== "other");
+      const recent = events.filter(event => event.at > now - window.durationMs
+        && ["gpt-6-pro", "gpt-5.6-pro", "pro-unknown"].includes(event.model));
       return {
         ...window,
         used: recent.filter(event => window.model === "shared" || event.model === window.model).length,
@@ -130,7 +144,7 @@ function snapshotAt(state, now) {
 }
 
 // One store instance per file, called synchronously by the launcher main process.
-// configure opts in; unsupported stops recording while preserving retained history.
+// Account checks select a view; accepted sends automatically initialize tracking.
 class LimitsStore {
   #filePath;
   #now;
@@ -180,7 +194,7 @@ class LimitsStore {
       ...state.accounts,
       [accountKey]: {
         plan: config.plan,
-        initializedAt: previous?.initializedAt ?? (config.plan === "unsupported" ? null : now),
+        initializedAt: previous?.initializedAt ?? now,
         checkedAt: now,
         events: previous?.events ?? [],
       },
@@ -192,12 +206,18 @@ class LimitsStore {
     return isAccountKey(accountKey) && accountKey.toLowerCase() === this.#state.activeAccountKey;
   }
 
-  // Returns false for inactive accounts, unsupported plans, pre-opt-in/expired receipts,
-  // or duplicate IDs within that account's retained history. Invalid inputs throw.
+  markGap() {
+    const now = this.#time();
+    this.#commit({ ...retainHistory(this.#state, now), gapAt: now });
+  }
+
+  // Verified helper receipts select/create their account atomically. Legacy
+  // receipts without plan metadata require a previously checked account.
   record(event) {
     const now = this.#time();
     if (!isObject(event) || !isAccountKey(event.accountKey) || !isId(event.id)
-      || !MODELS.has(event.model) || !isTime(event.at)) {
+      || !MODELS.has(event.model) || !isTime(event.at)
+      || (event.plan !== undefined && !PLANS.has(event.plan))) {
       throw new LimitsStoreError("LIMITS_INVALID_EVENT", "Expected a bounded receipt id, 64-hex accountKey, supported model, and nonnegative integer timestamp.");
     }
     // Receipts use the helper's local wall clock. Never silently clamp a skewed
@@ -207,11 +227,20 @@ class LimitsStore {
     }
     const accountKey = event.accountKey.toLowerCase();
     let state = retainHistory(this.#state, now);
-    const account = state.accounts[accountKey];
-    if (accountKey === state.activeAccountKey && account.plan !== "unsupported" && now < account.initializedAt) {
+    if (event.at <= now - RETENTION_MS) return false;
+    let account = state.accounts[accountKey];
+    if (event.plan !== undefined) {
+      if (!account && Object.keys(state.accounts).length >= STORE_BOUNDS.maxAccounts) {
+        throw new LimitsStoreError("LIMITS_CAPACITY_EXCEEDED", "Limits account capacity reached; no accounts were discarded.");
+      }
+      account = { plan: event.plan, initializedAt: account?.initializedAt ?? event.at,
+        checkedAt: now, events: account?.events ?? [] };
+      state = { ...state, activeAccountKey: accountKey, accounts: { ...state.accounts, [accountKey]: account } };
+    }
+    if (accountKey === state.activeAccountKey && account && now < account.initializedAt) {
       throw new LimitsStoreError("LIMITS_CLOCK_SKEW", "The local clock is before tracking began; the message was not recorded.");
     }
-    const accepted = accountKey === state.activeAccountKey && account?.plan !== "unsupported"
+    const accepted = accountKey === state.activeAccountKey && !!account
       && event.at >= account.initializedAt && event.at > now - RETENTION_MS
       && !account.events.some(existing => existing.id === event.id);
     if (accepted) {

@@ -1,9 +1,9 @@
 const { LimitsStore } = require("./limits-store.cjs");
 
-const HISTORY_WARNING = "Local history may be incomplete. Check your plan again.";
+const HISTORY_WARNING = "Local history may be incomplete. Missed sends cannot be recovered by checking the account again.";
 const emptySnapshot = () => ({
   enabled: false, plan: null, trackingSince: null, checkedAt: null,
-  totalMessages: 0, unknownProMessages: 0, incomplete: false, windows: [],
+  totalMessages: 0, unknownProMessages: 0, incomplete: true, gapAt: null, models: [], windows: [],
 });
 const describe = cause => cause instanceof Error ? cause.message : "Unknown Limits error.";
 
@@ -74,28 +74,30 @@ class LimitsController {
     }
   }
 
-  // Optional telemetry must never fail generation. A later successful receipt or
-  // read cannot fill a missed send, so only a successful setup check clears errors.
+  // Optional accounting must never fail generation. Gaps survive account checks
+  // and restarts for the retained seven-day window.
   record({ receipt, trackingError } = {}) {
     try {
       if (this.#mode() !== "automatic") return false;
       const store = this.#getStore();
-      if (!store.snapshot().enabled) return false;
       if ((receipt !== undefined) === (trackingError !== undefined)) {
         throw new Error("Expected exactly one submission receipt or tracking error.");
       }
       if (trackingError === "account-unavailable") {
+        store.markGap();
         this.#error = `The ChatGPT account could not be identified for a sent message. ${HISTORY_WARNING}`;
         return false;
       }
       if (trackingError !== undefined) throw new Error("Unrecognized Limits tracking error.");
       if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) throw new Error("Invalid Limits submission receipt.");
-      if (!store.matchesAccount(receipt.accountKey)) {
+      if (receipt.plan === undefined && !store.matchesAccount(receipt.accountKey)) {
+        store.markGap();
         this.#error = `The ChatGPT account does not match the checked account. This message was not counted. ${HISTORY_WARNING}`;
         return false;
       }
       return store.record(receipt);
     } catch (cause) {
+      try { this.#getStore().markGap(); } catch { /* Preserve the original persistence failure. */ }
       this.#error = `Could not record launcher usage. ${describe(cause)} ${HISTORY_WARNING}`;
       return false;
     }

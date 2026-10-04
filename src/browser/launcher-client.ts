@@ -358,13 +358,21 @@ export const LAUNCHER_CAPABILITY_INSPECTION_TIMEOUT_MS = 120_000;
 
 export type LauncherTurnActivity =
   | {
+      phase: "conversation";
+      traceId: string;
+      helperPid: number;
+      conversationId: string;
+      named?: boolean;
+    }
+  | {
       phase: "usage";
       traceId: string;
       helperPid: number;
       receipt?: {
         id: string;
         accountKey: string;
-        model: "gpt-6-pro" | "gpt-5.6-pro" | "pro-unknown" | "other";
+        model: "gpt-6-pro" | "gpt-5.6-pro" | "gpt-5.6-sol" | "gpt-5.6-luna" | "pro-unknown" | "other";
+        plan?: "pro_100" | "pro_200" | "unsupported";
         at: number;
       };
       trackingError?: "account-unavailable";
@@ -376,6 +384,7 @@ export type LauncherTurnActivity =
       conversationKey?: string;
       connectorIdentity?: string;
       requireRetainedConversation?: boolean;
+      savedChat?: import("../../launcher/shared/saved-chat.cjs").SavedChatTask;
     }
   | {
       phase: "heartbeat";
@@ -638,6 +647,8 @@ export async function notifyLauncherTurn(
   cancelledByUser?: boolean;
   authenticationRequired?: boolean;
   trackUsage?: boolean;
+  expectedConversationId?: string;
+  conversationTitle?: string;
 }> {
   const descriptor = readLauncherBrowserHostDescriptor(descriptorPath);
   const controller = new AbortController();
@@ -678,11 +689,16 @@ export async function notifyLauncherTurn(
       if (typeof body.connectorBound !== "boolean") {
         throw new Error("Launcher browser control channel returned an invalid connector state");
       }
+      if (body.expectedConversationId !== undefined
+        && (typeof body.expectedConversationId !== "string" || !/^[a-zA-Z0-9-]{1,128}$/.test(body.expectedConversationId))) {
+        throw new Error("Launcher returned an invalid saved conversation identity");
+      }
       return {
         surfaceId: body.surfaceId,
         reused: body.reused,
         connectorBound: body.connectorBound,
         trackUsage: body.trackUsage === true,
+        ...(typeof body.expectedConversationId === "string" ? { expectedConversationId: body.expectedConversationId } : {}),
       };
     }
     if (activity.phase === "end") {
@@ -696,6 +712,14 @@ export async function notifyLauncherTurn(
         cancelledByUser: body.cancelledByUser,
         ...(body.authenticationRequired === true ? { authenticationRequired: true } : {}),
       };
+    }
+    if (activity.phase === "conversation") {
+      if (body.conversationTitle !== undefined
+        && (typeof body.conversationTitle !== "string" || body.conversationTitle.length > 220
+          || /[\u0000-\u001f\u007f]/.test(body.conversationTitle))) {
+        throw new Error("Launcher returned an invalid conversation title");
+      }
+      return typeof body.conversationTitle === "string" ? { conversationTitle: body.conversationTitle } : {};
     }
     return {};
   } catch (error) {

@@ -67,13 +67,13 @@ await context.addInitScript(()=>{
   return {cancelled:false,state:patch({coreSetupComplete:false,codexCatalogVerified:false,mcpSetupComplete:false})};
  },
  exportLogs:async()=>{window.__fixture.calls.push(['exportLogs']);if(window.__fixture.failExport)throw new Error('Fixture export error');return window.__fixture.cancelExport?null:'fixture-diagnostics.jsonl'},
- getLimits:async()=>({enabled:false,trackingSince:null,checkedAt:null,plan:null,totalMessages:0,unknownProMessages:0,incomplete:false,windows:[]}),
+ getLimits:async()=>({enabled:true,trackingSince:null,checkedAt:null,plan:null,totalMessages:0,unknownProMessages:0,incomplete:false,gapAt:null,models:["gpt-6-pro","gpt-5.6-pro","gpt-5.6-sol"].map(model=>({model,last24Hours:0,last7Days:0})),windows:[]}),
  setLanguage:async language=>patch({language}),setPreference:async(key,value)=>patch({[key]:value}),setContextFiles:async value=>patch({experimentalContextFiles:value,...(!value?{experimentalContextTripleBudget:false}:{})}),setContextTripleBudget:async value=>patch({experimentalContextTripleBudget:value}),setSkillAttachments:async value=>patch({experimentalSkillAttachments:value}),setFreshConversationPerTurn:async value=>patch({experimentalFreshConversationPerTurn:value}),setUseSavedChats:async value=>patch({useSavedChats:value}),
  setupCore:async()=>{window.__fixture.calls.push(['setupCore']);success();status.configured=true;status.mode='native-tools';status.interactionMode='automatic';status.capabilities.browserInteractionMode='automatic';patch({coreSetupComplete:true,mcpSetupComplete:false,codexCatalogVerified:false,browserInteractionMode:'automatic'});return {ok:true,stdout:'',restartRequired:true}},
  smokeTest:async()=>{window.__fixture.calls.push(['smokeTest']);snapshot.smokePassed=true;return {ok:true}},
  setupMcp:async input=>{window.__fixture.calls.push(['setupMcp',input]);success();status.mode='mcp-bridge';status.interactionMode=input.interactionMode;status.capabilities.browserInteractionMode=input.interactionMode;status.credentials[input.interactionMode]=true;patch({coreSetupComplete:true,mcpRuntimeInstalled:true,mcpSetupComplete:false,codexCatalogVerified:false,browserInteractionMode:input.interactionMode});return {ok:true}},
  setToolMode:async(mode,interaction)=>{window.__fixture.calls.push(['setToolMode',mode,interaction]);success();status.mode=mode;status.interactionMode=interaction;status.capabilities.browserInteractionMode=interaction;return {state:patch({coreSetupComplete:true,mcpRuntimeInstalled:mode==='mcp-bridge',mcpSetupComplete:false,codexCatalogVerified:false,browserInteractionMode:interaction}),credentialsRequired:false}},
- doctor:async()=>({ok:false,checks:[{id:'runtime',status:'error',message:'Fixture failure'},{id:'route',status:'warning',message:'Fixture route warning'}]}),
+ doctor:async()=>window.__fixture.doctorReport??({ok:false,checks:[{id:'runtime',status:'error',message:'Fixture failure',detail:'Original fixture diagnostic detail'},{id:'route',status:'warning',message:'Fixture route warning'}]}),
  verifyMcp:async()=>{window.__fixture.calls.push(['verifyMcp',state.browserInteractionMode]);patch({mcpSetupComplete:true});return {ok:true,checks:[{id:state.browserInteractionMode==='manual'?'local-runtime':'connector',status:'ok',message:state.browserInteractionMode==='manual'?'Local fixture ready':'Connected'}]}},
  completeOnboarding:async(language,interaction)=>{
   window.__fixture.calls.push(['completeOnboarding',language,interaction]);
@@ -280,8 +280,56 @@ await page.getByRole('radio',{name:/Native Tools/}).click();
 await page.getByRole('button',{name:'Apply configuration',exact:true}).click();
 await page.waitForFunction(()=>window.__fixture.status.mode==='native-tools'&&window.__fixture.state.browserInteractionMode==='automatic');
 await page.evaluate(()=>window.__fixture.patch({codexCatalogVerified:true}));
-await nav('Usage & Diagnostics');check('Official quota stays unknown',await page.getByText('Unknown',{exact:true}).count()===1);await page.getByRole('tab',{name:'Health checks',exact:true}).click();await page.locator('.content button.primary').click();await page.getByText('Fixture failure',{exact:true}).waitFor();check('All failed doctor checks remain visible',await page.getByText('Fixture route warning',{exact:true}).count()===1);
+await nav('Usage & Diagnostics');
+check('Usage is automatic with no enable or account-check button',await page.getByText('Always on automatically. The account is identified on the first send.',{exact:true}).count()===1&&await page.getByRole('button',{name:'Check usage tracking',exact:true}).count()===0);
+check('Empty local counts start at zero and show each model',await page.locator('.metric').innerText()==='0 turns'&&await page.locator('.panel .usage-table tbody tr').count()===3);
+await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_200');
+check('Pro 200 shows the post-October-29 reference with source and daily uncertainty',await page.locator('.official-limits .usage-table tbody').innerText()==='GPT-6 Pro\tWeekly\t100 (notice transcript)\nGPT-5.6 Sol Pro\tDaily\t170 (prior reference)\nBoth Pro models combined\tDaily\t200 (prior reference)\nGPT-5.6 Sol\t—\tNo fixed count published'&&(await page.locator('.official-limits').innerText()).includes('Reference from 2026-10-30')&&(await page.locator('.official-limits').innerText()).includes('applicability after 2026-10-30 is unconfirmed'));
+await page.getByRole('button',{name:'Subscriber notice (transcript)',exact:true}).click();
+check('New weekly count links to the notice transcript rather than a page omitting it',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='openExternal'&&call[1]==='https://community.openai.com/t/pro-200-is-fine-please-don-t-improve-it/1402079')));
+await page.getByRole('button',{name:'Published counts',exact:true}).click();
+check('Published counts link to the official page containing the numeric table',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='openExternal'&&call[1]==='https://help.openai.com/bs-ba/articles/20001354')));
+await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_100');
+check('Pro 100 keeps one shared weekly reference without changing local counts',await page.locator('.official-limits .usage-table tbody').innerText()==='Both Pro models combined\tWeekly\t50\nGPT-5.6 Sol\t—\tNo fixed count published'&&await page.locator('.metric').innerText()==='0 turns');
+await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_500');
+check('Pro 500 does not inherit another tier’s published numbers',await page.locator('.official-limits').getByText('No fixed count published',{exact:true}).count()===3);
+await page.getByRole('combobox',{name:'Plan reference'}).selectOption('business_premium');
+check('Business published weekly shared allowance is shown',await page.locator('.official-limits').getByText('50',{exact:true}).count()===1&&await page.locator('.official-limits').getByText('Weekly',{exact:true}).count()===1);
+await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_200');
+await page.screenshot({path:out+'/usage-en.png',fullPage:true});
+check('Official periods remain explicitly unconfirmed',await page.getByText('Official usage period unconfirmed',{exact:true}).count()===1);
+await page.locator('.language-toggle').click();await page.getByRole('region',{name:'用量与诊断',exact:true}).waitFor();
+check('Chinese usage shows model counters and period uncertainty',await page.getByText('官方周期未确认',{exact:true}).count()===1&&await page.getByRole('columnheader',{name:'最近 24 小时',exact:true}).count()===1);
+check('Chinese policy gives the future reference date and distinguishes unconfirmed daily values',await page.getByText('2026-10-30 起参考',{exact:true}).count()===1&&(await page.locator('.official-limits').innerText()).includes('100 （通知转录）')&&(await page.locator('.official-limits').innerText()).includes('2026-10-30 后是否继续适用待确认'));
+await page.waitForTimeout(250);await page.screenshot({path:out+'/usage-zh.png',fullPage:true});
+await page.setViewportSize({width:390,height:1050});await page.waitForTimeout(250);
+check('Chinese usage fits narrow windows',await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
+await page.screenshot({path:out+'/usage-zh-mobile.png',fullPage:true});
+await page.locator('.official-limits').scrollIntoViewIfNeeded();
+await page.screenshot({path:out+'/usage-zh-mobile-policy.png',fullPage:true});
+await page.setViewportSize({width:1440,height:1050});await page.locator('.language-toggle').click();await page.getByRole('region',{name:'Usage & Diagnostics',exact:true}).waitFor();
+await page.getByRole('tab',{name:'Health checks',exact:true}).click();await page.locator('.content button.primary').click();await page.locator('.doctor-check-content > p').filter({hasText:'Fixture failure'}).waitFor();check('All failed doctor checks remain visible',await page.locator('.doctor-check-content > p').filter({hasText:'Fixture route warning'}).isVisible());
 check('Doctor faults are red and warnings remain neutral',await page.locator('.doctor-check .status-error').count()===1&&await page.locator('.doctor-check .status-neutral').count()===1);
+check('Health rows use readable names and distinct failure and warning states',await page.getByRole('heading',{name:'Runtime environment',exact:true}).count()===1&&await page.getByRole('heading',{name:'Codex model route',exact:true}).count()===1&&await page.locator('.doctor-check-status').allTextContents().then(values=>values.join('|')==='Failed|Needs attention'));
+await page.locator('.doctor-check-details summary').first().click();
+check('Technical details retain the original identifier message and error evidence',await page.locator('.doctor-check-details').first().locator('code').allTextContents().then(values=>values.join('|')==='runtime|Fixture failure|Original fixture diagnostic detail'));
+await page.evaluate(()=>{window.__fixture.doctorReport={ok:false,checks:[{id:'dev-tunnel-credentials',status:'error',message:'This mode does not require an MCP tunnel'},{id:'future-check',status:'warning',message:'Unknown fixture diagnostic'}]}});
+await page.locator('.content button.primary').click();
+check('Not-required text never overrides a failed result and unknown checks remain visible',await page.locator('.doctor-check-status').allTextContents().then(values=>values.join('|')==='Failed|Needs attention')&&await page.getByRole('heading',{name:'Additional check',exact:true}).count()===1&&await page.locator('.doctor-check-content > p').filter({hasText:'Unknown fixture diagnostic'}).isVisible());
+await page.evaluate(()=>{window.__fixture.doctorReport={ok:true,mode:'native-tools',checks:[{id:'config',status:'ok',message:'Configuration is valid (fixture/config.json)'},{id:'browser-host',status:'ok',message:'Embedded launcher browser is authenticated and reachable (pid 123)'},{id:'codex',status:'ok',message:'Codex native model route is installed'},{id:'proxy',status:'ok',message:'Responses proxy is healthy on 127.0.0.1:12345'}]}});
+await page.locator('.content button.primary').click();
+check('Production report names application configuration without adding a DEV check',await page.getByRole('heading',{name:'Application configuration',exact:true}).count()===1&&await page.getByRole('heading',{name:'Development configuration',exact:true}).count()===0&&await page.locator('.doctor-check').count()===4);
+await page.evaluate(()=>{window.__fixture.doctorReport={ok:true,mode:'native-tools',checks:[{id:'dev-profile',status:'ok',message:'Isolated DEV harness configuration is valid'},{id:'dev-tunnel-credentials',status:'ok',message:'This mode does not require an MCP tunnel'},{id:'responses-listener',status:'ok',message:'Isolated DEV Responses runtime is ready'}]}});
+await page.locator('.content button.primary').click();
+check('DEV report distinguishes a component that is not required from passed checks',await page.locator('.doctor-check-status').allTextContents().then(values=>values.join('|')==='Passed|Not required|Passed')&&await page.locator('.doctor-check .status-success').count()===2);
+await page.screenshot({path:out+'/health-en.png',fullPage:true});
+await page.locator('.language-toggle').click();await page.getByRole('region',{name:'用量与诊断',exact:true}).waitFor();
+check('Chinese health checks have semantic names explanations and states',await page.getByRole('heading',{name:'开发环境配置',exact:true}).count()===1&&await page.getByRole('heading',{name:'本地连接服务',exact:true}).count()===1&&await page.getByText('当前模式不需要 MCP 隧道',{exact:true}).isVisible()&&await page.locator('.doctor-check-status').allTextContents().then(values=>values.join('|')==='通过|无需使用|通过'));
+await page.screenshot({path:out+'/health-zh.png',fullPage:true});
+await page.setViewportSize({width:390,height:1050});await page.waitForTimeout(250);
+check('Health names and states fit narrow windows',await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth)&&await page.locator('.doctor-check-status').evaluateAll(nodes=>nodes.every(el=>el.getBoundingClientRect().right<=window.innerWidth)));
+await page.screenshot({path:out+'/health-zh-mobile.png',fullPage:true});
+await page.setViewportSize({width:1440,height:1050});await page.locator('.language-toggle').click();await page.getByRole('region',{name:'Usage & Diagnostics',exact:true}).waitFor();
 await page.getByRole('tab',{name:'Logs',exact:true}).click();
 check('Logs restore compact event, summary and time rows',await page.locator('.activity-row').count()===2&&await page.locator('.activity-row time').count()===2);
 check('Latest log appears first with readable summary',await page.locator('.activity-row').first().locator('strong').textContent()==='browser · connection failed'&&await page.locator('.activity-row').first().locator('span').textContent()==='message: Fixture connection error · retry: false');

@@ -541,6 +541,22 @@
 .workspace-ui .doctor-check {
   align-items: flex-start;
 }
+.workspace-ui .doctor-check-content {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.workspace-ui .doctor-check-status {
+  flex: none;
+  white-space: nowrap;
+}
+.workspace-ui .doctor-check-details {
+  margin-top: 12px;
+}
+.workspace-ui .doctor-check-details summary {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+}
 .workspace-ui .activity-dot {
   width: 5px;
   height: 5px;
@@ -1185,4 +1201,15 @@
   margin: 16px 0 0;
   color: var(--color-text-secondary);
   line-height: 1.8;
+}
+.usage-table-scroll { overflow-x: auto; }
+.usage-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.usage-table th, .usage-table td { text-align: left; padding: 12px; border-bottom: 1px solid var(--color-border); }
+.usage-table th { font-weight: 500; }
+.usage-table td:not(:first-child) { font-variant-numeric: tabular-nums; }
+.official-plan { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 16px 0; font-size: 12px; }
+.official-plan select {
+  max-width: 100%; padding: 8px 12px; font: inherit;
+  color: var(--color-text-primary); background: var(--color-background-control);
+  border: 1px solid var(--color-border-heavy); border-radius: var(--radius-sm);
 }

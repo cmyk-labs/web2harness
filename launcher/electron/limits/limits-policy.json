@@ -1,7 +1,14 @@
 {
   "sourceUrl": "https://help.openai.com/en/articles/20001354-gpt-56-and-gpt-6-pro-in-chatgpt",
-  "checkedOn": "2026-09-19",
-  "pro_200": { "gpt6Weekly": 200, "solDaily": 170, "combinedDaily": 200 },
+  "checkedOn": "2026-10-05",
+  "pro_200": { "gpt6Weekly": 100, "solDaily": 170, "combinedDaily": 200, "effectiveFrom": "2026-10-30" },
   "pro_100": { "combinedWeekly": 50 },
-  "business": { "standardMonthly": 15, "premiumWeekly": 50 }
+  "business": { "standardMonthly": 15, "premiumWeekly": 50 },
+  "sources": {
+    "models": "https://help.openai.com/en/articles/20001354-gpt-56-and-gpt-6-pro-in-chatgpt",
+    "publishedModels": "https://help.openai.com/bs-ba/articles/20001354",
+    "pro200Notice": "https://community.openai.com/t/pro-200-is-fine-please-don-t-improve-it/1402079",
+    "pro": "https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers",
+    "business": "https://help.openai.com/en/articles/12003714-chatgpt-business-models-and-limits"
+  }
 }

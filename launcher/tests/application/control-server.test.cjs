@@ -72,7 +72,6 @@ test("Limits receipts require the active automatic owner and survive reconnect w
   const accountKey = "a".repeat(64);
   let mode = "automatic";
   const limits = new LimitsController(file, { getInteractionMode: () => mode });
-  await limits.setup(async () => ({ accountKey, plan: "pro_200" }));
   const host = {
     browserInteractionMode: () => mode,
     turnTabs: new Map([["tab", { traceId: "limits-turn", helperPid: process.pid, status: "running" }]]),
@@ -90,7 +89,7 @@ test("Limits receipts require the active automatic owner and survive reconnect w
     body: JSON.stringify(body),
   });
   const owner = { traceId: "limits-turn", helperPid: process.pid };
-  const body = { ...owner, receipt: { id: "one-accepted-send", accountKey, model: "gpt-6-pro", at: Date.now() } };
+  const body = { ...owner, receipt: { id: "one-accepted-send", accountKey, plan: "pro_200", model: "gpt-6-pro", at: Date.now() } };
   try {
     assert.equal((await (await send(owner, token, "start")).json()).trackUsage, true);
     assert.equal((await send(body, "wrong-token")).status, 401);
@@ -241,6 +240,7 @@ test("browser control server authenticates and owns turn visibility", async () =
       }),
     });
     assert.equal(end.status, 200);
+    assert.equal(calls[0].pop(), undefined); // optional saved-chat metadata
     const acquisitionSignal = calls[0].pop();
     assert.ok(acquisitionSignal instanceof AbortSignal);
     assert.equal(acquisitionSignal.aborted, false);
