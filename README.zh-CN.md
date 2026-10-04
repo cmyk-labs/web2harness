@@ -5,9 +5,9 @@
 **Web2Harness** — 将 ChatGPT 网页版模型接入 Codex，沿用原生工具与现有工作流，同时充分利用你 ChatGPT 账户中可用的 Web 模型额度，完成更多实际任务。
 
 <p align="center">
-  <a href="#installation"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 待发布"></a>&nbsp;
-  <a href="#installation"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 待发布"></a>&nbsp;
-  <a href="#installation"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 待发布"></a>
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.0.0/web2harness-1.0.0-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 1.0.0 预发布版"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.0.0/web2harness-1.0.0-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 1.0.0 预发布版"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.0.0/web2harness-1.0.0-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 1.0.0 预发布版"></a>
 </p>
 
 <p align="center">
@@ -78,7 +78,7 @@
 
 ## 快速开始
 
-准备本机可用的 Codex，以及能够登录的 ChatGPT 账号。顶部按钮指向本节安装说明；本地已构建安装包不代表已经公开发布。安装方式与平台要求见[使用手册](docs/user-guide.zh-CN.md)，已有源码目录也可按下方[源码运行](#development)启动。
+准备本机可用的 Codex，以及能够登录的 ChatGPT 账号。顶部按钮分别下载 Windows x64、macOS Apple silicon 和 Linux x64 安装包。macOS Intel、Linux arm64 及校验和见 [1.0.0 发布页面](https://github.com/cmyk-labs/web2harness/releases/tag/v1.0.0)。当前为预发布版，安装前请阅读其中的验收说明。安装方式与平台要求见[使用手册](docs/user-guide.zh-CN.md)，已有源码目录也可按下方[源码运行](#development)启动。
 
 1. **启动 Web2Harness**。使用与你的平台、架构匹配的安装包，或从源码启动。
 2. **完成浏览器登录**。打开「连接与模型」，在应用浏览器中登录 ChatGPT，运行「检查连接」。
