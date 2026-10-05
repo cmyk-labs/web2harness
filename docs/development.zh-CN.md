@@ -307,7 +307,7 @@ bun run src/cli.ts dev list
 | `/status` | 查看模拟会话状态。 |
 | `/fill 30000` | 在本地增加惰性上下文。 |
 | `/send-fill 12000` | 通过真实浏览器提交生成上下文。 |
-| `/compact` | 验证浏览器压缩；Luna 的滚动检查点不支持此独立命令。 |
+| `/compact` | 验证原生 Codex 浏览器压缩，包含 Luna。 |
 | `/model high` | 更改模拟器模型。 |
 | `/reset yes` | 重置命名模拟会话。 |
 | `/help`、`/exit` | 显示命令或退出。 |
@@ -389,6 +389,8 @@ DEV setup 支持 `--context-files` / `--no-context-files` 和 `--context-triple-
 架构图应标识参与进程/服务、传输方式及流向。时序图说明动作归属和工具结果返回位置；仅在符号或线型需要解释时增加图例。明确标注环境边界，防止混淆 DEV 和常规运行。技术内容由[架构手册](architecture.zh-CN.md)维护。
 
 `docs/` 直接存放使用、排障、参考、架构、开发和发布六份主手册。一项规则在负责该主题的手册中完整说明，其他位置使用链接。README 直接链接本手册的贡献要求和发布手册的漏洞报告流程；技术信任边界归架构手册，AGENTS 规定自动化工作边界。不另建重复正文或仅供跳转的独立文档。`dev-notes/` 保存带日期的开发证据，不替代当前操作说明。
+
+配套的[能力验收用例](acceptance-tests.zh-CN.md)同样直接放在 `docs/`，集中维护可复用提示词、通过条件和结果模板；发布要求链接该文档，不复制用例正文。目标能力变化时同步扩展两个语言版本，带日期的执行结果仍保存在候选版本证据中。
 
 资源按用途归入根目录 `assets/brand/`、`assets/readme/`、`assets/demos/` 和 `assets/diagrams/`，图示 JSON 与 SVG 一起维护。生成工具放在 `scripts/`，平台安装与启动脚本放在 `launcher/packaging/`。不要在各模块复制一份素材。桌面渲染器通过构建引用需要的图标和视频；Electron 打包配置明确映射应用图标、托盘图标与 Linux 启动脚本，保持包内 `assets/` 路径，不携带 README 演示、图示源文件或文档素材。
 

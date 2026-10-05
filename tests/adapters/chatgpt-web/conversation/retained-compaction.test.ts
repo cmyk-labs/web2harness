@@ -1,3 +1,4 @@
+import { toolIdentityKey } from "../../../../src/types";
 import { expect, test } from "bun:test";
 import { rejects } from "node:assert/strict";
 import { mock } from "node:test";
@@ -216,7 +217,7 @@ test("active compaction delivers the current result and converts every later MCP
     const current = callTurnBroker<BrokerToolResult>(broker.socketPath, {
       method: "invoke",
       bindingId: claimed.bindingId,
-      wireName: "exec_command",
+      wireName: toolIdentityKey(undefined, "exec_command"),
       arguments: { cmd: "pwd" },
     });
     const [request] = await broker.nextToolBatch(token);
@@ -234,7 +235,7 @@ test("active compaction delivers the current result and converts every later MCP
     expect(await callTurnBroker(broker.socketPath, {
       method: "invoke",
       bindingId: claimed.bindingId,
-      wireName: "exec_command",
+      wireName: toolIdentityKey(undefined, "exec_command"),
       arguments: { cmd: "git status --short" },
     })).toMatchObject({
       content: [{ type: "text", text: "compact now" }],
@@ -268,7 +269,7 @@ test("active compaction drains an MCP call already queued without an outer Codex
     const invocation = callTurnBroker<BrokerToolResult>(broker.socketPath, {
       method: "invoke",
       bindingId: claimed.bindingId,
-      wireName: "exec_command",
+      wireName: toolIdentityKey(undefined, "exec_command"),
       arguments: { cmd: "must-not-run" },
     });
     await Bun.sleep(25);
@@ -636,8 +637,8 @@ test("active compaction settles canonical tool results before the separate retai
     cancel() {},
   });
   source.setOutstanding([
-    { callId: "call_one", wireName: "exec_command", freeform: false },
-    { callId: "call_two", wireName: "exec_command", freeform: false },
+    { callId: "call_one", wireName: toolIdentityKey(undefined, "exec_command"), freeform: false },
+    { callId: "call_two", wireName: toolIdentityKey(undefined, "exec_command"), freeform: false },
   ]);
   const parsed = request(true);
   parsed.context.messages.push(
@@ -683,7 +684,7 @@ test("active compaction distinguishes a later intercepted tool from an ordinary 
   });
   source.setOutstanding([{
     callId: "call_current",
-    wireName: "exec_command",
+    wireName: toolIdentityKey(undefined, "exec_command"),
     freeform: false,
   }]);
   const parsed = request(true);
@@ -774,7 +775,7 @@ test("Zero Risk active compaction returns through its explicit completion contro
     text: new ChatGptTextFeed(),
     cancel() {},
   });
-  source.setOutstanding([{ callId: "call_one", wireName: "exec_command", freeform: false }]);
+  source.setOutstanding([{ callId: "call_one", wireName: toolIdentityKey(undefined, "exec_command"), freeform: false }]);
   const parsed = request(true);
   parsed.context.messages.push({
     role: "toolResult",
@@ -813,7 +814,7 @@ test("active compaction interrupts a queued MCP call that Codex never started wa
     const queuedInvocation = callTurnBroker<BrokerToolResult>(broker.socketPath, {
       method: "invoke",
       bindingId: claimed.bindingId,
-      wireName: "exec_command",
+      wireName: toolIdentityKey(undefined, "exec_command"),
       arguments: { cmd: "must-not-run" },
     });
     const browser = queuedInvocation.then(result => {

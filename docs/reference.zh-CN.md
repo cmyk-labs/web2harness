@@ -249,7 +249,7 @@ Luna 使用上方目录表中的 Ordinary／Think 映射，不使用 Sol 的五�
 | GPT-5.6 Sol Pro 或 GPT-6 Pro | 112,193 | 95,000 | 85% |
 | 默认手动档位 | 123,000 | 96,000 | 78% |
 | 使用 Pro 预算的手动档位 | 336,579 | 285,000 | 85% |
-| Luna Ordinary／Think | 1,050,000 | 公布值 1,050,000；见下方 Luna 行为 | 公布值 100% |
+| Luna Ordinary／Think | 28,000 | 22,000 | 79% |
 
 有效百分比计算为 `round(autoCompactTokenLimit / contextWindow × 100)`。Codex 的上下文指示器使用这些元数据，因此界面显示的工作预算不一定等于原始窗口值。
 
@@ -285,9 +285,9 @@ Pro 账户窗口包含 `8192` token 的平台预留，以及为适配器严格�
 
 ### Luna 连续性与浏览器边界
 
-Luna 公布 `1050000` 窗口和相同的自动压缩阈值。实现注明 Codex 内部会将该阈值限制到窗口的 90%；Web2Harness 通过完成历史的私有滚动检查点控制普通浏览器回合规模。检查点最多为 `4000` token，不出现在可见助手文本中。
+Luna 公布 `28000` 上下文窗口与 `22000` 自动压缩阈值，为实测浏览器预算保留余量。Ordinary 与 Think 均使用共享的原生 Codex 压缩路径，不再用私有滚动检查点替换原始历史。
 
-浏览器发送前检查对 Luna 的 Ordinary 和 Think 模式施加独立的 `28000` token 总估算请求预算，包含预留。因此，大目录窗口不代表单次 Luna 浏览器请求可以携带一百万 token。Luna 拒绝专门的 Codex 压缩请求；当前回合本身超过浏览器预算时，必须减少该回合输入，已完成历史被检查点替代后，`/compact` 无法继续缩小当前回合。
+浏览器发送前仍检查包含预留的 `28000` token 总估算预算。超限明确报错，不会静默裁剪。Codex 可以压缩已完成历史，但单个过大的输入项仍可能需要用户缩小。Context as File 与三倍预算不会扩大 Luna 的预算。
 
 <a id="native-context-preservation"></a>
 
@@ -432,7 +432,7 @@ bun run dev:codex -m chatgpt-web/gpt-6-pro
 | 环境与桌面偏好 | [启动器环境](../launcher/electron/profile.cjs)、[启动器状态](../launcher/electron/state.cjs)、[DEV 环境](../src/dev/profile.ts)、[DEV 命令](../src/dev/cli.ts)。 |
 | 运行控制 | [停滞检测](../src/stall-timeout.ts)、[隧道存储](../src/runtime/tunnel.ts)。 |
 | 模型身份与可用性 | [路由注册表](../src/models/chatgpt-web-model-registry.ts)、[账户感知解析](../src/models/chatgpt-web-models.ts)、[模型类型](../src/models/chatgpt-web-model-types.ts)。 |
-| 上下文与压缩预算 | [上下文与传输策略](../src/models/chatgpt-web-context.ts)、[输入估算与 Luna 边界](../src/adapters/chatgpt-web/prompt/input-tokens.ts)、[滚动检查点](../src/adapters/chatgpt-web/conversation/rolling-checkpoint.ts)。 |
+| 上下文与压缩预算 | [上下文与传输策略](../src/models/chatgpt-web-context.ts)、[输入估算与 Luna 边界](../src/adapters/chatgpt-web/prompt/input-tokens.ts)、[原始上下文保留](../src/adapters/chatgpt-web/prompt/source-context.ts)。 |
 | 目录与选择校验 | [模型目录扩展](../src/models/model-catalog.ts)、[原生上下文覆盖读取](../src/codex/integration-document.ts)、[浏览器家族验证](../src/adapters/chatgpt-web/browser/model-selection.ts)。 |
 
 [返回项目文档](../README.zh-CN.md#documentation) · [使用手册](user-guide.zh-CN.md) · [故障排查](troubleshooting.zh-CN.md)

@@ -23,8 +23,8 @@ test("verbosity and JSON-schema controls survive parser-to-prompt transport", ()
   expect(parsed.options.verbosity).toBe("high");
   expect(parsed.options.outputFormat).toEqual({ type: "json_schema", name: "result", strict: true, schema });
   const compiled = compileChatGptWebPrompt(parsed, capabilities, turnToken);
-  expect(compiled.text).toContain("Codex requested high response verbosity.");
-  expect(compiled.text).toContain('strict JSON-schema final answer named "result"');
+  expect(compiled.text).toContain('"verbosity":"high"');
+  expect(compiled.text).toContain('"type":"json_schema","name":"result","strict":true');
   expect(compiled.text).toContain(JSON.stringify(schema));
 });
 
@@ -106,7 +106,7 @@ async function runStrictAdapterAnswer(answer: string): Promise<AdapterEvent[]> {
   const events: AdapterEvent[] = [];
   (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
     const prepared = await turn.prepare();
-    expect(prepared.text).toContain('strict JSON-schema final answer named "adapter_payload"');
+    expect(prepared.text).toContain('"type":"json_schema","name":"adapter_payload","strict":true');
     const cut = Math.max(1, Math.floor(answer.length / 2));
     turn.onTextDelta(answer.slice(0, cut));
     turn.onTextDelta(answer.slice(cut));

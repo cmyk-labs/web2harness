@@ -13,7 +13,7 @@ import { chatGptReadOnlyContextWarning, compileChatGptWebPrompt } from "../../..
 import { CODEX_TOOL_CALLS_FENCE } from "../../../../src/adapters/chatgpt-web/tools/native-tool-call-block";
 import { ChatGptBrowserWorker, type BrowserTurn } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { createChatGptWebAdapter } from "../../../../src/adapters/chatgpt-web/adapter";
-import type { AdapterEvent, CodexParsedRequest, CodexProviderConfig, CodexTool } from "../../../../src/types";
+import { toolIdentityKey, type AdapterEvent, type CodexParsedRequest, type CodexProviderConfig, type CodexTool } from "../../../../src/types";
 
 const tempRoot = join(tmpdir(), `web2harness-native-tools-${process.pid}-${Date.now()}`);
 mkdirSync(tempRoot, { recursive: true });
@@ -165,22 +165,22 @@ describe("native-tools model mode and prompt contract", () => {
     const request = parsedRequest(tools);
     const compiled = compileChatGptWebPrompt(request, nativeCapabilities);
     expect(compiled.text).toContain(CODEX_TOOL_CALLS_FENCE);
-    expect(compiled.text).toContain('"tools" catalog');
-    expect(compiled.text).toContain("mcp__openaiDeveloperDocs__search_openai_docs");
+    expect(compiled.text).toContain("original namespace trees");
+    expect(compiled.text).toContain('"namespace":"mcp__openaiDeveloperDocs"');
     expect(compiled.text).not.toContain("no Codex Native bridge");
     expect(chatGptReadOnlyContextWarning(request, nativeCapabilities)).toBeUndefined();
 
     const envelope = JSON.parse(compiled.text.split("<codex_context_json>")[1]!.split("</codex_context_json>")[0]!);
-    expect(envelope.version).toBe(4);
+    expect(envelope.version).toBe(5);
     expect(envelope.tools).toEqual([
-      { name: "exec_command", description: "Run command", parameters: tools[0]!.parameters },
-      { name: "apply_patch", description: "Patch files", parameters: tools[1]!.parameters, input_type: "custom" },
-      { name: "mcp__openaiDeveloperDocs__search_openai_docs", description: "Search docs", parameters: tools[2]!.parameters },
+      { type: "function", name: "exec_command", description: "Run command", parameters: tools[0]!.parameters },
+      { type: "custom", name: "apply_patch", description: "Patch files" },
+      { type: "function", namespace: "mcp__openaiDeveloperDocs", name: "search_openai_docs", description: "Search docs", parameters: tools[2]!.parameters },
     ]);
 
     const browserOnly = compileChatGptWebPrompt(parsedRequest(tools), browserOnlyCapabilities);
     const browserEnvelope = JSON.parse(browserOnly.text.split("<codex_context_json>")[1]!.split("</codex_context_json>")[0]!);
-    expect(browserEnvelope.version).toBe(3);
+    expect(browserEnvelope.version).toBe(5);
     expect(browserEnvelope.tools).toBeUndefined();
   });
 
@@ -204,7 +204,7 @@ describe("native-tools model mode and prompt contract", () => {
     const compiled = compileChatGptWebPrompt(request, nativeCapabilities);
     expect(compiled.text).not.toContain(CODEX_TOOL_CALLS_FENCE);
     const envelope = JSON.parse(compiled.text.split("<codex_context_json>")[1]!.split("</codex_context_json>")[0]!);
-    expect(envelope.version).toBe(3);
+    expect(envelope.version).toBe(5);
     expect(envelope.tools).toBeUndefined();
   });
 });
@@ -285,7 +285,7 @@ describe("native-tools adapter emission", () => {
 
     const starts = events.filter(event => event.type === "tool_call_start");
     expect(starts).toHaveLength(1);
-    expect(starts[0]).toMatchObject({ name: "exec_command" });
+    expect(starts[0]).toMatchObject({ name: toolIdentityKey(undefined, "exec_command") });
     expect(typeof starts[0]!.id).toBe("string");
     expect((starts[0] as { id: string }).id).toMatch(/^callw_[0-9a-f]{32}$/);
 
@@ -365,7 +365,7 @@ describe("native-tools adapter emission", () => {
       await adapter.runTurn!(request, { headers: new Headers() }, collect(0));
 
       const callId = roundEvents[0]!.find(event => event.type === "tool_call_start");
-      expect(callId).toMatchObject({ type: "tool_call_start", name: "exec_command" });
+      expect(callId).toMatchObject({ type: "tool_call_start", name: toolIdentityKey(undefined, "exec_command") });
       const callIdValue = (callId as { id: string }).id;
       input.push(
         { type: "function_call", call_id: callIdValue, name: "exec_command", arguments: '{"cmd":"echo ok"}' },

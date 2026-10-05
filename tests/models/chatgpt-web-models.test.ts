@@ -230,14 +230,14 @@ describe("fixed ChatGPT Web model routes", () => {
     });
   });
 
-  test("publishes Luna's real model window without early native compaction", () => {
+  test("publishes Luna's browser budget with native compaction headroom", () => {
     expect(resolveChatGptWebContextLimits(CHATGPT_WEB_LUNA_BACKEND_MODEL, "low", {
       solAvailable: false,
       extraHighAvailable: false, proAvailable: false,
     })).toEqual({
-      contextWindow: 1_050_000,
-      effectiveContextWindowPercent: 100,
-      autoCompactTokenLimit: 1_050_000,
+      contextWindow: 28_000,
+      effectiveContextWindowPercent: 79,
+      autoCompactTokenLimit: 22_000,
     });
   });
 
@@ -257,9 +257,9 @@ describe("fixed ChatGPT Web model routes", () => {
       experimentalContextFiles: true,
       experimentalContextTripleBudget: true,
     })).toEqual({
-      contextWindow: 1_050_000,
-      effectiveContextWindowPercent: 100,
-      autoCompactTokenLimit: 1_050_000,
+      contextWindow: 28_000,
+      effectiveContextWindowPercent: 79,
+      autoCompactTokenLimit: 22_000,
     });
   });
 

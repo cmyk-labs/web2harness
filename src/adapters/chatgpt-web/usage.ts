@@ -8,8 +8,7 @@ import {
   compileChatGptWebPrompt,
   type CompileChatGptWebPromptOptions,
 } from "./prompt/compile";
-import { extractChatGptTurnIdentity } from "./prompt/environment";
-import { CHATGPT_WEB_LUNA_MODEL_ID, resolveChatGptWebModelMode, type ChatGptWebCapabilities } from "./model";
+import { resolveChatGptWebModelMode, type ChatGptWebCapabilities } from "./model";
 import type { BrokerToolRequest } from "./tools/turn-broker";
 
 // The real capability has the same length. Keeping it out of usage accounting would make
@@ -35,7 +34,6 @@ export function estimateChatGptWebInputTokens(
   const mode = manual
     ? { localTools: true }
     : resolveChatGptWebModelMode(parsed.modelId, parsed.options.reasoning, capabilities);
-  const identity = extractChatGptTurnIdentity(parsed);
   const compiled = compileChatGptWebPrompt(
     parsed,
     capabilities,
@@ -43,9 +41,7 @@ export function estimateChatGptWebInputTokens(
     {
       ...options,
       ...(manual ? { manualControl: true as const } : {}),
-      captureLunaCheckpoint: parsed.modelId === CHATGPT_WEB_LUNA_MODEL_ID
-        && !parsed._compactionRequest
-        && Boolean(identity.threadId && identity.turnId),
+      estimateOnly: true,
     },
   );
   return estimateCompiledChatGptWebInputTokens(compiled, parsed.modelId);

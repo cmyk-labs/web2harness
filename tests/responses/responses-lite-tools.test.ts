@@ -1,3 +1,4 @@
+import { toolIdentityKey } from "../../src/types";
 import { expect, test } from "bun:test";
 import { defaultConfig } from "../../src/config";
 import { parseRequest } from "../../src/responses/parser";
@@ -49,7 +50,7 @@ test("Responses Lite preserves custom tools and their format in every namespace"
   }));
   const waitTool = parsed.context.tools?.find(tool => tool.name === "wait");
   expect(waitTool).toEqual(expect.objectContaining({ name: "wait" }));
-  expect(waitTool).not.toHaveProperty("namespace");
+  expect(waitTool).toHaveProperty("namespace", "functions");
   expect(parsed.context.tools).toContainEqual(expect.objectContaining({
     name: "run_script", namespace: "mcp__python", freeform: true, format: freeformFormat,
   }));
@@ -83,7 +84,7 @@ test("Responses Lite native exec survives a complete server request as one custo
     name: "responses-lite-exec-regression",
     async runTurn(parsed, _incoming, emit) {
       expect(parsed.context.tools).toContainEqual(expect.objectContaining({ name: "exec", freeform: true }));
-      emit({ type: "tool_call_start", id: "call_exec", name: "exec" });
+      emit({ type: "tool_call_start", id: "call_exec", name: toolIdentityKey("functions", "exec") });
       emit({ type: "tool_call_delta", arguments: JSON.stringify({ input: "text('ok')" }) });
       emit({ type: "tool_call_end" });
       emit({ type: "done", endTurn: false });
@@ -111,7 +112,7 @@ for (const stream of [false, true]) test(`namespaced custom calls retain identit
       ],
     }),
   }), config, () => ({ name: "fixture", async runTurn(_parsed, _incoming, emit) {
-    for (const [name, args] of [["scripts__run", { input: "print('你好')\n" }], ["commands__run", { command: "status" }]] as const) {
+    for (const [name, args] of [[toolIdentityKey("scripts", "run"), { input: "print('你好')\n" }], [toolIdentityKey("commands", "run"), { command: "status" }]] as const) {
       emit({ type: "tool_call_start", id: `call_${name}`, name });
       emit({ type: "tool_call_delta", arguments: JSON.stringify(args) });
       emit({ type: "tool_call_end" });
@@ -127,14 +128,14 @@ for (const stream of [false, true]) test(`namespaced custom calls retain identit
     expect.objectContaining({ type: "function_call", name: "run", namespace: "commands", arguments: '{"command":"status"}' }),
   ]);
   if (stream) expect(events.filter(event => event.type === "response.output_item.added")[0].item.namespace).toBe("scripts");
-  const replay = parseRequest({ model: "chatgpt-web/luna", input: [...output, { type: "custom_tool_call_output", call_id: "call_scripts__run", output: "ok" }] });
+  const replay = parseRequest({ model: "chatgpt-web/luna", input: [...output, { type: "custom_tool_call_output", call_id: `call_${toolIdentityKey("scripts", "run")}`, output: "ok" }] });
   expect(replay.context.messages.at(-1)).toEqual(expect.objectContaining({ role: "toolResult", toolNamespace: "scripts", toolName: "run" }));
 });
 
-test("tool namespace collisions fail explicitly and named choices preserve namespaces", () => {
+test("literal underscore names remain distinct from namespaces and choices preserve identity", () => {
   expect(() => parseRequest({ model: "x", tools: [
     { type: "function", name: "scripts__run" },
     { type: "namespace", name: "scripts", tools: [{ type: "function", name: "run" }] },
-  ] })).toThrow("Ambiguous tool wire name");
-  expect(parseRequest({ model: "x", tool_choice: { type: "custom", name: "run", namespace: "scripts" } }).options.toolChoice).toEqual({ name: "scripts__run" });
+  ] })).not.toThrow();
+  expect(parseRequest({ model: "x", tool_choice: { type: "custom", name: "run", namespace: "scripts" } }).options.toolChoice).toEqual({ name: toolIdentityKey("scripts", "run") });
 });

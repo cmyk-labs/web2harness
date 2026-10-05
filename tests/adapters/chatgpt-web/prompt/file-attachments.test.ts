@@ -18,7 +18,7 @@ test("input files retain original bytes and identity across message/tool history
   ]);
   expect(prompt.files).toHaveLength(1);
   expect(prompt.text).not.toContain(file.file_data);
-  expect(prompt.text).toContain("file_attachment");
+  expect(prompt.text).toContain("input_file");
   const [uploaded] = chatGptPromptFilePayloads(prompt);
   expect(uploaded!.buffer.toString()).toBe("中文 file\nline 2");
   expect(uploaded!.name).toBe(prompt.files![0]!.name);
@@ -52,6 +52,6 @@ test("custom tool output images preserve byte content and ordering", () => {
   expect(prompt.images[0]!.imageUrl).toBe(imageUrl);
   expect(prompt.images[0]!.detail).toBe("original");
   expect(chatGptPromptFilePayloads(prompt)[0]!.buffer.toString()).toBe("hello");
-  expect(prompt.text.indexOf("before")).toBeLessThan(prompt.text.indexOf('"image_attachment"'));
-  expect(prompt.text.indexOf('"image_attachment"')).toBeLessThan(prompt.text.indexOf('"after"'));
+  expect(prompt.text.indexOf("before")).toBeLessThan(prompt.text.indexOf('"input_image"'));
+  expect(prompt.text.indexOf('"input_image"')).toBeLessThan(prompt.text.indexOf('"after"'));
 });

@@ -8,7 +8,7 @@ import {
 } from "../../../../src/adapters/chatgpt-web/tools/native-tool-call-block";
 import { buildResponseJSON } from "../../../../src/responses/json";
 import { chatGptHtmlToMarkdown } from "../../../../src/adapters/chatgpt-web/markdown";
-import type { AdapterEvent, CodexTool } from "../../../../src/types";
+import { toolIdentityKey, type AdapterEvent, type CodexTool } from "../../../../src/types";
 
 const execCommand: CodexTool = {
   name: "exec_command",
@@ -139,7 +139,7 @@ describe("parseNativeToolCallReply", () => {
     const parsed = parseNativeToolCallReply(reply, TOOLS);
     expect(parsed.issues).toHaveLength(0);
     expect(parsed.calls).toEqual([{
-      wireName: "exec_command",
+      wireName: toolIdentityKey(undefined, "exec_command"),
       name: "exec_command",
       freeform: false,
       toolSearch: false,
@@ -148,14 +148,14 @@ describe("parseNativeToolCallReply", () => {
     expect(parsed.visibleText).toBe("Checking the directory.\nI will continue after the result.");
   });
 
-  test("resolves flattened MCP names to the namespace tool", () => {
+  test("uses explicit original namespaces for MCP tools", () => {
     const parsed = parseNativeToolCallReply(
-      block('{"calls":[{"name":"mcp__context7__resolve","arguments":{"query":"bun test"}}]}'),
+      block('{"calls":[{"namespace":"mcp__context7","name":"resolve","arguments":{"query":"bun test"}}]}'),
       TOOLS,
     );
     expect(parsed.issues).toHaveLength(0);
     expect(parsed.calls[0]).toMatchObject({
-      wireName: "mcp__context7__resolve",
+      wireName: toolIdentityKey("mcp__context7", "resolve"),
       name: "resolve",
       namespace: "mcp__context7",
     });
@@ -227,7 +227,7 @@ describe("parseNativeToolCallReply", () => {
     );
     expect(parsed.calls).toHaveLength(0);
     expect(parsed.issues).toHaveLength(2);
-    expect(parsed.issues[0]!.problem).toContain("missing \"arguments\"");
+    expect(parsed.issues[0]!.problem).toContain("must be a JSON object");
     expect(parsed.issues[1]!.problem).toContain("must be a JSON object");
   });
 
@@ -237,7 +237,7 @@ describe("parseNativeToolCallReply", () => {
       TOOLS,
     );
     expect(parsed.calls).toHaveLength(0);
-    expect(parsed.issues[0]!.problem).toContain("\"reason\"");
+    expect(parsed.issues[0]!.problem).toContain("reason");
   });
 
   test("schema violations surface as issues", () => {
@@ -296,7 +296,7 @@ describe("browser-extracted native reply (P5 live shape)", () => {
     expect(parsed.issues).toHaveLength(0);
     expect(parsed.calls).toHaveLength(1);
     expect(parsed.calls[0]).toMatchObject({
-      wireName: "exec_command",
+      wireName: toolIdentityKey(undefined, "exec_command"),
       arguments: { cmd: "Get-Content notes.txt", workdir: "C:\\tmp", max_output_tokens: 4000 },
     });
     expect(parsed.visibleText).toBe("我会读取 notes.txt。");
@@ -322,13 +322,18 @@ describe("nativeToolCallContractLines", () => {
     const lines = nativeToolCallContractLines();
     const joined = lines.join("\n");
     expect(joined).toContain(CODEX_TOOL_CALLS_FENCE);
-    expect(joined).toContain("EXACT declared name");
-    expect(joined).toContain('{"input":"<raw tool body>"}');
-    expect(joined).toContain("no comments, no trailing commas");
+    expect(joined).toContain("exact declared namespace, name and kind");
+    expect(joined).toContain('"input":"<raw source>"');
+    expect(joined).toContain("JSON escaping is transport encoding only");
   });
 });
 
 describe("bridge round-trip of parsed native calls", () => {
+  const bridgeMaps = {
+    toolNsMap: new Map(TOOLS.map(tool => [toolIdentityKey(tool.namespace, tool.name), { namespace: tool.namespace ?? "", name: tool.name }])),
+    freeformToolNames: new Set([toolIdentityKey(undefined, "apply_patch")]),
+    toolSearchToolNames: new Set([toolIdentityKey(undefined, "tool_search")]),
+  };
   const toEvents = (calls: {
     id: string;
     wireName: string;
@@ -358,7 +363,7 @@ describe("bridge round-trip of parsed native calls", () => {
     const json = buildResponseJSON(
       toEvents(parsed.calls.map((call, i) => ({ id: `call_${i + 1}`, ...call }))),
       "probe-model",
-      {},
+      bridgeMaps,
     );
     const item = (json.output as Record<string, unknown>[]).find(candidate => candidate.type === "function_call");
     expect(item).toBeDefined();
@@ -368,13 +373,13 @@ describe("bridge round-trip of parsed native calls", () => {
 
   test("namespaced call keeps its namespace field", () => {
     const parsed = parseNativeToolCallReply(
-      block('{"calls":[{"name":"mcp__context7__resolve","arguments":{"query":"x"}}]}'),
+      block('{"calls":[{"namespace":"mcp__context7","name":"resolve","arguments":{"query":"x"}}]}'),
       TOOLS,
     );
     const json = buildResponseJSON(
       toEvents(parsed.calls.map((call, i) => ({ id: `call_${i + 1}`, ...call }))),
       "probe-model",
-      { toolNsMap: new Map([["mcp__context7__resolve", { namespace: "mcp__context7", name: "resolve" }]]) },
+      bridgeMaps,
     );
     const item = (json.output as Record<string, unknown>[]).find(candidate => candidate.type === "function_call");
     expect(item).toMatchObject({ namespace: "mcp__context7", name: "resolve" });
@@ -388,7 +393,7 @@ describe("bridge round-trip of parsed native calls", () => {
     const json = buildResponseJSON(
       toEvents(parsed.calls.map((call, i) => ({ id: `call_${i + 1}`, ...call }))),
       "probe-model",
-      { freeformToolNames: new Set(["apply_patch"]) },
+      bridgeMaps,
     );
     const item = (json.output as Record<string, unknown>[]).find(candidate => candidate.type === "custom_tool_call");
     expect(item).toMatchObject({ name: "apply_patch", input: "*** Begin Patch" });
@@ -402,7 +407,7 @@ describe("bridge round-trip of parsed native calls", () => {
     const json = buildResponseJSON(
       toEvents(parsed.calls.map((call, i) => ({ id: `call_${i + 1}`, ...call }))),
       "probe-model",
-      { toolSearchToolNames: new Set(["tool_search"]) },
+      bridgeMaps,
     );
     const item = (json.output as Record<string, unknown>[]).find(candidate => candidate.type === "tool_search_call");
     expect(item).toMatchObject({

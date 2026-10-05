@@ -10,13 +10,13 @@ const inputImageBlockSchema = z.object({
   file_id: z.string().optional(),
 }).refine(v => typeof v.image_url === "string" || typeof v.file_id === "string", {
   message: "input_image requires at least one of image_url or file_id",
-});
+}).loose();
 const inputFileBlockSchema = z.object({
   type: z.literal("input_file"),
   file_id: z.string().optional(),
   filename: z.string().optional(),
   file_data: z.string().optional(),
-});
+}).loose();
 const outputTextSchema = z.object({ type: z.literal("output_text"), text: z.string() });
 const outputRefusalSchema = z.object({ type: z.literal("refusal"), refusal: z.string() });
 const summaryTextSchema = z.object({ type: z.literal("summary_text"), text: z.string() });
@@ -40,18 +40,18 @@ const userMessageItemSchema = z.object({
   type: z.literal("message").optional(),
   role: z.union([z.literal("user"), z.literal("developer")]),
   content: z.union([z.string(), z.array(inputContentBlockSchema)]).optional(),
-});
+}).loose();
 const systemMessageItemSchema = z.object({
   type: z.literal("message").optional(),
   role: z.literal("system"),
   content: z.union([z.string(), z.array(inputContentBlockSchema)]).optional(),
-});
+}).loose();
 const assistantMessageItemSchema = z.object({
   type: z.literal("message").optional(),
   role: z.literal("assistant"),
   content: z.union([z.string(), z.array(outputContentBlockSchema)]).optional(),
   phase: z.enum(["commentary", "final_answer"]).optional(),
-});
+}).loose();
 const agentMessageItemSchema = z.object({
   type: z.literal("agent_message"),
   author: z.string().optional(),
@@ -71,7 +71,7 @@ const reasoningItemSchema = z.object({
   content: z.array(reasoningTextSchema).optional(),
   // Round-tripped opaque payload (native OpenAI encryption OR the proxy's ocxr1 envelope).
   encrypted_content: z.string().optional(),
-});
+}).loose();
 const functionCallItemSchema = z.object({
   type: z.literal("function_call"),
   id: z.string().optional(),
@@ -79,12 +79,12 @@ const functionCallItemSchema = z.object({
   name: z.string().min(1),
   namespace: z.string().optional(),
   arguments: z.string().optional(),
-});
+}).loose();
 const functionCallOutputItemSchema = z.object({
   type: z.literal("function_call_output"),
   call_id: z.string().min(1),
   output: toolOutputSchema.optional(),
-});
+}).loose();
 const customToolCallItemSchema = z.object({
   type: z.literal("custom_tool_call"),
   id: z.string().optional(),
@@ -92,13 +92,13 @@ const customToolCallItemSchema = z.object({
   name: z.string().min(1),
   namespace: z.string().optional(),
   input: z.string(),
-});
+}).loose();
 const customToolCallOutputItemSchema = z.object({
   type: z.literal("custom_tool_call_output"),
   call_id: z.string().min(1),
   // codex-rs CustomToolCallOutput carries FunctionCallOutputPayload: string OR content items.
   output: toolOutputSchema,
-});
+}).loose();
 
 export const inputItemSchema = z.union([
   userMessageItemSchema,
@@ -120,7 +120,7 @@ export const toolSchema = z.object({
   description: z.string().optional(),
   parameters: z.record(z.string(), z.unknown()).optional(),
   strict: z.boolean().optional(),
-});
+}).loose();
 
 const builtinToolSchema = z.object({ type: z.string() }).loose();
 
@@ -144,7 +144,7 @@ export const toolChoiceSchema = z.union([
 export const reasoningConfigSchema = z.object({
   effort: z.string().optional(),
   summary: z.enum(["auto", "concise", "detailed", "none"]).optional(),
-});
+}).loose();
 
 export const stopSchema = z.union([z.string(), z.array(z.string()), z.null()]);
 
@@ -174,4 +174,4 @@ export const responsesRequestSchema = z.object({
   prompt: z.unknown().optional(),
   text: z.unknown().optional(),
   truncation: z.unknown().optional(),
-});
+}).loose();

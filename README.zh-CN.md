@@ -5,9 +5,9 @@
 **Web2Harness** — 将 ChatGPT 网页版模型接入 Codex，沿用原生工具与现有工作流，同时充分利用你 ChatGPT 账户中可用的 Web 模型额度，完成更多实际任务。
 
 <p align="center">
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.0/web2harness-1.1.0-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 1.1.0"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.0/web2harness-1.1.0-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 1.1.0"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.0/web2harness-1.1.0-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 1.1.0"></a>
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 1.1.1"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 1.1.1"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 1.1.1"></a>
 </p>
 
 <p align="center">
@@ -34,6 +34,8 @@
 | 图片与附件 | 自动交互传递任务图片，并将客户端内联提供的 PDF、UTF-8 文本或源码作为真实附件发送；可选实验功能将较大上下文或所选技能作为文本附件发送。 |
 | 模型切换与子代理 | 在任务中切换原生与 Web 模型，并按所选兼容协议委派子代理任务。 |
 | 桌面管理 | 在应用内完成登录、模式配置、连接检查、运行诊断和安全日志导出。 |
+
+**1.1.1：**上下文转发保留 Codex 原始角色、顺序与工具身份，桥接输出编码单独组织，不静默裁剪历史或改写原始 exec 代码。网页传输限制与模型行为仍可能不同于原生 API，详见[上下文分离说明](docs/architecture.zh-CN.md#native-tools)。
 
 可用模型与档位取决于登录账号和浏览器检查结果。详见[配置与模型参考](docs/reference.zh-CN.md)；应用不会增加账号额度或解锁未开放的模型。
 
@@ -78,7 +80,7 @@
 
 ## 快速开始
 
-准备本机可用的 Codex，以及能够登录的 ChatGPT 账号。顶部按钮分别下载 Windows x64、macOS Apple silicon 和 Linux x64 安装包。其他处理器：[macOS Intel](https://github.com/cmyk-labs/web2harness/releases/download/v1.1.0/web2harness-1.1.0-mac-x64.dmg) · [Linux arm64](https://github.com/cmyk-labs/web2harness/releases/download/v1.1.0/web2harness-1.1.0-linux-arm64.AppImage)。选择一个匹配的安装包即可，校验和与验收说明见 [1.1.0 发布页面](https://github.com/cmyk-labs/web2harness/releases/tag/v1.1.0)。当前为正式版，已安装应用可通过检查更新获取。安装方式与平台要求见[使用手册](docs/user-guide.zh-CN.md)，已有源码目录也可按下方[源码运行](#development)启动。
+准备本机可用的 Codex，以及能够登录的 ChatGPT 账号。顶部按钮分别下载 Windows x64、macOS Apple silicon 和 Linux x64 安装包。其他处理器：[macOS Intel](https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-mac-x64.dmg) · [Linux arm64](https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-linux-arm64.AppImage)。选择一个匹配的安装包即可，校验和与验收说明见 [1.1.1 发布页面](https://github.com/cmyk-labs/web2harness/releases/tag/v1.1.1)。当前为正式版，已安装应用可通过检查更新获取。安装方式与平台要求见[使用手册](docs/user-guide.zh-CN.md)，已有源码目录也可按下方[源码运行](#development)启动。
 
 1. **启动 Web2Harness**。使用与你的平台、架构匹配的安装包，或从源码启动。
 2. **完成浏览器登录**。打开「连接与模型」，在应用浏览器中登录 ChatGPT，运行「检查连接」。
@@ -134,6 +136,7 @@ bun run dev:launcher
 
 | 版本 | 日期 | 更新内容 |
 | --- | --- | --- |
+| 1.1.1 | 2026-10-05 | 保留 Codex 原始上下文、工具声明、命名空间、调用范围及 exec 原文，桥接传输协议独立组织；续聊校验历史前缀，不支持的内容明确报错、不静默裁剪。升级后需刷新 MCP 工具定义。修复并行任务自动切页打断模型选择的问题，新增三项每次发布必测的真实能力验收用例。 |
 | 1.1.0 | 2026-10-05 | 保留原生 Code Mode、带命名空间的自定义工具、输入格式与调用身份。内联 PDF／文本／源码通过真实附件传输，保留图片清晰度参数。新增手动及定时检查更新、检查时间、下载进度、异步校验与可读日志说明。 |
 | 1.0.2 | 2026-10-05 | 新增侧栏蓝色更新提醒，同步显示下载／安装状态。Windows 更新使用独立安装进度窗口，完成后重新打开应用；快捷方式图标保存到应用替换目录之外，并记录安装阶段耗时。修复套餐参考下拉列表深色配色，默认参考 Pro $200。由 1.0.1 等旧更新程序升级的那一次仍沿用原静默流程，新进度窗口用于后续更新。 |
 | 1.0.1 | 2026-10-05 | 保存的聊天统一使用创建时间、固定任务名和对话／压缩独立编号；增量续聊发送前核验保存会话的对话 ID，工具往返时重新建立自有页面的可用尺寸，保持会话复用。默认记录本地用量，按模型展示滚动统计与官方公开上限参考，明确标注官方周期未确认；健康检查使用易懂名称与明确状态，修正原生工具诊断提示并持久保留漏记告警。 |
@@ -153,6 +156,7 @@ bun run dev:launcher
 | 系统组件、请求流程、会话生命周期及权限边界 | [架构设计](docs/architecture.zh-CN.md) |
 | 源码开发、贡献评审、隔离测试、命名与文档维护 | [开发手册](docs/development.zh-CN.md) |
 | 构建、打包、验收、发布、回滚与安全维护 | [发布手册](docs/release.zh-CN.md) |
+| 每次发布必测的真实能力用例、证据与扩展方式 | [能力验收用例](docs/acceptance-tests.zh-CN.md) |
 
 提交变更见[参与贡献与评审](docs/development.zh-CN.md#contributing)；私密报告见[报告漏洞](docs/release.zh-CN.md#vulnerability-reporting)；自动化代理遵守[仓库协作规则](AGENTS.zh-CN.md)。
 

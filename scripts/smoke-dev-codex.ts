@@ -7,7 +7,6 @@ import { defaultConfig, saveConfig } from "../src/config";
 import { installCodexIntegration } from "../src/codex/integration";
 import { augmentNativeModelCatalog } from "../src/models/model-catalog";
 import { startServer } from "../src/server";
-import { namespacedToolName } from "../src/types";
 import { createChatGptWebAdapter } from "../src/adapters/chatgpt-web/adapter";
 import { ChatGptBrowserWorker, closeChatGptBrowserWorkers } from "../src/adapters/chatgpt-web/browser/browser-worker";
 import { activateDevProfileEnvironment, resolveDevProfilePaths } from "../src/dev/profile";
@@ -74,9 +73,9 @@ const server = startServer(config, {
           sawWait ||= Boolean(runningCell);
           const fence = String.fromCharCode(96).repeat(3);
           const call = runningCell && wait
-            ? { name: namespacedToolName(wait.namespace, wait.name), arguments: { cell_id: runningCell, yield_time_ms: 10000 } }
-            : { name: namespacedToolName(patch.namespace, patch.name), arguments: { input: codeMode
-              ? `${codeModeWait ? '// @exec: {"yield_time_ms": 1}\nawait new Promise(resolve => setTimeout(resolve, 350));\n' : ""}text(await tools.apply_patch(${JSON.stringify(patchInput)}));` : patchInput } };
+            ? { type: "function_call", name: wait.name, ...(wait.namespace ? { namespace: wait.namespace } : {}), arguments: { cell_id: runningCell, yield_time_ms: 10000 } }
+            : { type: "custom_tool_call", name: patch.name, ...(patch.namespace ? { namespace: patch.namespace } : {}), input: codeMode
+              ? `${codeModeWait ? '// @exec: {"yield_time_ms": 1}\nawait new Promise(resolve => setTimeout(resolve, 350));\n' : ""}text(await tools.apply_patch(${JSON.stringify(patchInput)}));` : patchInput };
           const answer = sawToolResult && !runningCell ? "DEV_NATIVE_LOOP_OK" : [
             fence + "codex_tool_calls",
             JSON.stringify({ calls: [call] }),

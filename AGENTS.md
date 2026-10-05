@@ -32,6 +32,8 @@ All development, regression, and live acceptance follows the [standard isolated 
 7. Compare production configuration/authentication hashes and relevant process identities before and after live acceptance. Keep evidence in ignored `output/`; never print secrets. Investigate differences rather than overwriting production data to restore a baseline.
 8. Use a disposable VM or dedicated test operating system for installer, updater, or service tests that cannot preserve these boundaries. Do not run them on the user's normal desktop as development tests.
 
+Before every version release, execute the mandatory [capability acceptance cases](docs/acceptance-tests.md) on the current candidate and record their evidence. Historical passes do not replace a new run. Add or update cases when target capabilities change, keeping both languages aligned. Publication requires the baseline cases to pass, including for previews; follow the remaining gates in the release manual.
+
 ## Development records
 
 Maintain `dev-notes/worklog/YYYY-MM-DD-topic.md` for each development task. Create or update it when work begins, after significant milestones or changes of direction, and before handoff.

@@ -240,7 +240,7 @@ For development, use `bun run dev:launcher` in that session. For an installed pa
 
 ### Previous images reappear, or an attachment is incomplete
 
-**Check and action:** Codex includes prior task images in its conversation context, and the bridge keeps at most the newest ten complete images. Reattachment in the same task is expected. Start a new task if previous images should be excluded. For incomplete attachments or images belonging to a different Codex task, preserve the failing trace and identify the attachment stage.
+**Check and action:** Codex includes prior task images in its conversation context, and the bridge preserves them all. More than ten images in one submission produces an explicit limit error. Reattachment in the same task is expected. Start a new task if previous images should be excluded. For incomplete attachments or images belonging to a different Codex task, preserve the failing trace and identify the attachment stage.
 
 Do not replace inline images with arbitrary local filesystem paths; model-only and compaction turns do not gain unrestricted file access.
 

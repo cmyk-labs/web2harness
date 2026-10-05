@@ -226,9 +226,9 @@ describe("native /models augmentation", () => {
       display_name: CHATGPT_WEB_LUNA_MODEL_ROUTE.displayName,
       default_reasoning_level: "low",
       supported_reasoning_levels: [{ effort: "low", description: "ChatGPT Web: Ordinary Luna (Think off)" }, { effort: "medium", description: "ChatGPT Web: Luna Think" }],
-      context_window: 1_050_000,
-      effective_context_window_percent: 100,
-      auto_compact_token_limit: 1_050_000,
+      context_window: 28_000,
+      effective_context_window_percent: 79,
+      auto_compact_token_limit: 22_000,
     });
   });
 

@@ -24,12 +24,12 @@ test("only native selected-skill provenance enables attachment transport; defaul
   const compiled = compile([input(skill), input("Use $testing", ["user.text"])]);
   expect(compiled.skillFiles).toHaveLength(1);
   expect(compiled.text).not.toContain("Read references/checks.md");
-  expect(compiled.text).toContain('"origin":"codex_skill"');
-  expect(compiled.text).toContain('"filename":"testing--');
+  expect(compiled.text).toContain("skills.selected_skill_instructions");
+  expect(compiled.text).toContain('"attachment_ref":"testing--');
   const [file] = chatGptPromptFilePayloads(compiled);
   expect(file!.name).toMatch(/^testing--[a-f0-9]{16}\.txt$/);
   expect(file!.mimeType).toBe("text/plain");
-  expect(file!.buffer.toString("utf8")).toBe(skill);
+  expect(JSON.parse(file!.buffer.toString("utf8"))).toEqual(input(skill).content);
   expect(compile([input(skill)], false).text).toContain("Read references/checks.md");
   expect(compile([input(skill)], false).skillFiles).toBeUndefined();
   for (const item of [
@@ -52,24 +52,24 @@ test("files preserve resource authority and distinguish same-named versions with
   const files = chatGptPromptFilePayloads(compiled);
   expect(files[0]!.name).not.toBe(files[1]!.name);
   expect(files[0]!.name).not.toMatch(/[/:\\]/);
-  expect(files[0]!.buffer.toString()).toBe(first);
-  expect(files[1]!.buffer.toString()).toBe(changed);
+  expect(JSON.parse(files[0]!.buffer.toString())).toEqual(input(first).content);
+  expect(JSON.parse(files[1]!.buffer.toString())).toEqual(input(changed).content);
   expect(compile([input(first)]).skillFiles).toEqual([compiled.skillFiles![0]!]);
   const tampered = structuredClone(compiled);
   tampered.skillFiles![0]!.text += " changed";
   expect(() => chatGptPromptFilePayloads(tampered)).toThrow("does not match");
 });
 
-test("retained turns reuse prior attachments; fresh chats rebuild them and new skills still upload", () => {
+test("without a verified retained prefix, full source rebuilds all skill attachments", () => {
   const history = [input(text()), { role: "assistant", content: [{ type: "output_text", text: "Done" }] }, input("Continue", ["user.text"])];
   const parsed = parse(history);
   const resumed = retainedConversationResumeRequest(parsed)!;
-  expect(compileChatGptWebPrompt(resumed, capabilities, token, { experimentalSkillAttachments: true }).skillFiles).toBeUndefined();
+  expect(compileChatGptWebPrompt(resumed, capabilities, token, { experimentalSkillAttachments: true }).skillFiles).toHaveLength(1);
   expect(compile(history).skillFiles).toHaveLength(1);
   const next = retainedConversationResumeRequest(parse([...history, input(text("next"))]))!;
   const compiled = compileChatGptWebPrompt(next, capabilities, token, { experimentalSkillAttachments: true });
-  expect(compiled.skillFiles).toHaveLength(1);
-  expect(compiled.skillFiles![0]!.name).toStartWith("next--");
+  expect(compiled.skillFiles).toHaveLength(2);
+  expect(compiled.skillFiles![1]!.name).toStartWith("next--");
 });
 
 test("skill content counts toward input and final-message budgets, including context files", () => {

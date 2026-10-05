@@ -11,7 +11,8 @@ import type {
   CodexTool,
   CodexToolCall,
 } from "../types";
-import { namespacedToolName } from "../types";
+import { toolIdentityKey } from "../types";
+import { captureSourceContext } from "./context-source";
 import { responsesRequestSchema } from "./schema";
 import { compactionItemToText, isNativeTextCompaction } from "./compaction";
 import { previousResponseReplayPrefixLength } from "./state";
@@ -82,26 +83,26 @@ function mapToolChoice(value: unknown): CodexRequestOptions["toolChoice"] {
   if (isObj(value) && "type" in value) {
     const t = (value as { type: string }).type;
     if ((t === "function" || t === "custom") && "name" in value) {
-      return { name: namespacedToolName(normalizedToolNamespace(value.namespace), (value as { name: string }).name) };
+      return { name: toolIdentityKey(normalizedToolNamespace(value.namespace), (value as { name: string }).name) };
     }
     if (t === "allowed_tools" && Array.isArray(value.tools)) {
       const names = value.tools
-        .map(allowedToolName)
+        .map(tool => { const name = allowedToolName(tool); if (!name) throw new Error("Unsupported allowed_tools entry"); return name; })
         .filter((name): name is string => Boolean(name));
       return names.length > 0
         ? { allowedTools: [...new Set(names)], mode: value.mode === "required" ? "required" : "auto" }
         : "none";
     }
-    return "auto";
+    throw new Error(`Unsupported tool_choice: ${String(t)}`);
   }
-  return undefined;
+  throw new Error("Unsupported tool_choice");
 }
 
 function allowedToolName(tool: unknown): string | undefined {
   if (!isObj(tool)) return undefined;
-  if (typeof tool.name === "string" && tool.name.length > 0) return namespacedToolName(normalizedToolNamespace(tool.namespace), tool.name);
+  if (typeof tool.name === "string" && tool.name.length > 0) return toolIdentityKey(normalizedToolNamespace(tool.namespace), tool.name);
   if (tool.type === "web_search" || tool.type === "web_search_preview") return "web_search";
-  if (tool.type === "tool_search") return "tool_search";
+  if (tool.type === "tool_search") return toolIdentityKey(undefined, "tool_search");
   return undefined;
 }
 
@@ -129,19 +130,18 @@ function parseTextControls(value: unknown): Pick<CodexRequestOptions, "verbosity
   return out;
 }
 
-const DEFAULT_FUNCTION_NAMESPACE = "functions";
-
 function normalizedToolNamespace(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 && value !== DEFAULT_FUNCTION_NAMESPACE
+  return typeof value === "string" && value.length > 0
     ? value
     : undefined;
 }
 
-function buildTools(tools: unknown[] | undefined): CodexTool[] | undefined {
+export function buildTools(tools: unknown[] | undefined): CodexTool[] | undefined {
   if (!tools) return undefined;
   const out: CodexTool[] = [];
   const pushFn = (t: Record<string, unknown>, namespace?: string) => {
     const tool: CodexTool = {
+      specification: structuredClone(t),
       name: t.name as string,
       description: (t.description as string) ?? "",
       parameters: (t.parameters ?? {}) as Record<string, unknown>,
@@ -152,6 +152,7 @@ function buildTools(tools: unknown[] | undefined): CodexTool[] | undefined {
   };
   const pushFreeform = (t: Record<string, unknown>, namespace?: string) => {
     const tool: CodexTool = {
+      specification: structuredClone(t),
       name: t.name as string,
       description: (t.description as string) ?? "",
       parameters: {
@@ -172,29 +173,31 @@ function buildTools(tools: unknown[] | undefined): CodexTool[] | undefined {
     };
     out.push(tool);
   };
-  for (const t of tools) {
-    if (!isObj(t)) continue;
+  for (const encoded of tools) {
+    const t: unknown = typeof encoded === "string" ? JSON.parse(encoded) : encoded;
+    if (!isObj(t)) throw new Error("Invalid Codex tool declaration");
     if (t.type === "function" && typeof t.name === "string") {
       pushFn(t, normalizedToolNamespace(t.namespace));
     } else if (t.type === "namespace" && Array.isArray(t.tools)) {
-      // Flatten for the browser transport and restore both namespace and tool kind on output.
+      // Build a runtime lookup index; the original namespace tree is preserved separately.
       const ns = normalizedToolNamespace(t.name);
       for (const inner of t.tools as unknown[]) {
-        if (!isObj(inner) || typeof inner.name !== "string") continue;
+        if (!ns || !isObj(inner) || typeof inner.name !== "string" || !inner.name) throw new Error("Invalid namespaced Codex tool declaration");
         if (inner.type === "function") pushFn(inner, ns);
         else if (inner.type === "custom") pushFreeform(inner, ns);
+        else throw new Error(`Unsupported namespaced tool type: ${String(inner.type)}`);
       }
     }
     else if (t.type === "custom" && typeof t.name === "string") {
-      // Freeform custom tool (e.g. apply_patch). Chat models can't emit a lark grammar, so expose a
-      // function with a single string `input` carrying the raw tool body; the bridge relays the model's
-      // call back as a custom_tool_call (Codex's freeform handler rejects a function_call → fatal abort).
+      // Runtime index only. The original custom format remains in the source declaration;
+      // its raw input returns to Codex as a custom_tool_call.
       pushFreeform(t, normalizedToolNamespace(t.namespace));
     }
     else if (t.type === "tool_search") {
       // Client-executed tool discovery — the gateway to deferred tools (subagents, extra MCP tools).
-      // Expose as a function so chat models can call it; the bridge relays it as a tool_search_call.
+      // The runtime index marks this separately so the encoder returns a tool_search_call.
       out.push({
+        specification: structuredClone(t),
         name: "tool_search",
         description: (t.description as string) ?? "Search for additional tools to load for the next turn.",
         parameters: (isObj(t.parameters) ? t.parameters : {
@@ -208,14 +211,9 @@ function buildTools(tools: unknown[] | undefined): CodexTool[] | undefined {
         toolSearch: true,
       });
     }
-    else if (typeof t.name === "string" && t.type !== "web_search" && t.type !== "image_generation") {
-      // Any other named tool (for example a native computer-use tool type this parser does not
-      // model) is client-executed. Pass it through as a function so the routed model can call it
-      // naturally and the bridge can relay it as a function_call.
-      pushFn(t);
+    else {
+      throw new Error(`Unsupported Codex tool type: ${String(t.type)}`);
     }
-    // Only the OpenAI-hosted server-side tools (web_search, image_generation) are intentionally
-    // dropped — they're executed by OpenAI and can't be relayed to a routed chat model.
   }
   return out.length > 0 ? out : undefined;
 }
@@ -281,6 +279,7 @@ export function parseRequest(body: unknown): CodexParsedRequest {
   if (!parsed.success) {
     throw new Error(`responses parse error: ${parsed.error.message}`);
   }
+  const source = captureSourceContext(body);
   const data = parsed.data;
   const now = Date.now();
   const messages: CodexMessage[] = [];
@@ -458,8 +457,9 @@ export function parseRequest(body: unknown): CodexParsedRequest {
 
       if (effectiveType === "function_call") {
         const call = item as { id?: string; call_id: string; name: string; arguments?: string; namespace?: string };
-        // Tolerate empty/non-JSON arguments (e.g. a no-arg tool call serialized as "") instead of
-        // throwing — a single poisoned history item would otherwise 400 every subsequent turn.
+        // This index is only for runtime correlation. The source snapshot retains the exact
+        // argument string (including malformed history) for model input; never replay this index
+        // as an execution request.
         let args: Record<string, unknown> = {};
         const rawArgs = call.arguments?.trim();
         if (rawArgs) {
@@ -467,7 +467,7 @@ export function parseRequest(body: unknown): CodexParsedRequest {
             const parsed: unknown = JSON.parse(rawArgs);
             if (isObj(parsed)) args = parsed;
           } catch {
-            console.warn(`[parser] function_call ${call.call_id} has non-JSON arguments; defaulting to {}`);
+            // Malformed historical arguments remain verbatim in context.source.
           }
         }
         // Do NOT map Responses item `id` (fc_/ctc_/…) onto `thoughtSignature`. That field is
@@ -531,72 +531,55 @@ export function parseRequest(body: unknown): CodexParsedRequest {
         // Pair the tool_search call with its result so the model sees what was loaded.
         const out = item as { call_id?: string; status?: string; tools?: unknown[] };
         const specs = Array.isArray(out.tools) ? (out.tools as Record<string, unknown>[]) : [];
-        loadedToolSpecs.push(...specs);
-        // List the EXACT wire names the model must call (flattened for namespaced specs), matching
-        // how buildTools exposes them — otherwise the model guesses wrong names (e.g. the bare namespace).
-        const wireNames: string[] = [];
-        for (const spec of specs) {
-          if (spec.type === "namespace" && Array.isArray(spec.tools)) {
-            const namespace = normalizedToolNamespace(spec.name);
-            for (const inner of spec.tools as Record<string, unknown>[]) {
-              if (typeof inner.name === "string") wireNames.push(namespacedToolName(namespace, inner.name));
-            }
-          } else if (typeof spec.name === "string") {
-            wireNames.push(spec.name);
-          }
-        }
         const failed = typeof out.status === "string" && out.status !== "completed" && out.status !== "success";
+        if (!failed) loadedToolSpecs.push(...specs);
         messages.push({
           role: "toolResult", toolCallId: out.call_id ?? "", toolName: "tool_search",
-          content: failed && wireNames.length === 0
-            ? `Tool search failed (status: ${out.status}).`
-            : wireNames.length
-              ? `Tool search loaded these tools — they are now in your available tools. Call one by its EXACT name: ${wireNames.join(", ")}.`
-              : "Tool search returned no tools.",
-          isError: failed && wireNames.length === 0, timestamp: now,
+          content: JSON.stringify(item), isError: failed, timestamp: now,
         });
         continue;
       }
 
       if (effectiveType === "function_call_output") {
         pendingReasoning.length = 0;
-        const output = item as { call_id: string; output?: string | unknown[] };
+        const output = item as { call_id: string; output?: string | unknown[]; is_error?: boolean };
         const toolInfo = findToolById(messages, output.call_id);
         messages.push({
           role: "toolResult", toolCallId: output.call_id,
           toolName: toolInfo.name, toolNamespace: toolInfo.namespace,
-          content: outputToToolResultContent(output.output), isError: false, timestamp: now,
+          content: outputToToolResultContent(output.output), isError: output.is_error === true, timestamp: now,
         });
         continue;
       }
 
       if (effectiveType === "custom_tool_call_output") {
         pendingReasoning.length = 0;
-        const output = item as { call_id: string; output: string | unknown[] };
+        const output = item as { call_id: string; output: string | unknown[]; is_error?: boolean };
         const toolInfo = findToolById(messages, output.call_id);
         messages.push({
           role: "toolResult", toolCallId: output.call_id,
           toolName: toolInfo.name, toolNamespace: toolInfo.namespace,
           // Same payload shape as function_call_output (codex-rs FunctionCallOutputPayload):
           // string or content items — normalize arrays instead of leaking raw wire blocks.
-          content: outputToToolResultContent(output.output), isError: false, timestamp: now,
+          content: outputToToolResultContent(output.output), isError: output.is_error === true, timestamp: now,
         });
       }
     }
   }
 
-  const declaredTools = buildTools(data.tools as unknown[] | undefined) ?? [];
+  const declaredTools = buildTools(source.tools) ?? [];
   const loadedTools = buildTools(loadedToolSpecs) ?? [];
   const seenTools = new Map<string, CodexTool>();
   const mergedTools = [...declaredTools, ...loadedTools]
     .filter(t => {
-      const k = namespacedToolName(t.namespace, t.name);
+      const k = toolIdentityKey(t.namespace, t.name);
       const previous = seenTools.get(k);
       if (previous) {
         if (previous.name !== t.name || previous.namespace !== t.namespace
           || Boolean(previous.freeform) !== Boolean(t.freeform)
-          || Boolean(previous.toolSearch) !== Boolean(t.toolSearch)) {
-          throw new Error(`Ambiguous tool wire name: ${k}`);
+          || Boolean(previous.toolSearch) !== Boolean(t.toolSearch)
+          || JSON.stringify(previous.specification) !== JSON.stringify(t.specification)) {
+          throw new Error(`Conflicting Codex tool identity: ${k}`);
         }
         return false;
       }
@@ -604,6 +587,7 @@ export function parseRequest(body: unknown): CodexParsedRequest {
       return true;
     });
   const context: CodexContext = {
+    source,
     ...(systemPrompt.length > 0 ? { systemPrompt } : {}),
     messages,
     ...(mergedTools.length > 0 ? { tools: mergedTools } : {}),

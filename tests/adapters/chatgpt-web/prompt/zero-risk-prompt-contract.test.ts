@@ -47,8 +47,8 @@ test("Zero Risk compaction prompt stays task-focused while MCP metadata owns com
   const compiled = compileChatGptWebPrompt(request(true), capabilities, requestId, {
     manualControl: true,
   });
-  expect(compiled.text).toContain("This is a Codex history-compaction checkpoint");
-  expect(compiled.text).toContain("Do not call work tools or ChatGPT-native tools");
+  expect(compiled.text).toContain("Codex-requested compaction operation");
+  expect(compiled.text).toContain("without tool calls");
   expect(compiled.text).toContain("Produce the requested checkpoint summary now");
   expect(compiled.text).not.toContain("codex_turn_start");
   expect(compiled.text).not.toContain("codex_turn_complete");
@@ -64,7 +64,7 @@ test("Zero Risk prompt fails closed without MCP Bridge or an exact manual bindin
   expect(() => compileChatGptWebPrompt(request(), capabilities, requestId, {
     manualControl: true,
     experimentalContextFiles: true,
-  })).toThrow("does not support rolling or context-file browser transport");
+  })).toThrow("does not support context-file browser transport");
 });
 
 test("active Zero Risk compaction returns its checkpoint through the bound completion control", () => {

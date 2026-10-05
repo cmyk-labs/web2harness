@@ -136,17 +136,14 @@ test("Luna checkpoint stream still rejects a marker that was lost by Markdown se
   )).toThrow("not preserved in the Markdown stream");
 });
 
-test("Luna prompt requests the strict private checkpoint only when capture is enabled", () => {
+test("Luna prompt rejects private checkpoint capture and keeps canonical context", () => {
   const parsed = request("thread_prompt", "turn_prompt", [message("user", "Inspect it.", "turn_prompt")]);
   const capabilities = { localToolsEnabled: false, solAvailable: false, extraHighAvailable: false, proAvailable: false };
   const normal = compileChatGptWebPrompt(parsed, capabilities);
-  const rolling = compileChatGptWebPrompt(parsed, capabilities, undefined, { captureLunaCheckpoint: true });
   expect(normal.text).not.toContain(CHATGPT_LUNA_CHECKPOINT_MARKER);
-  expect(rolling.text).toContain(CHATGPT_LUNA_CHECKPOINT_MARKER);
-  expect(rolling.text).toContain("Do not write JSON");
-  expect(rolling.text).toContain("never permit an empty checkpoint");
-  expect(rolling.text).toContain("Objective:");
-  expect(rolling.text).toContain(`${CHATGPT_LUNA_CHECKPOINT_MAX_TOKENS.toLocaleString("en-US")} tokens`);
+  expect(normal.text).toContain("Inspect it.");
+  expect(() => compileChatGptWebPrompt(parsed, capabilities, undefined, { captureLunaCheckpoint: true }))
+    .toThrow("cannot replace canonical Codex context");
 });
 
 test("Luna checkpoint replaces only exact-parent history and preserves the current native turn", () => {

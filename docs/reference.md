@@ -249,7 +249,7 @@ Values are tokens. This table has Context as File's optional triple budget disab
 | GPT-5.6 Sol Pro or GPT-6 Pro | 112,193 | 95,000 | 85% |
 | Manual default profile | 123,000 | 96,000 | 78% |
 | Manual Pro-sized profile | 336,579 | 285,000 | 85% |
-| Luna Ordinary/Think | 1,050,000 | 1,050,000 advertised; see Luna behavior below | 100% advertised |
+| Luna Ordinary/Think | 28,000 | 22,000 | 79% |
 
 The effective percentage is `round(autoCompactTokenLimit / contextWindow × 100)`. Codex uses this metadata in its context indicator, so the UI need not display the raw window as its working budget.
 
@@ -279,15 +279,15 @@ For Sol/Pro, the ordinary visible-text budget is the smaller of the explicit mes
 
 `experimentalContextFiles` changes how sufficiently large context is sent. `experimentalContextTripleBudget` is a separate opt-in that takes effect only with file transport. For the automatic Sol/Pro policies, it multiplies the context window and compaction threshold by three while retaining the effective percentage. For example, ordinary Pro-account Sol becomes `333579` / `285000`, and a Pro route becomes `336579` / `285000`.
 
-The triple budget does not multiply the visible-message token cap, character cap or account usage quota; per-image token reserves remain unchanged. It does not change Luna's checkpoint policy. Manual mode rejects file transport and uses its own fixed budgets. A successful upload does not prove that all uploaded context was used by the browser model.
+The triple budget does not multiply the visible-message token cap, character cap or account usage quota; per-image token reserves remain unchanged. It does not multiply Luna's browser budget. Manual mode rejects file transport and uses its own fixed budgets. A successful upload does not prove that all uploaded context was used by the browser model.
 
 <a id="luna-continuity"></a>
 
 ### Luna continuity and browser boundary
 
-Luna advertises a `1050000` window and the same automatic compaction threshold. The implementation notes that Codex internally clamps that threshold to 90% of the window; Web2Harness instead keeps ordinary browser turns small through a private rolling checkpoint of completed history. The checkpoint has a `4000`-token maximum and is excluded from visible assistant text.
+Luna advertises a `28000` context window and `22000` automatic compaction threshold, leaving headroom inside the measured browser budget. Both Ordinary and Think use the shared native Codex compaction path. Private rolling checkpoints no longer replace original history.
 
-The browser input preflight enforces a separate `28000`-token total estimated request budget, including reserves, for Luna's Ordinary and Think modes. The large catalog window is therefore not a promise that one Luna browser request can carry a million tokens. Dedicated Codex compaction requests for Luna are rejected. When the current turn alone exceeds the browser budget, reduce that turn's input; `/compact` cannot reduce it after completed history has already been checkpointed.
+The browser preflight still enforces the `28000`-token total estimated request budget, including reserves. Oversize input fails explicitly; it is never silently trimmed. Codex can compact completed history, but an individual oversized item may still require the user to reduce it. Context as File and the triple budget do not extend Luna.
 
 <a id="native-context-preservation"></a>
 
@@ -432,7 +432,7 @@ The following modules define the contracts in this reference. For directory owne
 | Profiles and desktop preferences | [Launcher profiles](../launcher/electron/profile.cjs), [launcher state](../launcher/electron/state.cjs), [DEV profile](../src/dev/profile.ts), [DEV commands](../src/dev/cli.ts). |
 | Runtime controls | [Stall watchdog](../src/stall-timeout.ts), [tunnel storage](../src/runtime/tunnel.ts). |
 | Model identity and availability | [Route registry](../src/models/chatgpt-web-model-registry.ts), [account-aware resolution](../src/models/chatgpt-web-models.ts), [model types](../src/models/chatgpt-web-model-types.ts). |
-| Context and compaction budgets | [Context and transport policy](../src/models/chatgpt-web-context.ts), [input estimation and Luna boundary](../src/adapters/chatgpt-web/prompt/input-tokens.ts), [rolling checkpoints](../src/adapters/chatgpt-web/conversation/rolling-checkpoint.ts). |
+| Context and compaction budgets | [Context and transport policy](../src/models/chatgpt-web-context.ts), [input estimation and Luna boundary](../src/adapters/chatgpt-web/prompt/input-tokens.ts), [source preservation](../src/adapters/chatgpt-web/prompt/source-context.ts). |
 | Catalog and selection validation | [Catalog augmentation](../src/models/model-catalog.ts), [native context override reading](../src/codex/integration-document.ts), [browser family verification](../src/adapters/chatgpt-web/browser/model-selection.ts). |
 
 [Project documentation](../README.md#documentation) · [User guide](user-guide.md) · [Troubleshooting](troubleshooting.md)

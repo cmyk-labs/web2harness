@@ -2360,7 +2360,10 @@ class BrowserHost {
       if (!existing.view.webContents.isDestroyed()) {
         existing.view.webContents.setBackgroundThrottling(false);
       }
-      this.selectedTabId = existing.id;
+      // Switching a running surface changes its viewport and can dismiss an open model menu.
+      // Parallel automatic turns keep the selected running tab stable; explicit UI selection
+      // remains available through selectTab.
+      if (this.selectedTurnTab()?.status !== "running") this.selectedTabId = existing.id;
       if (reveal) this.show();
       else this.syncViewVisibility();
       this.publishState?.(this.snapshot());
@@ -2382,7 +2385,7 @@ class BrowserHost {
     const tab = await this.createTurnTab(traceId, helperPid, conversationKey, connectorIdentity, signal);
     if (savedChat) tab.savedChat = savedChat;
     tab.chatCreatedAt = Date.now();
-    this.selectedTabId = tab.id;
+    if (this.selectedTurnTab()?.status !== "running") this.selectedTabId = tab.id;
     if (reveal) this.show();
     else this.syncViewVisibility();
     this.publishState?.(this.snapshot());

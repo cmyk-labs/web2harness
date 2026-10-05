@@ -79,6 +79,16 @@ Runtime mode determines how a Web model reaches Codex tools. Browser interaction
 | MCP Bridge | ChatGPT connector → tunnel → MCP server → active-turn broker → Codex tool call | Codex, under its existing sandbox and approval policy | Required |
 | Browser-only | Browser answer only; Codex receives a notice that local tools are unavailable | No local tool requests from this Web route | Not started or attached |
 
+### Context and transport separation
+
+A browser submission contains one sentence defining the bridge role, the original structured request in `codex_context_json` (or its complete context-file equivalent), then a separate `codex_bridge_protocol`. The source snapshot preserves instructions, roles, item/block order, tool namespace trees, custom formats, request controls, call/result IDs, error fields and other input metadata. Runtime indexes are separate and are not replayed as substitute source context. Transport credentials and local routing metadata stay outside the source.
+
+Binary image/file data is carried as validated attachments at its original position; bridge-owned reasoning and compaction envelopes have a reversible decoded view. Unknown content or unreadable provider-encrypted content fails explicitly. The bridge does not delete old model-switch instructions, rewrite handle-like strings, drop old images, trim compaction history or summarize on its own. Only native Codex compaction replaces canonical history. An upload that exceeds the browser limit is rejected; the explicitly enabled Context as File feature can carry complete supported input.
+
+A verified retained prefix is labelled `transport_context.mode=append`, with its length and hash; fresh requests use `complete`. These labels describe transport, not new Codex roles. Encoding several original roles into one browser message cannot reproduce native API role enforcement or guarantee identical model behavior. Execution, sandbox and approvals remain with Codex.
+
+The MCP tool-call schema now separates `name`, `namespace` and `scope`. Refresh the selected connector's cached tool definitions before using this schema; an old ordinary `wire_name` call fails with a refresh instruction. The existing reserved compaction control still uses `wire_name`. No connector is silently substituted.
+
 <a id="native-tools"></a>
 
 ### Native Tools
@@ -87,7 +97,7 @@ The adapter includes the current tool definitions in the compiled context. When 
 
 Malformed tool blocks produce an explicit adapter failure. A bounded corrective retry can rebuild from canonical Codex history; invalid browser decisions are not adopted as successful tool execution. The adapter cannot add tools or grant permissions through the prompt.
 
-In Native Tools mode, the model catalog preserves Codex's original Code Mode setting. The request parser retains custom-tool format and namespace, and JSON/SSE output restores the same call identity. Flattened wire-name collisions fail before dispatch. `exec` and `wait` execute in the outer Codex process; the browser prompt distinguishes them from ChatGPT's own tools. Inline file data follows the same validated attachment path as images, with content-derived filenames and explicit helper capability negotiation. It does not resolve local paths or remote provider file IDs.
+In Native Tools mode, the model catalog preserves Codex's original Code Mode setting. The request parser retains custom-tool format and namespace, and JSON/SSE output restores the same call identity. Top-level identity is the original name plus namespace and kind; internal routing keys never become model-facing aliases. Conflicting declarations for the same identity fail before dispatch. `exec` and `wait` execute in the outer Codex process; the browser prompt distinguishes them from ChatGPT's own tools. Inline file data follows the same validated attachment path as images, with content-derived filenames and explicit helper capability negotiation. It does not resolve local paths or remote provider file IDs.
 
 <a id="mcp-bridge"></a>
 
@@ -95,7 +105,7 @@ In Native Tools mode, the model catalog preserves Codex's original Code Mode set
 
 The browser prompt carries an opaque capability for one outer Codex turn. Every connector action presents that capability. The local broker derives an internal binding, checks the current tool inventory, and relays the request to Codex. Results return through the MCP call so multiple tool rounds can remain within the same ChatGPT response.
 
-The connector supports exact-name discovery and invocation for tools exposed through Codex's code-mode gateway. It also supports the gateway's freeform orchestration surface, with transport guards for nested invocation and bounded agent waiting. These mechanisms expose the active outer tool environment; they do not create a second executor or planner. All available Web efforts use the same capability contract.
+The connector supports exact-name discovery and invocation for tools exposed through Codex's code-mode gateway. It also relays the gateway's freeform input unchanged. Top-level calls carry the original name and namespace; nested calls explicitly select the exec scope and must appear in the runtime's ALL_TOOLS exports. Top-level availability does not imply nested availability. These mechanisms expose the active outer tool environment; they do not create a second executor or planner. All available Web efforts use the same capability contract.
 
 The connector identity is part of the public MCP schema contract. Automatic and manual interaction have distinct connector identities and tunnel configurations. An incompatible cached connector must not be reused by silently renaming or selecting a different identity. Current names and setup requirements are in the [configuration reference](reference.md#runtime-settings).
 
@@ -134,7 +144,7 @@ SSE heartbeats keep an otherwise quiet transport alive, while a separate adapter
 
 1. **Establish the native environment.** The bridge derives working directory, roots, sandbox policy, thread, and turn from the native Codex envelope. If a resumed task or subagent omits required context, the canonical local rollout must prove the exact identity and source turn. Request metadata may constrain that authority, not invent it. User-authored environment text and tool output are not recovery authority.
 2. **Bind one turn.** A random capability is included in one browser task. Each connector action presents it. The MCP server obtains an internal binding and invocation activity lease, neither of which is exposed as a model-controlled authority object.
-3. **Resolve an advertised tool.** Tool definitions come from the active request. Discovery and exact-name calls are restricted to that inventory, including supported code-mode tools. Raw orchestration uses a guarded registry that prevents recursive raw gateway invocation and enforces bounded agent-wait polling so other Web agents can use the serialized MCP channel.
+3. **Resolve an advertised tool.** Tool definitions come from the active request. Discovery and exact-name calls are restricted to that inventory, including supported code-mode tools. Raw exec code and original wait parameters pass through unchanged; Codex validates and executes them. The MCP deadline remains a separate transport limit and may return an explicit timeout. Zero Risk continues to hide its own connector namespace and raw exec to prevent recursive manual handoffs.
 4. **Execute through Codex.** The bridge returns a native tool call; Codex owns approval, sandboxing, command sessions, and results. The activity lease remains live until the handler settles, including inventory operations that do not invoke a native tool.
 5. **Fence completion.** Before tool dispatch, the browser acknowledges the current answer projection. A final answer must be newly stable after the tool result. A two-phase broker check rereads the DOM and commits only when the activity revision is unchanged and no invocation is active. An action that races before commit invalidates the completion candidate; an action after commit is rejected as terminal.
 6. **Retire.** Completion, cancellation, timeout, or owner cleanup settles the turn and revokes later use of its capability. Retries and reconnects must preserve exact turn ownership rather than create an unrelated authority scope.
@@ -159,7 +169,7 @@ Three different kinds of state must be kept distinct:
 
 **Save chats in ChatGPT is enabled by default for new configurations.** Existing explicit choices are preserved. Saved versus Temporary Chat is independent of local conversation reuse. Saved chats can be subject to the account's ChatGPT memory and custom instructions. Changing the saved-chat preference invalidates eligible idle retained surfaces; it never authorizes reopening an arbitrary conversation from remote history.
 
-Retained reuse currently applies to eligible launcher-hosted Native Tools and MCP Bridge routes, excluding Luna and explicit fresh-conversation operation. The identity incorporates the task thread, model, effort/family, provider configuration, and compaction epoch. A retained surface is reused only when the launcher can prove that exact ownership. Browser-only and Luna do not use this retained-conversation key; Luna has a separate thread/turn-bound rolling-checkpoint mechanism.
+Retained reuse currently applies to eligible launcher-hosted Native Tools and MCP Bridge routes, excluding Luna and explicit fresh-conversation operation. The identity incorporates the task thread, model, effort/family, provider configuration, and compaction epoch. A retained surface is reused only when the launcher can prove that exact ownership. Before a suffix is sent, the bridge also verifies hashes of the complete previously submitted input prefix and instructions. Revised history starts a new browser conversation; missing prefix evidence sends complete context. Browser-only and Luna do not use this retained-conversation key. Luna uses the same native Codex compaction path, without private rolling checkpoints.
 
 Each task surface is an independent Electron `WebContentsView`. Surfaces share login state through one private persistent partition, but they do not share chat documents or task ownership. At most five task tabs can be active concurrently; another concurrent turn receives an explicit capacity error. Closing a running tab destroys its page and terminates its browser turn.
 
@@ -170,7 +180,7 @@ Automatic saved chats bind the remote conversation ID to their owned surface. Re
 Compaction follows an explicit control flow; it does not treat an ordinary task answer as a checkpoint:
 
 - With MCP Bridge, an eligible retained conversation produces a structured checkpoint tied to its exact source identity. Its one-shot compaction control accepts only that checkpoint and cannot invoke the ordinary tool environment.
-- If that retained conversation is unavailable during automatic interaction, or a fresh-conversation setting requires it, a dedicated read-only summarization chat receives canonical Codex history. Native Tools and Browser-only also use the read-only compaction path. Luna uses rolling checkpoints rather than a separate compaction turn.
+- If that retained conversation is unavailable during automatic interaction, or a fresh-conversation setting requires it, a dedicated read-only summarization chat receives canonical Codex history. Native Tools and Browser-only also use the read-only compaction path. Luna also uses the dedicated native compaction path.
 - Zero Risk uses its explicit manual MCP handoff: the active response receives the checkpoint instruction, completes through its bound control, and retires. A missing source requires the manual checkpoint flow.
 - The transaction waits for response settlement and physical helper cleanup before closing the old surface. The native replacement-history or compaction item returned to Codex establishes the next epoch. Its first browser turn starts a new chat.
 

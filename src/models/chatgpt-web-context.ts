@@ -60,11 +60,11 @@ export const CHATGPT_WEB_PRO_INSTANT_COMPOSER_CHAR_LIMIT = 545_000;
 export const CHATGPT_WEB_PRO_REASONING_COMPOSER_CHAR_LIMIT = 500_000;
 export const CHATGPT_WEB_PRO_MODEL_COMPOSER_CHAR_LIMIT = 1_635_000;
 /**
- * The underlying Luna model owns this context window. ChatGPT Free's much smaller browser request
- * envelope is enforced separately at the browser boundary; rolling checkpoints keep completed
- * history out of later browser requests without asking Codex to compact its canonical history.
+ * Luna uses the measured browser input budget and leaves headroom for native Codex compaction.
+ * The bridge does not replace canonical history with a private rolling checkpoint.
  */
-export const CHATGPT_WEB_LUNA_CONTEXT_WINDOW = 1_050_000;
+export const CHATGPT_WEB_LUNA_CONTEXT_WINDOW = 28_000;
+export const CHATGPT_WEB_LUNA_AUTO_COMPACT_TOKEN_LIMIT = 22_000;
 export const CHATGPT_WEB_CONTEXT_BUDGET_MULTIPLIER = 3;
 
 export interface ChatGptWebContextLimits {
@@ -130,10 +130,7 @@ export function resolveChatGptWebContextLimits(
     );
   }
   if (backendModel === CHATGPT_WEB_LUNA_BACKEND_MODEL) {
-    // Luna carries continuity through a private checkpoint on every completed browser turn. Codex
-    // internally clamps this field to 90% of the model window, but the reported active usage is the
-    // bounded payload actually sent to ChatGPT and therefore stays far below that threshold.
-    return contextLimits(CHATGPT_WEB_LUNA_CONTEXT_WINDOW, CHATGPT_WEB_LUNA_CONTEXT_WINDOW);
+    return contextLimits(CHATGPT_WEB_LUNA_CONTEXT_WINDOW, CHATGPT_WEB_LUNA_AUTO_COMPACT_TOKEN_LIMIT);
   }
 
   let limits: ChatGptWebContextLimits;

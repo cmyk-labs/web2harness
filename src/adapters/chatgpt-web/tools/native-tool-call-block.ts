@@ -1,6 +1,6 @@
 import Ajv, { type ValidateFunction } from "ajv";
 import addFormats from "ajv-formats";
-import { namespacedToolName, type CodexTool } from "../../../types";
+import { toolIdentityKey, type CodexTool } from "../../../types";
 
 /**
  * Native-tools reply contract.
@@ -15,7 +15,7 @@ import { namespacedToolName, type CodexTool } from "../../../types";
 export const CODEX_TOOL_CALLS_FENCE = "codex_tool_calls";
 
 export interface NativeToolCall {
-  /** Exact flattened wire name the model used (namespace__name for MCP tools). */
+  /** Internal routing key; never shown as a model-facing tool name. */
   wireName: string;
   name: string;
   namespace?: string;
@@ -57,7 +57,7 @@ function buildToolIndex(tools: readonly CodexTool[]): Map<string, ToolIndexEntry
   addFormats(ajv);
   const index = new Map<string, ToolIndexEntry>();
   for (const tool of tools) {
-    const wireName = namespacedToolName(tool.namespace, tool.name);
+    const wireName = toolIdentityKey(tool.namespace, tool.name);
     let validate: ValidateFunction | undefined;
     try {
       validate = ajv.compile(tool.parameters as object | boolean);
@@ -216,30 +216,41 @@ export function parseNativeToolCallReply(text: string, tools: readonly CodexTool
         issues.push(issueFor(callIndex, 'call entry is missing the required string field "name"'));
         continue;
       }
-      const entry = index.get(name);
+      const namespace = raw.namespace;
+      if (namespace !== undefined && (typeof namespace !== "string" || namespace.length === 0)) {
+        issues.push(issueFor(callIndex, "namespace must be a nonempty string when supplied", name));
+        continue;
+      }
+      const entry = index.get(toolIdentityKey(namespace as string | undefined, name));
       if (!entry) {
         issues.push(issueFor(callIndex, `unknown tool ${JSON.stringify(name)} — use an exact declared tool name`, name));
         continue;
       }
-      if (raw.arguments === undefined) {
-        issues.push(issueFor(callIndex, `call to ${name} is missing "arguments" (use {} when there are none)`, name));
+      const expectedType = entry.tool.toolSearch ? "tool_search_call" : entry.tool.freeform ? "custom_tool_call" : "function_call";
+      if (raw.type !== undefined && raw.type !== expectedType) {
+        issues.push(issueFor(callIndex, `tool requires type ${expectedType}`, name));
         continue;
       }
-      if (!isObj(raw.arguments)) {
-        issues.push(issueFor(callIndex, `"arguments" for ${name} must be a JSON object`, name));
+      // Untyped, unnamespaced legacy calls remain readable; never infer a namespace from a name.
+      const args = entry.tool.freeform && typeof raw.input === "string"
+        ? { input: raw.input } : raw.arguments;
+      const fields = entry.tool.freeform && raw.input !== undefined
+        ? ["type", "name", "namespace", "input"] : ["type", "name", "namespace", "arguments"];
+      const unexpectedKeys = Object.keys(raw).filter(key => !fields.includes(key));
+      if (unexpectedKeys.length) {
+        issues.push(issueFor(callIndex, `unsupported field(s): ${unexpectedKeys.join(", ")}`, name));
         continue;
       }
-      const unexpectedKeys = Object.keys(raw).filter(key => key !== "name" && key !== "arguments");
-      if (unexpectedKeys.length > 0) {
-        issues.push(issueFor(
-          callIndex,
-          `call to ${name} has unsupported field(s) ${unexpectedKeys.map(key => JSON.stringify(key)).join(", ")} — only "name" and "arguments" are allowed`,
-          name,
-        ));
+      if (!isObj(args)) {
+        issues.push(issueFor(callIndex, entry.tool.freeform ? "custom tool requires raw string input" : '"arguments" must be a JSON object', name));
+        continue;
+      }
+      if (entry.tool.freeform && raw.type !== undefined && typeof raw.input !== "string") {
+        issues.push(issueFor(callIndex, "custom_tool_call requires input, not a synthetic arguments wrapper", name));
         continue;
       }
       const validate = entry.validate;
-      if (validate && !validate(raw.arguments)) {
+      if (validate && !validate(args)) {
         issues.push(issueFor(callIndex, `arguments for ${name} do not match its schema: ${compactAjvErrors(validate)}`, name));
         continue;
       }
@@ -249,7 +260,7 @@ export function parseNativeToolCallReply(text: string, tools: readonly CodexTool
         ...(entry.tool.namespace ? { namespace: entry.tool.namespace } : {}),
         freeform: entry.tool.freeform === true,
         toolSearch: entry.tool.toolSearch === true,
-        arguments: structuredClone(raw.arguments),
+        arguments: structuredClone(args),
       });
     }
   }
@@ -283,7 +294,7 @@ export function formatNativeToolCallCorrection(
       : []),
     ...lines,
     "Re-issue exactly one corrected ```codex_tool_calls block now, or answer normally without any block when no tool is needed.",
-    "Keep the same JSON shape {\"calls\":[{\"name\":…,\"arguments\":…}]}, use only declared tool names, and fix only what is listed above.",
+    "Use {\"calls\":[…]} with the original type, namespace and name. Function calls use arguments; custom calls use raw input. Fix only the listed errors.",
     "</codex_tool_call_correction>",
   ].join("\n");
 }
@@ -294,14 +305,13 @@ export function formatNativeToolCallCorrection(
  */
 export function nativeToolCallContractLines(): string[] {
   return [
-    `This task runs on Codex native tools. You decide tool calls; a local Codex agent executes them. You never execute anything yourself.`,
-    `When the latest request needs a local effect or fresh local evidence, reply with exactly one \`\`\`${CODEX_TOOL_CALLS_FENCE} fenced block: a single JSON object {"calls":[{"name":"<tool>","arguments":{…}},…]}.`,
-    `Use each tool's EXACT declared name from the supplied tool catalog. Freeform tools (for example apply_patch) take arguments {"input":"<raw tool body>"}.`,
-    `The supplied catalog belongs to the OUTER Codex process, not this ChatGPT page. A catalog tool named exec is Codex Code Mode, not a ChatGPT-native execution tool. Send its JavaScript source as the input string in the fenced JSON block; do not run that source in this page's tools.`,
-    `Inside that source, tools, text, image, store and other documented globals are provided later by the outer Codex runtime. Their absence in this ChatGPT page is not a task failure. Do not use a ChatGPT connector, ask for a turn token, or discover similarly named page tools to execute an outer call.`,
-    `Sending the fenced block is the actual execution request, not a suggestion or a user-facing code example. Stop after the block and wait for Codex's tool_result before reporting success or failure.`,
-    `The block must contain valid JSON only: no comments, no trailing commas, no prose inside the fence. When no tool is needed, answer normally without any block.`,
-    `Text you write outside the block reaches the Codex user; keep it brief before a tool call and write the complete final answer only after the last tool result has settled.`,
-    `After tool results appear in the context, continue the task: either another block with the next calls, or the final answer with no block.`,
+    "Codex executes the supplied tools under its own sandbox and approvals. This page only returns call decisions.",
+    'Return calls in one fenced codex_tool_calls JSON block: {"calls":[{"type":"function_call","namespace":"<original namespace, if any>","name":"<original name>","arguments":{...}}]}.',
+    'For custom tools use {"type":"custom_tool_call","namespace":"<original namespace, if any>","name":"<original name>","input":"<raw source>"}. For tool_search use type tool_search_call with name tool_search and arguments.',
+    "Use the exact declared namespace, name and kind. A namespace group supplies its namespace to its children. Omit namespace only for a tool declared outside a namespace. Never combine namespace and name into an alias.",
+    "The catalog describes top-level Codex tools. It does not declare members of exec's tools object. Inside exec use only the nested exports and globals declared by its original description or discovered from its runtime ALL_TOOLS; top-level tools do not imply nested exports.",
+    "Return custom exec source unchanged in input. Codex executes it; do not run it using this page's own tools or connector.",
+    "After returning a call block, wait for the matching Codex tool output before reporting its outcome. When no call is needed, return the requested answer without a call block.",
+    "JSON escaping is transport encoding only. Preserve raw custom input after JSON decoding, including newlines and backslashes.",
   ];
 }

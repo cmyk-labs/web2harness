@@ -574,7 +574,7 @@ export class DevChatDriver {
   }
 
   private shouldAutoCompact(state: DevChatState, context: DevContextStatus): boolean {
-    return !isLunaDevChatModel(state.model) && context.inputTokens >= context.autoCompactTokenLimit;
+    return context.inputTokens >= context.autoCompactTokenLimit;
   }
 
   private assertContextFileModel(model: DevChatModel): void {
@@ -624,9 +624,6 @@ export class DevChatDriver {
     reason: "automatic" | "manual",
     emit: (event: DevChatEvent) => void,
   ): Promise<unknown[]> {
-    if (isLunaDevChatModel(state.model)) {
-      throw new Error("ChatGPT Web Luna uses its production rolling checkpoint and does not support a separate compact command");
-    }
     const compactTurnId = id("dev_compact_turn");
     emit({ type: "compaction_start", reason, inputItems: input.length });
     const response = await compactRequest(new Request("http://web2harness.dev/v1/responses/compact", {

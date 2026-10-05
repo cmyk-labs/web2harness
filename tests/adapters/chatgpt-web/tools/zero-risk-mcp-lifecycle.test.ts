@@ -1,3 +1,4 @@
+import { toolIdentityKey } from "../../../../src/types";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -94,12 +95,12 @@ describe("Zero Risk turn broker lifecycle", () => {
       const invocation = callTurnBroker<BrokerToolResult>(socketPath, {
         method: "invoke",
         bindingId: claimed.bindingId,
-        wireName: "exec_command",
+        wireName: toolIdentityKey(undefined, "exec_command"),
         freeform: false,
         arguments: { cmd: "pwd" },
       }, null);
       const [request] = await ownerBatch;
-      expect(request).toMatchObject({ wireName: "exec_command", arguments: { cmd: "pwd" } });
+      expect(request).toMatchObject({ wireName: toolIdentityKey(undefined, "exec_command"), arguments: { cmd: "pwd" } });
       expect(() => broker.completeSafeTurn(requestId, "premature"))
         .toThrow("1 pending Codex tool invocation");
       broker.completeTool(requestId, request!.callId, toolResult({ output: root }));
@@ -337,7 +338,7 @@ describe("Zero Risk public MCP ABI", () => {
         arguments: { request_id: requestId },
       });
       const [inventoryRequest] = await broker.nextToolBatch(requestId);
-      expect(inventoryRequest).toMatchObject({ wireName: "exec", freeform: true });
+      expect(inventoryRequest).toMatchObject({ wireName: toolIdentityKey(undefined, "exec"), freeform: true });
       expect(inventoryRequest?.input).toContain("ALL_TOOLS");
       expect(inventoryRequest?.input).toContain("codex_turn_complete");
       broker.completeTool(requestId, inventoryRequest!.callId, {
@@ -347,8 +348,8 @@ describe("Zero Risk public MCP ABI", () => {
       expect(inventory.structuredContent).toMatchObject({
         total: 2,
         tools: [
-          { wire_name: "exec_command" },
-          { wire_name: "mcp__useful__useful_tool" },
+          { scope: "top_level", name: "exec_command" },
+          { scope: "top_level", namespace: "mcp__useful", name: "useful_tool" },
         ],
       });
       expect(JSON.stringify(inventory)).not.toContain(ownNamespace);
@@ -360,7 +361,7 @@ describe("Zero Risk public MCP ABI", () => {
         name: "codex_tool_call",
         arguments: {
           request_id: requestId,
-          wire_name: `${ownNamespace}__shadow_tool`,
+          namespace: ownNamespace, name: "shadow_tool",
           arguments: {},
         },
       });
@@ -371,7 +372,7 @@ describe("Zero Risk public MCP ABI", () => {
         name: "codex_tool_call",
         arguments: {
           request_id: requestId,
-          wire_name: "exec",
+          name: "exec",
           input: "await tools.mcp__codex_safe__codex_turn_complete({});",
         },
       });
@@ -382,13 +383,13 @@ describe("Zero Risk public MCP ABI", () => {
         name: "codex_tool_call",
         arguments: {
           request_id: requestId,
-          wire_name: "mcp__useful__useful_tool",
+          namespace: "mcp__useful", name: "useful_tool",
           arguments: { query: "test" },
         },
       });
       const [request] = await broker.nextToolBatch(requestId);
       expect(request).toMatchObject({
-        wireName: "mcp__useful__useful_tool",
+        wireName: toolIdentityKey("mcp__useful", "useful_tool"),
         arguments: { query: "test" },
       });
       broker.completeTool(requestId, request!.callId, toolResult({ ok: true }));

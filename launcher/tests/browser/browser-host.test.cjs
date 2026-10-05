@@ -2292,6 +2292,64 @@ test("a later provider round reuses only its exact connector-bound conversation"
   assert.deepEqual(events, ["visible", "published", "descriptor", "browser.tab_reused"]);
 });
 
+for (const reused of [false, true]) {
+  for (const selectedStatus of ["running", "ready"]) {
+    test(`${reused ? "resuming" : "starting"} a parallel turn preserves a ${selectedStatus} selected surface appropriately`, async () => {
+      const bounds = new Map();
+      const emulation = new Map();
+      const makeView = (id) => ({
+        setBounds: (value) => bounds.set(id, value),
+        setVisible() {},
+        webContents: {
+          isDestroyed: () => false,
+          setBackgroundThrottling() {},
+          enableDeviceEmulation: (value) => emulation.set(id, value.viewSize),
+          disableDeviceEmulation: () => emulation.delete(id),
+        },
+      });
+      const selected = {
+        id: "parent", traceId: "trace_parent", status: selectedStatus,
+        interactionMode: "automatic", rendererReady: true, view: makeView("parent"),
+      };
+      const child = {
+        id: "child", surfaceId: "child-surface", traceId: "trace_previous_child",
+        status: reused ? "ready" : "running", interactionMode: "automatic",
+        conversationKey: "p".repeat(64), rendererReady: true, view: makeView("child"),
+      };
+      const fixture = Object.assign(Object.create(BrowserHost.prototype), {
+        view: makeView("home"), authView: null, manualOperation: null,
+        turnTabs: new Map([selected, ...(reused ? [child] : [])].map(tab => [tab.id, tab])),
+        selectedTabId: selected.id, userCancelledTurnOwners: new Map(),
+        visible: true, surfaceActive: true, boundsReady: true,
+        bounds: { x: 252, y: 88, width: 868, height: 633 },
+        window: {
+          getContentSize: () => [1120, 721],
+          isVisible: () => true, isMinimized: () => false,
+        },
+        createTurnTab: async () => { fixture.turnTabs.set(child.id, child); return child; },
+        show: () => fixture.syncViewVisibility(),
+        snapshot: () => ({}), publishState() {}, writeDescriptor() {}, logger: { info() {} },
+      });
+      fixture.syncViewVisibility();
+
+      const lease = await fixture.beginTurn("trace_next_child", true, 222, child.conversationKey);
+
+      assert.equal(lease.tabId, child.id);
+      assert.equal(lease.reused, reused);
+      assert.equal(fixture.selectedTabId, selectedStatus === "running" ? selected.id : child.id);
+      if (selectedStatus === "running") {
+        assert.deepEqual(bounds.get(selected.id), fixture.bounds);
+        assert.equal(emulation.has(selected.id), false);
+        assert.deepEqual(emulation.get(child.id), { width: 1120, height: 721 });
+        assert.equal(bounds.get(child.id).x > 1120, true);
+      } else {
+        assert.deepEqual(bounds.get(child.id), fixture.bounds);
+        assert.equal(emulation.has(child.id), false);
+      }
+    });
+  }
+}
+
 test("a retained conversation is not reused for a different connector identity", async () => {
   const conversationKey = "b".repeat(64);
   const retained = {

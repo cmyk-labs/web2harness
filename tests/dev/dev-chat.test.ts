@@ -1,3 +1,5 @@
+import { rejects } from "node:assert/strict";
+import { toolIdentityKey } from "../../src/types";
 import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -59,12 +61,12 @@ test("remote outer harness owns a turn through the live broker protocol", async 
     const invocation = callTurnBroker<BrokerToolResult>(socketPath, {
       method: "invoke",
       bindingId: claimed.bindingId,
-      wireName: "exec_command",
+      wireName: toolIdentityKey(undefined, "exec_command"),
       arguments: { cmd: "pwd" },
     }, 10_000);
     const batch = await remote.nextToolBatch(token);
     expect(batch).toHaveLength(1);
-    expect(batch[0]).toMatchObject({ wireName: "exec_command", arguments: { cmd: "pwd" } });
+    expect(batch[0]).toMatchObject({ wireName: toolIdentityKey(undefined, "exec_command"), arguments: { cmd: "pwd" } });
     await remote.completeTool(token, batch[0]!.callId, {
       content: [{ type: "text", text: "simulated" }],
       structuredContent: { simulated: true },
@@ -72,7 +74,7 @@ test("remote outer harness owns a turn through the live broker protocol", async 
     expect(await invocation).toMatchObject({ structuredContent: { simulated: true } });
     await remote.revoke(token);
     await expect(retirement).resolves.toBeUndefined();
-    await expect(callTurnBroker(socketPath, { method: "claim", token })).rejects.toThrow("already finished");
+    await rejects(callTurnBroker(socketPath, { method: "claim", token }), /already finished/);
   } finally {
     await broker.close();
   }
@@ -109,7 +111,7 @@ test("disconnecting a remote owner_next removes its broker waiter", async () => 
     const invocation = callTurnBroker<BrokerToolResult>(socketPath, {
       method: "invoke",
       bindingId: claimed.bindingId,
-      wireName: "exec_command",
+      wireName: toolIdentityKey(undefined, "exec_command"),
       arguments: { cmd: "pwd" },
     }, 10_000);
     const [request] = await secondWait;
@@ -399,7 +401,7 @@ test("DEV driver uses shared browser methods and its own broker while an unrelat
       const invocation = callTurnBroker<BrokerToolResult>(config.brokerSocketPath, {
         method: "invoke",
         bindingId: claimed.bindingId,
-        wireName: "exec_command",
+        wireName: toolIdentityKey(undefined, "exec_command"),
         arguments: { cmd: "git status --short" },
       }, 30_000);
       let snapshot = progress.snapshot();

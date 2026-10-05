@@ -5,9 +5,9 @@
 **Web2Harness** — Bring ChatGPT web models into Codex, keep your native tools and existing workflow, and make the most of the web model usage available on your ChatGPT account to get more real work done.
 
 <p align="center">
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.0/web2harness-1.1.0-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 1.1.0"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.0/web2harness-1.1.0-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 1.1.0"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.0/web2harness-1.1.0-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 1.1.0"></a>
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 1.1.1"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 1.1.1"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 1.1.1"></a>
 </p>
 
 <p align="center">
@@ -34,6 +34,8 @@ Select a **(Web)** model in Codex to use your signed-in ChatGPT account for repo
 | Images and attachments | Automatic interaction forwards task images and PDF, UTF-8 text, or source files supplied inline by the client as real attachments; optional experiments send large context or selected skills as text attachments. |
 | Model switching and subagents | Use native and Web models within a task, with subagent delegation governed by the selected compatibility protocol. |
 | Desktop management | Sign in, configure modes, check connections, inspect runtime health, and export safe logs in the application. |
+
+**1.1.1:** Context forwarding preserves original Codex roles, order and tool identities, with bridge output encoding kept separate. It does not silently trim history or rewrite raw exec programs. Browser transport limits and model behavior still differ from native API execution; see [context separation](docs/architecture.md#native-tools).
 
 Available models and efforts depend on the signed-in account and browser checks. See the [configuration and model reference](docs/reference.md); the application does not add account quota or unlock unavailable models.
 
@@ -78,7 +80,7 @@ A task typically follows **select a Web model → submit a task → receive a we
 
 ## Get started
 
-Have Codex available on your computer and a ChatGPT account you can sign in to. The header buttons download Windows x64, macOS Apple silicon and Linux x64 installers. Other processors: [macOS Intel](https://github.com/cmyk-labs/web2harness/releases/download/v1.1.0/web2harness-1.1.0-mac-x64.dmg) · [Linux arm64](https://github.com/cmyk-labs/web2harness/releases/download/v1.1.0/web2harness-1.1.0-linux-arm64.AppImage). Choose one matching installer; the [1.1.0 release](https://github.com/cmyk-labs/web2harness/releases/tag/v1.1.0) provides checksums and validation notes. This stable release is available through the application's update check. See the [user guide](docs/user-guide.md) for installation methods and platform requirements, or [run an existing checkout from source](#development).
+Have Codex available on your computer and a ChatGPT account you can sign in to. The header buttons download Windows x64, macOS Apple silicon and Linux x64 installers. Other processors: [macOS Intel](https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-mac-x64.dmg) · [Linux arm64](https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-linux-arm64.AppImage). Choose one matching installer; the [1.1.1 release](https://github.com/cmyk-labs/web2harness/releases/tag/v1.1.1) provides checksums and validation notes. This stable release is available through the application's update check. See the [user guide](docs/user-guide.md) for installation methods and platform requirements, or [run an existing checkout from source](#development).
 
 1. **Start Web2Harness.** Use a package matching your platform and architecture, or run from source.
 2. **Sign in through the browser.** Open **Connection & Models**, sign in to ChatGPT in the application browser, and run **Check connection**.
@@ -134,6 +136,7 @@ User-visible features, fixes, and compatibility changes are recorded by version,
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 1.1.1 | 2026-10-05 | Preserve original Codex context and tool declarations, namespaces, call scopes, and raw exec input. Separate bridge transport instructions; verify retained-history prefixes and reject unsupported content without silent trimming. Refresh MCP tool definitions after upgrading. Fix automatic tab switches interrupting model selection during parallel tasks, and add three mandatory live release acceptance cases. |
 | 1.1.0 | 2026-10-05 | Preserve native Code Mode and namespaced custom tools, input formats and call identities. Transfer inline PDF/text/source files through real attachments and preserve image fidelity hints. Add manual and periodic update checks, check timestamps, download progress, responsive checksum verification and readable log summaries. |
 | 1.0.2 | 2026-10-05 | Adds a blue sidebar update notice with download/install states. Windows updates show a separate installer progress window and reopen the app after completion; setup keeps shortcut icons outside the replaced application directory and records stage durations. Fixes the plan-reference dropdown's dark colors and defaults its reference table to Pro $200. The update from an older updater such as 1.0.1 still uses its original silent flow; the new window applies to subsequent updates. |
 | 1.0.1 | 2026-10-05 | Saved chats use creation time, a stable task name, and separate dialogue/compaction sequence numbers. Retained saved conversations are checked by conversation ID before incremental submission; tool round trips refresh the owned browser viewport to preserve reuse. Local usage recording is automatic, with per-model rolling counts and published policy references clearly separated from unconfirmed official periods. Health checks show readable names and distinct statuses; Native Tools diagnostics and persistent missing-record warnings are corrected. |
@@ -153,6 +156,7 @@ Start with the user guide. Go directly to troubleshooting for a failure, and con
 | Components, request flow, conversation lifecycle, and permission boundaries | [Architecture](docs/architecture.md) |
 | Source development, contributions and review, isolated tests, naming, and documentation maintenance | [Development manual](docs/development.md) |
 | Builds, packages, acceptance, publication, rollback, and security maintenance | [Release manual](docs/release.md) |
+| Mandatory live capability cases for each release, evidence, and case extensions | [Acceptance tests](docs/acceptance-tests.md) |
 
 See [Contributing and review](docs/development.md#contributing) for submissions, [Report a vulnerability](docs/release.md#vulnerability-reporting) for private reports, and the [repository instructions](AGENTS.md) for automated work.
 

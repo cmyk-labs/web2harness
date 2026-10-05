@@ -307,7 +307,7 @@ Only `--simulate` uses `DevChatDriver` and simulated tool receipts. Every simula
 | `/status` | Inspect the simulator session. |
 | `/fill 30000` | Add inert context locally. |
 | `/send-fill 12000` | Send generated context through the real browser. |
-| `/compact` | Exercise browser compaction; unavailable for Luna's rolling checkpoint. |
+| `/compact` | Exercise native Codex browser compaction, including Luna. |
 | `/model high` | Change the simulator model selection. |
 | `/reset yes` | Reset the named simulator chat. |
 | `/help`, `/exit` | Show commands or leave the simulator. |
@@ -389,6 +389,8 @@ Give component boundaries and arrows a clear operational meaning. Use readable l
 Architecture diagrams should identify the participating process/service, transport, and direction of flow. Sequence diagrams should state which component owns an action and where tool results return. Use a legend only when symbols or line styles need explanation. Label environment boundaries explicitly so DEV and regular operation cannot be confused. The [architecture manual](architecture.md) owns the technical content.
 
 Keep the six primary manuals—usage, troubleshooting, reference, architecture, development, and release—directly under `docs/`. Maintain each detailed rule in the manual that owns its subject and link to it elsewhere. README provides direct links to contribution requirements in this manual and vulnerability reporting in the release manual. Technical trust boundaries belong in the architecture manual; AGENTS governs automated work. Do not add separate documents that duplicate these sections or only redirect readers. Dated evidence in `dev-notes/` does not replace current instructions.
+
+The companion [capability acceptance cases](acceptance-tests.md) also live directly under `docs/` and own reusable prompts, pass criteria, and the result template. Release requirements link to them instead of copying the cases. Extend both language editions when target capabilities change; keep dated execution results in the candidate's evidence record.
 
 Keep assets by purpose in root `assets/brand/`, `assets/readme/`, `assets/demos/` and `assets/diagrams/`; maintain diagram JSON with its SVG. Generators belong in `scripts/`, and platform installation and launch scripts belong in `launcher/packaging/`. Do not duplicate assets in individual modules. Renderer imports select the required icons and videos. Explicit Electron packaging mappings retain the installed `assets/` paths for application/tray icons and the Linux runner, without bundling README demonstrations, diagram sources or documentation assets.
 

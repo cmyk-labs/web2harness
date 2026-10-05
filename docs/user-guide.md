@@ -203,9 +203,9 @@ Automatic launcher-hosted saved chats with a Codex thread identity are named aft
 
 Saved-chat continuation checks the exact conversation ID before incremental submission. A changed chat or home screen is rejected; retry to start a new chat with full Codex context. Titles and numbering do not authorize reopening history after a launcher restart. Compaction still starts a new context epoch, and separate summary chats remain saved when history is enabled.
 
-Luna uses rolling checkpoints. Browser-only does not retain browser conversations, and manual interaction follows the operator's handoff. Their continuity differs from retained Sol/Pro routes; see the [architecture manual](architecture.md).
+Luna uses native Codex compaction without private history replacement. Browser-only does not retain browser conversations, and manual interaction follows the operator's handoff. Their continuity differs from retained Sol/Pro routes; see the [architecture manual](architecture.md).
 
-Both saved and temporary chats send prompts, files, and images to ChatGPT. Disabling history does not make processing local. Task images come from Codex's conversation context; earlier images can be attached again, with at most the newest ten complete images retained by the bridge. Start a new Codex task to exclude earlier task images.
+Both saved and temporary chats send prompts, files, and images to ChatGPT. Disabling history does not make processing local. Task images come from Codex's conversation context; earlier images can be attached again, without deleting older images. If one submission requires more than ten images, it fails explicitly. Start a new Codex task to exclude earlier task images.
 
 Browser-based image generation is not a supported Web turn. Codex's native Image Gen tool follows its own native backend path, authentication, and allowance. Uninstalling Web2Harness does not remove conversations already saved in ChatGPT.
 
@@ -218,6 +218,8 @@ Inspect **Connection & Models → Web models** for the current account's model I
 Keep Web2Harness as route owner when switching a task between Web and native Codex models. Its native route converts Web checkpoints while preserving native encrypted history. An external router can bypass that conversion. Preserve task history if a switch fails and use [routing diagnostics](troubleshooting.md#codex-routing-and-catalog).
 
 **Compatibility V1** is the default subagent protocol for delegation between native and Web models. **Native** preserves Codex's native protocol settings. Under V2, Web-to-Web delegation uses an explicit plaintext marker; unreadable native encrypted task content is rejected. Child agents retain their selected model, tools, sandbox, and approval rules.
+
+Parallel automatic tasks use separate browser tabs. Starting or resuming another task keeps the currently selected running tab in place, so its model controls are not interrupted by an automatic tab switch. You can still select a task tab explicitly; when the selected task is idle, the next task is shown automatically.
 
 Where the CLI is installed:
 

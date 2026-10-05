@@ -1,3 +1,4 @@
+import { toolIdentityKey } from "../../../src/types";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { rejects } from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -861,8 +862,8 @@ describe("ChatGPT outer-native harness v4", () => {
     const second = sessions.getOrCreate("same", runtime);
     expect(second).toBe(first);
     expect(starts).toBe(1);
-    first.setOutstanding([{ callId: "call_1", wireName: "exec_command", freeform: false, arguments: { cmd: "pwd" } }]);
-    expect(second.outstanding()).toEqual([{ callId: "call_1", wireName: "exec_command", freeform: false, arguments: { cmd: "pwd" } }]);
+    first.setOutstanding([{ callId: "call_1", wireName: toolIdentityKey(undefined, "exec_command"), freeform: false, arguments: { cmd: "pwd" } }]);
+    expect(second.outstanding()).toEqual([{ callId: "call_1", wireName: toolIdentityKey(undefined, "exec_command"), freeform: false, arguments: { cmd: "pwd" } }]);
   });
 
   test("waits for completed browser cleanup before starting the next canonical instruction", async () => {
@@ -1362,7 +1363,7 @@ describe("ChatGPT outer-native harness v4", () => {
     }
   });
 
-  test("a missing optional Luna checkpoint completes once without repeating the browser turn", async () => {
+  test("Luna preserves canonical context without private checkpoint capture", async () => {
     const checkpointPath = join(tempRoot, `missing-luna-checkpoint-${Date.now()}.json`);
     const provider: CodexProviderConfig = {
       adapter: "chatgpt-web",
@@ -1381,7 +1382,7 @@ describe("ChatGPT outer-native harness v4", () => {
       browserStarts += 1;
       const prepared = await turn.prepare();
       try {
-        expect(turn.captureLunaCheckpoint).toBeTrue();
+        expect(turn.captureLunaCheckpoint).toBeUndefined();
         const answer = "Luna completed the requested task.";
         turn.onTextDelta(answer);
         return answer;
@@ -1486,10 +1487,10 @@ describe("ChatGPT outer-native harness v4", () => {
     const compiled = compileChatGptWebPrompt(request, toolCapabilities, "turn_123456789012345678901234");
     expect(compiled.text).not.toContain(imageUrl);
     expect(compiled.text).toContain('"attachment_ref":"codex-input-image-1"');
-    expect(compiled.text).toContain('"version":3');
-    expect(compiled.text).toContain("use the attached Codex Native tools directly according to their declared descriptions and schemas");
-    expect(compiled.text).toContain("Use actual Codex Native results as evidence");
-    expect(compiled.text).toContain("Write the user-facing final answer only after the last required tool result has settled");
+    expect(compiled.text).toContain('"version":5');
+    expect(compiled.text).toContain("Use the attached Codex transport tools to relay calls to the active Codex task");
+    expect(compiled.text).toContain("Codex retains sandbox and approval enforcement");
+    expect(compiled.text).toContain("Follow the Codex task's own tool-use instructions");
     expect(compiled.text.match(/turn_123456789012345678901234/g)).toHaveLength(1);
     expect(compiled.text).not.toContain("codex_bind_turn");
     expect(compiled.text).not.toContain("binding_id");
@@ -1499,7 +1500,7 @@ describe("ChatGPT outer-native harness v4", () => {
     expect(files[0]?.buffer.length).toBeGreaterThan(0);
   });
 
-  test("keeps only the newest complete Codex model-switch contract", () => {
+  test("keeps all original Codex model-switch contracts in order", () => {
     const history = [
       { role: "developer" as const, content: "<model_switch>old contract</model_switch>", timestamp: 1 },
       { role: "developer" as const, content: "<skills_instructions>old catalog</skills_instructions>", timestamp: 2 },
@@ -1513,8 +1514,8 @@ describe("ChatGPT outer-native harness v4", () => {
 
     const normalized = withoutSupersededModelSwitchContracts(history);
     const serialized = JSON.stringify(normalized);
-    expect(serialized).not.toContain("old contract");
-    expect(serialized).not.toContain("old catalog");
+    expect(serialized).toContain("old contract");
+    expect(serialized).toContain("old catalog");
     expect(serialized).toContain("historical user message");
     expect(serialized).toContain("historical answer");
     expect(serialized).toContain("unrelated developer instruction");
@@ -1564,8 +1565,8 @@ describe("ChatGPT outer-native harness v4", () => {
     ];
 
     const compiled = compileChatGptWebPrompt(request, browserOnlyCapabilities);
-    expect(compiled.text).toContain("ChatGPT Web Pro with no Codex Native bridge to the user's local computer");
-    expect(compiled.text).toContain("web search, browsing, research");
+    expect(compiled.text).toContain("No local Codex tool execution route is attached to this response");
+    expect(compiled.text).toContain("Preserve the provided context and report this limitation");
     expect(compiled.text).toContain("prepared workspace evidence");
     expect(compiled.text).toContain('"system":["system-rule","repo-rule"]');
     expect(compiled.text).toContain('"attachment_ref":"codex-input-image-1"');
@@ -2014,7 +2015,7 @@ describe("ChatGPT outer-native harness v4", () => {
     const compiled = compileChatGptWebPrompt(request, toolCapabilities, "turn_123456789012345678901234");
     const encoded = compiled.text.match(/<codex_context_json>\n(.+)\n<\/codex_context_json>/s)?.[1];
     const envelope = JSON.parse(encoded!) as { version: number; system: string[]; messages: Array<Record<string, unknown>> };
-    expect(envelope.version).toBe(3);
+    expect(envelope.version).toBe(5);
     expect(envelope.system).toEqual(["system-rule", "repo-rule"]);
     expect(envelope.messages.map(message => message.role)).toEqual(["developer", "user", "assistant", "tool_result", "user"]);
     expect(envelope.messages[2]?.content).toEqual([
@@ -2044,12 +2045,12 @@ describe("ChatGPT outer-native harness v4", () => {
     const invocation = callTurnBroker<BrokerToolResult>(socketPath, {
       method: "invoke",
       bindingId: claimed.bindingId,
-      wireName: "exec_command",
+      wireName: toolIdentityKey(undefined, "exec_command"),
       freeform: false,
       arguments: { cmd: "pwd" },
     }, 10_000);
     const [request] = await broker.nextToolBatch(token);
-    expect(request).toMatchObject({ wireName: "exec_command", freeform: false, arguments: { cmd: "pwd" } });
+    expect(request).toMatchObject({ wireName: toolIdentityKey(undefined, "exec_command"), freeform: false, arguments: { cmd: "pwd" } });
     expect(() => broker.completeTool(token, "unknown", toolResult({ output: "no" }))).toThrow("not pending");
     broker.completeTool(token, request!.callId, toolResult({ output: tempRoot }));
     expect(await invocation).toEqual(toolResult({ output: tempRoot }));
@@ -2148,7 +2149,7 @@ describe("ChatGPT outer-native harness v4", () => {
       const invoke = (cmd: string) => callTurnBroker<BrokerToolResult>(socketPath, {
         method: "invoke",
         bindingId: claimed.bindingId,
-        wireName: "exec_command",
+        wireName: toolIdentityKey(undefined, "exec_command"),
         freeform: false,
         arguments: { cmd },
       }, 10_000);
@@ -2183,7 +2184,7 @@ describe("ChatGPT outer-native harness v4", () => {
       const invocation = callTurnBroker(socketPath, {
         method: "invoke",
         bindingId: claimed.bindingId,
-        wireName: "exec_command",
+        wireName: toolIdentityKey(undefined, "exec_command"),
         freeform: false,
         arguments: { cmd: "sleep 30" },
       }, 10_000);
@@ -2220,7 +2221,7 @@ describe("ChatGPT outer-native harness v4", () => {
         const nativeResult = await invokeAfterBrowserBoundary(turn, () => callTurnBroker<BrokerToolResult>(socketPath, {
           method: "invoke",
           bindingId: claimed.bindingId,
-          wireName: "exec_command",
+          wireName: toolIdentityKey(undefined, "exec_command"),
           freeform: false,
           arguments: { cmd: "collect-large-evidence", workdir: tempRoot },
         }, 30_000));
@@ -2241,7 +2242,7 @@ describe("ChatGPT outer-native harness v4", () => {
       const call = firstEvents.find(
         (event): event is Extract<AdapterEvent, { type: "tool_call_start" }> => event.type === "tool_call_start",
       );
-      expect(call?.name).toBe("exec_command");
+      expect(call?.name).toBe(toolIdentityKey(undefined, "exec_command"));
       const firstDone = firstEvents.at(-1) as Extract<AdapterEvent, { type: "done" }>;
       expect(firstDone.usage!.inputTokens).toBeLessThan(95_000);
 
@@ -2348,7 +2349,7 @@ describe("ChatGPT outer-native harness v4", () => {
           const nativeResult = await invokeAfterBrowserBoundary(turn, () => callTurnBroker<BrokerToolResult>(socketPath, {
             method: "invoke",
             bindingId: claimed.bindingId,
-            wireName: "exec_command",
+            wireName: toolIdentityKey(undefined, "exec_command"),
             freeform: false,
             arguments: { cmd: "git status --short", workdir: tempRoot },
           }, 30_000));
@@ -2365,7 +2366,7 @@ describe("ChatGPT outer-native harness v4", () => {
         const nativeResult = await invokeAfterBrowserBoundary(turn, () => callTurnBroker<BrokerToolResult>(socketPath, {
           method: "invoke",
           bindingId: claimed.bindingId,
-          wireName: "exec_command",
+          wireName: toolIdentityKey(undefined, "exec_command"),
           freeform: false,
           arguments: { cmd: "pwd", workdir: tempRoot },
         }, 30_000));
@@ -2389,7 +2390,7 @@ describe("ChatGPT outer-native harness v4", () => {
     try {
       await adapter.runTurn!(firstRequest, { headers: new Headers() }, event => firstEvents.push(event));
       const callStart = firstEvents.find((event): event is Extract<AdapterEvent, { type: "tool_call_start" }> => event.type === "tool_call_start");
-      expect(callStart?.name).toBe("exec_command");
+      expect(callStart?.name).toBe(toolIdentityKey(undefined, "exec_command"));
       expect(firstEvents.filter(event => event.type === "assistant_boundary")).toHaveLength(2);
       expect(firstEvents.filter(event => event.type === "thinking_delta")).toEqual([
         { type: "thinking_delta", thinking: "Mapped the repository surface" },
@@ -2400,7 +2401,7 @@ describe("ChatGPT outer-native harness v4", () => {
       expect(firstDone.usage?.estimated).toBe(true);
       expect(Number.isFinite(firstDone.usage?.inputTokens)).toBe(true);
       expect(Number.isFinite(firstDone.usage?.outputTokens)).toBe(true);
-      const firstResponse = buildResponseJSON(firstEvents, "gpt-5.6-sol") as { output: Array<Record<string, unknown>>; usage: { total_tokens: number } };
+      const firstResponse = buildResponseJSON(firstEvents, "gpt-5.6-sol", { toolNsMap: new Map([[toolIdentityKey(undefined, "exec_command"), { namespace: "", name: "exec_command" }]]) }) as { output: Array<Record<string, unknown>>; usage: { total_tokens: number } };
       expect(firstResponse.usage.total_tokens).toBeGreaterThan(0);
       expect(firstResponse.output.map(item => item.type)).toEqual(["reasoning", "reasoning", "function_call"]);
       expect(firstResponse.output[2]).toMatchObject({
@@ -2516,7 +2517,7 @@ describe("ChatGPT outer-native harness v4", () => {
       expect(turn.capabilities.localToolsEnabled).toBe(true);
       const prepared = await turn.prepare();
       try {
-        expect(prepared.text).toContain("For local work required by the task, use the attached Codex Native tools directly");
+        expect(prepared.text).toContain("Use the attached Codex transport tools to relay calls to the active Codex task");
         expect(prepared.text).not.toContain("with no Codex Native bridge");
         const token = prepared.text.match(/turn_token (turn_[A-Za-z0-9_-]+)/)?.[1];
         if (!token) throw new Error("turn token missing from compiled Pro prompt");
@@ -2525,7 +2526,7 @@ describe("ChatGPT outer-native harness v4", () => {
         const nativeResult = await invokeAfterBrowserBoundary(turn, () => callTurnBroker<BrokerToolResult>(socketPath, {
           method: "invoke",
           bindingId: claimed.bindingId,
-          wireName: "exec_command",
+          wireName: toolIdentityKey(undefined, "exec_command"),
           freeform: false,
           arguments: { cmd: "pwd", workdir: tempRoot },
         }, 30_000));
@@ -2548,7 +2549,7 @@ describe("ChatGPT outer-native harness v4", () => {
       const call = firstEvents.find(
         (event): event is Extract<AdapterEvent, { type: "tool_call_start" }> => event.type === "tool_call_start",
       );
-      expect(call?.name).toBe("exec_command");
+      expect(call?.name).toBe(toolIdentityKey(undefined, "exec_command"));
       expect(firstEvents.some(event => event.type === "text_delta"
         && event.text.includes("cannot access the local Codex computer"))).toBe(false);
       expect(firstEvents.at(-1)).toMatchObject({ type: "done", stopReason: "tool_use", endTurn: false });
@@ -2680,7 +2681,7 @@ describe("ChatGPT outer-native harness v4", () => {
       // ChatGPT caches the complete tools/list contract under a connector identity.
       // An intentional hash change therefore requires an explicit connector refresh or identity migration.
       expect(createHash("sha256").update(canonicalJson(publicConnectorAbi)).digest("hex"))
-        .toBe("9bb14902149337b52ce8598889497b1aba5a3265f28291df950bb38b5700a421");
+        .toBe("8a2be9ac6c2fceccf7178738c6da35268ec5ccb0651a7507e5432a36bdff0f54");
       for (const tool of listed.tools) {
         const properties = tool.inputSchema.properties as Record<string, unknown>;
         expect(properties.turn_token).toEqual({ type: "string", minLength: 20, maxLength: 256 });
@@ -2738,7 +2739,7 @@ describe("ChatGPT outer-native harness v4", () => {
       const secondExec = call("codex_exec", { turn_token: token, cmd: "git status --short", workdir: tempRoot });
       const execRequests = await broker.nextToolBatch(token);
       expect(execRequests).toHaveLength(2);
-      expect(execRequests.every(request => request.wireName === "exec" && request.freeform)).toBe(true);
+      expect(execRequests.every(request => request.wireName === toolIdentityKey(undefined, "exec") && request.freeform)).toBe(true);
       expect(execRequests.some(request => request.input?.includes(JSON.stringify({
         cmd: "pwd",
         workdir: tempRoot,
@@ -2805,7 +2806,7 @@ describe("ChatGPT outer-native harness v4", () => {
           include_schema: includeSchema,
         });
         const [request] = await broker.nextToolBatch(token);
-        expect(request).toMatchObject({ wireName: "exec", freeform: true });
+        expect(request).toMatchObject({ wireName: toolIdentityKey(undefined, "exec"), freeform: true });
         const gatewayCalls: GatewayProgramCall[] = [];
         const content = await executeGatewayProgram(request!.input!, nestedToolNames, gatewayCalls);
         expect(gatewayCalls).toEqual([]);
@@ -2825,16 +2826,16 @@ describe("ChatGPT outer-native harness v4", () => {
         total: 0,
         next_offset: null,
         discovery_tools: [{
-          wire_name: "tool_search", name: "tool_search", namespace: null,
+          scope: "top_level", name: "tool_search",
           description: "Load deferred tools", kind: "tool_search",
         }],
       });
 
       const search = call("codex_tool_call", {
-        turn_token: token, wire_name: "tool_search", arguments: { query: "clink opencode pal" },
+        turn_token: token, name: "tool_search", arguments: { query: "clink opencode pal" },
       });
       const [searchRequest] = await broker.nextToolBatch(token);
-      expect(searchRequest).toMatchObject({ wireName: "tool_search", arguments: { query: "clink opencode pal" } });
+      expect(searchRequest).toMatchObject({ wireName: toolIdentityKey(undefined, "tool_search"), arguments: { query: "clink opencode pal" } });
       broker.completeTool(token, searchRequest!.callId, toolResult({ tools: [] }));
       await search;
 
@@ -2845,10 +2846,8 @@ describe("ChatGPT outer-native harness v4", () => {
       );
       expect(rawGatewayInventory.structuredContent).toMatchObject({
         tools: [{
-          wire_name: "exec",
-          name: "exec",
-          kind: "freeform",
-          description: expect.stringContaining("enforced for wait_agent calls made inside exec"),
+          scope: "top_level", name: "exec", kind: "custom",
+          description: "Run nested Codex tools, including exec_command",
         }],
         total: 1,
         next_offset: null,
@@ -2857,7 +2856,7 @@ describe("ChatGPT outer-native harness v4", () => {
 
       const rawWeb = call("codex_tool_call", {
         turn_token: token,
-        wire_name: "exec",
+        name: "exec",
         input: "const value = await tools.web__run({ search_query: [{ q: 'Codex' }] }); text(value);",
       });
       const [rawWebRequest] = await broker.nextToolBatch(token);
@@ -2880,7 +2879,7 @@ describe("ChatGPT outer-native harness v4", () => {
 
       const rawVendorExec = call("codex_tool_call", {
         turn_token: token,
-        wire_name: "exec",
+        name: "exec",
         input: "const value = await tools.vendor__exec({ task: 'safe' }); text(value);",
       });
       const [rawVendorExecRequest] = await broker.nextToolBatch(token);
@@ -2897,16 +2896,13 @@ describe("ChatGPT outer-native harness v4", () => {
 
       const recursiveRawExec = call("codex_tool_call", {
         turn_token: token,
-        wire_name: "exec",
+        name: "exec",
         input: "await tools.exec('text(\"nested\")');",
       });
       const [recursiveRawExecRequest] = await broker.nextToolBatch(token);
       const recursiveRawExecCalls: GatewayProgramCall[] = [];
-      await expect(executeGatewayProgram(
-        recursiveRawExecRequest!.input!,
-        ["exec"],
-        recursiveRawExecCalls,
-      )).rejects.toThrow("Nested raw exec is unavailable");
+      expect(recursiveRawExecRequest!.input).toBe(`await tools.exec('text("nested")');`);
+      // The original runtime owns validation of an unavailable nested call; no bridge proxy is injected.
       expect(recursiveRawExecCalls).toEqual([]);
       broker.completeTool(token, recursiveRawExecRequest!.callId, {
         content: [{ type: "text", text: "Nested raw exec is unavailable" }],
@@ -2922,8 +2918,8 @@ describe("ChatGPT outer-native harness v4", () => {
       expect(vendorInventory.structuredContent).toMatchObject({
         total: 2,
         tools: [
-          { wire_name: "vendor__exec", kind: "gateway" },
-          { wire_name: "vendor__codex_tool_call", kind: "gateway" },
+          { scope: "exec", name: "vendor__exec", kind: "gateway" },
+          { scope: "exec", name: "vendor__codex_tool_call", kind: "gateway" },
         ],
       });
 
@@ -2932,22 +2928,19 @@ describe("ChatGPT outer-native harness v4", () => {
         total: 1,
         next_offset: null,
         tools: [{
-          wire_name: "web__run",
-          name: "web__run",
-          namespace: null,
+          scope: "exec", name: "web__run",
           kind: "gateway",
           description: "web__run test tool",
-          parameters: { type: "object", additionalProperties: true },
         }],
       });
 
       const nestedWeb = call("codex_tool_call", {
         turn_token: token,
-        wire_name: "web__run",
+        scope: "exec", name: "web__run",
         arguments: { search_query: [{ q: "Codex" }] },
       });
       const [nestedWebRequest] = await broker.nextToolBatch(token);
-      expect(nestedWebRequest).toMatchObject({ wireName: "exec", freeform: true });
+      expect(nestedWebRequest).toMatchObject({ wireName: toolIdentityKey(undefined, "exec"), freeform: true });
       const nestedWebCalls: GatewayProgramCall[] = [];
       const nestedWebContent = await executeGatewayProgram(
         nestedWebRequest!.input!,
@@ -2966,12 +2959,12 @@ describe("ChatGPT outer-native harness v4", () => {
 
       const waitPromise = call("codex_tool_call", {
         turn_token: token,
-        wire_name: "wait",
+        name: "wait",
         arguments: { cell_id: "cell_test", yield_time_ms: 10_000 },
       });
       const [waitRequest] = await broker.nextToolBatch(token);
       expect(waitRequest).toMatchObject({
-        wireName: "wait",
+        wireName: toolIdentityKey(undefined, "wait"),
         freeform: false,
         arguments: { cell_id: "cell_test", yield_time_ms: 10_000 },
       });
@@ -2980,54 +2973,40 @@ describe("ChatGPT outer-native harness v4", () => {
       expect((await waitPromise).structuredContent).toEqual({ output: "completed" });
 
       for (const wait of agentWaits) {
-        const inventory = await inventoryThroughGateway(wait.name, true, [wait.name]);
-        const catalog = inventory.structuredContent as { tools: Array<{ description: string; parameters: { properties: Record<string, unknown>; required: string[] } }> };
-        expect(catalog.tools).toHaveLength(1);
-        expect(catalog.tools[0]!.description).toContain("exactly 30 seconds");
-        expect(catalog.tools[0]!.description).not.toContain("target ids");
+        const namespace = wait.direct ? wait.name.split("__")[0]! : undefined;
+        const name = wait.direct ? "wait_agent" : wait.name;
+        const scope = wait.direct ? "top_level" : "exec";
+        const inventory = await inventoryThroughGateway(wait.direct ? name : wait.name, true, [wait.name]);
+        const catalog = inventory.structuredContent as { tools: Array<Record<string, unknown>> };
+        const entry = catalog.tools.find(tool => tool.name === name && tool.namespace === namespace)!;
+        expect(entry).toBeDefined();
+        expect(entry.scope).toBe(scope);
         if (wait.direct) {
-          const schema = catalog.tools[0]!.parameters;
-          expect(schema.properties.timeout_ms).toEqual({
-            type: "number", const: 30_000, minimum: 30_000, maximum: 30_000,
-            description: expect.stringContaining("exactly 30000"),
-          });
-          expect(schema.required).toEqual("targets" in wait.args ? ["targets", "timeout_ms"] : ["timeout_ms"]);
-          expect(Object.keys(schema.properties).sort()).toEqual(schema.required.toSorted());
+          const original = gatewayOnlyEnvironment.tools.find(tool => tool.namespace === namespace && tool.name === name)!;
+          expect(entry.description).toBe(original.description);
+          expect(entry.parameters).toEqual(original.parameters);
         }
-        for (const args of [{}, { timeout_ms: 180_000 }, { timeout_ms: "30000" }]) {
-          const rejected = await call("codex_tool_call", { turn_token: token, wire_name: wait.name, arguments: args });
-          expect(rejected.isError).toBe(true);
-          expect(JSON.stringify(rejected.content)).toContain("requires timeout_ms=30000");
-        }
-        const pending = call("codex_tool_call", { turn_token: token, wire_name: wait.name, arguments: wait.args });
-        const [request] = await broker.nextToolBatch(token);
-        if (wait.direct) {
-          expect(request).toMatchObject({ wireName: wait.name, arguments: wait.args });
-        } else {
-          const calls: GatewayProgramCall[] = [];
-          await executeGatewayProgram(request!.input!, [wait.name], calls);
-          expect(calls).toEqual([{ name: wait.name, input: wait.args }]);
-        }
-        broker.completeTool(token, request!.callId, toolResult(wait.result));
-        expect((await pending).structuredContent).toEqual(wait.result);
-
         for (const timeout_ms of [180_000, 30_000]) {
           const args = { ...wait.args, timeout_ms };
-          const raw = call("codex_tool_call", {
-            turn_token: token, wire_name: "exec", input: `await tools.${wait.name}(${JSON.stringify(args)});`,
-          });
+          const pending = call("codex_tool_call", { turn_token: token, scope, name, ...(namespace ? { namespace } : {}), arguments: args });
           const [request] = await broker.nextToolBatch(token);
-          const calls: GatewayProgramCall[] = [];
-          const execution = executeGatewayProgram(request!.input!, [wait.name], calls);
-          if (timeout_ms === 180_000) {
-            await expect(execution).rejects.toThrow("requires timeout_ms=30000");
-            expect(calls).toEqual([]);
-          } else {
-            await execution;
+          if (wait.direct) expect(request).toMatchObject({ wireName: toolIdentityKey(namespace, name), arguments: args });
+          else {
+            const calls: GatewayProgramCall[] = [];
+            await executeGatewayProgram(request!.input!, [wait.name], calls);
             expect(calls).toEqual([{ name: wait.name, input: args }]);
           }
-          broker.completeTool(token, request!.callId, { ...toolResult(wait.result), isError: timeout_ms === 180_000 });
-          expect(Boolean((await raw).isError)).toBe(timeout_ms === 180_000);
+          broker.completeTool(token, request!.callId, toolResult(wait.result));
+          expect((await pending).structuredContent).toEqual(wait.result);
+          const program = `await tools.${wait.name}(${JSON.stringify(args)});`;
+          const raw = call("codex_tool_call", { turn_token: token, name: "exec", input: program });
+          const [rawRequest] = await broker.nextToolBatch(token);
+          expect(rawRequest!.input).toBe(program);
+          const calls: GatewayProgramCall[] = [];
+          await executeGatewayProgram(rawRequest!.input!, [wait.name], calls);
+          expect(calls).toEqual([{ name: wait.name, input: args }]);
+          broker.completeTool(token, rawRequest!.callId, toolResult(wait.result));
+          expect((await raw).isError).not.toBe(true);
         }
       }
 
@@ -3068,7 +3047,7 @@ describe("ChatGPT outer-native harness v4", () => {
           const expected = name === "exec_command" ? { cmd: "pwd", ...permissions } : { command: "pwd", ...permissions };
           broker.completeTool(token, request!.callId, { content: [{ type: "text", text: "Native approval denied" }], isError: true });
           const response = await pending;
-          expect(request).toMatchObject({ wireName: name, arguments: expected });
+          expect(request).toMatchObject({ wireName: toolIdentityKey(undefined, name), arguments: expected });
           expect(response.isError).toBe(true);
           expect(response.content).toEqual([{ type: "text", text: "Native approval denied" }]);
         } finally { broker.revoke(token); }
@@ -3124,7 +3103,7 @@ describe("ChatGPT outer-native harness v4", () => {
       });
       expect(inventory.structuredContent).toMatchObject({
         total: 1,
-        tools: [{ wire_name: "exec_command", kind: "function" }],
+        tools: [{ scope: "top_level", name: "exec_command", kind: "function" }],
       });
       expect(JSON.stringify(inventory)).not.toContain("binding_");
       // A fully local inventory lookup still crosses the broker's activity fence even though it
@@ -3141,7 +3120,7 @@ describe("ChatGPT outer-native harness v4", () => {
       });
       const [execRequest] = await broker.nextToolBatch(token);
       expect(execRequest).toEqual(expect.objectContaining({
-        wireName: "exec_command",
+        wireName: toolIdentityKey(undefined, "exec_command"),
         freeform: false,
         arguments: {
           cmd: "pwd",
@@ -3164,7 +3143,7 @@ describe("ChatGPT outer-native harness v4", () => {
       });
       const [writeRequest] = await broker.nextToolBatch(token);
       expect(writeRequest).toEqual(expect.objectContaining({
-        wireName: "write_stdin",
+        wireName: toolIdentityKey(undefined, "write_stdin"),
         freeform: false,
         arguments: {
           session_id: 42,
@@ -3179,7 +3158,7 @@ describe("ChatGPT outer-native harness v4", () => {
       const patch = "*** Begin Patch\n*** Add File: direct-token.txt\n+ok\n*** End Patch";
       const apply = call("codex_apply_patch", { turn_token: token, patch });
       const [applyRequest] = await broker.nextToolBatch(token);
-      expect(applyRequest).toMatchObject({ wireName: "apply_patch", freeform: true, input: patch });
+      expect(applyRequest).toMatchObject({ wireName: toolIdentityKey(undefined, "apply_patch"), freeform: true, input: patch });
       expect(applyRequest?.arguments).toBeUndefined();
       broker.completeTool(token, applyRequest!.callId, toolResult({ output: "Done!" }));
       expect((await apply).structuredContent).toEqual({ output: "Done!" });
@@ -3191,7 +3170,7 @@ describe("ChatGPT outer-native harness v4", () => {
       });
       const [viewRequest] = await broker.nextToolBatch(token);
       expect(viewRequest).toEqual(expect.objectContaining({
-        wireName: "view_image",
+        wireName: toolIdentityKey(undefined, "view_image"),
         freeform: false,
         arguments: { path: "/private/tmp/direct-token.png", detail: "original" },
       }));
@@ -3247,11 +3226,11 @@ describe("ChatGPT outer-native harness v4", () => {
       ]);
 
       expect(firstRequest).toMatchObject({
-        wireName: "exec_command",
+        wireName: toolIdentityKey(undefined, "exec_command"),
         arguments: { cmd: "pwd", workdir: "/workspace/first", yield_time_ms: 1_000 },
       });
       expect(secondRequest).toMatchObject({
-        wireName: "shell_command",
+        wireName: toolIdentityKey(undefined, "shell_command"),
         arguments: { command: "pwd", workdir: "/workspace/second", timeout_ms: 2_000 },
       });
       expect(JSON.stringify(firstRequest)).not.toContain(firstToken);
@@ -3306,7 +3285,7 @@ describe("ChatGPT outer-native harness v4", () => {
           throw new Error(`codex_exec settled before reaching the broker: ${JSON.stringify(response.content)}`);
         }),
       ]);
-      expect(execRequest).toMatchObject({ wireName: "exec", freeform: true });
+      expect(execRequest).toMatchObject({ wireName: toolIdentityKey(undefined, "exec"), freeform: true });
       expect(execRequest?.input).toContain("ALL_TOOLS");
       expect(execRequest?.input).toContain('"exec_command"');
       expect(execRequest?.input).toContain('"shell_command"');
@@ -3347,7 +3326,7 @@ describe("ChatGPT outer-native harness v4", () => {
         arguments: { turn_token: abandonedToken, cmd: "sleep forever", yield_time_ms: 30_000 },
       }, undefined, { signal: abort.signal });
       const [request] = await broker.nextToolBatch(abandonedToken);
-      expect(request).toMatchObject({ wireName: "exec_command" });
+      expect(request).toMatchObject({ wireName: toolIdentityKey(undefined, "exec_command") });
       abort.abort(new Error("synthetic MCP client cancellation"));
       await expect(abandoned).rejects.toBeDefined();
 
@@ -3370,7 +3349,7 @@ describe("ChatGPT outer-native harness v4", () => {
       });
       expect(inventory.structuredContent).toMatchObject({
         total: 1,
-        tools: [{ wire_name: "exec_command" }],
+        tools: [{ scope: "top_level", name: "exec_command" }],
       });
     } finally {
       await client.close().catch(() => {});
@@ -3410,7 +3389,7 @@ describe("ChatGPT outer-native harness v4", () => {
         arguments: { turn_token: activeTimedOutToken, cmd: "slow external MCP call" },
       });
       const [request] = await broker.nextToolBatch(activeTimedOutToken);
-      expect(request).toMatchObject({ wireName: "exec_command" });
+      expect(request).toMatchObject({ wireName: toolIdentityKey(undefined, "exec_command") });
       const externalProgress = new ChatGptExternalTurnProgress();
       const toolBatchRevision = externalProgress.recordToolBatch(1, 1_000);
       const toolBoundary = externalProgress.waitForToolBatchObservation(toolBatchRevision);
@@ -3450,7 +3429,7 @@ describe("ChatGPT outer-native harness v4", () => {
       });
       expect(inventory.structuredContent).toMatchObject({
         total: 1,
-        tools: [{ wire_name: "exec_command" }],
+        tools: [{ scope: "top_level", name: "exec_command" }],
       });
     } finally {
       await client.close().catch(() => {});
@@ -3489,7 +3468,7 @@ describe("ChatGPT outer-native harness v4", () => {
         const invocation = callTurnBroker<BrokerToolResult>(socketPath, {
           method: "invoke",
           bindingId: claimed.bindingId,
-          wireName: "exec_command",
+          wireName: toolIdentityKey(undefined, "exec_command"),
           arguments: { cmd: "stale after MCP timeout" },
         }, null);
         const invocationOutcome = invocation.then(
@@ -3588,7 +3567,7 @@ describe("ChatGPT outer-native harness v4", () => {
           const result = await invokeAfterBrowserBoundary(turn, () => callTurnBroker<BrokerToolResult>(socketPath, {
             method: "invoke",
             bindingId: claimed.bindingId,
-            wireName: "exec_command",
+            wireName: toolIdentityKey(undefined, "exec_command"),
             arguments: { cmd: "first emitted round" },
           }, null));
           expect(result.structuredContent).toEqual({ output: "first tool result", exit_code: 0 });

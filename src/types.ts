@@ -25,6 +25,10 @@ export interface CodexParsedRequest {
 }
 
 export interface CodexContext {
+  /** Lossless model input. Derived messages/tools below are runtime indexes, not a replacement. */
+  source?: CodexSourceContext;
+  /** Verified browser prefix; transport metadata, never part of the original Codex request. */
+  sourceContinuation?: { prefixItems: number; prefixHash: string };
   systemPrompt?: string[];
   messages: CodexMessage[];
   tools?: CodexTool[];
@@ -105,6 +109,13 @@ export interface CodexFileContent {
   data: string;
 }
 
+export interface CodexSourceContext {
+  instructions?: string | null;
+  input: unknown[] | string;
+  tools?: unknown[];
+  controls: Record<string, unknown>;
+}
+
 export interface CodexThinkingContent {
   type: "thinking";
   thinking: string;
@@ -127,6 +138,8 @@ export interface CodexToolCall {
 export type CodexAssistantContentPart = CodexTextContent | CodexThinkingContent | CodexToolCall;
 
 export interface CodexTool {
+  /** Original declaration, without transport schemas or aliases. */
+  specification?: Record<string, unknown>;
   name: string;
   description: string;
   parameters: Record<string, unknown>;
@@ -141,12 +154,12 @@ export interface CodexTool {
   toolSearch?: boolean;
 }
 
-/**
- * Wire name a chat model sees for a tool. Namespaced (MCP) tools are flattened to
- * "<namespace>__<name>" so they survive the chat-completions function-tool format;
- * the proxy maps this back to {namespace, name} on the return trip (Codex routes MCP
- * calls by an explicit `namespace` field, not by parsing the name).
- */
+/** Collision-free internal routing key. Never presented as a model-facing tool name. */
+export function toolIdentityKey(namespace: string | undefined, name: string): string {
+  return JSON.stringify([namespace ?? null, name]);
+}
+
+/** Export spelling used by the native exec runtime; never a top-level tool identity. */
 export function namespacedToolName(namespace: string | undefined, name: string): string {
   return namespace ? `${namespace}__${name}` : name;
 }

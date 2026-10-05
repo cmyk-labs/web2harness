@@ -144,9 +144,11 @@ Shell entry points must be committed with Git mode `100755`. Linux workflows che
 
 Use isolated DEV for shared-runtime acceptance; repeat installed-app flows on the disposable test OS where required. Use independently obtained credentials. Verify account-visible capabilities rather than inferring support from a model label or a native Codex catalog row.
 
+Before every release, including previews, run the three mandatory [capability acceptance cases CAP-001–CAP-003](acceptance-tests.md#release-requirements) on the current candidate and record all passes before pushing a publication-triggering tag or publishing. Preview status does not waive these three cases. Add or update cases for new or changed target capabilities. Prompts, evidence criteria, and the candidate result template live in that document; `verify` and release CI do not automatically execute or enforce this manual gate.
+
 ### Native Tools
 
-1. Complete a real Codex read, native patch, command assertion, and final answer with file and tool-event evidence.
+1. Complete [CAP-001–CAP-003](acceptance-tests.md): real parallel reads, native patch and readback, same-cell waiting, and three real parallel child agents with a parent summary. Retain file, tool-event, and read-only boundary evidence.
 2. Cancel an active task, confirm terminal cancellation and no active turns, then run a new task without restarting the daemon. Cancelled turns must not revive.
 3. Inject a bounded DOM observation timeout into one verified DEV page; confirm it rebinds the same owned page and continues without repeating tools.
 4. Interrupt only the owned DEV target/transport for a bounded interval. Require correct continuation or an explicit terminal failure, and record actual outcome, duration, and scope.

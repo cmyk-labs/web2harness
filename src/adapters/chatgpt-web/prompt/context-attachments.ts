@@ -21,7 +21,12 @@ export function validateContextFile(value: unknown): asserts value is ChatGptCon
   const digest = createHash("sha256").update(file.text).digest("hex").slice(0, 16);
   if (file.name !== `codex-context--${digest}.txt`) throw new Error("Context attachment content does not match its name");
   const context = JSON.parse(file.text);
-  if (!context || ![3, 4].includes(context.version) || !Array.isArray(context.system) || !Array.isArray(context.messages)) {
+  const sourceEnvelope = context?.version === 5
+    && (Array.isArray(context.input) || typeof context.input === "string")
+    && context.controls !== null && typeof context.controls === "object" && !Array.isArray(context.controls);
+  const indexedEnvelope = [3, 4, 5].includes(context?.version)
+    && Array.isArray(context.system) && Array.isArray(context.messages);
+  if (!sourceEnvelope && !indexedEnvelope) {
     throw new Error("Invalid context attachment envelope");
   }
 }

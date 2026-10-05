@@ -1,3 +1,4 @@
+import { toolIdentityKey } from "../../../src/types";
 import { afterAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -165,7 +166,7 @@ for (const scenario of [
           method: "claim", token, contract: "safe",
         });
         const result = await callTurnBroker<BrokerToolResult>(socket, {
-          method: "invoke", bindingId: claim.bindingId, wireName: "exec_command", freeform: false,
+          method: "invoke", bindingId: claim.bindingId, wireName: toolIdentityKey(undefined, "exec_command"), freeform: false,
           arguments: { cmd: "pwd" },
         }, null);
         if (!scenario.finalWins) expect(JSON.stringify(result)).toContain("codex_turn_complete");
