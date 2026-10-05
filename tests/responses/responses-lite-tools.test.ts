@@ -37,7 +37,7 @@ function responsesLiteTools() {
   }];
 }
 
-test("Responses Lite exposes native exec from the default functions namespace only", () => {
+test("Responses Lite preserves custom tools and their format in every namespace", () => {
   const parsed = parseRequest({
     model: "chatgpt-web/luna",
     input: [{ type: "additional_tools", role: "developer", tools: responsesLiteTools() }],
@@ -50,7 +50,9 @@ test("Responses Lite exposes native exec from the default functions namespace on
   const waitTool = parsed.context.tools?.find(tool => tool.name === "wait");
   expect(waitTool).toEqual(expect.objectContaining({ name: "wait" }));
   expect(waitTool).not.toHaveProperty("namespace");
-  expect(parsed.context.tools?.some(tool => tool.name === "run_script")).toBe(false);
+  expect(parsed.context.tools).toContainEqual(expect.objectContaining({
+    name: "run_script", namespace: "mcp__python", freeform: true, format: freeformFormat,
+  }));
 });
 
 test("Responses Lite native exec survives a complete server request as one custom call", async () => {
@@ -96,4 +98,43 @@ test("Responses Lite native exec survives a complete server request as one custo
     name: "exec",
     input: "text('ok')",
   })]);
+});
+
+for (const stream of [false, true]) test(`namespaced custom calls retain identity beside same-name functions (stream=${stream})`, async () => {
+  const config = defaultConfig("native-tools");
+  const response = await responseRequest(new Request("http://localhost/v1/responses", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+      model: "chatgpt-web/gpt-5.6-sol", stream, input: "Use both tools",
+      tools: [
+        { type: "namespace", name: "scripts", tools: [{ type: "custom", name: "run", format: freeformFormat }] },
+        { type: "namespace", name: "commands", tools: [{ type: "function", name: "run", parameters: { type: "object" } }] },
+      ],
+    }),
+  }), config, () => ({ name: "fixture", async runTurn(_parsed, _incoming, emit) {
+    for (const [name, args] of [["scripts__run", { input: "print('你好')\n" }], ["commands__run", { command: "status" }]] as const) {
+      emit({ type: "tool_call_start", id: `call_${name}`, name });
+      emit({ type: "tool_call_delta", arguments: JSON.stringify(args) });
+      emit({ type: "tool_call_end" });
+    }
+    emit({ type: "done", endTurn: false });
+  } }), { rememberState: false });
+  expect(response.status).toBe(200);
+  const wire = await response.text();
+  const events = stream ? wire.split("\n").filter(line => line.startsWith("data: {")).map(line => JSON.parse(line.slice(6))) : [];
+  const output = stream ? events.find(event => event.type === "response.completed").response.output : JSON.parse(wire).output;
+  expect(output).toEqual([
+    expect.objectContaining({ type: "custom_tool_call", name: "run", namespace: "scripts", input: "print('你好')\n" }),
+    expect.objectContaining({ type: "function_call", name: "run", namespace: "commands", arguments: '{"command":"status"}' }),
+  ]);
+  if (stream) expect(events.filter(event => event.type === "response.output_item.added")[0].item.namespace).toBe("scripts");
+  const replay = parseRequest({ model: "chatgpt-web/luna", input: [...output, { type: "custom_tool_call_output", call_id: "call_scripts__run", output: "ok" }] });
+  expect(replay.context.messages.at(-1)).toEqual(expect.objectContaining({ role: "toolResult", toolNamespace: "scripts", toolName: "run" }));
+});
+
+test("tool namespace collisions fail explicitly and named choices preserve namespaces", () => {
+  expect(() => parseRequest({ model: "x", tools: [
+    { type: "function", name: "scripts__run" },
+    { type: "namespace", name: "scripts", tools: [{ type: "function", name: "run" }] },
+  ] })).toThrow("Ambiguous tool wire name");
+  expect(parseRequest({ model: "x", tool_choice: { type: "custom", name: "run", namespace: "scripts" } }).options.toolChoice).toEqual({ name: "scripts__run" });
 });

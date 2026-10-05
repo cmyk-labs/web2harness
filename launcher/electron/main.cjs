@@ -1014,6 +1014,10 @@ function registerIpc({ logger, stateStore }) {
     logger.info("launcher.logs_exported", { recordCount });
     return result.filePath;
   });
+  handle("launcher:update-check", () => {
+    if (!updateController) throw new Error("Launcher updates are unavailable");
+    return updateController.check();
+  });
   handle("launcher:update-install", async () => {
     if (!updateController) throw new Error("Launcher updates are unavailable");
     const launch = await updateController.beginInstall();
@@ -1057,6 +1061,7 @@ async function requestQuit() {
     await browserHost?.persistSession();
     browserHost?.destroy();
     await browserControl?.close();
+    updateController?.stop();
     exitCommitted = true;
     app.quit();
     return { ok: true };
@@ -1261,7 +1266,7 @@ async function start() {
       });
     });
   }
-  if (!launcherSmokeTest) void updateController.checkOnce();
+  if (!launcherSmokeTest) updateController.start();
   if (launcherSmokeTest) {
     const smokeRuntimeRoot = runtimeRootProvider();
     if (app.isPackaged && !smokeRuntimeRoot) {

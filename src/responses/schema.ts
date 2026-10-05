@@ -29,7 +29,7 @@ const outputContentBlockSchema = z.union([outputTextSchema, plainTextSchema, out
 // Codex tool outputs can contain both input-shaped and output-shaped content blocks.
 const toolOutputContentBlockSchema = z.union([
   outputTextSchema, plainTextSchema, outputRefusalSchema,
-  inputTextSchema, inputImageBlockSchema, encryptedContentBlockSchema,
+  inputTextSchema, inputImageBlockSchema, inputFileBlockSchema, encryptedContentBlockSchema,
 ]);
 const toolOutputSchema = z.union([z.string(), z.array(toolOutputContentBlockSchema)]);
 
@@ -90,6 +90,7 @@ const customToolCallItemSchema = z.object({
   id: z.string().optional(),
   call_id: z.string().min(1),
   name: z.string().min(1),
+  namespace: z.string().optional(),
   input: z.string(),
 });
 const customToolCallOutputItemSchema = z.object({
@@ -115,6 +116,7 @@ export const inputItemSchema = z.union([
 export const toolSchema = z.object({
   type: z.literal("function"),
   name: z.string().min(1),
+  namespace: z.string().optional(),
   description: z.string().optional(),
   parameters: z.record(z.string(), z.unknown()).optional(),
   strict: z.boolean().optional(),
@@ -127,14 +129,14 @@ const hostedToolType = z.enum([
   "code_interpreter", "image_generation", "mcp",
 ]);
 
-const allowedToolEntrySchema = z.object({ type: z.string(), name: z.string().optional() });
+const allowedToolEntrySchema = z.object({ type: z.string(), name: z.string().optional(), namespace: z.string().optional() });
 
 export const toolChoiceSchema = z.union([
   z.literal("auto"),
   z.literal("none"),
   z.literal("required"),
-  z.object({ type: z.literal("function"), name: z.string().min(1) }),
-  z.object({ type: z.literal("custom"), name: z.string().min(1) }),
+  z.object({ type: z.literal("function"), name: z.string().min(1), namespace: z.string().optional() }),
+  z.object({ type: z.literal("custom"), name: z.string().min(1), namespace: z.string().optional() }),
   z.object({ type: hostedToolType }),
   z.object({ type: z.literal("allowed_tools"), mode: z.enum(["auto", "required"]), tools: z.array(allowedToolEntrySchema) }),
 ]);

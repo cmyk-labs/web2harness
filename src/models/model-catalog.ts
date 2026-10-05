@@ -138,9 +138,9 @@ export function buildChatGptWebModel(
     ...(multiAgentVersion === undefined
       ? {}
       : { multi_agent_version: multiAgentVersion }),
-    // Code mode collapses the outer registry into an exec gateway; routed models need the regular
-    // Responses tool surface so MCP namespaces, deferred tool_search, and custom tools reach us.
-    tool_mode: null,
+    // Native tools run inside Codex, including its exec/wait gateway. Connector transports still
+    // need the ordinary registry because they cannot execute that gateway themselves.
+    tool_mode: config.mode === "native-tools" ? template.tool_mode ?? null : null,
     upgrade: null,
     ...(config.mode === "native-tools"
       ? {

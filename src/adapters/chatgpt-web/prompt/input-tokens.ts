@@ -1,5 +1,6 @@
 import { CHATGPT_WEB_PLATFORM_RESERVE_TOKENS, chatGptWebImageTokenReserve } from "../../../models/chatgpt-web-models";
 import { skillFileTokens } from "./skill-attachments";
+import { inputFileTokens } from "./file-attachments";
 import { estimateTokens } from "../../../lib/token-estimate";
 import type { CompiledChatGptWebPrompt } from "./compile";
 
@@ -25,7 +26,7 @@ export function estimateCompiledChatGptWebMessageTokens(
 ): number {
   const messages = compiledChatGptWebMessages(compiled);
   return Math.max(...messages.map((message, index) => estimateTokens(message, modelId)
-    + (index === messages.length - 1 ? skillFileTokens(compiled.skillFiles, modelId) : 0)));
+    + (index === messages.length - 1 ? skillFileTokens(compiled.skillFiles, modelId) + inputFileTokens(compiled.files, modelId) : 0)));
 }
 
 export function estimateCompiledChatGptWebInputTokens(
@@ -36,7 +37,7 @@ export function estimateCompiledChatGptWebInputTokens(
   const messageTokens = compiledChatGptWebMessages(compiled)
     .reduce((total, message) => total + estimateTokens(message, modelId), 0);
   const contextTokens = compiled.contextFile ? estimateTokens(compiled.contextFile.text, modelId) : 0;
-  return CHATGPT_WEB_PLATFORM_RESERVE_TOKENS + messageTokens + contextTokens + imageTokens + skillFileTokens(compiled.skillFiles, modelId);
+  return CHATGPT_WEB_PLATFORM_RESERVE_TOKENS + messageTokens + contextTokens + imageTokens + skillFileTokens(compiled.skillFiles, modelId) + inputFileTokens(compiled.files, modelId);
 }
 
 export function estimateChatGptWebImageTokens(compiled: CompiledChatGptWebPrompt): number {

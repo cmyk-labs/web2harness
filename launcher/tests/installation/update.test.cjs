@@ -75,7 +75,7 @@ for (const [platform, arch, suffix] of [
         spawnWorker: () => assert.fail("Checking a version must not install it"),
       },
     });
-    assert.deepEqual(await controller.checkOnce(), newer
+    assert.deepEqual(checkedState(await controller.checkOnce()), newer
       ? { status: "available", version }
       : { status: "up-to-date" });
   }
@@ -140,8 +140,8 @@ test("startup check runs once and exposes only a newer complete release", async 
       },
     },
   });
-  assert.deepEqual(await controller.checkOnce(), { status: "available", version: "1.2.0" });
-  assert.deepEqual(await controller.checkOnce(), { status: "available", version: "1.2.0" });
+  assert.deepEqual(checkedState(await controller.checkOnce()), { status: "available", version: "1.2.0" });
+  assert.deepEqual(checkedState(await controller.checkOnce()), { status: "available", version: "1.2.0" });
   assert.equal(calls, 1);
   assert.deepEqual(published.map((state) => state.status), ["checking", "available"]);
 });
@@ -163,7 +163,7 @@ test("preview and draft releases stay hidden until promoted, regardless of the v
         },
       });
       const hidden = flags.prerelease || flags.draft;
-      assert.deepEqual(await controller.checkOnce(), hidden
+      assert.deepEqual(checkedState(await controller.checkOnce()), hidden
         ? { status: "up-to-date" }
         : { status: "available", version: tag });
       if (hidden) await assert.rejects(controller.beginInstall(), /No launcher update/);
@@ -231,7 +231,7 @@ for (const arch of ["x64", "arm64"]) {
       assert.equal(controller.getState().status, "installing");
       controller.cancelInstall(launch);
       assert.equal(fs.existsSync(launch.tempRoot), false);
-      assert.deepEqual(controller.getState(), { status: "available", version: "1.2.0" });
+      assert.deepEqual(checkedState(controller.getState()), { status: "available", version: "1.2.0" });
     } finally {
       if (previousAppImage === undefined) delete process.env.WEB2HARNESS_APPIMAGE;
       else process.env.WEB2HARNESS_APPIMAGE = previousAppImage;
@@ -294,4 +294,68 @@ test("detached worker replaces an installed Linux AppImage and removes the old v
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+function checkedState(state) {
+  assert.ok(Number.isFinite(Date.parse(state.lastCheckedAt)), "Completed checks record their time");
+  const { lastCheckedAt, ...rest } = state;
+  return rest;
+}
+
+test("download progress keeps checks from racing and async checksum failure never starts installation", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "w2h-update-progress-"));
+  t.after(() => {
+    assert.equal(path.dirname(root), os.tmpdir());
+    assert.match(path.basename(root), /^w2h-update-progress-/);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const published = [];
+  let checks = 0;
+  const controller = createUpdateController({
+    currentVersion: "1.0.0", platform: "win32", arch: "x64", packaged: true,
+    executablePath: path.join(root, "app.exe"), runtimeExecutable: "fixture", logsDirectory: root,
+    repository: "fixture-owner/web2harness", publish: state => published.push(state),
+    dependencies: {
+      fetchRelease: async () => { checks++; return { tag_name: "v1.1.0", assets: ["web2harness-1.1.0-win-x64.exe", "checksums.txt"].map(name => ({ name, browser_download_url: `https://github.com/fixture-owner/web2harness/releases/download/v1.1.0/${name}` })) }; },
+      downloadText: async () => `${"a".repeat(64)}  web2harness-1.1.0-win-x64.exe`,
+      downloadFile: async (_url, destination, progress) => {
+        fs.writeFileSync(destination, "fixture");
+        progress({ downloadedBytes: 4, totalBytes: 8 });
+        assert.equal((await controller.check()).status, "downloading");
+      },
+      sha256: async () => "b".repeat(64),
+      spawnWorker: () => assert.fail("unverified package must never execute"),
+    },
+  });
+  await controller.check();
+  await assert.rejects(controller.beginInstall(), /SHA-256 verification failed/);
+  assert.equal(checks, 1);
+  assert.ok(published.some(state => state.downloadedBytes === 4 && state.totalBytes === 8));
+  assert.equal(controller.getState().status, "available");
+});
+
+test("manual checks retry failures, coalesce concurrent calls and refresh completed checks", async () => {
+  let calls = 0;
+  let finish;
+  const controller = createUpdateController({
+    currentVersion: "1.0.0", platform: "win32", arch: "x64", packaged: true,
+    repository: "fixture-owner/web2harness",
+    dependencies: { fetchRelease: () => {
+      calls++;
+      if (calls === 1) return Promise.reject(new Error("offline"));
+      return new Promise(resolve => { finish = resolve; });
+    } },
+  });
+  assert.equal((await controller.checkOnce()).status, "error");
+  const first = controller.check();
+  const second = controller.check();
+  assert.equal(first, second);
+  assert.equal(calls, 2);
+  finish({ tag_name: "v1.0.0" });
+  assert.equal((await first).status, "up-to-date");
+  assert.ok(controller.getState().lastCheckedAt);
+  const third = controller.check();
+  assert.equal(calls, 3);
+  finish({ tag_name: "v1.0.0" });
+  await third;
 });

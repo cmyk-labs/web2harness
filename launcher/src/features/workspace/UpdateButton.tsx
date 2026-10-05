@@ -13,8 +13,11 @@ export function UpdateButton({
   const update = snapshot.update;
   if (update.status !== "available" && update.status !== "downloading" && update.status !== "installing") return null;
   const busy = workspaceBusy(browser, operation);
+  const progress = update.totalBytes && update.downloadedBytes !== undefined
+    ? ` ${Math.min(100, Math.floor(update.downloadedBytes / update.totalBytes * 100))}%`
+    : update.downloadedBytes !== undefined ? ` ${(update.downloadedBytes / 1_000_000).toFixed(1)} MB` : "";
   const label = update.status === "downloading"
-    ? t("正在下载更新…", "Downloading update…")
+    ? t("正在下载更新…", "Downloading update…") + progress
     : update.status === "installing" || pending
       ? t("正在安装更新…", "Installing update…")
       : `${t("更新至", "Update to")} v${update.version}`;
@@ -28,7 +31,7 @@ export function UpdateButton({
   return (
     <button
       type="button"
-      className={sidebar ? "sidebar-update" : "btn"}
+      className={sidebar ? "sidebar-update" : "btn update-install"}
       disabled={pending || busy || snapshot.startup.status !== "ready" || update.status !== "available"}
       title={busy ? t("当前任务结束后即可更新", "Update when the current task finishes") : label}
       onClick={() => void install()}

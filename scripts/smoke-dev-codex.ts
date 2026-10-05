@@ -15,6 +15,9 @@ import { devCodexCommand, devCodexEnvironment } from "../src/dev/codex";
 import { LAUNCHER_BROWSER_IDLE_URL } from "../src/browser/launcher-client";
 
 const expectReadOnly = process.argv.includes("--expect-read-only");
+const codeMode = process.argv.includes("--code-mode");
+const codeModeWait = process.argv.includes("--code-mode-wait");
+if (codeModeWait && !codeMode) throw new Error("--code-mode-wait requires --code-mode");
 const windowsSandbox = process.argv.find(arg => arg.startsWith("--windows-sandbox="))?.split("=")[1];
 if (windowsSandbox && windowsSandbox !== "unelevated" && windowsSandbox !== "elevated") {
   throw new Error("--windows-sandbox must be elevated or unelevated");
@@ -46,6 +49,7 @@ writeFileSync(paths.descriptorPath, JSON.stringify({
 let rounds = 0;
 let sawToolResult = false;
 let toolResults = "";
+let sawWait = false;
 const server = startServer(config, {
   fetchUpstream: async () => { throw new Error("Offline DEV smoke forbids upstream requests"); },
   adapterFactory: provider => {
@@ -57,16 +61,25 @@ const server = startServer(config, {
         worker.run = async turn => {
           await turn.prepare();
           rounds += 1;
-          if (rounds > 3) throw new Error("DEV smoke exceeded its round budget");
+          if (rounds > 5) throw new Error("DEV smoke exceeded its round budget");
           sawToolResult ||= parsed.context.messages.some(message => message.role === "toolResult");
           toolResults = JSON.stringify(parsed.context.messages.filter(message => message.role === "toolResult"));
-          const patch = parsed.context.tools?.find(tool => tool.name === "apply_patch");
-          if (!patch) throw new Error("Real Codex did not declare apply_patch");
+          const patch = parsed.context.tools?.find(tool => tool.name === (codeMode ? "exec" : "apply_patch"));
+          if (!patch) throw new Error(`Real Codex did not declare ${codeMode ? "exec" : "apply_patch"}`);
+          const patchInput = "*** Begin Patch\n*** Add File: dev-native-proof.txt\n+DEV_NATIVE_LOOP_OK\n*** End Patch";
+          const lastResult = parsed.context.messages.filter(message => message.role === "toolResult").at(-1)?.content;
+          const runningCell = typeof lastResult === "string" ? /Script running with cell ID ([^\s]+)/.exec(lastResult)?.[1] : undefined;
+          const wait = parsed.context.tools?.find(tool => tool.name === "wait");
+          if (runningCell && !wait) throw new Error("Real Codex did not declare wait for a yielded exec cell");
+          sawWait ||= Boolean(runningCell);
           const fence = String.fromCharCode(96).repeat(3);
-          const answer = sawToolResult ? "DEV_NATIVE_LOOP_OK" : [
+          const call = runningCell && wait
+            ? { name: namespacedToolName(wait.namespace, wait.name), arguments: { cell_id: runningCell, yield_time_ms: 10000 } }
+            : { name: namespacedToolName(patch.namespace, patch.name), arguments: { input: codeMode
+              ? `${codeModeWait ? '// @exec: {"yield_time_ms": 1}\nawait new Promise(resolve => setTimeout(resolve, 350));\n' : ""}text(await tools.apply_patch(${JSON.stringify(patchInput)}));` : patchInput } };
+          const answer = sawToolResult && !runningCell ? "DEV_NATIVE_LOOP_OK" : [
             fence + "codex_tool_calls",
-            JSON.stringify({ calls: [{ name: namespacedToolName(patch.namespace, patch.name),
-              arguments: { input: "*** Begin Patch\n*** Add File: dev-native-proof.txt\n+DEV_NATIVE_LOOP_OK\n*** End Patch" } }] }),
+            JSON.stringify({ calls: [call] }),
             fence,
           ].join("\n");
           turn.onTextDelta(answer);
@@ -81,7 +94,11 @@ config.port = server.port!;
 saveConfig(config);
 installCodexIntegration(config);
 const modelPath = join(paths.codexHome, "offline-models.json");
-writeFileSync(modelPath, JSON.stringify(augmentNativeModelCatalog(JSON.parse(bundled.stdout), config)));
+const catalog = augmentNativeModelCatalog(JSON.parse(bundled.stdout), config);
+for (const model of catalog.models as Array<Record<string, unknown>>) {
+  if (String(model.slug).startsWith("chatgpt-web/")) model.tool_mode = codeMode ? "code_mode_only" : null;
+}
+writeFileSync(modelPath, JSON.stringify(catalog));
 const codexConfigPath = join(paths.codexHome, "config.toml");
 writeFileSync(codexConfigPath, 'model_catalog_json = ' + JSON.stringify(modelPath) + "\n" + readFileSync(codexConfigPath, "utf8"));
 const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -110,12 +127,12 @@ try {
   const proofMatches = expectReadOnly
     ? !existsSync(proof) && toolResults.includes("writing is blocked by read-only sandbox")
     : existsSync(proof) && readFileSync(proof, "utf8").trim() === "DEV_NATIVE_LOOP_OK";
-  if (exitCode !== 0 || rounds !== 2 || !sawToolResult || !proofMatches) {
+  if (exitCode !== 0 || (codeModeWait ? !sawWait || rounds < 3 : rounds !== 2) || !sawToolResult || !proofMatches) {
     throw new Error("DEV native loop failed: exit=" + exitCode + " rounds=" + rounds + "\n" + stdout.slice(-3000) + "\n" + stderr.slice(-2000) + "\nTool results: " + toolResults);
   }
   process.stdout.write(expectReadOnly
     ? "DEV_NATIVE_CODEX_SANDBOX_DENIAL_ROUNDTRIP_OK (write acceptance remains unverified)\n"
-    : "DEV_NATIVE_CODEX_PATCH_LOOP_OK (real Codex, fixture browser, isolated home)\n");
+    : `DEV_NATIVE_CODEX_${codeModeWait ? "CODE_MODE_WAIT" : codeMode ? "CODE_MODE" : "PATCH"}_LOOP_OK (real Codex, fixture browser, isolated home)\n`);
 } finally {
   clearTimeout(timeout);
   if (child.exitCode === null) { child.kill(); await child.exited; }
@@ -123,4 +140,3 @@ try {
   await closeChatGptBrowserWorkers();
   rmSync(root, { recursive: true, force: true });
 }
-

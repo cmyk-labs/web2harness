@@ -464,8 +464,8 @@ function toolBridgeMaps(parsed: CodexParsedRequest): {
   const toolSearchToolNames = new Set<string>();
   for (const tool of parsed.context.tools ?? []) {
     if (tool.namespace) toolNsMap.set(namespacedToolName(tool.namespace, tool.name), { namespace: tool.namespace, name: tool.name });
-    if (tool.freeform) freeformToolNames.add(tool.name);
-    if (tool.toolSearch) toolSearchToolNames.add(tool.name);
+    if (tool.freeform) freeformToolNames.add(namespacedToolName(tool.namespace, tool.name));
+    if (tool.toolSearch) toolSearchToolNames.add(namespacedToolName(tool.namespace, tool.name));
   }
   return { toolNsMap, freeformToolNames, toolSearchToolNames };
 }

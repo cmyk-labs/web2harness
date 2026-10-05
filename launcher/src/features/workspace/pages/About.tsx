@@ -116,6 +116,22 @@ export function About({
         </span>
         <span>MIT {t("许可证", "License")}</span>
       </footer>
+      <Row title={t("检查更新", "Check for updates")} description={
+        snapshot.update.lastCheckedAt
+          ? `${t("上次检查：", "Last checked: ")}${new Date(snapshot.update.lastCheckedAt).toLocaleString(language)}`
+          : t("启动时及每 6 小时自动检查，也可手动检查。", "Checked at startup and every 6 hours, or manually.")
+      }>
+        <button type="button" className="btn" disabled={["disabled", "checking", "downloading", "installing"].includes(snapshot.update.status)}
+          onClick={() => { void api.checkUpdate().catch(error => setError(messageOf(error))); }}>
+          {snapshot.update.status === "checking" ? t("正在检查…", "Checking…") : t("检查更新", "Check for updates")}
+        </button>
+      </Row>
+      <p role="status" className="note">{
+        snapshot.update.status === "disabled" ? t("开发模式或当前安装方式不支持应用内更新。", "In-app updates are unavailable in development or for this installation.")
+          : snapshot.update.status === "up-to-date" ? t("已是最新稳定版本。", "You have the latest stable version.")
+          : snapshot.update.status === "error" ? `${t("检查失败，可重试：", "Check failed; retry: ")}${snapshot.update.message}`
+          : snapshot.update.status === "idle" ? t("尚未检查更新。", "Updates have not been checked yet.") : ""
+      }</p>
       {["available", "downloading", "installing"].includes(
         snapshot.update.status,
       ) && (

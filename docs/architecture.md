@@ -87,6 +87,8 @@ The adapter includes the current tool definitions in the compiled context. When 
 
 Malformed tool blocks produce an explicit adapter failure. A bounded corrective retry can rebuild from canonical Codex history; invalid browser decisions are not adopted as successful tool execution. The adapter cannot add tools or grant permissions through the prompt.
 
+In Native Tools mode, the model catalog preserves Codex's original Code Mode setting. The request parser retains custom-tool format and namespace, and JSON/SSE output restores the same call identity. Flattened wire-name collisions fail before dispatch. `exec` and `wait` execute in the outer Codex process; the browser prompt distinguishes them from ChatGPT's own tools. Inline file data follows the same validated attachment path as images, with content-derived filenames and explicit helper capability negotiation. It does not resolve local paths or remote provider file IDs.
+
 <a id="mcp-bridge"></a>
 
 ### MCP Bridge

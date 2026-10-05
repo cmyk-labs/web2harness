@@ -16,6 +16,7 @@ import { responsesRequestSchema } from "./schema";
 import { compactionItemToText, isNativeTextCompaction } from "./compaction";
 import { previousResponseReplayPrefixLength } from "./state";
 import { decodeReasoningEnvelope } from "./reasoning-envelope";
+import { parseInputFile } from "./file-input";
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -25,7 +26,7 @@ type InputBlock =
   | { type: "input_text"; text: string }
   | { type: "text"; text: string }
   | { type: "input_image"; image_url?: string; file_id?: string; detail?: string }
-  | { type: "input_file"; file_id?: string; filename?: string };
+  | { type: "input_file"; file_id?: string; filename?: string; file_data?: string };
 
 function inputContentParts(blocks: unknown[] | string | undefined): string | CodexContentPart[] {
   if (typeof blocks === "string") return blocks;
@@ -40,13 +41,12 @@ function inputContentParts(blocks: unknown[] | string | undefined): string | Cod
       if (b.image_url) {
         // Preserve the image as a structured part — adapters send it as a native image block.
         // NEVER inline the (often base64 data-URL) image_url as text: that explodes the token count.
-        parts.push({ type: "image", imageUrl: b.image_url, ...(b.detail ? { detail: normalizeImageDetail(b.detail) } : {}) });
+        parts.push({ type: "image", imageUrl: b.image_url, ...(b.detail ? { detail: b.detail } : {}) });
       } else {
-        parts.push({ type: "text", text: `[image: ${b.file_id ?? "?"}]` }); // file_id ref → no inline data
+        throw new Error("input_image requires inline image_url data; provider file_id references cannot be read by ChatGPT Web");
       }
     } else if (block.type === "input_file") {
-      const ref = (block as { file_id?: string; filename?: string }).file_id ?? (block as { filename?: string }).filename ?? "?";
-      parts.push({ type: "text", text: `[file: ${ref}]` });
+      parts.push(parseInputFile(block));
     }
   }
   // Collapse to a plain string only for a single TEXT part; images must stay structured.
@@ -82,7 +82,7 @@ function mapToolChoice(value: unknown): CodexRequestOptions["toolChoice"] {
   if (isObj(value) && "type" in value) {
     const t = (value as { type: string }).type;
     if ((t === "function" || t === "custom") && "name" in value) {
-      return { name: (value as { name: string }).name };
+      return { name: namespacedToolName(normalizedToolNamespace(value.namespace), (value as { name: string }).name) };
     }
     if (t === "allowed_tools" && Array.isArray(value.tools)) {
       const names = value.tools
@@ -99,7 +99,7 @@ function mapToolChoice(value: unknown): CodexRequestOptions["toolChoice"] {
 
 function allowedToolName(tool: unknown): string | undefined {
   if (!isObj(tool)) return undefined;
-  if (typeof tool.name === "string" && tool.name.length > 0) return tool.name;
+  if (typeof tool.name === "string" && tool.name.length > 0) return namespacedToolName(normalizedToolNamespace(tool.namespace), tool.name);
   if (tool.type === "web_search" || tool.type === "web_search_preview") return "web_search";
   if (tool.type === "tool_search") return "tool_search";
   return undefined;
@@ -150,7 +150,7 @@ function buildTools(tools: unknown[] | undefined): CodexTool[] | undefined {
     if (namespace) tool.namespace = namespace;
     out.push(tool);
   };
-  const pushFreeform = (t: Record<string, unknown>) => {
+  const pushFreeform = (t: Record<string, unknown>, namespace?: string) => {
     const tool: CodexTool = {
       name: t.name as string,
       description: (t.description as string) ?? "",
@@ -159,36 +159,37 @@ function buildTools(tools: unknown[] | undefined): CodexTool[] | undefined {
         properties: {
           input: {
             type: "string",
-            description: "Raw tool input. For apply_patch, begin exactly with `*** Begin Patch` (no trailing `***`), then use its standard patch envelope.",
+            description: t.name === "apply_patch"
+              ? "Raw patch input, beginning exactly with `*** Begin Patch` (no trailing `***`), using the standard patch envelope."
+              : "Raw tool input, following the tool description and its format contract. Do not JSON-encode the input itself.",
           },
         },
         required: ["input"],
       },
       freeform: true,
+      ...(namespace ? { namespace } : {}),
+      ...(isObj(t.format) ? { format: structuredClone(t.format) } : {}),
     };
     out.push(tool);
   };
   for (const t of tools) {
     if (!isObj(t)) continue;
     if (t.type === "function" && typeof t.name === "string") {
-      pushFn(t);
+      pushFn(t, normalizedToolNamespace(t.namespace));
     } else if (t.type === "namespace" && Array.isArray(t.tools)) {
-      // Responses Lite groups ordinary native functions and the native freeform `exec` tool under
-      // the default `functions` namespace. Flatten normal functions from every namespace, and the
-      // official freeform variant only from that default namespace. Non-default custom namespaces
-      // need a distinct round-trip contract and must not be silently exposed as function calls.
+      // Flatten for the browser transport and restore both namespace and tool kind on output.
       const ns = normalizedToolNamespace(t.name);
       for (const inner of t.tools as unknown[]) {
         if (!isObj(inner) || typeof inner.name !== "string") continue;
         if (inner.type === "function") pushFn(inner, ns);
-        else if (t.name === DEFAULT_FUNCTION_NAMESPACE && inner.type === "custom") pushFreeform(inner);
+        else if (inner.type === "custom") pushFreeform(inner, ns);
       }
     }
     else if (t.type === "custom" && typeof t.name === "string") {
       // Freeform custom tool (e.g. apply_patch). Chat models can't emit a lark grammar, so expose a
       // function with a single string `input` carrying the raw tool body; the bridge relays the model's
       // call back as a custom_tool_call (Codex's freeform handler rejects a function_call → fatal abort).
-      pushFreeform(t);
+      pushFreeform(t, normalizedToolNamespace(t.namespace));
     }
     else if (t.type === "tool_search") {
       // Client-executed tool discovery — the gateway to deferred tools (subagents, extra MCP tools).
@@ -236,31 +237,29 @@ function outputToToolResultContent(output: string | unknown[] | undefined): stri
   if (typeof output === "string") return output;
   if (!Array.isArray(output)) return "";
   const parts: CodexContentPart[] = [];
-  let hasImage = false;
+  let hasAttachment = false;
   for (const raw of output) {
     if (!isObj(raw)) continue;
     if (raw.type === "output_text" || raw.type === "text" || raw.type === "input_text") {
       if (typeof raw.text === "string") parts.push({ type: "text", text: raw.text });
     } else if (raw.type === "refusal" && typeof raw.refusal === "string") {
       parts.push({ type: "text", text: `[refusal: ${raw.refusal}]` });
-    } else if (raw.type === "input_image" && typeof raw.image_url === "string") {
-      parts.push({ type: "image", imageUrl: raw.image_url, ...(typeof raw.detail === "string" ? { detail: normalizeImageDetail(raw.detail) } : {}) });
-      hasImage = true;
+    } else if (raw.type === "input_image") {
+      if (typeof raw.image_url !== "string" || !raw.image_url) {
+        throw new Error("Tool input_image requires inline image_url data; provider file_id references cannot be read by ChatGPT Web");
+      }
+      parts.push({ type: "image", imageUrl: raw.image_url, ...(typeof raw.detail === "string" ? { detail: raw.detail } : {}) });
+      hasAttachment = true;
+    } else if (raw.type === "input_file") {
+      parts.push(parseInputFile(raw));
+      hasAttachment = true;
     } else if (raw.type === "encrypted_content") {
       // codex-rs FunctionCallOutputContentItem::EncryptedContent — opaque to routed models.
       parts.push({ type: "text", text: "[encrypted content omitted]" });
     }
   }
-  if (!hasImage) return parts.map(p => (p.type === "text" ? p.text : "")).join("");
+  if (!hasAttachment) return parts.map(p => (p.type === "text" ? p.text : "")).join("");
   return parts;
-}
-
-/**
- * codex-rs ImageDetail allows "original", but chat-completions providers only accept
- * auto|low|high on image_url.detail — degrade "original" to "high" (the codex default).
- */
-function normalizeImageDetail(detail: string): string {
-  return detail === "original" ? "high" : detail;
 }
 
 function findToolById(messages: CodexMessage[], callId: string): { name: string; namespace?: string } {
@@ -483,10 +482,11 @@ export function parseRequest(body: unknown): CodexParsedRequest {
       }
 
       if (effectiveType === "custom_tool_call") {
-        const call = item as { id?: string; call_id: string; name: string; input: string };
+        const call = item as { id?: string; call_id: string; name: string; input: string; namespace?: string };
         const toolCall: CodexToolCall = {
           type: "toolCall", id: call.call_id, name: call.name,
           arguments: { input: call.input ?? "" },
+          ...(normalizedToolNamespace(call.namespace) ? { namespace: normalizedToolNamespace(call.namespace) } : {}),
         };
         assistantHolderWithReasoning().content.push(toolCall);
         continue;
@@ -587,12 +587,20 @@ export function parseRequest(body: unknown): CodexParsedRequest {
 
   const declaredTools = buildTools(data.tools as unknown[] | undefined) ?? [];
   const loadedTools = buildTools(loadedToolSpecs) ?? [];
-  const seenTools = new Set<string>();
+  const seenTools = new Map<string, CodexTool>();
   const mergedTools = [...declaredTools, ...loadedTools]
     .filter(t => {
       const k = namespacedToolName(t.namespace, t.name);
-      if (seenTools.has(k)) return false;
-      seenTools.add(k);
+      const previous = seenTools.get(k);
+      if (previous) {
+        if (previous.name !== t.name || previous.namespace !== t.namespace
+          || Boolean(previous.freeform) !== Boolean(t.freeform)
+          || Boolean(previous.toolSearch) !== Boolean(t.toolSearch)) {
+          throw new Error(`Ambiguous tool wire name: ${k}`);
+        }
+        return false;
+      }
+      seenTools.set(k, t);
       return true;
     });
   const context: CodexContext = {

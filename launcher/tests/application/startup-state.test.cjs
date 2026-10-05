@@ -30,6 +30,7 @@ test("quit waits for the installation transaction and prevents startup continuat
   const calls = [];
   const sandbox = {
     shutdownInProgress: false, exitCommitted: false, quitting: false,
+    updateController: { stop: () => calls.push("updates stopped") },
     runtimePreparation: new Promise(resolve => { finish = resolve; }), runtimeHost: null, browserHost: null, browserControl: null,
     runtimeSupervisor: { shutdown: async () => calls.push("shutdown") },
     stopCatalogVerificationMonitor() {}, app: { quit: () => calls.push("quit") },
@@ -42,7 +43,7 @@ test("quit waits for the installation transaction and prevents startup continuat
   assert.deepEqual(calls, []);
   finish();
   assert.equal((await quitting).ok, true);
-  assert.deepEqual(calls, ["shutdown", "quit"]);
+  assert.deepEqual(calls, ["shutdown", "updates stopped", "quit"]);
 });
 
 for (const shutdownFails of [false, true]) test(`package smoke follows normal shutdown before closing its window (failure=${shutdownFails})`, async () => {
@@ -51,6 +52,7 @@ for (const shutdownFails of [false, true]) test(`package smoke follows normal sh
   let windowDestroyed = false;
   const sandbox = {
     Error, shutdownInProgress: false, exitCommitted: false, quitting: false, runtimePreparation: Promise.resolve(),
+    updateController: { stop: () => calls.push("updates stopped") },
     runtimeRootProvider: () => "/fixture/runtime", runtimeHost: { currentOperation: () => null },
     runtimeSupervisor: { runtimeCommand: () => ({ executable: "/fixture/bun", args: ["--version"], cwd: "/fixture" }),
       shutdown: async () => calls.push("runtime stopped") },
@@ -84,7 +86,7 @@ for (const shutdownFails of [false, true]) test(`package smoke follows normal sh
     assert.deepEqual(calls, ["verified marker", "runtime stopped"]);
   } else {
     await result;
-    assert.deepEqual(calls, ["verified marker", "runtime stopped", "session saved", "browser closed", "control closed", "quit"]);
+    assert.deepEqual(calls, ["verified marker", "runtime stopped", "session saved", "browser closed", "control closed", "updates stopped", "quit"]);
     assert.equal(windowDestroyed, true);
   }
 });

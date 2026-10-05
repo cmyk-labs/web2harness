@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const { pipeline } = require("node:stream/promises");
+const { Transform } = require("node:stream");
 const { configuredRepository, normalizeRepository } = require("./release-config.cjs");
 
 const USER_AGENT = "web2harness-launcher-updater";
@@ -120,24 +121,28 @@ async function downloadText(url, maxBytes = 2 * 1024 * 1024) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-async function downloadFile(url, destination) {
+async function downloadFile(url, destination, onProgress) {
   const response = await request(url);
-  await pipeline(response, fs.createWriteStream(destination, { flags: "wx", mode: 0o600 }));
+  const declaredLength = Number(response.headers["content-length"]);
+  const totalBytes = Number.isSafeInteger(declaredLength) && declaredLength > 0 ? declaredLength : undefined;
+  let downloadedBytes = 0;
+  let publishedAt = 0;
+  const progress = new Transform({ transform(chunk, _encoding, callback) {
+    downloadedBytes += chunk.length;
+    const now = Date.now();
+    if (now - publishedAt >= 250) {
+      onProgress?.({ downloadedBytes, totalBytes });
+      publishedAt = now;
+    }
+    callback(null, chunk);
+  } });
+  await pipeline(response, progress, fs.createWriteStream(destination, { flags: "wx", mode: 0o600 }));
+  onProgress?.({ downloadedBytes, totalBytes });
 }
 
-function sha256(filePath) {
+async function sha256(filePath) {
   const hash = crypto.createHash("sha256");
-  const fd = fs.openSync(filePath, "r");
-  const buffer = Buffer.allocUnsafe(1024 * 1024);
-  try {
-    for (;;) {
-      const count = fs.readSync(fd, buffer, 0, buffer.length, null);
-      if (count === 0) break;
-      hash.update(buffer.subarray(0, count));
-    }
-  } finally {
-    fs.closeSync(fd);
-  }
+  for await (const chunk of fs.createReadStream(filePath, { highWaterMark: 1024 * 1024 })) hash.update(chunk);
   return hash.digest("hex");
 }
 
@@ -266,11 +271,14 @@ function createUpdateController({
   const supportedAsset = releaseAssetName(currentVersion, platform, arch);
   let state = packaged && supportedAsset && selectedRepository ? { status: "idle" } : { status: "disabled" };
   let checked = false;
+  let checking = null;
+  let lastCheckedAt;
+  let timer = null;
   let pending = null;
   let candidate = null;
 
   const transition = (next) => {
-    state = next;
+    state = { ...next, ...(lastCheckedAt ? { lastCheckedAt } : {}) };
     publish?.(state);
     return state;
   };
@@ -278,9 +286,21 @@ function createUpdateController({
   async function checkOnce() {
     if (state.status === "disabled" || checked) return state;
     checked = true;
+    return check();
+  }
+
+  function check() {
+    if (checking) return checking;
+    if (state.status === "disabled" || pending || state.status === "installing") return Promise.resolve(state);
+    checking = performCheck().finally(() => { checking = null; });
+    return checking;
+  }
+
+  async function performCheck() {
     transition({ status: "checking" });
     try {
       const release = await deps.fetchRelease();
+      lastCheckedAt = new Date().toISOString();
       // GitHub's /releases/latest already excludes these, including for older launchers.
       if (release?.draft === true || release?.prerelease === true) {
         candidate = null;
@@ -308,10 +328,23 @@ function createUpdateController({
       logger?.info("launcher.update_available", { currentVersion, version, platform, arch });
       return transition({ status: "available", version });
     } catch (error) {
+      lastCheckedAt = new Date().toISOString();
       const message = error instanceof Error ? error.message : String(error);
       logger?.warn("launcher.update_check_failed", { message });
       return transition({ status: "error", message });
     }
+  }
+
+  function start() {
+    if (timer || state.status === "disabled") return;
+    void checkOnce();
+    timer = setInterval(() => { void check(); }, 6 * 60 * 60 * 1000);
+    timer.unref?.();
+  }
+
+  function stop() {
+    if (timer) clearInterval(timer);
+    timer = null;
   }
 
   async function beginInstall() {
@@ -325,8 +358,10 @@ function createUpdateController({
         const checksums = await deps.downloadText(available.checksumsUrl);
         const expected = expectedChecksum(checksums, available.assetName);
         const assetPath = path.join(tempRoot, available.assetName);
-        await deps.downloadFile(available.assetUrl, assetPath);
-        const actual = deps.sha256(assetPath);
+        await deps.downloadFile(available.assetUrl, assetPath, progress => {
+          transition({ status: "downloading", version: available.version, ...progress });
+        });
+        const actual = await deps.sha256(assetPath);
         if (actual !== expected) throw new Error(`SHA-256 verification failed for ${available.assetName}`);
 
         const stagingRoot = path.join(tempRoot, "stage");
@@ -380,6 +415,9 @@ function createUpdateController({
   return {
     getState: () => state,
     checkOnce,
+    check,
+    start,
+    stop,
     beginInstall,
     cancelInstall,
   };

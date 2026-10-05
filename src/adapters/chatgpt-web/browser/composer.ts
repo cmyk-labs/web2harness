@@ -2,6 +2,7 @@
 
 import { validateSkillFiles } from "../prompt/skill-attachments";
 import { validateContextFile } from "../prompt/context-attachments";
+import { validateInputFiles } from "../prompt/file-attachments";
 import { parseDataUrl } from "../../image";
 import { ChatGptWebAdapterError } from "../adapter-error";
 import { CHATGPT_MAX_INPUT_IMAGES, type CompiledChatGptWebPrompt, type ChatGptWebPromptImage } from "../prompt/compile";
@@ -57,21 +58,24 @@ export function chatGptImageFilePayloads(images: ChatGptWebPromptImage[]): Array
 }
 
 export function assertChatGptPromptAttachments(prompt: CompiledChatGptWebPrompt): void {
-  if (prompt.images.length + (prompt.skillFiles?.length ?? 0) + (prompt.contextFile ? 1 : 0) > CHATGPT_MAX_INPUT_IMAGES) {
+  if (prompt.images.length + (prompt.files?.length ?? 0) + (prompt.skillFiles?.length ?? 0) + (prompt.contextFile ? 1 : 0) > CHATGPT_MAX_INPUT_IMAGES) {
     throw new ChatGptWebAdapterError(
-      "Context, skills and images exceed ChatGPT's 10 attachments per message; reduce attachments before retrying.",
+      "Context, skills, files and images exceed ChatGPT's 10 attachments per message; reduce attachments before retrying.",
       { status: 400, errorType: "invalid_request_error", code: "too_many_attachments", retryable: false },
     );
   }
   validateSkillFiles(prompt.skillFiles);
   validateContextFile(prompt.contextFile);
+  validateInputFiles(prompt.files);
 }
 
 export function chatGptPromptFilePayloads(
   prompt: CompiledChatGptWebPrompt,
 ): Array<{ name: string; mimeType: string; buffer: Buffer }> {
   assertChatGptPromptAttachments(prompt);
-  const files = [...chatGptImageFilePayloads(prompt.images), ...[...(prompt.skillFiles ?? []), ...(prompt.contextFile ? [prompt.contextFile] : [])].map(file => ({
+  const files = [...chatGptImageFilePayloads(prompt.images), ...(prompt.files ?? []).map(file => ({
+    name: file.name, mimeType: file.mimeType, buffer: Buffer.from(file.data, "base64"),
+  })), ...[...(prompt.skillFiles ?? []), ...(prompt.contextFile ? [prompt.contextFile] : [])].map(file => ({
     name: file.name, mimeType: "text/plain", buffer: Buffer.from(file.text, "utf8"),
   }))];
   if (files.reduce((sum, file) => sum + file.buffer.length, 0) > 50_000_000) {

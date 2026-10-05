@@ -1,4 +1,5 @@
 import { createContextFile } from "../../../../src/adapters/chatgpt-web/prompt/context-attachments";
+import { createInputFile } from "../../../../src/adapters/chatgpt-web/prompt/file-attachments";
 import { selectedSkillFile } from "../../../../src/adapters/chatgpt-web/prompt/skill-attachments";
 import { afterEach, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -28,6 +29,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
       const prepared = await turn.prepare();
       if (prepared.skillFiles?.[0]?.text !== "<skill>\\n<name>ipc</name>\\n<path>/skills/ipc/SKILL.md</path>\\ncheck IPC\\n</skill>") throw new Error("Skill file lost in IPC");
       if (prepared.contextFile?.text !== '{"version":3,"system":[],"messages":[]}') throw new Error("Context file was lost");
+      if (prepared.files?.[0]?.filename !== "input.txt" || prepared.files[0].data !== "aGVsbG8=") throw new Error("Input file bytes lost in IPC");
       await turn.onSendActivated();
       turn.onSubmitted();
       turn.onReasoningSummary("Reading project");
@@ -100,6 +102,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
           content: "<skill>\n<name>ipc</name>\n<path>/skills/ipc/SKILL.md</path>\ncheck IPC\n</skill>",
         })],
         contextFile: createContextFile('{"version":3,"system":[],"messages":[]}'),
+        files: [createInputFile({ type: "file", filename: "input.txt", mimeType: "text/plain", data: "aGVsbG8=" })],
         release: () => { released = true; },
       }),
       onSendActivated: () => { sendActivated = true; },
@@ -410,7 +413,7 @@ test("structured helper errors preserve the ChatGPT adapter failure contract", a
   });
 });
 
-test("an older helper cannot silently drop selected skill files and releases the prepared turn", async () => {
+for (const kind of ["skill", "input"] as const) test(`an older helper cannot silently drop ${kind} files and releases the prepared turn`, async () => {
   const client = new LauncherBrowserHelperClient({
     appName: "Codex Native2", browserHost: "launcher", browserHostDescriptorPath: "/durable/launcher.json",
     storageStatePath: "/durable/unused.json", chromeExecutablePath: "/durable/chrome", headed: true, autoApproveToolCalls: false, useSavedChats: false,
@@ -439,13 +442,13 @@ test("an older helper cannot silently drop selected skill files and releases the
     traceId: "skill-old-helper", modelId: "gpt-5.6-sol", reasoning: "high",
     capabilities: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: false, proAvailable: false },
     prepare: async () => ({ text: "inspect", images: [],
-      skillFiles: [selectedSkillFile({ role: "user", origin: "codex_skill", timestamp: 0,
+      ...(kind === "skill" ? { skillFiles: [selectedSkillFile({ role: "user", origin: "codex_skill", timestamp: 0,
         content: "<skill>\n<name>test</name>\n<path>/test</path>\ncheck\n</skill>",
-      })],
+      })] } : { files: [createInputFile({ type: "file", filename: "input.txt", mimeType: "text/plain", data: "aGVsbG8=" })] }),
       release() { released = true; },
     }),
     onTextDelta() {},
-  })).rejects.toThrow("does not support skill attachments");
+  })).rejects.toThrow(kind === "skill" ? "does not support skill attachments" : "does not support input files");
   expect(sent).toEqual(["run", "abort"]);
   expect(released).toBe(true);
 });

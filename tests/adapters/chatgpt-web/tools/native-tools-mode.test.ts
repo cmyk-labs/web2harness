@@ -174,7 +174,7 @@ describe("native-tools model mode and prompt contract", () => {
     expect(envelope.version).toBe(4);
     expect(envelope.tools).toEqual([
       { name: "exec_command", description: "Run command", parameters: tools[0]!.parameters },
-      { name: "apply_patch", description: "Patch files", parameters: tools[1]!.parameters },
+      { name: "apply_patch", description: "Patch files", parameters: tools[1]!.parameters, input_type: "custom" },
       { name: "mcp__openaiDeveloperDocs__search_openai_docs", description: "Search docs", parameters: tools[2]!.parameters },
     ]);
 

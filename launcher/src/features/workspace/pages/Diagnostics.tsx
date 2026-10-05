@@ -8,6 +8,7 @@ import type { LimitsTracker } from "../../limits/useLimits";
 import { PageIntro, Section } from "../controls";
 import { Feedback } from "../Feedback";
 import { translate } from "../labels";
+import { presentLog } from "../log-presentation";
 import { Report } from "../Report";
 import { workspaceBusy } from "../status";
 import type { WorkspaceProps } from "../types";
@@ -253,20 +254,7 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
             <div className="activity-table">
               {logs.length ? (
                 [...logs].reverse().map((record, i) => {
-                  const event = record.event
-                    .split(".")
-                    .map((part) => part.replaceAll("_", " "))
-                    .join(" · ");
-                  const detail = Object.entries(record.detail ?? {})
-                    .filter(
-                      ([, value]) => value !== undefined && value !== null,
-                    )
-                    .slice(0, 3)
-                    .map(
-                      ([key, value]) =>
-                        `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`,
-                    )
-                    .join(" · ");
+                  const presentation = presentLog(record, language);
                   const date = new Date(record.at),
                     time = Number.isNaN(date.getTime())
                       ? record.at
@@ -279,11 +267,14 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
                     <div className="activity-row" key={`${record.at}-${i}`}>
                       <i
                         className={`activity-dot ${record.level === "error" ? "is-error" : ""}`}
-                        aria-label={record.level}
+                        aria-label={presentation.status}
                       />
                       <div>
-                        <strong title={event}>{event}</strong>
-                        <span title={detail}>{detail}</span>
+                        <strong>{presentation.title} · {presentation.status}</strong>
+                        <details>
+                          <summary>{t("技术详情", "Technical details")}</summary>
+                          <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{presentation.event}{"\n"}{presentation.detail}</pre>
+                        </details>
                       </div>
                       <time dateTime={record.at}>{time}</time>
                     </div>

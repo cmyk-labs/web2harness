@@ -144,6 +144,14 @@ The tool mode selects the path to Codex tools. The interaction method selects wh
 
 Finish active tasks before changing mode or interaction. Select the new values in **Connection & Models**, complete their prerequisites, and choose **Apply configuration**. Until application succeeds, **Active configuration** remains authoritative. Follow any catalog-refresh or client-restart instruction. Manual interaction is available only with MCP Bridge.
 
+### Native tool and attachment support in 1.1.0
+
+Native Tools preserves the installed Codex catalog's Code Mode setting. Codex owns `exec`/`wait`, nested tool execution, sandboxing and approval; Web2Harness transports the declared input format, namespace, call ID and result. Ordinary function tools and custom tools can share a name in different namespaces. Refresh the applied catalog and restart Codex after upgrading. MCP Bridge continues to use its ordinary tool registry.
+
+Automatic interaction accepts inline `input_file.file_data` as canonical base64 or a base64 data URL, with a plain filename. Supported files are PDF and UTF-8 text/source files. They upload as attachments, including files returned by tools; image results remain images. Identical files in one request share an attachment. Provider `file_id` references, local paths, unsupported file types and malformed data fail explicitly. Manual Zero Risk does not automatically transfer these files.
+
+The transport permits up to 10 combined context, skill, file and image attachments, 20 MB per input file/image and 50 MB total. Older image overflow retains the existing explicit omission notice. Text files count toward the token budget; PDF input uses a conservative byte-based reserve because the bridge cannot know ChatGPT's extracted token count. These limits do not imply complete parity with every hosted Codex capability: private encrypted V2 subagent content and remote file IDs remain unsupported.
+
 <a id="mcp-bridge"></a>
 
 ### Configure automatic MCP Bridge
@@ -264,6 +272,10 @@ Activity reflects the current browser and application observations; it does not 
 The GitHub icon beside **Web2Harness** in the sidebar opens the current project repository. **About** presents the project slogan, capabilities, version, operating system and license. Its operating diagram shows how Codex, Web2Harness and ChatGPT Web exchange requests and results, with a brief explanation of each tool mode. Documentation, GitHub and project-license links open in the system browser. Third-party notices remain in the repository and distribution; there is no separate shortcut on this page.
 
 When a release is available, a small blue update button appears at the bottom of the sidebar with the target version. **About** provides the same action. Both show downloading/installing states and are unavailable while a task is running. Preferences remains focused on conversations, window behavior and experimental features. Overview and Diagnostics continue to show connection and runtime status.
+
+Packaged applications check for stable updates at startup and every six hours. **About → Check for updates** retries immediately and shows the last check time or failure. While downloading, the update button displays a percentage when the server provides a total size, otherwise downloaded MB. SHA-256 verification uses asynchronous file reads to keep the interface responsive; installation still requires verification to pass. Development/source runs keep application updates disabled.
+
+**Usage & Diagnostics → Logs** shows readable event summaries with severity. Expand **Technical details** for the original event name and all recorded fields. Informational severity does not by itself mean that an operation succeeded.
 
 <a id="update"></a>
 

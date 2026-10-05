@@ -90,12 +90,20 @@ export interface CodexImageContent {
   type: "image";
   /** A `data:` URL (base64) or a remote https URL — passed through from Codex verbatim, NEVER inlined as text. */
   imageUrl: string;
-  /** Fidelity hint from Codex: "low" | "high" | "auto". */
+  /** Fidelity hint from Codex: "low" | "high" | "auto" | "original". */
   detail?: string;
 }
 
-/** A user/developer message content part: text or an image (vision). */
-export type CodexContentPart = CodexTextContent | CodexImageContent;
+/** Message or tool-result content, with binary attachments kept out of prompt text. */
+export type CodexContentPart = CodexTextContent | CodexImageContent | CodexFileContent;
+
+export interface CodexFileContent {
+  type: "file";
+  filename: string;
+  mimeType: string;
+  /** Canonical base64 bytes supplied by the caller, never a local path or provider file ID. */
+  data: string;
+}
 
 export interface CodexThinkingContent {
   type: "thinking";
@@ -127,6 +135,8 @@ export interface CodexTool {
   namespace?: string;
   /** Freeform/custom tool (e.g. apply_patch): the model's call must be relayed as a custom_tool_call. */
   freeform?: boolean;
+  /** Original custom-tool input contract; the Codex client remains its validator. */
+  format?: Record<string, unknown>;
   /** Client-executed tool discovery (tool_search): the model's call must be relayed as a tool_search_call. */
   toolSearch?: boolean;
 }

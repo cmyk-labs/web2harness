@@ -52,6 +52,7 @@ await context.addInitScript(()=>{
   if(window.__fixture.holdRepository)await new Promise(resolve=>window.__fixture.releaseRepository=resolve);
   return patch({githubOpened:true});
  },
+ checkUpdate:async()=>{window.__fixture.calls.push(['checkUpdate']);const update={status:'up-to-date',lastCheckedAt:'2026-10-05T01:00:00Z'};window.__fixture.emitUpdate(update);return update},
  snapshot:async()=>{if(window.__fixture.holdSnapshot)await new Promise(resolve=>heldSnapshots.push(resolve));if(window.__fixture.failSnapshot)throw new Error('Fixture snapshot error');return structuredClone(snapshot)},workspaceStatus:async()=>{if(window.__fixture.failStatus)throw new Error('Fixture status unavailable');return structuredClone(status)},windowState:async()=>({fullScreen:false,maximized:false}),
  cancelTurns:async()=>{
   window.__fixture.calls.push(['cancelTurns']);
@@ -338,7 +339,7 @@ await page.screenshot({path:out+'/health-zh-mobile.png',fullPage:true});
 await page.setViewportSize({width:1440,height:1050});await page.locator('.language-toggle').click();await page.getByRole('region',{name:'Usage & Diagnostics',exact:true}).waitFor();
 await page.getByRole('tab',{name:'Logs',exact:true}).click();
 check('Logs restore compact event, summary and time rows',await page.locator('.activity-row').count()===2&&await page.locator('.activity-row time').count()===2);
-check('Latest log appears first with readable summary',await page.locator('.activity-row').first().locator('strong').textContent()==='browser · connection failed'&&await page.locator('.activity-row').first().locator('span').textContent()==='message: Fixture connection error · retry: false');
+check('Latest log appears first with readable summary',await page.locator('.activity-row').first().locator('strong').textContent()==='Browser connection failed · Error'&&(await page.locator('.activity-row').first().locator('pre').textContent()).includes('retry: false'));
 check('Raw JSON log blocks removed',await page.locator('.log').count()===0);
 await page.screenshot({path:out+'/logs-en.png'});
 for(const width of [1440,900,390]){await page.setViewportSize({width,height:1050});for(const name of ['Overview','Connection & Models','Usage & Diagnostics']){await nav(name);await page.waitForTimeout(200);if(name==='Overview')check(`${width} flow layout preserves readable content`,await page.locator('.usage-flow li').evaluateAll((nodes,width)=>new Set(nodes.map(el=>Math.round(el.getBoundingClientRect().top))).size===(width>560?1:3),width));check(`${width} ${name} no horizontal overflow`,await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));if(name==='Overview')await page.screenshot({path:out+'/overview-en-'+width+'.png',fullPage:true});}await pref('Preferences');check(`${width} Preferences no horizontal overflow`,await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));}
@@ -418,8 +419,8 @@ const beforeSidebarUpdate=await page.evaluate(()=>window.__fixture.calls.filter(
 await page.locator('.sidebar-update').click();
 check('Sidebar invokes the same update API once',await page.evaluate(()=>window.__fixture.calls.filter(c=>c[0]==='installUpdate').length)===beforeSidebarUpdate+1);
 await page.evaluate(()=>window.__fixture.emitOperation({status:'running',name:'fixture',message:'Busy'}));
-await page.waitForFunction(()=>document.querySelector('.sidebar-update')?.disabled&&document.querySelector('.row button')?.disabled);
-check('Both update entries are disabled during an operation',await page.locator('.sidebar-update').isDisabled()&&await page.locator('.row button').isDisabled());
+await page.waitForFunction(()=>document.querySelector('.sidebar-update')?.disabled&&document.querySelector('.update-install')?.disabled);
+check('Both update entries are disabled during an operation',await page.locator('.sidebar-update').isDisabled()&&await page.locator('.update-install').isDisabled());
 await page.evaluate(()=>window.__fixture.emitOperation({status:'completed',name:'fixture',message:'Done'}));
 await page.waitForFunction(()=>!document.querySelector('.sidebar-update')?.disabled);
 await page.evaluate(()=>window.__fixture.emitBrowser({status:'running'}));
@@ -440,11 +441,18 @@ for(const language of ['en','zh-CN']) {
 await page.locator('.language-toggle').click();await page.getByRole('region',{name:'About',exact:true}).waitFor();
 await page.evaluate(()=>window.__fixture.emitUpdate({status:'downloading',version:'1.0.1'}));
 await page.waitForFunction(()=>document.querySelector('.sidebar-update')?.textContent==='Downloading update…');
-check('Downloading update cannot be started twice',await page.locator('.row button').isDisabled());
+check('Downloading update cannot be started twice',await page.locator('.update-install').isDisabled());
 check('Sidebar shows download progress state',await page.locator('.sidebar-update').isDisabled()&&await page.locator('.sidebar-update').textContent()==='Downloading update…');
+await page.evaluate(()=>window.__fixture.emitUpdate({status:'downloading',version:'1.0.1',downloadedBytes:50,totalBytes:100}));
+await page.waitForFunction(()=>document.querySelector('.sidebar-update')?.textContent==='Downloading update… 50%');
+check('Known download length shows measured percentage',await page.locator('.sidebar-update').textContent()==='Downloading update… 50%');
 await page.evaluate(()=>window.__fixture.emitUpdate({status:'installing',version:'1.0.1'}));
 await page.waitForFunction(()=>document.querySelector('.sidebar-update')?.textContent==='Installing update…');
 check('Sidebar shows installation progress state',await page.locator('.sidebar-update').isDisabled()&&await page.locator('.sidebar-update').textContent()==='Installing update…');
+await page.evaluate(()=>window.__fixture.emitUpdate({status:'error',message:'offline'}));
+await page.getByRole('button',{name:'Check for updates',exact:true}).click();
+await page.getByText('You have the latest stable version.',{exact:true}).waitFor();
+check('Manual update retry refreshes status and check time',await page.evaluate(()=>window.__fixture.calls.some(c=>c[0]==='checkUpdate'))&&(await page.locator('.content').innerText()).includes('Last checked:'));
 await page.evaluate(()=>window.__fixture.emitUpdate({status:'disabled'}));
 await page.waitForFunction(()=>!document.querySelector('.sidebar-update'));
 check('Sidebar update stays hidden when no update is available',await page.locator('.sidebar-update').count()===0);

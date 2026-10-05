@@ -50,6 +50,14 @@ function source(): Record<string, unknown> {
 }
 
 describe("native /models augmentation", () => {
+  test("native tools retain the official Code Mode contract without changing other transports", () => {
+    for (const mode of ["native-tools", "mcp-bridge", "browser-only"] as const) {
+      const catalog = augmentNativeModelCatalog(source(), defaultConfig(mode));
+      const web = (catalog.models as Array<Record<string, unknown>>).filter(model => String(model.slug).startsWith("chatgpt-web/"));
+      expect(web.length).toBeGreaterThan(0);
+      expect(web.every(model => model.tool_mode === (mode === "native-tools" ? "code_mode_only" : null))).toBe(true);
+    }
+  });
   test("preserves native models, groups supported efforts, and retains hidden legacy metadata", () => {
     const native = source();
     const nativeSnapshot = structuredClone(native);

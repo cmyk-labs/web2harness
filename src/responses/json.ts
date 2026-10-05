@@ -93,8 +93,8 @@ export function buildResponseJSON(
     const mapped = options?.toolNsMap?.get(currentToolCallName);
     const realName = mapped?.name ?? currentToolCallName;
     const ns = mapped?.namespace;
-    const toolSearch = options?.toolSearchToolNames?.has(realName) ?? false;
-    const freeform = !toolSearch && (options?.freeformToolNames?.has(realName) ?? false);
+    const toolSearch = options?.toolSearchToolNames?.has(currentToolCallName) ?? false;
+    const freeform = !toolSearch && (options?.freeformToolNames?.has(currentToolCallName) ?? false);
     if (toolSearch) {
       output.push({
         type: "tool_search_call", id: `tsc_${uuid()}`,
@@ -106,6 +106,7 @@ export function buildResponseJSON(
         type: "custom_tool_call", id: `ctc_${uuid()}`,
         call_id: currentToolCallId, name: realName,
         input: freeformInput(currentToolCallArgs), status: "completed",
+        ...(ns ? { namespace: ns } : {}),
       });
     } else {
       output.push({
@@ -231,4 +232,3 @@ export function buildResponseJSON(
     usage: responsesUsage(incompleteEvent?.usage ?? usage),
   };
 }
-

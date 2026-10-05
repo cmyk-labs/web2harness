@@ -93,10 +93,10 @@ export interface OperationState {
   message: string;
 }
 
-export type UpdateState =
+export type UpdateState = { lastCheckedAt?: string; downloadedBytes?: number; totalBytes?: number } & (
   | { status: "disabled" | "idle" | "checking" | "up-to-date" }
   | { status: "available" | "downloading" | "installing"; version: string }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string });
 
 export interface StartupState {
   status: "preparing" | "ready" | "failed";
@@ -212,6 +212,7 @@ export interface LauncherApi {
   logs(limit?: number): Promise<LogRecord[]>;
   exportLogs(): Promise<string | null>;
   installUpdate(): Promise<boolean>;
+  checkUpdate(): Promise<UpdateState>;
   windowState(): Promise<{ fullScreen: boolean; maximized: boolean }>;
   windowControl(action: "close" | "minimize" | "zoom"): void;
   onWindowStateChanged(listener: (state: { fullScreen: boolean; maximized: boolean }) => void): () => void;

@@ -1,4 +1,5 @@
 import { validateContextFile } from "../prompt/context-attachments";
+import { validateInputFiles } from "../prompt/file-attachments";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -490,6 +491,10 @@ export class LauncherBrowserHelperClient {
           }
           pending.prepared = prepared;
           validateContextFile(prepared.contextFile);
+          validateInputFiles(prepared.files);
+          if (prepared.files?.length && !this.helperFeatures.has("input-files")) {
+            throw new Error("Launcher browser helper does not support input files; update or restart the launcher");
+          }
           if (prepared.contextFile && !this.helperFeatures.has("context-file")) {
             throw new Error("Launcher browser helper does not support context files; update or restart the launcher");
           }
@@ -504,6 +509,7 @@ export class LauncherBrowserHelperClient {
               prepared: {
                 text: prepared.text,
                 images: prepared.images,
+                ...(prepared.files ? { files: prepared.files } : {}),
                 ...(prepared.skillFiles ? { skillFiles: prepared.skillFiles } : {}),
                 ...(prepared.contextFile ? { contextFile: prepared.contextFile } : {}),
                 ...(prepared.trimmedCompactionMessages !== undefined
