@@ -1473,9 +1473,15 @@ class BrowserHost {
 
   setBounds(bounds, rendererZoomFactor = 1) {
     const [width, height] = this.window.getContentSize();
+    const measured = normalizeBounds(scaleBrowserBounds(bounds, rendererZoomFactor));
+    // Windows may report 0x0 for the native window while its renderer has valid pane
+    // measurements. Do not collapse those measurements to a synthetic 1x1 viewport.
     this.bounds = constrainBrowserBounds(
-      normalizeBounds(scaleBrowserBounds(bounds, rendererZoomFactor)),
-      { width, height },
+      measured,
+      {
+        width: width > 0 ? width : measured.x + measured.width,
+        height: height > 0 ? height : measured.y + measured.height,
+      },
     );
     this.boundsReady = true;
     this.authView?.setBounds(this.bounds);
@@ -1493,7 +1499,11 @@ class BrowserHost {
   }
 
   hiddenTurnBounds() {
-    const [contentWidth, contentHeight] = this.window.getContentSize();
+    const [nativeWidth, nativeHeight] = this.window.getContentSize();
+    const contentWidth = nativeWidth > 0 ? nativeWidth
+      : this.boundsReady ? this.bounds.x + this.bounds.width : HIDDEN_TURN_VIEWPORT.width;
+    const contentHeight = nativeHeight > 0 ? nativeHeight
+      : this.boundsReady ? this.bounds.y + this.bounds.height : HIDDEN_TURN_VIEWPORT.height;
     // Once measured, every tab uses the browser pane's dimensions, including offscreen tabs.
     // Using the whole window here resized a running page when another task finished and its
     // tab became selected. ChatGPT closes its model picker on that resize, aborting selection.

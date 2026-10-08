@@ -3521,3 +3521,27 @@ test("automatic primary checks keep an explicit viewport and manual mode restore
   assert.equal(fixture.primaryDeviceEmulationViewport, null);
   assert.deepEqual(calls.slice(-3), [["bounds", { x: 1281, y: 801, width: 1280, height: 800 }], ["disable"], ["visible", true]]);
 });
+
+test("zero native window size preserves measured pane bounds and offscreen placement", () => {
+  let nativeSize = [0, 0];
+  let synchronized = 0;
+  const host = Object.assign(Object.create(BrowserHost.prototype), {
+    boundsReady: false,
+    bounds: { x: 0, y: 0, width: 1, height: 1 },
+    window: { getContentSize: () => nativeSize },
+    view: { webContents: { executeJavaScript: async () => {} } },
+    syncViewVisibility: () => { synchronized += 1; },
+  });
+  const pane = { x: 252, y: 88, width: 868, height: 633 };
+  host.setBounds(pane);
+  assert.deepEqual(host.bounds, pane);
+  assert.equal(host.boundsReady, true);
+  assert.deepEqual(host.hiddenTurnBounds(), { x: 1121, y: 722, width: 868, height: 633 });
+  host.setBounds(pane, 1.25);
+  assert.deepEqual(host.bounds, { x: 315, y: 110, width: 1085, height: 791 });
+  assert.deepEqual(host.hiddenTurnBounds(), { x: 1401, y: 902, width: 1085, height: 791 });
+  nativeSize = [1000, 700];
+  host.setBounds(pane);
+  assert.deepEqual(host.bounds, { x: 252, y: 88, width: 748, height: 612 });
+  assert.equal(synchronized, 3);
+});

@@ -37,6 +37,15 @@ test.skipIf(!process.env.LAUNCHER_TEST_ELECTRON)("finishing another Electron tab
       expect(await page.getByRole("menu").isVisible()).toBe(true);
       await app.evaluate(() => {
         const host = (globalThis as any).viewportFixture;
+        const getContentSize = host.window.getContentSize;
+        host.window.getContentSize = () => [0, 0];
+        try { host.setBounds({ ...host.bounds }); }
+        finally { host.window.getContentSize = getContentSize; }
+      });
+      expect(await dimensions()).toEqual(before);
+      expect(await page.getByRole("menu").isVisible()).toBe(true);
+      await app.evaluate(() => {
+        const host = (globalThis as any).viewportFixture;
         const second = host.turnTabs.get("second");
         if (second) {
           host.selectedTabId = second.id;
