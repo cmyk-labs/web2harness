@@ -23,7 +23,7 @@ This manual follows the application lifecycle: prepare an installation, connect 
 
 ## Requirements and distribution
 
-Desktop installers are available from the [1.0.0 preview release](https://github.com/cmyk-labs/web2harness/releases/tag/v1.0.0). Choose the installer matching your operating system and processor; one installer is sufficient. Review its validation and signing limitations before use. Formal installer acceptance is tracked separately in the [release manual](release.md).
+Desktop installers are available from the [1.1.1 stable release](https://github.com/cmyk-labs/web2harness/releases/tag/v1.1.1). Choose the installer matching your operating system and processor; one installer is sufficient. Review its validation and signing limitations before use. Formal installer acceptance is tracked separately in the [release manual](release.md).
 
 | Requirement | Details |
 | --- | --- |
@@ -47,15 +47,15 @@ Ordinary users may install and use the application on their own workstation. Dev
 
 | Device | Installer |
 | --- | --- |
-| Windows x64 | `web2harness-1.0.0-win-x64.exe` |
-| macOS Apple silicon | `web2harness-1.0.0-mac-arm64.dmg` |
-| macOS Intel | `web2harness-1.0.0-mac-x64.dmg` |
-| Linux x64 | `web2harness-1.0.0-linux-x64.AppImage` |
-| Linux arm64 | `web2harness-1.0.0-linux-arm64.AppImage` |
+| Windows x64 | `web2harness-1.1.1-win-x64.exe` |
+| macOS Apple silicon | `web2harness-1.1.1-mac-arm64.dmg` |
+| macOS Intel | `web2harness-1.1.1-mac-x64.dmg` |
+| Linux x64 | `web2harness-1.1.1-linux-x64.AppImage` |
+| Linux arm64 | `web2harness-1.1.1-linux-arm64.AppImage` |
 
 Verify the download against `checksums.txt` in the same release. On macOS, open the DMG and copy Web2Harness to Applications. On Linux, grant the AppImage execute permission and launch it from a supported desktop session. Windows installation is described below.
 
-The macOS ZIPs support updates and terminal-only installation; they are not additional prerequisites for DMG users. Source code archives are for developers. Advanced users can obtain [installation scripts from the versioned source](https://github.com/cmyk-labs/web2harness/tree/v1.0.0/scripts). Set `WEB2HARNESS_REPOSITORY=cmyk-labs/web2harness` explicitly. The macOS terminal script downloads the complete desktop ZIP and installs only its embedded runtime and licenses; it does not install the desktop application. To use the preview with the desktop scripts, also set `WEB2HARNESS_VERSION=1.0.0`, since automatic stable-version discovery excludes previews.
+The macOS ZIPs support updates and terminal-only installation; they are not additional prerequisites for DMG users. Source code archives are for developers. Advanced users can obtain [installation scripts from the versioned source](https://github.com/cmyk-labs/web2harness/tree/v1.1.1/scripts). Set `WEB2HARNESS_REPOSITORY=cmyk-labs/web2harness` explicitly. The macOS terminal script downloads the complete desktop ZIP and installs only its embedded runtime and licenses; it does not install the desktop application. Desktop installation scripts select the latest stable release by default; set `WEB2HARNESS_VERSION=1.1.1` to pin this release.
 
 ### Existing source checkout
 
