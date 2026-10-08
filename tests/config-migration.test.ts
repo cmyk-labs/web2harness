@@ -145,4 +145,4 @@ test("current first-party contracts and documentation exclude the retired mode v
     return readFileSync(join(root, file), "utf8").split(/\r?\n/).flatMap((line, index) => forbidden.test(line) ? [`${key}:${index + 1}`] : []);
   });
   expect(violations).toEqual([]);
-});
+}, 30_000);

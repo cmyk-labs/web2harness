@@ -10,13 +10,16 @@ import {
 test("ordinary Web model families are attributed from selected UI evidence and unknown plans still have receipts", () => {
   for (const level of ["Instant", "Medium", "High", "Extra High"]) {
     expect(chatGptUsageModelFromAnnouncements([`5.6 ${level}, 3 of 5.`], false)).toBe("gpt-5.6-sol");
+    expect(chatGptUsageModelFromAnnouncements([`6 ${level}, 3 of 5.`], false)).toBe("gpt-6-sol");
+    expect(chatGptUsageModelFromAnnouncements([`GPT-6 Sol ${level}`], false)).toBe("gpt-6-sol");
   }
   expect(chatGptUsageModelFromAnnouncements(["GPT-5.6 Sol High, 3 of 5."], false)).toBe("gpt-5.6-sol");
   for (const level of ["即时", "中", "高", "极高"]) {
     expect(chatGptUsageModelFromAnnouncements([`5.6 ${level}，第 3 项，共 5 项。`], false)).toBe("gpt-5.6-sol");
+    expect(chatGptUsageModelFromAnnouncements([`6 ${level}，第 3 项，共 5 项。`], false)).toBe("gpt-6-sol");
   }
   expect(chatGptUsageModelFromAnnouncements(["GPT-5.6 Luna Think"], false)).toBe("gpt-5.6-luna");
-  for (const labels of [[], ["Latest"], ["5.6 Sol High", "5.6 Luna Think"], ["6 Pro"]]) {
+  for (const labels of [[], ["Latest"], ["5.6 Sol High", "5.6 Luna Think"], ["6 Pro"], ["6 High", "5.6 High"], ["6.1 High"], ["7 High"]]) {
     expect(chatGptUsageModelFromAnnouncements(labels, false)).toBe("other");
   }
   expect(chatGptUsagePlan({ personal: true, planType: "plus" })).toBe("unsupported");

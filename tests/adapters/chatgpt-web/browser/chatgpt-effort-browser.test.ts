@@ -3,16 +3,17 @@ import { chromium } from "playwright-core";
 import { ChatGptBrowserWorker } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { detectChatGptAccountCapabilities } from "../../../../src/browser/session";
 
-for (const modern of [false, true])
-test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`model selection reuses the ${modern ? "power" : "classic"} picker without racing Escape cleanup`, async () => {
+for (const picker of ["classic", "power", "track"])
+test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`model selection reuses the ${picker} picker without racing Escape cleanup`, async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
   try {
     const page = await browser.newPage();
     page.setDefaultTimeout(2_000);
     await page.setContent(`<form><div id="prompt-textarea" contenteditable="true">Draft</div>
       <button type="button" data-tone="neutral" aria-haspopup="menu" aria-controls="picker" aria-expanded="false">Extra High</button></form>
-      <div id="picker" role="menu" hidden><div ${modern ? 'data-model-picker-view="simple"' : ''}>
-        <div id="toggle" role="menuitem" aria-hidden="false" aria-expanded="false" data-model-picker-view-toggle="true">Select model</div>
+      <div id="picker" role="menu" hidden><div ${picker !== 'classic' ? 'data-model-picker-view="simple"' : ''}>
+        <div aria-hidden="false"><div id="toggle" role="menuitem" ${picker === "track" ? "" : 'aria-hidden="false"'} aria-expanded="false" data-model-picker-view-toggle="true">Select model</div></div>
+        ${picker === "track" ? '<div aria-hidden="true" inert><div data-model-picker-view-toggle="true">Inactive toggle</div></div>' : ""}
         <div id="models" hidden><div role="menuitemradio" aria-checked="true">Latest</div>
           <div role="menuitemradio" aria-checked="false">GPT-5.6 Sol</div></div>
         <span id="announcement">5.6 Extra High, 4 of 4.</span>

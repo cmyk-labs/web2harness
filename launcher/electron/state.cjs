@@ -18,7 +18,7 @@ const DEFAULT_STATE = Object.freeze({
   experimentalContextTripleBudget: false,
   experimentalSkillAttachments: false,
   experimentalFreshConversationPerTurn: false,
-  useSavedChats: true,
+  useSavedChats: false,
   zeroRiskProEnabled: false,
   browserSmokePassed: false,
   browserSmokeVersion: null,

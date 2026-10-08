@@ -11,6 +11,8 @@ This document maintains repeatable live capability cases: prompts, pass criteria
 - [CAP-001: Code Mode parallel reads and native patch](#cap-001)
 - [CAP-002: Code Mode waiting and same-task continuation](#cap-002)
 - [CAP-003: Three real agents performing parallel read-only analysis](#cap-003)
+- [CAP-004: Model family, effort and shared budget](#cap-004)
+- [CAP-005: Local send accounting and receipt recovery](#cap-005)
 - [Candidate results](#result-record)
 - [Adding and maintaining cases](#extend-cases)
 
@@ -18,13 +20,15 @@ This document maintains repeatable live capability cases: prompts, pass criteria
 
 ## Release requirements and case index
 
-Run CAP-001 through CAP-003 again on the current candidate before every release, including previews. All three must pass with recorded evidence before pushing a tag that triggers publication or making the release public. Failed, blocked, and unexecuted checks are not passes; retest after fixes and retain earlier failures. This is a manual publication gate: neither `bun run verify` nor GitHub Actions currently runs or enforces these cases automatically.
+Run CAP-001 through CAP-005, subject to each case’s applicability, again on the current candidate before every release, including previews. All applicable cases must pass with recorded evidence before pushing a tag that triggers publication or making the release public. Failed, blocked, and unexecuted checks are not passes; retest after fixes and retain earlier failures. This is a manual publication gate: neither `bun run verify` nor GitHub Actions currently runs or enforces these cases automatically.
 
 | ID | Capability | Frequency | Key pass evidence |
 | --- | --- | --- | --- |
 | [CAP-001](#cap-001) | Code Mode, parallel tools, native patch, and result readback | Every release | Actual `Promise.all` reads inside `exec`, both returned values, patch event, and matching output file. |
 | [CAP-002](#cap-002) | Asynchronous cell lifecycle and waiting | Every release | One 15-second task, a running cell, `wait` on that cell, and the recorded result. |
 | [CAP-003](#cap-003) | Real delegation, parallel execution, aggregation, and read-only boundaries | Every release | Three distinct agents, actual tool execution, completed results, and before/after file checks. |
+| [CAP-004](#cap-004) | Explicit family, five effort positions, triple budget and send accounting | Automatic-mode releases; DEV account with both families and Pro | Ten family/effort menu checks, four live read/write routes, catalog budgets and model receipts. |
+| [CAP-005](#cap-005) | Send accounting, receipt recovery and separate references | Automatic mode releases | Live sends/compaction, fault fixtures, bilingual UI and migration evidence. |
 
 These cases do not replace the [release manual's](release.md#authenticated-runtime) cancellation, compaction, conversation reuse, MCP, platform, or installation/upgrade checks. Changes to candidate source or the loaded runtime that affect accepted behavior require new evidence for the changed candidate.
 
@@ -121,6 +125,35 @@ report the failed step explicitly; do not simulate success. Keep the read-only s
 
 The read-only requirement covers both parent and children. Store the report in the external evidence directory; these tasks must not write into the analyzed project to document their acceptance.
 
+
+<a id="cap-004"></a>
+
+## CAP-004: Model family, effort and shared budget
+
+Applies to every release containing Automatic mode. Use an independently authenticated DEV account exposing GPT-5.6 Sol, GPT-6 and all five efforts; missing account capabilities mean not executed. Follow this page's preparation and use a task-owned workspace.
+
+1. Starting from the default model, alternate between both families and Instant, Medium, High, Extra High and Pro. Use the shared adapter to verify the actual selected family and slider position. Retain menu evidence, including layouts with a separate version header. Manual preselection must not bypass adapter selection.
+2. Run a real DEV Codex task for each of GPT-5.6 Sol, GPT-5.6 Sol Pro, GPT-6 and GPT-6 Pro. Choose a non-Pro effort for ordinary entries and fixed max for Pro. Supply an input file and prompt: “Read input.txt, write result.txt using a native patch, then run a command to verify that its content matches the input, and report the result.” Retain actual tool calls, readback and artifact hashes; verify matching browser and usage-receipt models.
+3. Check that the Pro-account catalog offers four ordinary efforts and fixed max for both Pro entries. Compare standard and triple configurations for all four routes: context windows and compaction thresholds must triple while effort grouping remains identical. Single-message limits stay unchanged. Catalog checks do not establish server capacity.
+4. Isolated DOM fixtures cover both 6/GPT-6 labels, hidden or inert menus, wrong families and conflicting announcements. Failed verification must block sending; fixtures do not replace authenticated steps 1 and 2.
+
+Missing selection, execution or file evidence, or accepting 5.6 as 6, fails the case. Ordinary GPT-6 messages must count separately without consuming Pro counters. On Chinese Pro pages, a delayed assistant node while “停止” is visible must not be treated as stopped generation; the overall turn deadline still applies. Close only the case-owned DEV pages/tasks, compare the production boundary and retain evidence.
+
+For viewport or response-extraction changes, also run the isolated Electron model-picker fixture at 100% and 125% zoom: changing the selected tab, finishing another tab, and hiding/showing the window must preserve the open picker and pane dimensions. Run response DOM regressions for file-preview movement, repeated paragraphs, empty paragraphs that later receive text, and KaTeX source preservation; genuine edits or changed links must still fail. Complete an authenticated DEV read → patch → command task with the rebuilt shared runtime. New configurations and missing history preferences must select Temporary Chat; existing explicit history preferences must survive reload. Fixture results alone are not authenticated acceptance.
+
+<a id="cap-005"></a>
+
+## CAP-005: Local send accounting and receipt recovery
+
+Applies to Automatic mode releases. Use an independently authenticated DEV profile, an owned workspace and the shared candidate runtime.
+
+1. Record the initial per-account counts. Run the CAP-004 read/patch/command task using an available non-Pro model. Compare accepted Web submissions with the ledger delta, selected model/effort and task/tool-result purposes. A tool call without a Web send adds no message.
+2. Exercise a real isolated compaction and verify a compaction-purpose receipt only when it submits a Web message. No count multiplier comes from the triple budget.
+3. In an owned transport fixture, lose an acknowledgement after persistence and interrupt delivery before persistence. Restart the receipt consumer; each accepted ID appears exactly once. Pending activation without acceptance stays separate. Corrupt entries remain preserved and visible as an error. These fault fixtures do not replace authenticated steps 1–2.
+4. Render both languages and a narrow window. Model rows combine efforts and send purposes; the Pro total includes both families and unidentified Pro records, excludes ordinary Sol and agrees with receipt evidence. No separate effort table is shown. Browsing another policy tier or period never changes the account counts or selected Web model. Unknown caps use `-`, the selected reference period stays visible, and concise explanations follow their respective tables. Source and verification status remain in policy metadata.
+
+Retain receipt/tool/file evidence, old-ledger migration results, lifecycle state and production-boundary comparison. Missing delivery evidence, duplicate charging, a replayed Web send, or an official balance derived from local rolling counts fails the case.
+
 <a id="result-record"></a>
 
 ## Candidate results
@@ -134,6 +167,8 @@ Record version/commit and candidate-difference identifier, test date and operato
 | CAP-001 | Pending | Not executed | To record | To record |
 | CAP-002 | Pending | Not executed | To record | To record |
 | CAP-003 | Pending | Not executed | To record | To record |
+| CAP-004 | Pending | Not executed | To record | To record |
+| CAP-005 | Pending | Not executed | To record | To record |
 
 Use Passed / Failed / Not executed. A blocked check remains non-passing with its reason recorded. Distinguish model output, bridge conversion, the Codex executor, and permission/account/network conditions during diagnosis; do not blame one layer without evidence.
 
@@ -141,14 +176,14 @@ Use Passed / Failed / Not executed. A blocked check remains non-passing with its
 
 ## Adding and maintaining cases
 
-When adding a target capability or changing an existing one, add or update its live acceptance case and execute it before publication. Continue numbering at `CAP-004`; do not renumber for a new version or reuse old IDs. Keep English and Chinese IDs, prompt semantics, and pass criteria aligned, and update the index above.
+When adding a target capability or changing an existing one, add or update its live acceptance case and execute it before publication. Continue numbering at `CAP-006`; do not renumber for a new version or reuse old IDs. Keep English and Chinese IDs, prompt semantics, and pass criteria aligned, and update the index above.
 
 New cases join the every-release baseline by default. If a case only applies to specific modes, platforms, or accounts, document those conditions and the required environment; execute it for every applicable release. Do not narrow scope, lower pass criteria, or relabel unexecuted checks as inapplicable to bypass a failure. Retain retired IDs with the reason and replacement case reference.
 
 Use this format for additions:
 
 ```text
-ID and name: CAP-004: <target capability>
+ID and name: CAP-006: <target capability>
 Scope and frequency: <every release, or explicit mode/platform/account conditions>
 Prerequisites: <candidate, environment, permissions, fixture, and selected model>
 Prompt and steps: <copyable; no private paths or historical conversation IDs>

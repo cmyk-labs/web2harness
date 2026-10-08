@@ -61,15 +61,15 @@ test("version 1 migrates without losing receipts, account isolation, or deduplic
   assert.equal(restored.snapshot().trackingSince, START);
   assert.equal(restored.configure({ accountKey: A, plan: "pro_200" }).totalMessages, 1);
   const migrated = JSON.parse(fs.readFileSync(file, "utf8"));
-  assert.equal(migrated.version, 2);
-  assert.deepEqual(migrated.accounts[A].events, legacy.accounts[A].events);
+  assert.equal(migrated.version, 3);
+  assert.deepEqual(migrated.accounts[A].events, legacy.accounts[A].events.map(event => ({ ...event, effort: "unknown", purpose: "unknown" })));
 });
 
 test("always-on, private atomic persistence, restart dedup, and receipt-only storage", t => {
   const { root, file, now, store, setTime } = fixture(t);
   assert.deepEqual(store.snapshot(), {
-    enabled: true, plan: null, trackingSince: null, checkedAt: null,
-    totalMessages: 0, unknownProMessages: 0, incomplete: false, gapAt: null, models: ["gpt-6-pro", "gpt-5.6-pro", "gpt-5.6-sol"].map(model => ({ model, last24Hours: 0, last7Days: 0 })), windows: [],
+    enabled: true, plan: null, trackingSince: null, checkedAt: null, lastRecordedAt: null, details: [],
+    totalMessages: 0, unknownProMessages: 0, incomplete: false, gapAt: null, models: ["gpt-6-pro", "gpt-5.6-pro", "gpt-6-sol", "gpt-5.6-sol"].map(model => ({ model, last24Hours: 0, last7Days: 0 })), windows: [],
   });
   assert.equal(store.matchesAccount(A), false);
   assert.equal(store.record(receipt("before-opt-in")), false);
@@ -227,7 +227,7 @@ test("corrupt and unsupported persisted data throws specific errors and remains 
   ];
   const cases = [
     ["{broken", "LIMITS_CORRUPT_STATE"], ["null", "LIMITS_CORRUPT_STATE"],
-    [JSON.stringify({ ...JSON.parse(valid), version: 3 }), "LIMITS_UNSUPPORTED_VERSION"],
+    [JSON.stringify({ ...JSON.parse(valid), version: 999 }), "LIMITS_UNSUPPORTED_VERSION"],
     ...mutations.map(mutate => { const state = JSON.parse(valid); mutate(state); return [JSON.stringify(state), "LIMITS_CORRUPT_STATE"]; }),
   ];
   for (const [content, code] of cases) {
@@ -259,7 +259,7 @@ test("capacity fails explicitly without evicting recent receipts or account hist
   const { store, file, now, setTime } = fixture(t);
   store.configure({ accountKey: A, plan: "pro_200" });
   const state = JSON.parse(fs.readFileSync(file, "utf8"));
-  state.accounts[A].events = Array.from({ length: STORE_BOUNDS.maxEvents }, (_, index) => ({ id: `receipt-${index}`, model: "gpt-6-pro", at: START }));
+  state.accounts[A].events = Array.from({ length: STORE_BOUNDS.maxEvents }, (_, index) => ({ id: `receipt-${index}`, model: "gpt-6-pro", at: START, effort: "unknown", purpose: "unknown" }));
   for (let index = 1; index < STORE_BOUNDS.maxAccounts; index += 1) {
     state.accounts[index.toString(16).padStart(64, "0")] = { plan: "unsupported", initializedAt: null, checkedAt: START, events: [] };
   }
@@ -274,4 +274,19 @@ test("capacity fails explicitly without evicting recent receipts or account hist
   assert.equal(bounded.record(receipt("one-too-many", "pro-unknown", now())), true);
   assert.equal(bounded.snapshot().totalMessages, 1);
   assert.equal(Object.keys(JSON.parse(fs.readFileSync(file, "utf8")).accounts).length, STORE_BOUNDS.maxAccounts);
+});
+
+
+test("ordinary GPT-6 receipts persist separately and do not consume Pro counters", t => {
+  const { store, file, now } = fixture(t);
+  store.configure({ accountKey: A, plan: "pro_200" });
+  store.record(receipt("6-medium", "gpt-6-sol"));
+  store.record(receipt("56-high", "gpt-5.6-sol"));
+  const restarted = new LimitsStore(file, { now });
+  assert.equal(restarted.record(receipt("6-medium", "gpt-6-sol")), false);
+  assert.equal(restarted.snapshot().totalMessages, 2);
+  assert.deepEqual(restarted.snapshot().models.find(row => row.model === "gpt-6-sol"), {
+    model: "gpt-6-sol", last24Hours: 1, last7Days: 1,
+  });
+  assert.ok(restarted.snapshot().windows.every(row => row.used === 0 && row.uncertainUsed === 0));
 });

@@ -68,7 +68,7 @@ await context.addInitScript(()=>{
   return {cancelled:false,state:patch({coreSetupComplete:false,codexCatalogVerified:false,mcpSetupComplete:false})};
  },
  exportLogs:async()=>{window.__fixture.calls.push(['exportLogs']);if(window.__fixture.failExport)throw new Error('Fixture export error');return window.__fixture.cancelExport?null:'fixture-diagnostics.jsonl'},
- getLimits:async()=>({enabled:true,trackingSince:null,checkedAt:null,plan:null,totalMessages:0,unknownProMessages:0,incomplete:false,gapAt:null,models:["gpt-6-pro","gpt-5.6-pro","gpt-5.6-sol"].map(model=>({model,last24Hours:0,last7Days:0})),windows:[]}),
+ getLimits:async()=>({...{enabled:true,trackingSince:null,checkedAt:null,plan:null,totalMessages:0,unknownProMessages:0,incomplete:false,gapAt:null,models:["gpt-6-pro","gpt-5.6-pro","gpt-6-sol","gpt-5.6-sol"].map(model=>({model,last24Hours:0,last7Days:0})),windows:[]},...window.__fixture.usage}),
  setLanguage:async language=>patch({language}),setPreference:async(key,value)=>patch({[key]:value}),setContextFiles:async value=>patch({experimentalContextFiles:value,...(!value?{experimentalContextTripleBudget:false}:{})}),setContextTripleBudget:async value=>patch({experimentalContextTripleBudget:value}),setSkillAttachments:async value=>patch({experimentalSkillAttachments:value}),setFreshConversationPerTurn:async value=>patch({experimentalFreshConversationPerTurn:value}),setUseSavedChats:async value=>patch({useSavedChats:value}),
  setupCore:async()=>{window.__fixture.calls.push(['setupCore']);success();status.configured=true;status.mode='native-tools';status.interactionMode='automatic';status.capabilities.browserInteractionMode='automatic';patch({coreSetupComplete:true,mcpSetupComplete:false,codexCatalogVerified:false,browserInteractionMode:'automatic'});return {ok:true,stdout:'',restartRequired:true}},
  smokeTest:async()=>{window.__fixture.calls.push(['smokeTest']);snapshot.smokePassed=true;return {ok:true}},
@@ -143,7 +143,7 @@ await page.evaluate(()=>window.__fixture.patch({codexCatalogVerified:true}));
 check('Successful catalog read hides the stale restart reminder',await page.locator('.model-catalog-notice').count()===0&&await page.locator('.model-catalog-status').count()===0);
 await page.evaluate(()=>window.__fixture.patch({codexRestartRequired:false}));
 
-check('Shared runtime rules expose three Pro-account Web models',await page.locator('.model').count()===3);
+check('Shared runtime rules expose four Pro-account Web models',await page.locator('.model').count()===4);
 await page.locator('.model-list summary').click();
 await page.screenshot({path:out+'/connection-native-zh.png',fullPage:true});
 const mutations=()=>page.evaluate(()=>window.__fixture.calls.filter(c=>['setupCore','setupMcp','setToolMode','smokeTest','verifyMcp'].includes(c[0])).length);
@@ -282,38 +282,44 @@ await page.getByRole('button',{name:'Apply configuration',exact:true}).click();
 await page.waitForFunction(()=>window.__fixture.status.mode==='native-tools'&&window.__fixture.state.browserInteractionMode==='automatic');
 await page.evaluate(()=>window.__fixture.patch({codexCatalogVerified:true}));
 await nav('Usage & Diagnostics');
-check('Usage is automatic with no enable or account-check button',await page.getByText('Always on automatically. The account is identified on the first send.',{exact:true}).count()===1&&await page.getByRole('button',{name:'Check usage tracking',exact:true}).count()===0);
-check('Empty local counts start at zero and show each model',await page.locator('.metric').innerText()==='0 turns'&&await page.locator('.panel .usage-table tbody tr').count()===3);
-check('Plan reference defaults to Pro 200 before any manual selection',await page.getByRole('combobox',{name:'Plan reference'}).inputValue()==='pro_200');
-await page.getByRole('combobox',{name:'Plan reference'}).click();
-await page.screenshot({path:out+'/plan-menu-en.png'});
-await page.keyboard.press('Escape');
-check('Pro 200 shows the post-October-29 reference with source and daily uncertainty',await page.locator('.official-limits .usage-table tbody').innerText()==='GPT-6 Pro\tWeekly\t100 (notice transcript)\nGPT-5.6 Sol Pro\tDaily\t170 (prior reference)\nBoth Pro models combined\tDaily\t200 (prior reference)\nGPT-5.6 Sol\t—\tNo fixed count published'&&(await page.locator('.official-limits').innerText()).includes('Reference from 2026-10-30')&&(await page.locator('.official-limits').innerText()).includes('applicability after 2026-10-30 is unconfirmed'));
-await page.getByRole('button',{name:'Subscriber notice (transcript)',exact:true}).click();
-check('New weekly count links to the notice transcript rather than a page omitting it',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='openExternal'&&call[1]==='https://community.openai.com/t/pro-200-is-fine-please-don-t-improve-it/1402079')));
-await page.getByRole('button',{name:'Published counts',exact:true}).click();
-check('Published counts link to the official page containing the numeric table',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='openExternal'&&call[1]==='https://help.openai.com/bs-ba/articles/20001354')));
-await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_100');
-check('Pro 100 keeps one shared weekly reference without changing local counts',await page.locator('.official-limits .usage-table tbody').innerText()==='Both Pro models combined\tWeekly\t50\nGPT-5.6 Sol\t—\tNo fixed count published'&&await page.locator('.metric').innerText()==='0 turns');
-await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_500');
-check('Pro 500 does not inherit another tier’s published numbers',await page.locator('.official-limits').getByText('No fixed count published',{exact:true}).count()===3);
-await page.getByRole('combobox',{name:'Plan reference'}).selectOption('business_premium');
-check('Business published weekly shared allowance is shown',await page.locator('.official-limits').getByText('50',{exact:true}).count()===1&&await page.locator('.official-limits').getByText('Weekly',{exact:true}).count()===1);
+const localRow=model=>page.locator('.local-usage tbody tr').filter({has:page.getByRole('cell',{name:model,exact:true})});
+check('Empty total and all four models remain visible without effort details',await page.locator('.usage-total-value').innerText()==='0'&&await page.locator('.local-usage tbody tr').count()===4&&(await page.locator('.local-usage tbody td:not(:first-child)').allTextContents()).every(value=>value==='0')&&await page.locator('.usage-details').count()===0);
+const emptyLocalCounts=await page.locator('.local-usage table').innerText();
+check('Browsing policy does not pretend to identify a plan',await page.getByRole('combobox',{name:'Plan reference'}).inputValue()==='other'&&(await page.locator('.official-limits tbody td:last-child').allTextContents()).every(value=>value==='-'));
 await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_200');
+check('Requested future policy remains the default view',await page.getByRole('combobox',{name:'Reference period'}).inputValue()==='future');
+const policyRow=model=>page.locator('.official-limits tbody tr').filter({has:page.locator('td:first-child').filter({hasText:new RegExp('^'+model.replaceAll('.','\\.')+'$')})});
+check('Future weekly reference count is preserved',await policyRow('GPT-6 Pro').locator('td').nth(2).innerText()==='100');
+check('Ordinary models do not inherit Pro counts',await policyRow('GPT-6').locator('td').nth(2).innerText()==='-'&&await policyRow('GPT-5.6 Sol').locator('td').nth(2).innerText()==='-');
+check('Reference table has three columns and no source buttons',await page.locator('.official-limits th').count()===3&&await page.locator('.official-limits button,.official-limits .note').count()===0);
+await page.getByRole('combobox',{name:'Reference period'}).selectOption('prior');
+check('Earlier policy is visible without changing sends',await policyRow('GPT-6 Pro').locator('td').nth(2).innerText()==='200'&&await page.locator('.local-usage table').innerText()===emptyLocalCounts);
+await page.getByRole('combobox',{name:'Reference period'}).selectOption('future');
+await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_100');
+check('Pro 100 exposes only the shared numeric reference',await policyRow('Both Pro models combined').locator('td').nth(2).innerText()==='50');
+await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_500');
+check('Unknown Pro 500 counts use dashes',(await page.locator('.official-limits tbody td:last-child').allTextContents()).every(value=>value==='-'));
+await page.getByRole('combobox',{name:'Plan reference'}).selectOption('business_premium');
+check('Business shared allowance is preserved',await policyRow('Both Pro models combined').locator('td').nth(2).innerText()==='50');
+await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_200');
+await page.evaluate(()=>{window.__fixture.usage={plan:'pro_200',totalMessages:10,models:[{model:'gpt-6-pro',last24Hours:2,last7Days:4},{model:'gpt-5.6-pro',last24Hours:1,last7Days:2},{model:'gpt-6-sol',last24Hours:2,last7Days:3},{model:'gpt-5.6-sol',last24Hours:0,last7Days:0},{model:'pro-unknown',last24Hours:1,last7Days:1}],trackingSince:Date.now()-10000,lastRecordedAt:Date.now(),pendingMessages:1,pendingReceipts:1,incomplete:true,details:[{model:'gpt-6-sol',effort:'high',purpose:'tool-result',last24Hours:1,last7Days:2},{model:'gpt-6-sol',effort:'medium',purpose:'task',last24Hours:1,last7Days:1},{model:'gpt-6-pro',effort:'max',purpose:'task',last24Hours:2,last7Days:4},{model:'gpt-5.6-pro',effort:'max',purpose:'task',last24Hours:1,last7Days:2},{model:'pro-unknown',effort:'unknown',purpose:'unknown',last24Hours:1,last7Days:1}]};});
+await page.locator('.local-usage').getByRole('button',{name:'Refresh',exact:true}).click();
+await page.getByText('Records may be incomplete',{exact:true}).waitFor();
+check('Total equals model counts without adding pending sends or the Pro subtotal',await page.locator('.usage-total-value').innerText()==='10'&&(await page.locator('.local-usage tbody td:last-child').allTextContents()).reduce((sum,value)=>sum+Number(value),0)===10&&await localRow('GPT-6').locator('td').last().innerText()==='3'&&(await page.locator('.local-usage').innerText()).includes('Acceptance unconfirmed')&&(await page.locator('.local-usage').innerText()).includes('awaiting ledger write'));
+check('All efforts and purposes remain grouped into one model row',await localRow('GPT-6').count()===1&&await localRow('GPT-6').innerText()==='GPT-6\t2\t3'&&await page.locator('.local-usage details').count()===0);
+check('Pro total includes both families and unidentified Pro without Sol',await page.locator('.local-usage tfoot tr').innerText()==='Pro total\t4\t7'&&await localRow('Pro (unknown model)').count()===1);
+check('Explanations follow their respective tables',await page.locator('.usagegrid .card').evaluateAll(cards=>cards.every(card=>card.querySelector('.usage-footnote').getBoundingClientRect().top>=card.querySelector('table').getBoundingClientRect().bottom)));
 await page.screenshot({path:out+'/usage-en.png',fullPage:true});
-check('Official periods remain explicitly unconfirmed',await page.getByText('Official usage period unconfirmed',{exact:true}).count()===1);
+check('Reference footer shows only check date and reference notice',await page.locator('.official-limits .usage-footnote').innerText()==='Checked · 2026-10-05 · For reference only');
 await page.locator('.language-toggle').click();await page.getByRole('region',{name:'用量与诊断',exact:true}).waitFor();
-check('Chinese usage shows model counters and period uncertainty',await page.getByText('官方周期未确认',{exact:true}).count()===1&&await page.getByRole('columnheader',{name:'最近 24 小时',exact:true}).count()===1);
-check('Chinese policy gives the future reference date and distinguishes unconfirmed daily values',await page.getByText('2026-10-30 起参考',{exact:true}).count()===1&&(await page.locator('.official-limits').innerText()).includes('100 （通知转录）')&&(await page.locator('.official-limits').innerText()).includes('2026-10-30 后是否继续适用待确认'));
-await page.waitForTimeout(250);await page.screenshot({path:out+'/usage-zh.png',fullPage:true});
-await page.getByRole('combobox',{name:'套餐参考'}).click();
-await page.screenshot({path:out+'/plan-menu-zh.png'});
-await page.keyboard.press('Escape');
+check('Chinese usage distinguishes local sends and references',await page.getByRole('heading',{name:'本地使用次数',exact:true}).count()===1&&await page.getByRole('heading',{name:'模型限额参考',exact:true}).count()===1);
+check('Chinese reference preserves the period and compact footer',(await page.locator('.official-limits').innerText()).includes('2026-10-30 起参考')&&await page.locator('.official-limits .usage-footnote').innerText()==='核对日期 · 2026-10-05 · 仅供参考');
+await page.screenshot({path:out+'/usage-zh.png',fullPage:true});
+await page.getByRole('combobox',{name:'套餐',exact:true}).click();await page.screenshot({path:out+'/plan-menu-zh.png'});await page.keyboard.press('Escape');
 await page.setViewportSize({width:390,height:1050});await page.waitForTimeout(250);
 check('Chinese usage fits narrow windows',await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
 await page.screenshot({path:out+'/usage-zh-mobile.png',fullPage:true});
-await page.locator('.official-limits').scrollIntoViewIfNeeded();
-await page.screenshot({path:out+'/usage-zh-mobile-policy.png',fullPage:true});
+await page.locator('.official-limits').scrollIntoViewIfNeeded();await page.screenshot({path:out+'/usage-zh-mobile-policy.png',fullPage:true});
 await page.setViewportSize({width:1440,height:1050});await page.locator('.language-toggle').click();await page.getByRole('region',{name:'Usage & Diagnostics',exact:true}).waitFor();
 await page.getByRole('tab',{name:'Health checks',exact:true}).click();await page.locator('.content button.primary').click();await page.locator('.doctor-check-content > p').filter({hasText:'Fixture failure'}).waitFor();check('All failed doctor checks remain visible',await page.locator('.doctor-check-content > p').filter({hasText:'Fixture route warning'}).isVisible());
 check('Doctor faults are red and warnings remain neutral',await page.locator('.doctor-check .status-error').count()===1&&await page.locator('.doctor-check .status-neutral').count()===1);

@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import type { Locator, Page } from "playwright-core";
+import { readChatGptModelAnnouncements } from "../../browser/session";
 
 export type ChatGptLimitsPlan = "pro_100" | "pro_200" | "unsupported";
-export type ChatGptUsageModel = "gpt-6-pro" | "gpt-5.6-pro" | "gpt-5.6-sol" | "gpt-5.6-luna" | "pro-unknown" | "other";
+export type ChatGptUsageModel = "gpt-6-pro" | "gpt-5.6-pro" | "gpt-6-sol" | "gpt-5.6-sol" | "gpt-5.6-luna" | "pro-unknown" | "other";
 
 /** An unknown policy tier does not prevent local send accounting. */
 export function chatGptUsagePlan(account: { personal: boolean; planType: string }): ChatGptLimitsPlan {
@@ -75,12 +76,9 @@ export async function detectChatGptLimitsPlan(page: Page): Promise<{ accountKey:
   return { accountKey: after.accountKey, plan: after.planType === "pro" ? "pro_200" : "pro_100" };
 }
 
-/** The slider's own accessibility announcement names the selected family, even for 'Latest'. */
+/** Use the same active model evidence as selection verification, including older Latest pickers. */
 export async function readChatGptUsageModel(slider: Locator, isPro: boolean): Promise<ChatGptUsageModel> {
-  const announcements = await slider.locator("xpath=ancestor::*[@role='menuitem'][1]").evaluate(element => (
-    (element.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean)
-      .map(id => element.ownerDocument.getElementById(id)?.textContent ?? "")
-  ));
+  const announcements = await readChatGptModelAnnouncements(slider);
   return chatGptUsageModelFromAnnouncements(announcements, isPro);
 }
 
@@ -91,6 +89,7 @@ export function chatGptUsageModelFromAnnouncements(announcements: readonly strin
       if (/^\s*(?:GPT[-\s])?6(?:\s+Astra)?\s+Pro(?:\s|[,.;，。]|$)/i.test(text)) families.add("gpt-6-pro");
       if (/^\s*(?:GPT[-\s])?5\.6(?:\s+Sol)?\s+Pro(?:\s|[,.;，。]|$)/i.test(text)) families.add("gpt-5.6-pro");
     } else {
+      if (/^\s*(?:GPT[-\s])?6(?:\s+Sol)?\s+(?:Instant|Medium|High|Extra High|即时|中|高|极高)(?:\s|[,.;，。]|$)/i.test(text)) families.add("gpt-6-sol");
       if (/^\s*(?:GPT[-\s])?5\.6(?:\s+Sol)?\s+(?:Instant|Medium|High|Extra High|即时|中|高|极高)(?:\s|[,.;，。]|$)/i.test(text)) families.add("gpt-5.6-sol");
       if (/^\s*(?:GPT[-\s])?5\.6\s+Luna(?:\s|[,.;]|$)/i.test(text)) families.add("gpt-5.6-luna");
     }

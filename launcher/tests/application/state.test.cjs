@@ -28,7 +28,7 @@ test("launcher state persists onboarding, language, and autostart atomically", (
       experimentalContextTripleBudget: false,
       experimentalSkillAttachments: false,
       experimentalFreshConversationPerTurn: false,
-      useSavedChats: true,
+      useSavedChats: false,
       zeroRiskProEnabled: false,
       browserSmokePassed: false,
       browserSmokeVersion: null,
@@ -67,6 +67,9 @@ test("launcher state persists onboarding, language, and autostart atomically", (
       mcpGuideStep: 0,
       sessionRefreshReminderAt: null,
     });
+    store.update({ useSavedChats: true });
+    assert.equal(createStateStore(file).read().useSavedChats, true, "explicit history preference survives reload");
+    store.update({ useSavedChats: false });
     const saved = JSON.parse(fs.readFileSync(file, "utf8"));
     fs.writeFileSync(file, JSON.stringify({ ...saved, xOpened: true }));
     const upgraded = createStateStore(file).read();
@@ -158,7 +161,7 @@ test("persisted sidebar corruption is repaired without changing the rest of laun
       experimentalContextTripleBudget: false,
       experimentalSkillAttachments: false,
       experimentalFreshConversationPerTurn: false,
-      useSavedChats: true,
+      useSavedChats: false,
       zeroRiskProEnabled: false,
       browserSmokePassed: false,
       browserSmokeVersion: null,

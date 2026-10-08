@@ -3,8 +3,8 @@ import { chatGptModelFamilyMatches, selectChatGptModelFamily } from "../../../..
 
 test("model selection recognizes Latest in the launcher languages without accepting other model names", async () => {
   for (const [label, accepted] of [
-    ["Latest", true], ["最新", true], ["최신", true], ["GPT-6 Pro", true],
-    ["GPT-5.6 Sol", false], ["GPT-7 Pro", false], ["Latest preview", false],
+    ["Latest", true], ["最新", true], ["최신", true], ["GPT-6 Pro", true], ["GPT-6", true], ["6", true],
+    ["GPT-5.6 Sol", false], ["GPT-7 Pro", false], ["6.1", false], ["GPT-6 preview", false], ["Latest preview", false],
   ] as const) {
     const menu = { menu: {
       getByRole: (_role: string, options: { name: RegExp }) => ({
@@ -20,9 +20,17 @@ test("model selection recognizes Latest in the launcher languages without accept
   }
 });
 
-test("family confirmation separates Latest staging from the actual Pro response", () => {
+test("family confirmation requires the requested version for every effort", () => {
   expect(chatGptModelFamilyMatches(["5.6 High, 3 of 5."], "5.6", "high")).toBe(true);
-  expect(chatGptModelFamilyMatches(["5.6 Extra High, 4 of 5."], "6", "xhigh")).toBe(true);
+  expect(chatGptModelFamilyMatches(["5.6 Extra High, 4 of 5."], "6", "xhigh")).toBe(false);
+  for (const [label, effort] of [["Instant", "low"], ["Medium", "medium"], ["High", "high"], ["Extra High", "xhigh"]] as const) {
+    for (const prefix of ["6", "GPT-6", "GPT-6 Sol"]) {
+      expect(chatGptModelFamilyMatches([`${prefix} ${label}, 3 of 5.`], "6", effort)).toBe(true);
+      expect(chatGptModelFamilyMatches([`${prefix} ${label}, 3 of 5.`], "5.6", effort)).toBe(false);
+    }
+    expect(chatGptModelFamilyMatches([`6 Astra ${label}`], "6", effort)).toBe(false);
+    expect(chatGptModelFamilyMatches([`6 ${label}`, `5.6 ${label}`], "6", effort)).toBe(false);
+  }
   expect(chatGptModelFamilyMatches(["6 Pro, 5 of 5."], "6", "max")).toBe(true);
   expect(chatGptModelFamilyMatches(["GPT-5.6 Sol Pro, 5 of 5."], "5.6", "max")).toBe(true);
   for (const descriptions of [[], ["Try Pro for more reasoning"], ["5.6 High, 3 of 5."], ["5.6 Pro, 5 of 5."],

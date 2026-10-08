@@ -471,7 +471,7 @@ function smokePassedForCurrentVersion(state) {
 }
 
 function syncFreshConversationPreference(stateStore, config) {
-  const useSavedChats = config?.useSavedChats !== false;
+  const useSavedChats = config?.useSavedChats === true;
   const enabled = config?.experimentalFreshConversationPerTurn === true;
   const current = stateStore.read();
   if (runtimeHost?.currentOperation()) return current;
@@ -757,7 +757,7 @@ function registerIpc({ logger, stateStore }) {
       experimentalContextTripleBudget: false,
       experimentalSkillAttachments: false,
       experimentalFreshConversationPerTurn: false,
-      useSavedChats: true,
+      useSavedChats: false,
       zeroRiskProEnabled: false,
     });
     send("launcher:state-changed", state);
@@ -793,7 +793,7 @@ function registerIpc({ logger, stateStore }) {
       codexRestartRequired: true,
       zeroRiskProEnabled: runtimeHost.runtimeConfigSnapshot().config?.zeroRiskProEnabled === true,
       experimentalFreshConversationPerTurn: runtimeHost.runtimeConfigSnapshot().config?.experimentalFreshConversationPerTurn === true,
-      useSavedChats: runtimeHost.runtimeConfigSnapshot().config?.useSavedChats !== false,
+      useSavedChats: runtimeHost.runtimeConfigSnapshot().config?.useSavedChats === true,
       ...(result.mode === "mcp-bridge" ? {
         mcpRuntimeInstalled: true,
         mcpSetupComplete: false,
@@ -839,7 +839,7 @@ function registerIpc({ logger, stateStore }) {
       ...(interactionMode === "manual" ? { experimentalContextFiles: false, experimentalContextTripleBudget: false, experimentalSkillAttachments: false } : {}),
       zeroRiskProEnabled: runtimeHost.runtimeConfigSnapshot().config?.zeroRiskProEnabled === true,
       experimentalFreshConversationPerTurn: runtimeHost.runtimeConfigSnapshot().config?.experimentalFreshConversationPerTurn === true,
-      useSavedChats: runtimeHost.runtimeConfigSnapshot().config?.useSavedChats !== false,
+      useSavedChats: runtimeHost.runtimeConfigSnapshot().config?.useSavedChats === true,
       coreSetupComplete: true,
       codexCatalogVerified: false,
       mcpRuntimeInstalled: true,
@@ -979,7 +979,7 @@ function registerIpc({ logger, stateStore }) {
     const state = stateStore.update({
       browserInteractionMode: mode,
       experimentalFreshConversationPerTurn: runtimeHost.runtimeConfigSnapshot().config?.experimentalFreshConversationPerTurn === true,
-      useSavedChats: runtimeHost.runtimeConfigSnapshot().config?.useSavedChats !== false,
+      useSavedChats: runtimeHost.runtimeConfigSnapshot().config?.useSavedChats === true,
       ...(mode === "manual" ? { experimentalContextFiles: false, experimentalContextTripleBudget: false, experimentalSkillAttachments: false } : {}),
       ...(result.configured ? {
         codexCatalogVerified: false,
@@ -1099,6 +1099,7 @@ async function start() {
   const stateStore = createStateStore(path.join(app.getPath("userData"), "launcher-state.json"));
   limitsController = new LimitsController(path.join(app.getPath("userData"), "limits.json"), {
     getInteractionMode: () => stateStore.read().browserInteractionMode,
+    outboxDirectory: path.join(path.dirname(BROWSER_DESCRIPTOR_PATH), "usage-outbox"),
   });
   if (IS_DEV_PROFILE && !stateStore.read().onboardingComplete) {
     stateStore.update({
@@ -1226,7 +1227,7 @@ async function start() {
     control: browserControl.descriptor(),
     cancelTurn: (traceId, reason) => runtimeSupervisor.cancelBrowserTurn(traceId, reason),
     getConnectorName: () => runtimeHost.browserConnectorName(),
-    getUseSavedChats: () => runtimeHost.runtimeConfigSnapshot().config?.useSavedChats !== false,
+    getUseSavedChats: () => runtimeHost.runtimeConfigSnapshot().config?.useSavedChats === true,
     helper: { executable: process.execPath, script: installedRuntimeRoot
       ? path.join(installedRuntimeRoot, "app", "browser-helper.cjs")
       : path.join(SOURCE_ROOT, ".launcher-runtime", "browser-helper.cjs") },
@@ -1325,7 +1326,7 @@ async function start() {
       experimentalContextTripleBudget: config?.experimentalContextTripleBudget === true,
       experimentalSkillAttachments: config?.experimentalSkillAttachments === true,
       experimentalFreshConversationPerTurn: config?.experimentalFreshConversationPerTurn === true,
-      useSavedChats: config?.useSavedChats !== false,
+      useSavedChats: config?.useSavedChats === true,
       zeroRiskProEnabled: config?.zeroRiskProEnabled === true,
     });
     send("launcher:state-changed", state);
@@ -1356,7 +1357,7 @@ async function start() {
         experimentalContextTripleBudget: runtimeHost.runtimeConfigSnapshot().config?.experimentalContextTripleBudget === true,
         experimentalSkillAttachments: runtimeHost.runtimeConfigSnapshot().config?.experimentalSkillAttachments === true,
         experimentalFreshConversationPerTurn: runtimeHost.runtimeConfigSnapshot().config?.experimentalFreshConversationPerTurn === true,
-        useSavedChats: runtimeHost.runtimeConfigSnapshot().config?.useSavedChats !== false,
+        useSavedChats: runtimeHost.runtimeConfigSnapshot().config?.useSavedChats === true,
         zeroRiskProEnabled: runtimeHost.runtimeConfigSnapshot().config?.zeroRiskProEnabled === true,
         ...(upgrade.mode === "mcp-bridge" ? {
           mcpRuntimeInstalled: true,
@@ -1382,7 +1383,7 @@ async function start() {
       const experimentalContextTripleBudget = enabled && configuredRuntime.config?.experimentalContextTripleBudget === true;
       const experimentalSkillAttachments = configuredRuntime.config?.experimentalSkillAttachments === true;
       const experimentalFreshConversationPerTurn = configuredRuntime.config?.experimentalFreshConversationPerTurn === true;
-      const useSavedChats = configuredRuntime.config?.useSavedChats !== false;
+      const useSavedChats = configuredRuntime.config?.useSavedChats === true;
       const zeroRiskProEnabled = configuredRuntime.config?.zeroRiskProEnabled === true;
       const saved = stateStore.read();
       if (saved.experimentalSkillAttachments !== experimentalSkillAttachments
@@ -1410,7 +1411,7 @@ async function start() {
         experimentalContextTripleBudget: config.experimentalContextTripleBudget === true,
         experimentalSkillAttachments: config.experimentalSkillAttachments === true,
         experimentalFreshConversationPerTurn: config.experimentalFreshConversationPerTurn === true,
-        useSavedChats: config.useSavedChats !== false,
+        useSavedChats: config.useSavedChats === true,
         zeroRiskProEnabled: config.zeroRiskProEnabled === true,
         ...(runtime.bridgeRouteChanged ? {
           codexCatalogVerified: false,

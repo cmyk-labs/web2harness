@@ -85,8 +85,8 @@ Setup options:
   --standard-context-budget    Keep normal budgets (default)
   --fresh-conversation         Start each automatic turn in a fresh browser chat
   --retained-conversation      Reuse the browser chat between turns (default)
-  --saved-chats                Keep task conversations in ChatGPT history (default)
-  --temporary-chats            Use Temporary Chat instead of saving task conversations
+  --saved-chats                Keep task conversations in ChatGPT history
+  --temporary-chats            Use Temporary Chat instead of saving task conversations (default)
   --skill-attachments         Experimental selected skills as text attachments
   --inline-skills             Keep selected skills inline (default)
   --acknowledge-unofficial     Accept the one-time unofficial-browser-automation notice

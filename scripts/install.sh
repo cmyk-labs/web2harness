@@ -10,7 +10,7 @@ if ! printf '%s\n' "$REPOSITORY" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z
   echo "Invalid GitHub repository: $REPOSITORY" >&2
   exit 1
 fi
-VERSION="${WEB2HARNESS_VERSION:-1.1.1}"
+VERSION="${WEB2HARNESS_VERSION:-1.2.0}"
 BIN_DIR="${WEB2HARNESS_BIN_DIR:-$HOME/.local/bin}"
 LIB_DIR="${WEB2HARNESS_LIB_DIR:-$HOME/.local/lib/web2harness}"
 DOC_DIR="${WEB2HARNESS_DOC_DIR:-$HOME/.local/share/doc/web2harness}"

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { createUsageDelivery } from "./usage-delivery";
 import { savedChatId } from "../../../../launcher/shared/saved-chat.cjs";
 import { assertSavedChatIdentity, renameSavedChat } from "./saved-chat";
 import { existsSync } from "node:fs";
@@ -1035,6 +1036,7 @@ export interface BrowserTurn {
   traceId: string;
   modelId: string;
   reasoning?: string;
+  usagePurpose?: "task" | "tool-result" | "compaction";
   modelFamily?: "5.6" | "6";
   capabilities: ChatGptWebCapabilities;
   prepare: () => Promise<CompiledChatGptWebPrompt & { release: () => void }>;
@@ -3246,7 +3248,6 @@ export class ChatGptBrowserWorker {
       // The ID survives observation recovery; a new actual Send receives a new ID.
       const usageSubmission = async () => {
         if (!trackUsage) return undefined;
-        const id = randomUUID();
         let identity: { accountKey: string; plan: ReturnType<typeof chatGptUsagePlan> } | undefined;
         try {
           const account = await readChatGptUsageAccount(page);
@@ -3255,19 +3256,8 @@ export class ChatGptBrowserWorker {
           // A missing identity is reported as a tracking gap, never charged to the previous account.
         }
         const model = mode.usageModel ?? (mode.effort === "max" ? "pro-unknown" : "other");
-        return () => {
-          // Do not spend the Send observation deadline waiting for optional local accounting.
-          // Drain these bounded writes before releasing this turn's launcher lease.
-          const write = notifyLauncherTurn(this.config.browserHostDescriptorPath!, {
-            phase: "usage", traceId: turn.traceId, helperPid: process.pid,
-            ...(identity ? { receipt: { id, ...identity, model, at: Date.now() } }
-              : { trackingError: "account-unavailable" as const }),
-          }).then(() => {}, () => {
-            // Approximate accounting must not turn an already accepted model message into a retry.
-            console.warn(`[chatgpt-web] Limits could not persist a submission receipt for ${turn.traceId}`);
-          });
-          usageWrites.push(write);
-        };
+        return createUsageDelivery({ descriptorPath: this.config.browserHostDescriptorPath!, traceId: turn.traceId,
+          identity, model, effort: mode.effort, purpose: turn.usagePurpose ?? (turn.compaction ? "compaction" : "task") });
       };
 
       let finalPrompt = prepared.text;
@@ -3350,13 +3340,14 @@ export class ChatGptBrowserWorker {
           turn.abortSignal ? AbortSignal.any([stageSignal, turn.abortSignal]) : stageSignal,
           turn.externalProgress,
           { ...turn, onSubmitted: () => {
-            recordFinalUsage?.();
+            if (recordFinalUsage) usageWrites.push(recordFinalUsage.submitted());
             return turn.onSubmitted?.();
           }, onSendActivated: async () => {
             await this.assertSelectedEffort(page, mode);
             assertSavedChatIdentity(page, expectedConversationId);
             submissionRejection.begin(page);
             await turn.onSendActivated?.();
+            recordFinalUsage?.activate();
           } },
           completionTracker,
           launcherObservationRecovery

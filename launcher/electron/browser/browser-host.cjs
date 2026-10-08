@@ -379,6 +379,9 @@ class BrowserHost {
     this.cloudflareChallengeRecoveryArmed = true;
     this.cloudflareChallengeRecoveryDelayMs = CLOUDFLARE_CHALLENGE_RECOVERY_DELAY_MS;
     this.cloudflareChallengeRecoverySettleMs = CLOUDFLARE_CHALLENGE_RECOVERY_SETTLE_MS;
+    this.primaryRendererReady = false;
+    this.primaryDeviceEmulationViewport = null;
+    this.primaryDeviceEmulationDirty = true;
     this.viewportCssKey = null;
     this.shellZoomShortcutBindings = new Map();
     this.authView = null;
@@ -1026,6 +1029,8 @@ class BrowserHost {
         this.setState({ url });
         return;
       }
+      this.primaryRendererReady = false;
+      this.primaryDeviceEmulationDirty = true;
       this.armHomeNavigationTimeout(contents, url);
       if (this.manualOperation === "ChatGPT login") {
         this.logger.info("browser.auth_navigation_started", {
@@ -1039,6 +1044,8 @@ class BrowserHost {
     });
     contents.on("did-finish-load", () => {
       this.clearHomeNavigationTimeout();
+      this.primaryRendererReady = true;
+      this.syncViewVisibility();
       if (this.manualOperation === "ChatGPT login") {
         this.logger.info("browser.auth_navigation_completed", {
           surface: "primary",
@@ -1087,6 +1094,7 @@ class BrowserHost {
     });
     contents.on("did-fail-load", (_event, errorCode, errorDescription, url, mainFrame) => {
       if (!mainFrame || errorCode === -3) return;
+      this.primaryRendererReady = false;
       this.clearHomeNavigationTimeout();
       this.logger.error(
         this.manualOperation === "ChatGPT login"
@@ -1102,6 +1110,7 @@ class BrowserHost {
       this.setState({ status: "error", message: errorDescription, url, loading: false });
     });
     contents.on("render-process-gone", (_event, details) => {
+      this.primaryRendererReady = false;
       this.clearHomeNavigationTimeout();
       this.logger.error("browser.renderer_gone", { reason: details.reason, exitCode: details.exitCode });
       this.setState({ status: "error", message: `Browser renderer stopped: ${details.reason}`, loading: false });
@@ -1113,6 +1122,7 @@ class BrowserHost {
     this.homeNavigationTimeout = setTimeout(() => {
       this.homeNavigationTimeout = null;
       if (contents.isDestroyed() || !contents.isLoadingMainFrame()) return;
+      this.primaryRendererReady = false;
       contents.stop();
       const message = "ChatGPT did not finish loading within 60 seconds. Check your connection and retry.";
       this.logger.error("browser.navigation_timeout", { origin: navigationOriginForLog(url) });
@@ -1484,8 +1494,13 @@ class BrowserHost {
 
   hiddenTurnBounds() {
     const [contentWidth, contentHeight] = this.window.getContentSize();
-    const width = Math.max(HIDDEN_TURN_VIEWPORT.width, Math.round(contentWidth || 0));
-    const height = Math.max(HIDDEN_TURN_VIEWPORT.height, Math.round(contentHeight || 0));
+    // Once measured, every tab uses the browser pane's dimensions, including offscreen tabs.
+    // Using the whole window here resized a running page when another task finished and its
+    // tab became selected. ChatGPT closes its model picker on that resize, aborting selection.
+    const width = this.boundsReady ? this.bounds.width
+      : Math.max(HIDDEN_TURN_VIEWPORT.width, Math.round(contentWidth || 0));
+    const height = this.boundsReady ? this.bounds.height
+      : Math.max(HIDDEN_TURN_VIEWPORT.height, Math.round(contentHeight || 0));
     return {
       // Electron collapses a hidden WebContentsView's renderer viewport to 0x0. Keep running
       // turn views visible to Chromium and move them wholly outside the launcher content area so
@@ -1497,7 +1512,7 @@ class BrowserHost {
     };
   }
 
-  enableHiddenTurnViewport(contents, { width, height }) {
+  enableBrowserViewport(contents, { width, height }) {
     contents.enableDeviceEmulation({
       screenPosition: "desktop",
       screenSize: { width, height },
@@ -1514,29 +1529,19 @@ class BrowserHost {
       tab.view.setVisible(visible || tab.status === "running");
       return;
     }
-    if (visible) {
-      // Establish native on-screen bounds before removing the background viewport contract.
-      tab.view.setBounds(this.bounds);
-      if (tab.rendererReady && tab.deviceEmulationViewport) {
-        tab.view.webContents.disableDeviceEmulation();
-        tab.deviceEmulationViewport = null;
-      }
-      if (tab.rendererReady) tab.deviceEmulationDirty = false;
-    } else {
-      // A WebContentsView born outside a hidden BrowserWindow has a 0x0 renderer even when its
-      // native bounds and View visibility are non-zero. Device emulation gives background turns
-      // an explicit renderer viewport before moving the view outside the launcher surface.
-      const bounds = this.hiddenTurnBounds();
-      if (tab.rendererReady
-        && (tab.deviceEmulationDirty
-          || tab.deviceEmulationViewport?.width !== bounds.width
-          || tab.deviceEmulationViewport?.height !== bounds.height)) {
-        this.enableHiddenTurnViewport(tab.view.webContents, bounds);
-        tab.deviceEmulationViewport = { width: bounds.width, height: bounds.height };
-        tab.deviceEmulationDirty = false;
-      }
-      tab.view.setBounds(bounds);
+    // Hidden BrowserWindows need an explicit renderer viewport. Keep that same contract when
+    // a task becomes visible: disabling emulation emits resize even when the dimensions match,
+    // which closes ChatGPT menus midway through another helper's model selection.
+    const bounds = visible ? this.bounds : this.hiddenTurnBounds();
+    if (tab.rendererReady
+      && (tab.deviceEmulationDirty
+        || tab.deviceEmulationViewport?.width !== bounds.width
+        || tab.deviceEmulationViewport?.height !== bounds.height)) {
+      this.enableBrowserViewport(tab.view.webContents, bounds);
+      tab.deviceEmulationViewport = { width: bounds.width, height: bounds.height };
+      tab.deviceEmulationDirty = false;
     }
+    tab.view.setBounds(bounds);
     tab.view.setVisible(visible || tab.status === "running");
   }
 
@@ -1545,7 +1550,28 @@ class BrowserHost {
     // the native View can make Windows drop it from the remote-debugging target set, leaving a
     // live descriptor whose ownership id cannot be leased. Keep the View attached and drawable
     // offscreen; only its placement, never its ownership lifetime, follows the launcher UI.
-    this.view.setBounds(visible ? this.bounds : this.hiddenTurnBounds());
+    // As with task views, automatic primary inspection needs a renderer viewport
+    // even when Windows reports the native view as visible with a zero-sized renderer.
+    const automatic = browserInteractionModeFor(this) === "automatic";
+    const bounds = visible ? this.bounds : this.hiddenTurnBounds();
+    if (!automatic) {
+      this.view.setBounds(bounds);
+      if (this.primaryRendererReady && this.primaryDeviceEmulationViewport) {
+        this.view.webContents.disableDeviceEmulation();
+        this.primaryDeviceEmulationViewport = null;
+      }
+      if (this.primaryRendererReady) this.primaryDeviceEmulationDirty = false;
+    } else {
+      if (this.primaryRendererReady
+        && (this.primaryDeviceEmulationDirty
+          || this.primaryDeviceEmulationViewport?.width !== bounds.width
+          || this.primaryDeviceEmulationViewport?.height !== bounds.height)) {
+        this.enableBrowserViewport(this.view.webContents, bounds);
+        this.primaryDeviceEmulationViewport = { width: bounds.width, height: bounds.height };
+        this.primaryDeviceEmulationDirty = false;
+      }
+      this.view.setBounds(bounds);
+    }
     this.view.setVisible(true);
   }
 

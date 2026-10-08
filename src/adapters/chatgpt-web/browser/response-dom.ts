@@ -156,13 +156,18 @@ export async function readChatGptResponseDom(
       observer: MutationObserver;
       rendered: Map<HTMLElement, boolean>;
     };
-    type ObserverRegistry = { documentId: string; nextId: number; states: WeakMap<Element, ObserverState> };
+    type ObserverRegistry = {
+      documentId: string; nextId: number; states: WeakMap<Element, ObserverState>;
+      nextNodeId: number; nodeIds: WeakMap<Node, number>;
+    };
     const scope = globalThis as typeof globalThis & {
       __WEB2HARNESS_RESPONSE_OBSERVERS__?: ObserverRegistry;
     };
     const registry = scope.__WEB2HARNESS_RESPONSE_OBSERVERS__ ??= {
       documentId: `${performance.timeOrigin}:${Math.random().toString(36).slice(2)}`,
       nextId: 0,
+      nextNodeId: 0,
+      nodeIds: new WeakMap<Node, number>(),
       states: new WeakMap<Element, ObserverState>(),
     };
     let observerState = registry.states.get(root);
@@ -289,8 +294,25 @@ export async function readChatGptResponseDom(
     const commentaryRoots = classified.commentaryRoots;
     const renderedRoots = classified.answerRoots;
     // CHATGPT_MARKDOWN_CONTENT_BEGIN
-    const chatGptMarkdownContent = (markdownRoot: HTMLElement): HTMLElement => {
+    const chatGptMarkdownContent = (
+      markdownRoot: HTMLElement,
+      onClone?: (original: HTMLElement, clone: HTMLElement) => void,
+    ): HTMLElement => {
       const content = markdownRoot.cloneNode(true) as HTMLElement;
+      onClone?.(markdownRoot, content);
+      // A formula's visual and accessibility layers hydrate independently. Compare
+      // its TeX source, just as Markdown conversion does, so cosmetic changes cannot
+      // look like an edit to text already delivered to Codex.
+      for (const math of Array.from(content.querySelectorAll<HTMLElement>(".katex"))) {
+        if (math.closest("pre, code")) continue;
+        const sources = math.querySelectorAll('annotation[encoding="application/x-tex"]');
+        if (sources.length !== 1) continue;
+        const source = content.ownerDocument.createElement("annotation");
+        source.setAttribute("encoding", "application/x-tex");
+        source.textContent = sources[0]!.textContent;
+        math.textContent = "";
+        math.appendChild(source);
+      }
       // Writing cards expose a copy-content boundary separate from their title,
       // format picker and other changing controls. Keep only that owned content.
       const writingCard = '[data-markdown-copy="rich-block"]';
@@ -303,6 +325,16 @@ export async function readChatGptResponseDom(
         const children = Array.from(bodies[0]!.childNodes);
         card.textContent = "";
         for (const child of children) card.appendChild(child);
+      }
+      // #769 captured a resource preview changing its title to filename/type after
+      // surrounding prose was already delivered. This is a presentation control,
+      // not answer text. Preserve cards that expose an actual link destination.
+      for (const card of Array.from(content.querySelectorAll(
+        '[data-chatgpt-copy-reference][data-markdown-copy="contents"]',
+      ))) {
+        if (card.querySelector('[class~="group/resource-row"]') && !card.querySelector("a[href]")) {
+          card.remove();
+        }
       }
       // These are embedded renderers, not Markdown answer text. Their loading labels, controls
       // and plot axes change independently of generation (including after a later paragraph).
@@ -361,6 +393,7 @@ export async function readChatGptResponseDom(
     // answer is finalized. Root boundaries and visible indices therefore are not identity:
     // flatten semantic blocks and preserve ChatGPT's source ranges across that reparenting.
     const flattenedMarkdownSegments: Array<{
+      nodeKey: string;
       tag: string;
       html: string;
       text: string;
@@ -396,6 +429,24 @@ export async function readChatGptResponseDom(
       return parts.join("").trim();
     };
     // CHATGPT_MARKDOWN_CONTENT_END
+    // A DOM position is not a block identity: a file preview leaving the answer
+    // must not give the following paragraph the preview's already committed key.
+    const nodeKey = (node: Node): string => {
+      let id = registry.nodeIds.get(node);
+      if (id === undefined) {
+        id = registry.nextNodeId++;
+        registry.nodeIds.set(node, id);
+      }
+      return `dom:${registry.documentId}:${id}`;
+    };
+    const rememberClone = (original: HTMLElement, clone: HTMLElement): void => {
+      const source = document.createTreeWalker(original, NodeFilter.SHOW_ALL);
+      const copied = document.createTreeWalker(clone, NodeFilter.SHOW_ALL);
+      do {
+        nodeKey(source.currentNode);
+        registry.nodeIds.set(copied.currentNode, registry.nodeIds.get(source.currentNode)!);
+      } while (source.nextNode() && copied.nextNode());
+    };
     let listGroupIndex = 0;
     const sourceRange = (candidate: Element): { sourceStart: number; sourceEnd: number } | undefined => {
       const startAttribute = candidate.getAttribute("data-start");
@@ -429,6 +480,7 @@ export async function readChatGptResponseDom(
         : [];
       if (listItems.length === 0) {
         flattenedMarkdownSegments.push({
+          nodeKey: nodeKey(child),
           tag,
           html: child.outerHTML,
           text: markdownText(child),
@@ -450,6 +502,7 @@ export async function readChatGptResponseDom(
         }
         shell.append(item.cloneNode(true));
         flattenedMarkdownSegments.push({
+          nodeKey: nodeKey(item),
           tag: `${tag}:item`,
           html: shell.outerHTML,
           text: markdownText(item),
@@ -459,11 +512,12 @@ export async function readChatGptResponseDom(
         });
       });
     };
-    renderedRoots.map(chatGptMarkdownContent).forEach((markdownRoot) => {
+    renderedRoots.map(root => chatGptMarkdownContent(root, rememberClone)).forEach((markdownRoot) => {
       const children = [...markdownRoot.children] as HTMLElement[];
       const hasBlockChildren = children.some(child => blockMarkdownTags.has(child.tagName.toLowerCase()));
       if (!hasBlockChildren) {
         if (markdownRoot.innerHTML.trim()) flattenedMarkdownSegments.push({
+          nodeKey: nodeKey(markdownRoot),
           tag: "root",
           html: markdownRoot.innerHTML,
           text: markdownText(markdownRoot),
@@ -489,6 +543,7 @@ export async function readChatGptResponseDom(
             .map(sourceRange)
             .filter((range): range is { sourceStart: number; sourceEnd: number } => range !== undefined);
           flattenedMarkdownSegments.push({
+            nodeKey: nodeKey(nodes[0]!),
             tag: "inline",
             html: shell.outerHTML,
             text,
@@ -514,7 +569,7 @@ export async function readChatGptResponseDom(
     const markdownSegments = flattenedMarkdownSegments.map((segment, index, segments) => ({
       key: segment.sourceStart !== undefined
         ? `${segment.sourceStart}:${segment.tag}`
-        : `${index}:${segment.tag}`,
+        : `${segment.nodeKey}:${segment.tag}`,
       tag: segment.tag,
       html: segment.html,
       text: segment.text,

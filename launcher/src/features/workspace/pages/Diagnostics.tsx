@@ -3,6 +3,7 @@ import { Button } from "../../../components/Buttons";
 import { Icon } from "../../../components/icons";
 import { copyFor } from "../../../i18n";
 import type { DoctorReport } from "../../../types";
+import { LocalUsage } from "../../limits/LocalUsage";
 import { OfficialLimits } from "../../limits/OfficialLimits";
 import type { LimitsTracker } from "../../limits/useLimits";
 import { PageIntro, Section } from "../controls";
@@ -109,92 +110,8 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
               </div>
             )}
             <div className="usagegrid">
-              <div className="card">
-                <div className="flex between">
-                  <h3>{t("本地对话轮次", "Local conversation turns")}</h3>
-                  <span className="badge">
-                    {t("滚动 7 天 · 辅助统计", "ROLLING 7 DAYS · LOCAL")}
-                  </span>
-                </div>
-                <div className="metric">
-                  {usage && !tracker.readError && usage.models.length > 0
-                    ? new Intl.NumberFormat(language).format(
-                        usage.totalMessages,
-                      )
-                    : "—"}{" "}
-                  <span
-                    className="muted"
-                    style={{ fontSize: 12, letterSpacing: 0 }}
-                  >
-                    {t("轮", "turns")}
-                  </span>
-                </div>
-                <p>
-                  {t(
-                    "每次网页实际接受发送计 1 轮，含工具结果续发和压缩。仅统计本应用记录。",
-                    "Each accepted Web send counts as one turn, including tool-result follow-ups and compaction. Only this application’s sends are counted.",
-                  )}
-                </p>
-                <div className="note">
-                  {manual
-                    ? t(
-                        "手动交互不读取浏览器用量。已有本地历史可保留。",
-                        "Manual interaction does not inspect browser usage. Existing local history is retained.",
-                      )
-                    : t(
-                        "默认自动记录，无需开启。首次发送后自动识别账户。",
-                        "Always on automatically. The account is identified on the first send.",
-                      )}
-                  {usage?.incomplete && (
-                    <p>
-                      {t(
-                        "最近 7 天存在漏记或无法归属模型的记录。重新检查账户不能补回遗漏。",
-                        "The last seven days include missed sends or unidentified models. An account check cannot recover missing records.",
-                      )}
-                    </p>
-                  )}
-                </div>
-                <div className="actions">
-                  <Button
-                    disabled={tracker.reading || tracker.settingUp}
-                    onClick={tracker.refresh}
-                  >
-                    {t("刷新本地统计", "Refresh local counts")}
-                  </Button>
-                </div>
-                <Section
-                  title={t("按模型统计 · 本地滚动窗口", "Turns by model · local rolling windows")}
-                  meta={
-                    <span className="muted" style={{ fontSize: 11 }}>
-                      {t("本地记录", "LOCAL RECORDS")}
-                    </span>
-                  }
-                />
-                <div className="panel usage-table-scroll">
-                  <table className="usage-table">
-                    <thead><tr>
-                      <th>{t("模型", "Model")}</th>
-                      <th>{t("最近 24 小时", "Last 24 hours")}</th>
-                      <th>{t("最近 7 天", "Last 7 days")}</th>
-                    </tr></thead>
-                    <tbody>{usage?.models.map(item => <tr key={item.model}>
-                      <td>{({
-                        "gpt-6-pro": "GPT-6 Pro", "gpt-5.6-pro": "GPT-5.6 Sol Pro",
-                        "gpt-5.6-sol": "GPT-5.6 Sol", "gpt-5.6-luna": "GPT-5.6 Luna",
-                        "pro-unknown": t("Pro · 型号未识别", "Pro · unidentified model"),
-                        other: t("型号未识别／旧版其他模型", "Unidentified / legacy other models"),
-                      } as Record<string, string>)[item.model] ?? item.model}</td>
-                      <td>{item.last24Hours}</td><td>{item.last7Days}</td>
-                    </tr>)}</tbody>
-                  </table>
-                  {!usage?.models.length && <p className="note">{t("暂无可用的本地统计。", "Local counts are unavailable.")}</p>}
-                </div>
-                <p className="muted">{t("仅作辅助统计，不代表官方额度周期。各模型合并思考强度；显示最近一次识别账户的记录。滚动窗口重叠，不能相加。", "Auxiliary counts, not official quota periods. Thinking levels are grouped by model family. Counts belong to the last identified account. Rolling windows overlap and cannot be added together.")}</p>
-                {usage?.trackingSince != null && <p className="muted">
-                  {t("此账户记录起始", "Account tracking since")} · {new Date(usage.trackingSince).toLocaleString(language)}
-                </p>}
-              </div>
-              <OfficialLimits language={language} api={api} />
+              <LocalUsage language={language} tracker={tracker} manual={manual} />
+              <OfficialLimits language={language} />
             </div>
           </>
         )}

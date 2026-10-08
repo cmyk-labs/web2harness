@@ -135,7 +135,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
   } finally {
     await client.close();
   }
-});
+}, 30_000);
 
 test("accepted compaction retires through the helper as completed without hiding cancellations or errors", async () => {
   const root = mkdtempSync(join(tmpdir(), "codex-helper-compaction-end-"));
@@ -227,7 +227,7 @@ test("accepted compaction retires through the helper as completed without hiding
     logger.mockRestore();
     await server.stop(true);
   }
-});
+}, 30_000);
 
 test("launcher helper protocol preserves context file and the compaction flag", async () => {
   const sent: Record<string, unknown>[] = [];

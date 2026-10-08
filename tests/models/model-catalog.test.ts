@@ -8,10 +8,11 @@ import {
   CHATGPT_WEB_ZERO_RISK_PRO_MODEL_ROUTE,
   CHATGPT_WEB_MODEL_ROUTES,
   CHATGPT_WEB_LEGACY_MODEL_ROUTES,
-  CHATGPT_WEB_INSTANT_MODEL_ROUTE,
+  CHATGPT_WEB_BUDGET_FALLBACK_ROUTES,
   availableChatGptWebModelRoutes,
   chatGptWebRouteEfforts,
   resolveChatGptWebContextLimits,
+  resolveChatGptWebTransportLimits,
 } from "../../src/models/chatgpt-web-models";
 import { augmentNativeModelCatalog, buildChatGptWebModel } from "../../src/models/model-catalog";
 
@@ -73,8 +74,9 @@ describe("native /models augmentation", () => {
     expect(models.slice(0, 3)).toEqual(originalModels);
     const web = models.slice(3).filter(model => model.visibility === "list");
     const legacy = models.slice(3).filter(model => model.visibility === "hide");
-    expect(legacy.map(model => model.slug)).toEqual([CHATGPT_WEB_INSTANT_MODEL_ROUTE, ...CHATGPT_WEB_LEGACY_MODEL_ROUTES].map(route => route.slug));
+    expect(legacy.map(model => model.slug)).toEqual([...CHATGPT_WEB_BUDGET_FALLBACK_ROUTES, ...CHATGPT_WEB_LEGACY_MODEL_ROUTES].map(route => route.slug));
     expect(legacy.map(model => [model.context_window, model.auto_compact_token_limit])).toEqual([
+      [111_193, 95_000],
       [111_193, 95_000], [111_193, 95_000], [111_193, 95_000], [111_193, 95_000], [111_193, 95_000], [112_193, 95_000],
     ]);
     expect(web.map(model => model.slug)).toEqual(CHATGPT_WEB_MODEL_ROUTES.map(route => route.slug));
@@ -194,6 +196,7 @@ describe("native /models augmentation", () => {
     const web = models.filter(model => String(model.slug).startsWith("chatgpt-web/"));
     expect(web.map(model => model.slug)).toEqual([
       "chatgpt-web/gpt-5.6-sol-instant", "chatgpt-web/gpt-5.6-sol",
+      "chatgpt-web/gpt-6-sol-instant", "chatgpt-web/gpt-6-sol",
       "chatgpt-web/light", "chatgpt-web/medium", "chatgpt-web/high", "chatgpt-web/extra-high",
     ]);
     expect(web.every(model => model.tool_mode === null)).toBe(true);
@@ -204,6 +207,8 @@ describe("native /models augmentation", () => {
       effectiveContextWindowPercent: model.effective_context_window_percent,
       autoCompactTokenLimit: model.auto_compact_token_limit,
     }))).toEqual([
+      { contextWindow: 41_000, effectiveContextWindowPercent: 78, autoCompactTokenLimit: 32_000 },
+      { contextWindow: 90_000, effectiveContextWindowPercent: 89, autoCompactTokenLimit: 80_000 },
       { contextWindow: 41_000, effectiveContextWindowPercent: 78, autoCompactTokenLimit: 32_000 },
       { contextWindow: 90_000, effectiveContextWindowPercent: 89, autoCompactTokenLimit: 80_000 },
       { contextWindow: 41_000, effectiveContextWindowPercent: 78, autoCompactTokenLimit: 32_000 },
@@ -329,7 +334,7 @@ describe("native /models augmentation", () => {
     const result = augmentNativeModelCatalog(native, defaultConfig("mcp-bridge"));
     const web = (result.models as Array<Record<string, unknown>>)
       .filter(model => String(model.slug).startsWith("chatgpt-web/"));
-    expect(web.length).toBe(5);
+    expect(web.length).toBe(7);
     expect(web.every(model => model.shell_type === "shell_command")).toBe(true);
     expect(web.every(model => model.tool_mode === null)).toBe(true);
   });
@@ -345,7 +350,7 @@ describe("native /models augmentation", () => {
     const web = (result.models as Array<Record<string, unknown>>)
       .filter(model => String(model.slug).startsWith("chatgpt-web/"));
 
-    expect(web).toHaveLength(5);
+    expect(web).toHaveLength(7);
     expect(web.every(model => model.supported_in_api === true)).toBe(true);
     expect((result.models as Array<Record<string, unknown>>).slice(0, models.length))
       .toEqual(models);
@@ -380,4 +385,29 @@ describe("native /models augmentation", () => {
       }],
     }, defaultConfig("mcp-bridge"))).toThrow("no list-visible, tool-capable model");
   });
+});
+
+
+test("both GPT families share the local triple context policy without expanding message transport", () => {
+  for (const proAvailable of [false, true]) {
+    const standard = { ...defaultConfig("native-tools"), solAvailable: true, proAvailable, extraHighAvailable: true };
+    const triple = { ...standard, experimentalContextFiles: true, experimentalContextTripleBudget: true };
+    const standardRows = augmentNativeModelCatalog(source(), standard).models as Array<Record<string, any>>;
+    const tripleRows = augmentNativeModelCatalog(source(), triple).models as Array<Record<string, any>>;
+    for (const family of ["5.6", "6"]) {
+      for (const suffix of ["sol", "sol-instant", ...(proAvailable ? ["pro"] : [])]) {
+        const slug = "chatgpt-web/gpt-" + family + "-" + suffix;
+        const normal = standardRows.find(row => row.slug === slug)!;
+        const expanded = tripleRows.find(row => row.slug === slug)!;
+        expect(expanded.context_window).toBe(normal.context_window * 3);
+        expect(expanded.auto_compact_token_limit).toBe(normal.auto_compact_token_limit * 3);
+        expect(expanded.supported_reasoning_levels).toEqual(normal.supported_reasoning_levels);
+        expect(expanded.effective_context_window_percent).toBe(normal.effective_context_window_percent);
+        expect(expanded.visibility).toBe(normal.visibility);
+        const route = availableChatGptWebModelRoutes(triple, true).find(route => route.slug === slug)!;
+        expect(resolveChatGptWebTransportLimits(route.backendModel, route.adapterEffort, triple))
+          .toEqual(resolveChatGptWebTransportLimits(route.backendModel, route.adapterEffort, standard));
+      }
+    }
+  }
 });

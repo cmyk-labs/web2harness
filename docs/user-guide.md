@@ -194,7 +194,7 @@ Change these settings after active turns finish. Saving a chat and reusing its c
 | --- | --- |
 | **Conversation reuse → Reuse conversation** | Default. Eligible automatic Sol/Pro routes in Native Tools or MCP Bridge retain the browser conversation associated with a verified Codex task. This reduces repeated context; compaction begins a new context epoch. |
 | **Conversation reuse → New each turn** | Off. Eligible automatic Sol/Pro routes create a new browser chat and resend the applicable context each turn. Useful when a connector disappears on follow-up messages, with more transfer and potentially longer waits. Inactive for manual interaction. |
-| **Chat history → Save to history** | On for new configurations. Saves tasks to ChatGPT history, where memory and custom instructions may apply. Upgrades preserve an existing explicit **Temporary** choice. |
+| **Chat history → Temporary** | Default for new configurations. Select **Save to history** to save tasks in ChatGPT history, where memory and custom instructions may apply. Upgrades preserve an existing explicit choice. |
 | **Context as File (Experimental)** | Off. Sends sufficiently large context as a text attachment and keeps small context inline. Requires automatic interaction and is unavailable for Luna. |
 | **Context budget → Triple** | Experimental and off. Available with context-file transport; advertises larger context and compaction budgets. Restart the affected Codex client after changing it. It does not increase allowance or guarantee complete model use of the content. |
 | **Skills as files (experimental)** | Off. Uploads explicitly selected Codex skills as named text files during automatic interaction. Other skills load through tools. Skills and images share attachment limits. |

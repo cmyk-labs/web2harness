@@ -360,13 +360,19 @@ test("launcher liveness verification checks only owned process and loopback CDP 
 });
 
 test("launcher session verification reports its own deadline instead of a generic abort", async () => {
-  const server = createServer(async (request, response) => {
-    for await (const _chunk of request) { /* consume request */ }
-    await new Promise(resolveDelay => setTimeout(resolveDelay, 30));
-    if (!response.destroyed) {
-      response.writeHead(500, { "content-type": "application/json" });
-      response.end('{"error":"late"}\n');
-    }
+  const server = createServer((request, response) => {
+    // The client deliberately aborts this request, possibly before its body ends.
+    request.on("error", error => {
+      if ((error as NodeJS.ErrnoException).code !== "ECONNRESET") throw error;
+    });
+    request.resume();
+    const timer = setTimeout(() => {
+      if (!response.destroyed) {
+        response.writeHead(500, { "content-type": "application/json" });
+        response.end('{"error":"late"}\n');
+      }
+    }, 30);
+    response.once("close", () => clearTimeout(timer));
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);

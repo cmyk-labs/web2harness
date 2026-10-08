@@ -310,8 +310,8 @@ class BrowserControlServer {
         // The same owner check as a heartbeat prevents another helper from charging this tab.
         host.heartbeatTurn(body.traceId, body.helperPid);
         if (!this.limits) throw new Error("Limits tracking is unavailable");
-        const recorded = this.limits.record(body);
-        writeJson(response, 200, { ok: true, recorded });
+        const result = this.limits.recordAcknowledged(body);
+        writeJson(response, 200, { ok: true, ...result });
         return;
       }
       if (request.url === "/v1/turn/start") {

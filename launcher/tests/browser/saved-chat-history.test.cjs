@@ -108,6 +108,7 @@ test("retained tool rounds restore the hidden viewport cleared by the previous h
   Object.assign(tab.view.webContents, { enableDeviceEmulation() { emulations++; } });
   Object.assign(host, {
     visible: false, surfaceActive: false, boundsReady: true, authView: null,
+    bounds: { x: 280, y: 64, width: 840, height: 656 },
     window: { getContentSize: () => [1120, 720], isVisible: () => false, isMinimized: () => false },
     view: { setBounds() {}, setVisible() {} },
     syncViewVisibility: BrowserHost.prototype.syncViewVisibility,
@@ -116,6 +117,7 @@ test("retained tool rounds restore the hidden viewport cleared by the previous h
   assert.equal(lease.reused, true);
   assert.equal(lease.surfaceId, tab.surfaceId);
   assert.equal(emulations, 1);
+  assert.deepEqual(tab.deviceEmulationViewport, { width: 840, height: 656 });
   assert.equal(tab.deviceEmulationDirty, false);
   assert.equal(host.turnTabs.size, 1);
 });

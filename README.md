@@ -30,7 +30,7 @@ Select a **(Web)** model in Codex to use your signed-in ChatGPT account for repo
 | Web models and reasoning effort | Adds the Web models available to your account alongside native Codex models, with the efforts each route supports. |
 | Tool execution | Native mode preserves Codex Code Mode and namespaced custom tools; Codex executes file reads, code changes, and commands permitted for the active task. |
 | Conversation continuity | Eligible routes reuse the task's web conversation across tool round trips and follow-up questions, reducing repeated context transfer. |
-| History and context | New configurations save chats to ChatGPT history by default; context budgets and compaction follow model and account capabilities. |
+| History and context | New configurations use Temporary Chat by default; context budgets and compaction follow model and account capabilities. |
 | Images and attachments | Automatic interaction forwards task images and PDF, UTF-8 text, or source files supplied inline by the client as real attachments; optional experiments send large context or selected skills as text attachments. |
 | Model switching and subagents | Use native and Web models within a task, with subagent delegation governed by the selected compatibility protocol. |
 | Desktop management | Sign in, configure modes, check connections, inspect runtime health, and export safe logs in the application. |
@@ -136,6 +136,7 @@ User-visible features, fixes, and compatibility changes are recorded by version,
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 1.2.0 | Unreleased | Adds GPT-6 and GPT-5.6 Sol family/effort selection, model-level local usage and recoverable send receipts. New configurations default to Temporary Chat. Stabilizes browser viewports, repeated paragraphs and formula extraction; updates security dependencies. |
 | 1.1.1 | 2026-10-05 | Preserve original Codex context and tool declarations, namespaces, call scopes, and raw exec input. Separate bridge transport instructions; verify retained-history prefixes and reject unsupported content without silent trimming. Refresh MCP tool definitions after upgrading. Fix automatic tab switches interrupting model selection during parallel tasks, and add three mandatory live release acceptance cases. |
 | 1.1.0 | 2026-10-05 | Preserve native Code Mode and namespaced custom tools, input formats and call identities. Transfer inline PDF/text/source files through real attachments and preserve image fidelity hints. Add manual and periodic update checks, check timestamps, download progress, responsive checksum verification and readable log summaries. |
 | 1.0.2 | 2026-10-05 | Adds a blue sidebar update notice with download/install states. Windows updates show a separate installer progress window and reopen the app after completion; setup keeps shortcut icons outside the replaced application directory and records stage durations. Fixes the plan-reference dropdown's dark colors and defaults its reference table to Pro $200. The update from an older updater such as 1.0.1 still uses its original silent flow; the new window applies to subsequent updates. |

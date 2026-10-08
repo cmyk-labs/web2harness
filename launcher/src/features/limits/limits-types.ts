@@ -16,6 +16,11 @@ export interface LimitsSnapshot {
   trackingSince: number | null;
   checkedAt: number | null;
   // Retained local history (rolling seven days), not a lifetime total.
+  lastRecordedAt?: number | null;
+  pendingMessages?: number;
+  pendingReceipts?: number;
+  deliveryErrors?: number;
+  details?: { model: string; effort: string; purpose: string; last24Hours: number; last7Days: number }[];
   totalMessages: number;
   unknownProMessages: number;
   incomplete: boolean;

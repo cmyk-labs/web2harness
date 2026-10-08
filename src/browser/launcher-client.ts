@@ -368,13 +368,7 @@ export type LauncherTurnActivity =
       phase: "usage";
       traceId: string;
       helperPid: number;
-      receipt?: {
-        id: string;
-        accountKey: string;
-        model: "gpt-6-pro" | "gpt-5.6-pro" | "gpt-5.6-sol" | "gpt-5.6-luna" | "pro-unknown" | "other";
-        plan?: "pro_100" | "pro_200" | "unsupported";
-        at: number;
-      };
+      receipt?: import("../../launcher/shared/usage-receipts.cjs").UsageReceipt;
       trackingError?: "account-unavailable";
     }
   | {
@@ -649,6 +643,7 @@ export async function notifyLauncherTurn(
   trackUsage?: boolean;
   expectedConversationId?: string;
   conversationTitle?: string;
+  usageStatus?: "recorded" | "duplicate" | "gap-recorded";
 }> {
   const descriptor = readLauncherBrowserHostDescriptor(descriptorPath);
   const controller = new AbortController();
@@ -679,6 +674,10 @@ export async function notifyLauncherTurn(
       throw new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
     }
     const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+    if (activity.phase === "usage") {
+      if (!["recorded", "duplicate", "gap-recorded"].includes(String(body.status))) throw new Error("Usage receipt was not acknowledged: " + String(body.reason ?? body.status));
+      return { usageStatus: body.status as "recorded" | "duplicate" | "gap-recorded" };
+    }
     if (activity.phase === "start") {
       if (typeof body.surfaceId !== "string" || !/^[A-Za-z0-9_-]{32}$/.test(body.surfaceId)) {
         throw new Error("Launcher browser control channel returned an invalid turn surface id");

@@ -160,8 +160,23 @@ export const CHATGPT_WEB_INSTANT_MODEL_ROUTE: ChatGptWebAutomaticModelRoute = {
   legacy: true,
 };
 
+export const CHATGPT_WEB_GPT6_INSTANT_MODEL_ROUTE: ChatGptWebAutomaticModelRoute = {
+  slug: "chatgpt-web/gpt-6-sol-instant",
+  displayName: "GPT-6 · Instant (Web)",
+  description: "GPT-6 Instant through ChatGPT, with its own context and compaction budget.",
+  interactionMode: "automatic",
+  backendModel: CHATGPT_WEB_BACKEND_MODEL,
+  modelFamily: "6",
+  codexEffort: "low",
+  adapterEffort: "low",
+  supportedCodexEfforts: ["low"],
+  requiresPro: false,
+  legacy: true,
+};
+
 export const CHATGPT_WEB_BUDGET_FALLBACK_ROUTES: readonly ChatGptWebAutomaticModelRoute[] = [
   CHATGPT_WEB_INSTANT_MODEL_ROUTE,
+  CHATGPT_WEB_GPT6_INSTANT_MODEL_ROUTE,
 ];
 
 /** Add named browser models here. Account resolution groups only identical context contracts. */
@@ -190,6 +205,19 @@ export const CHATGPT_WEB_MODEL_ROUTES: readonly ChatGptWebAutomaticModelRoute[] 
     adapterEffort: "max",
     supportedCodexEfforts: ["max"],
     requiresPro: true,
+  },
+  {
+    slug: "chatgpt-web/gpt-6-sol",
+    displayName: "GPT-6 (Web)",
+    description: "GPT-6 through ChatGPT. Low selects Instant when it shares the Thinking budget; otherwise Instant has its own entry. Default: High.",
+    interactionMode: "automatic",
+    backendModel: CHATGPT_WEB_BACKEND_MODEL,
+    modelFamily: "6",
+    codexEffort: "high",
+    adapterEffort: "high",
+    supportedCodexEfforts: ["low", "medium", "high", "xhigh"],
+    contextFallbacks: { low: CHATGPT_WEB_GPT6_INSTANT_MODEL_ROUTE.slug },
+    requiresPro: false,
   },
   {
     slug: "chatgpt-web/gpt-6-pro",

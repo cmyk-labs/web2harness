@@ -223,7 +223,7 @@ export function defaultConfig(mode: RuntimeMode = "native-tools"): AppConfig {
     experimentalContextTripleBudget: false,
     experimentalSkillAttachments: false,
     experimentalFreshConversationPerTurn: false,
-    useSavedChats: true,
+    useSavedChats: false,
     zeroRiskProEnabled: false,
     autoApproveToolCalls: false,
     controlToken: randomBytes(32).toString("base64url"),
@@ -522,7 +522,7 @@ function parseConfig(value: unknown, path: string): AppConfig {
   if (parsed.useSavedChats !== undefined && typeof parsed.useSavedChats !== "boolean") {
     throw new Error(`Invalid useSavedChats in ${path}`);
   }
-  const useSavedChats = parsed.useSavedChats !== false;
+  const useSavedChats = parsed.useSavedChats === true;
   if (browserInteractionMode === "manual" && experimentalSkillAttachments) {
     throw new Error(`Zero Risk does not support Skills as files in ${path}`);
   }

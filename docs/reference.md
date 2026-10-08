@@ -62,7 +62,7 @@ Automatic and manual MCP configurations use separate tunnel IDs and connector id
 
 | Setting | Default | Effect and constraints |
 | --- | --- | --- |
-| `useSavedChats` | `true` | Task conversations use ChatGPT history. `false` selects Temporary Chat. An explicit `false` is retained when loading configuration. This setting is separate from conversation reuse. |
+| `useSavedChats` | `false` | Task conversations use Temporary Chat by default. `true` saves them in ChatGPT history. Explicit choices are retained when loading configuration. This setting is separate from conversation reuse. |
 | `experimentalFreshConversationPerTurn` | `false` | `false` allows eligible launcher-hosted Sol/Pro conversations to be reused with Native Tools or MCP Bridge. `true` starts a new browser conversation for each automatic turn. Browser-only and Luna use different continuity paths. Manual setup rejects an explicit request to enable it. See [conversation state](architecture.md#conversation-state-and-compaction). |
 | `experimentalContextFiles` | `false` | Enables experimental Context as File transport for large context. Smaller input can remain inline. Unavailable in manual mode. |
 | `experimentalContextTripleBudget` | `false` | With Context as File enabled, multiply the applicable automatic Sol/Pro catalog context and compaction budgets by three. Does not increase a single browser message limit, an account quota, or underlying model capacity. Disabling Context as File clears this setting. |
@@ -158,9 +158,11 @@ The launcher records `solAvailable`, `extraHighAvailable` and `proAvailable` fro
 | `chatgpt-web/gpt-5.6-sol-instant` | GPT-5.6 Sol · Instant (Web) | Sol available, and Instant cannot share the Sol row's context budget | Fixed `low` |
 | `chatgpt-web/gpt-5.6-sol` | GPT-5.6 Sol (Web) | Sol available | `medium`, `high`; `xhigh` if observed; `low` if its budget matches; default `high` |
 | `chatgpt-web/gpt-5.6-pro` | GPT-5.6 Sol Pro (Web) | Sol and Pro available | Fixed `max` |
+| `chatgpt-web/gpt-6-sol-instant` | GPT-6 · Instant (Web) | Sol available, and Instant cannot share the GPT-6 row's context budget | Fixed `low` |
+| `chatgpt-web/gpt-6-sol` | GPT-6 (Web) | Sol available | `medium`, `high`; `xhigh` if observed; `low` if its budget matches; default `high` |
 | `chatgpt-web/gpt-6-pro` | GPT-6 Pro (Web) | Sol and Pro available | Fixed `max` |
 
-The current registry contains no GPT-6 Instant, Medium, High or Extra High route. The GPT-6 Pro route uses the existing Pro compatibility budget; its full browser capacity has not been calibrated separately.
+GPT-5.6 Sol and GPT-6 provide Instant, Medium, High and Extra High subject to the account and budget rules below. The two Pro entries use fixed `max`. GPT-6 uses the same local account/effort budget policy as GPT-5.6, including the optional triple budget; its full browser capacity has not been calibrated separately. The picker accepts both `6` and `GPT-6` labels and verifies the requested family from the active header and slider announcements before sending. The new Chinese composer’s “停止” button also proves active generation, preventing false Pro timeouts before an assistant node appears.
 
 Catalog gating records general Sol/Extra High/Pro capability, not a separate availability flag for every model family. Before submitting a named automatic route, the adapter selects and verifies both the browser family and effort. A generic Pro label alone is insufficient. Failure to verify the requested family produces `model_version_unavailable` and leaves the pending message unsent; the adapter does not silently substitute another family.
 
@@ -172,8 +174,10 @@ One Codex catalog row has one context contract: context window, effective window
 
 | Account policy | Instant behavior |
 | --- | --- |
-| Pro capability observed | Instant and ordinary Sol thinking use the same `111193` context window and `95000` compaction threshold. `low` appears within `chatgpt-web/gpt-5.6-sol`; the standalone Instant ID remains resolvable for saved tasks but is hidden from the normal picker. |
+| Pro capability observed | Instant and ordinary Sol thinking use the same `111193` context window and `95000` compaction threshold. `low` appears within both `chatgpt-web/gpt-5.6-sol` and `chatgpt-web/gpt-6-sol`; the standalone Instant ID remains resolvable for saved tasks but is hidden from the normal picker. |
 | Sol available without Pro capability | Instant uses `41000` / `32000`; Medium and High use `90000` / `80000`. The catalog exposes a separate Instant entry and omits `low` from the main Sol row. |
+
+These grouping and Sol/Pro budget policies apply to both GPT-5.6 and GPT-6. Applying the triple multiplier preserves budget equality, so it does not create another Instant entry on Pro accounts.
 
 If a caller requests `low` on the main Sol row when the budgets differ, the request is rejected with guidance to select the standalone Instant entry. The implementation does not shrink the thinking budget to combine these choices.
 
@@ -220,6 +224,7 @@ Compatibility route IDs remain resolvable when the current account and interacti
 | `chatgpt-web/luna` | Luna Ordinary, Luna-only accounts |
 | `chatgpt-web/think` | Luna Think, Luna-only accounts |
 | `chatgpt-web/gpt-5.6-sol-instant` | Named GPT-5.6 Sol Instant, including when hidden by grouping |
+| `chatgpt-web/gpt-6-sol-instant` | Named GPT-6 Instant, including when hidden by grouping |
 
 The older fixed routes preserve their original adapter bindings and do not acquire the newer named routes' model-family pinning. Use named current routes for explicit family selection. Unsupported reasoning values on named routes are rejected rather than silently remapped.
 
@@ -277,7 +282,7 @@ For Sol/Pro, the ordinary visible-text budget is the smaller of the explicit mes
 
 ### Context as File and triple budget
 
-`experimentalContextFiles` changes how sufficiently large context is sent. `experimentalContextTripleBudget` is a separate opt-in that takes effect only with file transport. For the automatic Sol/Pro policies, it multiplies the context window and compaction threshold by three while retaining the effective percentage. For example, ordinary Pro-account Sol becomes `333579` / `285000`, and a Pro route becomes `336579` / `285000`.
+`experimentalContextFiles` changes how sufficiently large context is sent. `experimentalContextTripleBudget` is a separate opt-in that takes effect only with file transport. For the automatic GPT-5.6 and GPT-6 Sol/Pro policies, it multiplies the context window and compaction threshold by three while retaining the effective percentage. For example, ordinary Pro-account Sol becomes `333579` / `285000`, and a Pro route becomes `336579` / `285000`.
 
 The triple budget does not multiply the visible-message token cap, character cap or account usage quota; per-image token reserves remain unchanged. It does not multiply Luna's browser budget. Manual mode rejects file transport and uses its own fixed budgets. A successful upload does not prove that all uploaded context was used by the browser model.
 
@@ -411,7 +416,7 @@ These commands start real DEV Codex sessions and require the [development setup 
 
 | Symptom | Meaning and next action |
 | --- | --- |
-| Instant is absent as a separate row | On the Pro-account budget policy, choose `low` under GPT-5.6 Sol. |
+| Instant is absent as a separate row | On the Pro-account budget policy, choose `low` under GPT-5.6 Sol or GPT-6. |
 | `low` rejected on the Sol row | This account has a distinct Instant budget; select the standalone Instant ID. |
 | Extra High absent | No positive Extra High observation is stored; refresh capabilities in automatic mode. |
 | Pro row has no lower effort choices | Named Pro routes are fixed at `max` by design. |
@@ -436,3 +441,14 @@ The following modules define the contracts in this reference. For directory owne
 | Catalog and selection validation | [Catalog augmentation](../src/models/model-catalog.ts), [native context override reading](../src/codex/integration-document.ts), [browser family verification](../src/adapters/chatgpt-web/browser/model-selection.ts). |
 
 [Project documentation](../README.md#documentation) · [User guide](user-guide.md) · [Troubleshooting](troubleshooting.md)
+
+
+## Local usage and allowance references
+
+Usage & Diagnostics counts **Web sends from this app**. Automatic mode records each observed, accepted submission once, including tool-result follow-ups and compaction. Native tool calls alone do not add a send. Context as File and the triple budget do not multiply the count. Other devices, browsers and pre-tracking activity are excluded; these records cannot determine official remaining allowance or reset time.
+
+The total above the model table counts all recorded models over the last seven days. GPT-5.6 Sol, GPT-5.6 Sol Pro, GPT-6 and GPT-6 Pro have separate rolling 24-hour/7-day totals. The windows overlap. Each model combines all thinking levels and send purposes; there is no separate effort table. The Pro total includes both Pro families and legacy records known to be Pro with an unidentified family. These records also keep their own row. Ledger metadata retains verified effort and purpose for diagnostics; old records retain their IDs and timestamps, with unavailable dimensions unknown. Token usage remains an estimate and is not an official bill.
+
+A private, bounded usage outbox records send activation separately from acceptance. Unconfirmed activation is shown separately and never counted as accepted. Accepted receipts are retried with the same ID and reconciled after restart; a lost acknowledgement cannot duplicate usage or trigger another Web send. An unavailable account or corrupt record is reported as a gap. Manual mode pauses automatic recording/reconciliation and retains history. Records and pending items expire after seven days; the outbox holds at most 2,000 items, and the ledger at most 20,000 receipts across 64 accounts. Receipt metadata contains no prompts or authentication. Storage failure can still prevent recording; it must not replay an accepted request.
+
+**Model allowance references** are a separate, manually selected reference view. It starts without an assumed price tier; recognizing a Pro category does not prove its price tier. Each numeric rule retains its source, source type, check date, reference period and verification status in the bundled policy data. The interface shows only model, period and count, with unknown values as `-`; the check date and “For reference only” appear below the table. Local usage likewise puts its brief scope, last-recorded time and any pending/error status below its table. The Pro $200 view retains the requested reference from 2026-10-30 and offers an earlier historical view. Notice transcripts and historical carry-forward values remain unconfirmed in the policy metadata. Passing a listed date does not independently verify a rule. Unknown counts, including ordinary GPT-6, are not inferred from Pro counts. Sources are reviewed before changing bundled policy; local counts do not generate official percentages, balance alerts or quota enforcement.

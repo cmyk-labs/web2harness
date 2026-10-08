@@ -1882,6 +1882,7 @@ describe("ChatGPT outer-native harness v4", () => {
       expect(diagnostic).toEqual({
         reason: "text_changed", observedStart: 0, observedEnd: 6,
         committedStart: 0, committedEnd: 6, observedTextChars: 7, committedTextChars: 6,
+        observedTag: "p", committedTag: "p", observedIndex: 0, committedIndex: 0,
       });
       expect(JSON.stringify(diagnostic)).not.toMatch(/Stable|Changed|<p/);
     }
@@ -3306,8 +3307,8 @@ describe("ChatGPT outer-native harness v4", () => {
     environment.tools = [
       { name: "exec_command", description: "Run a Codex command", parameters: { type: "object" } },
     ];
-    const abandonedToken = await broker.register(environment, 3_000);
-    const replacementToken = await broker.register(environment);
+    let abandonedToken = "";
+    let replacementToken = "";
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: ["src/cli.ts", "mcp", "--broker-socket", socketPath],
@@ -3320,6 +3321,9 @@ describe("ChatGPT outer-native harness v4", () => {
       expect(chatGptMcpInvocationTimeout(environment)).toBe(CHATGPT_WEB_MCP_INVOCATION_TIMEOUT_MS);
       expect(chatGptMcpInvocationTimeout({ ...environment, expiresAt: 1_500 }, 1_000)).toBe(500);
       await client.connect(transport);
+      // The cancellation lease covers the request, not cold CLI/SDK startup.
+      abandonedToken = await broker.register(environment, 3_000);
+      replacementToken = await broker.register(environment);
       const abort = new AbortController();
       const abandoned = client.callTool({
         name: "codex_exec",

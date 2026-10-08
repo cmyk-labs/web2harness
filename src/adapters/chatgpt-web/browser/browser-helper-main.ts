@@ -29,6 +29,7 @@ interface RunMessage {
     traceId: string;
     modelId: string;
     reasoning?: string;
+    usagePurpose?: "task" | "tool-result" | "compaction";
     modelFamily?: "5.6" | "6";
     capabilities: ChatGptWebCapabilities;
     nativeConnector?: boolean;
@@ -184,6 +185,7 @@ async function run(message: RunMessage): Promise<void> {
   if (message.turn.savedChat !== undefined && !validSavedChatTask(message.turn.savedChat)) {
     throw new Error("Browser helper saved chat metadata is invalid");
   }
+  if (message.turn.usagePurpose !== undefined && !["task", "tool-result", "compaction"].includes(message.turn.usagePurpose)) throw new Error("Invalid usage purpose");
   if (message.turn.compaction !== undefined && typeof message.turn.compaction !== "boolean") {
     throw new Error("Browser helper compaction flag is invalid");
   }
@@ -227,6 +229,7 @@ async function run(message: RunMessage): Promise<void> {
     traceId: message.turn.traceId,
     modelId: message.turn.modelId,
     reasoning: message.turn.reasoning,
+    usagePurpose: message.turn.usagePurpose,
     ...(message.turn.modelFamily ? { modelFamily: message.turn.modelFamily } : {}),
     capabilities: message.turn.capabilities,
     ...(message.turn.nativeConnector ? { nativeConnector: true } : {}),

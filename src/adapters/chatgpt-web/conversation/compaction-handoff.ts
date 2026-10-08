@@ -316,7 +316,9 @@ export async function requestRetainedCompactionHandoff(
     browser = worker.run({
       traceId,
       modelId: parsed.modelId,
+      modelFamily: parsed._chatgptModelFamily,
       reasoning: parsed.options.reasoning,
+      usagePurpose: "compaction",
       // The retained connector exposes only the one-shot control token embedded above. It does
       // not receive an ordinary Codex tool environment for this checkpoint message.
       capabilities: { ...capabilities, localToolsEnabled: false },

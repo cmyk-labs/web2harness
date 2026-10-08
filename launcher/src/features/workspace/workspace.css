@@ -548,6 +548,7 @@
 }
 .workspace-ui .usagegrid {
   display: grid;
+  align-items: start;
   grid-template-columns: repeat(2,minmax(0,1fr));
   gap: 16px;
 }
@@ -1237,7 +1238,8 @@
 .usage-table th, .usage-table td { text-align: left; padding: 12px; border-bottom: 1px solid var(--color-border); }
 .usage-table th { font-weight: 500; }
 .usage-table td:not(:first-child) { font-variant-numeric: tabular-nums; }
-.official-plan { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 16px 0; font-size: 12px; }
+.official-filters { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: 16px 0; }
+.official-plan { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; font-size: 12px; }
 .official-plan select {
   max-width: 100%; padding: 8px 12px; font: inherit;
   color: var(--color-text-primary); background: var(--color-background-elevated);
@@ -1246,3 +1248,16 @@
 .official-plan option {
   color: var(--color-text-primary); background: var(--color-background-elevated);
 }
+
+.usage-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.usage-heading h3 { margin: 0; }
+.usage-total-label { color: var(--color-text-secondary); font-size: 12px; font-weight: 400; }
+.usage-footnote { margin: 14px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.7; }
+.usage-footnote p { margin: 0; }
+.usage-shared { background: var(--color-background-elevated); }
+.local-usage .usage-table :is(td, th):not(:first-child), .official-limits .usage-table :is(td, th):last-child { text-align: right; }
+.local-usage .usage-table th:not(:first-child) { white-space: nowrap; padding-inline: 8px; }
+.official-limits .usage-table td { vertical-align: top; overflow-wrap: anywhere; }
+.official-limits .usage-table td:first-child { min-width: 80px; }
+
+.official-limits .usage-table td:nth-child(2), .official-limits .usage-table th:nth-child(2) { white-space: nowrap; padding-inline: 8px; }
