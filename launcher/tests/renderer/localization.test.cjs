@@ -40,7 +40,7 @@ function linkTargets(source) {
   // Localized illustrations and documents correspond to the English sources.
   return [...new Set([...markdown, ...html].map(target => {
     const [pathname, ...fragment] = target.split("#");
-    const canonicalPath = pathname.replace(/\.zh-CN\.(md|svg)$/, ".$1");
+    const canonicalPath = pathname.replace(/\.(?:en|zh-CN)\.(md|svg|png)$/, ".$1");
     return [canonicalPath, ...fragment].join("#");
   }))].sort();
 }

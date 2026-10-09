@@ -41,6 +41,15 @@
 
 [观看演示](#demo) · [快速开始](#get-started) · [查阅手册](#documentation)
 
+<a id="product-overview"></a>
+
+## 产品介绍
+
+<p align="center">
+  <a href="assets/posters/web2harness-overview.zh-CN.png"><img src="assets/posters/web2harness-overview.zh-CN.png" width="49%" alt="Web2Harness 产品介绍与架构海报"></a>
+  <a href="assets/posters/web2harness-features.zh-CN.png"><img src="assets/posters/web2harness-features.zh-CN.png" width="49%" alt="Web2Harness 功能与上手指南海报"></a>
+</p>
+
 <a id="modes"></a>
 
 ## 选择工具模式

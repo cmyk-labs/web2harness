@@ -41,6 +41,15 @@ Available models and efforts depend on the signed-in account and browser checks.
 
 [Watch the demonstration](#demo) · [Get started](#get-started) · [Browse the manuals](#documentation)
 
+<a id="product-overview"></a>
+
+## Product overview
+
+<p align="center">
+  <a href="assets/posters/web2harness-overview.en.png"><img src="assets/posters/web2harness-overview.en.png" width="49%" alt="Web2Harness product overview and architecture"></a>
+  <a href="assets/posters/web2harness-features.en.png"><img src="assets/posters/web2harness-features.en.png" width="49%" alt="Web2Harness features and quick start guide"></a>
+</p>
+
 <a id="modes"></a>
 
 ## Choose a tool mode
