@@ -1,6 +1,6 @@
 ## 简体中文
 
-Web2Harness 1.2.0（候选）更新 Web 模型适配、本地用量统计和浏览器稳定性。
+Web2Harness 1.2.0（`v1.2.0`）更新 Web 模型适配、本地用量统计和浏览器稳定性。
 
 - **模型与思考档位**：适配 GPT-5.6 Sol、GPT-5.6 Sol Pro、GPT-6、GPT-6 Pro；普通模型提供账号支持的思考档位，Pro 固定对应档位。兼容网页中的 6/GPT-6 名称及独立版本菜单，发送前核实模型与强度。
 - **通用三倍预算**：保留跨模型的三倍上下文及压缩预算，模型可用档位与单条消息边界保持独立。
@@ -14,11 +14,15 @@ Web2Harness 1.2.0（候选）更新 Web 模型适配、本地用量统计和浏�
 
 保留已有模型、工具模式、账号和历史偏好。原生工具、文件上下文与通用预算继续使用本项目实现。安装包和更新可用性以实际发布资产为准。
 
-本候选正在执行发布验收；尚未确认完整 CAP-001～005、各平台安装升级和认证 MCP 门槛通过。此前版本或开发轮次的通过不代表本候选通过。正式发布前更新此段为实际结果。
+本版本的三平台源码 CI、CAP-001～005，以及 Windows 独立 DEV 中的自动 MCP、原生工具读写、压缩续聊、请求重放去重和路由恢复已通过。Codex Voice 使用 v3 协议建立了真实 WebRTC 连接；该检查不包含麦克风采集或音频质量。Windows 候选包的嵌入 Bun 回归 67 项通过；维护者已确认补充人工验收完成并批准发布。
+
+发布目标为 Windows x64、macOS arm64/x64、Linux x64/arm64；各原生包由对应平台 CI 构建和检查。认证交互自动验收覆盖 Windows，macOS/Linux 的认证交互未由本次自动验收独立复现。Windows 包未做证书签名，macOS 使用 ad-hoc 签名，未作 Developer ID 签名或公证。
+
+退出活动 MCP 任务时，后台进程可能需要超时收尾后才完全退出。手动模式的剪贴板交接曾在自动验收环境受阻，该记录保留，不作为自动验收通过项。若遇到模型或连接器检查失败，请保留报错并检查对应选择、登录和插件工具定义；不要反复提交同一消息。安装或更新出现问题时保留配置及诊断信息，后续修复以新版本分发，不覆盖已有发布资产。
 
 ## English
 
-Web2Harness 1.2.0 (candidate) updates Web model integration, local usage accounting, and browser stability.
+Web2Harness 1.2.0 (`v1.2.0`) updates Web model integration, local usage accounting, and browser stability.
 
 - **Models and efforts**: Supports GPT-5.6 Sol, GPT-5.6 Sol Pro, GPT-6, and GPT-6 Pro, with account-supported efforts for ordinary models and fixed Pro effort. Recognizes both 6/GPT-6 labels and separate version menus; verifies family and effort before sending.
 - **Shared triple budget**: Retains the cross-model triple context and compaction budget. Available efforts and single-message boundaries remain independent.
@@ -32,4 +36,8 @@ Web2Harness 1.2.0 (candidate) updates Web model integration, local usage account
 
 Existing model, tool-mode, account, and history preferences are retained. Native Tools, Context as File, and shared budgets keep this project's implementation. Package and update availability depend on actual published assets.
 
-Release acceptance is in progress. Full CAP-001–005, platform installation/upgrade, and authenticated MCP gates have not yet been confirmed for this candidate. Earlier development or release passes do not establish a current pass. Replace this paragraph with actual results before publication.
+This candidate passed source CI on all three operating systems, CAP-001–005, and isolated Windows DEV checks for automatic MCP, native tool reads and patches, compaction continuation, exact-request replay deduplication, and route restoration. Codex Voice established a real WebRTC connection using protocol v3; microphone capture and audio quality were not tested. The Windows candidate passed all 67 embedded-Bun regressions. The maintainer confirmed completion of supplementary manual acceptance and authorized publication.
+
+Release targets are Windows x64, macOS arm64/x64, and Linux x64/arm64, built and checked by native-platform CI. Automated authenticated interaction acceptance covers Windows; it did not independently reproduce authenticated macOS/Linux interaction. Windows packages are not certificate-signed. macOS uses ad-hoc signing without Developer ID signing or notarization.
+
+Quitting an active MCP task can require timeout cleanup before the background process fully exits. Clipboard handoff in manual mode was blocked in the automated acceptance environment; that record remains and is not counted as an automated pass. If model or connector checks fail, retain the error and check the selected model, login, and plugin tool definitions instead of repeatedly submitting the same message. Preserve configuration and diagnostics if installation or updating fails; distributed fixes use a new version rather than replacing published assets.
