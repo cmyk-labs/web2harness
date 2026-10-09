@@ -158,10 +158,10 @@ Before every release, including previews, run the applicable mandatory [capabili
 ### Conversation and model behavior
 
 - With Reuse conversation and Save to history, prove at least two actual tool-result round trips plus a later user message use the same ChatGPT conversation ID. Replaying an identical Responses request must not submit a duplicate browser message. Test New each turn separately; history persistence and conversation reuse are independent.
-- New configurations and missing history preferences default to Save to history in UI and core configuration. Existing explicit true/false values survive setup and upgrade. Account inspection remains temporary and must not change reuse behavior.
-- On a Pro-capable account, verify the supported Sol/Pro rows: `GPT-5.6 Sol (Web)`, `GPT-5.6 Sol Pro (Web)`, and `GPT-6 Pro (Web)`. Ordinary Sol defaults to High. Low/Medium/High/account-supported Extra High must select the correct browser effort; Pro uses fixed Max.
+- New configurations and missing history preferences default to Temporary Chat in UI and core configuration. Existing explicit true/false values survive setup and upgrade. Account inspection remains temporary and must not change reuse behavior.
+- On a Pro-capable account, verify the supported rows: `GPT-5.6 Sol (Web)`, `GPT-5.6 Sol Pro (Web)`, `GPT-6 (Web)`, and `GPT-6 Pro (Web)`. Both ordinary models default to High. Low/Medium/High/account-supported Extra High must select the correct browser effort; Pro uses fixed Max.
 - When account budgets differ, keep Instant separate: Thinking retains 90k/80k and Instant 41k/32k context/compaction budgets. Hidden Instant identifiers must continue old tasks. Reject Max/Ultra on ordinary Sol rather than silently selecting another model. Preserve native model rows, efforts, and budgets.
-- Launcher and Codex catalog must agree on supported/default efforts. GPT-6 Pro must identify the Astra family. A “Latest” label, slider position, or native Codex model alone does not establish browser family support. See the [model reference](reference.md).
+- Launcher and Codex catalog must agree on supported/default efforts. Verify both GPT-6 routes against the actual `6` or `GPT-6` browser family label. A “Latest” label, slider position, or native Codex model alone does not establish browser family support. See the [model reference](reference.md).
 
 ### MCP Bridge and manual interaction
 

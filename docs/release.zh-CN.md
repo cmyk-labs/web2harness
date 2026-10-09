@@ -158,10 +158,10 @@ Shell 入口脚本必须以 Git 模式 `100755` 提交。Linux 工作流在检�
 ### 对话与模型行为
 
 - 在 Reuse conversation 与 Save to history 下，证明至少两次真实工具结果往返及后续用户消息使用同一 ChatGPT conversation ID。重放相同 Responses 请求不得重复提交浏览器消息。另测 New each turn；历史保存和对话复用相互独立。
-- 新配置或缺失历史偏好时，UI 与核心均默认 Save to history。已有显式 true/false 在 setup 与升级后保留。账户探测保持临时页面，不改变复用行为。
-- 在具备 Pro 的账户上验证受支持的 Sol/Pro 条目：`GPT-5.6 Sol (Web)`、`GPT-5.6 Sol Pro (Web)`、`GPT-6 Pro (Web)`。普通 Sol 默认 High；Low/Medium/High/账户支持的 Extra High 必须选择正确网页档位，Pro 固定 Max。
+- 新配置或缺失历史偏好时，UI 与核心均默认临时聊天。已有显式 true/false 在 setup 与升级后保留。账户探测保持临时页面，不改变复用行为。
+- 在具备 Pro 的账户上验证受支持的条目：`GPT-5.6 Sol (Web)`、`GPT-5.6 Sol Pro (Web)`、`GPT-6 (Web)`、`GPT-6 Pro (Web)`。两个普通模型均默认 High；Low/Medium/High/账户支持的 Extra High 必须选择正确网页档位，Pro 固定 Max。
 - 账户预算不同时保持 Instant 独立：Thinking 的上下文/压缩预算为 90k/80k，Instant 为 41k/32k。隐藏的 Instant ID 仍可继续旧任务。普通 Sol 的 Max/Ultra 必须拒绝，不能静默切模型。保留原生模型条目、档位和预算。
-- 启动器与 Codex 目录必须一致展示支持档位和默认值。GPT-6 Pro 必须识别为 Astra 家族；“Latest”标签、滑块位置或原生 Codex 模型均不能单独证明网页模型家族支持。参见[模型参考](reference.zh-CN.md)。
+- 启动器与 Codex 目录必须一致展示支持档位和默认值。两条 GPT-6 路由均须核实网页实际的 `6` 或 `GPT-6` 家族标签；“Latest”标签、滑块位置或原生 Codex 模型均不能单独证明网页模型家族支持。参见[模型参考](reference.zh-CN.md)。
 
 ### MCP Bridge 与手动交互
 

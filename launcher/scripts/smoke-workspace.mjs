@@ -8,8 +8,9 @@ const brandMark=JSON.parse(await readFile(resolve('assets/brand/brand-mark.json'
 const out=resolve(process.env.WORKSPACE_SMOKE_OUTPUT || 'output/context-files/ui');await mkdir(out,{recursive:true});
 // Own the HTTP listener so port 0 really requests an ephemeral OS port. Vite's
 // standalone listen path treats 0 as its default port, which can be occupied.
-const server=await createServer({root:resolve('launcher'),configFile:resolve('launcher/vite.config.ts'),server:{middlewareMode:true,hmr:false,open:false}});
-const listener=createHttpServer(server.middlewares);
+const listener=createHttpServer();
+const server=await createServer({root:resolve('launcher'),configFile:resolve('launcher/vite.config.ts'),server:{middlewareMode:true,hmr:{server:listener},open:false}});
+listener.on('request',server.middlewares);
 await new Promise((resolve,reject)=>{listener.once('error',reject);listener.listen(0,'127.0.0.1',resolve)});
 const origin=`http://127.0.0.1:${listener.address().port}`;
 const browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
