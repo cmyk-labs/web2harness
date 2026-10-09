@@ -5,9 +5,9 @@
 **Web2Harness** — 将 ChatGPT 网页版模型接入 Codex，沿用原生工具与现有工作流，同时充分利用你 ChatGPT 账户中可用的 Web 模型额度，完成更多实际任务。
 
 <p align="center">
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 1.1.1"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 1.1.1"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 1.1.1"></a>
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.2.0/web2harness-1.2.0-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 1.2.0"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.2.0/web2harness-1.2.0-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 1.2.0"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.2.0/web2harness-1.2.0-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 1.2.0"></a>
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@
 | 模型切换与子代理 | 在任务中切换原生与 Web 模型，并按所选兼容协议委派子代理任务。 |
 | 桌面管理 | 在应用内完成登录、模式配置、连接检查、运行诊断和安全日志导出。 |
 
-**1.1.1：**上下文转发保留 Codex 原始角色、顺序与工具身份，桥接输出编码单独组织，不静默裁剪历史或改写原始 exec 代码。网页传输限制与模型行为仍可能不同于原生 API，详见[上下文分离说明](docs/architecture.zh-CN.md#native-tools)。
+**1.2.0：**适配 GPT-6 与 GPT-5.6 Sol 系列及其可用思考档位，按模型汇总本地使用次数，新配置默认临时聊天。继续保留 Codex 原始上下文与工具身份，详见[上下文分离说明](docs/architecture.zh-CN.md#native-tools)。
 
 可用模型与档位取决于登录账号和浏览器检查结果。详见[配置与模型参考](docs/reference.zh-CN.md)；应用不会增加账号额度或解锁未开放的模型。
 
@@ -80,7 +80,7 @@
 
 ## 快速开始
 
-准备本机可用的 Codex，以及能够登录的 ChatGPT 账号。顶部按钮分别下载 Windows x64、macOS Apple silicon 和 Linux x64 安装包。其他处理器：[macOS Intel](https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-mac-x64.dmg) · [Linux arm64](https://github.com/cmyk-labs/web2harness/releases/download/v1.1.1/web2harness-1.1.1-linux-arm64.AppImage)。选择一个匹配的安装包即可，校验和与验收说明见 [1.1.1 发布页面](https://github.com/cmyk-labs/web2harness/releases/tag/v1.1.1)。当前为正式版，已安装应用可通过检查更新获取。安装方式与平台要求见[使用手册](docs/user-guide.zh-CN.md)，已有源码目录也可按下方[源码运行](#development)启动。
+准备本机可用的 Codex，以及能够登录的 ChatGPT 账号。顶部按钮分别下载 Windows x64、macOS Apple silicon 和 Linux x64 安装包。其他处理器：[macOS Intel](https://github.com/cmyk-labs/web2harness/releases/download/v1.2.0/web2harness-1.2.0-mac-x64.dmg) · [Linux arm64](https://github.com/cmyk-labs/web2harness/releases/download/v1.2.0/web2harness-1.2.0-linux-arm64.AppImage)。选择一个匹配的安装包即可，校验和与验收说明见 [1.2.0 发布页面](https://github.com/cmyk-labs/web2harness/releases/tag/v1.2.0)。当前为正式版，已安装应用可通过检查更新获取。安装方式与平台要求见[使用手册](docs/user-guide.zh-CN.md)，已有源码目录也可按下方[源码运行](#development)启动。
 
 1. **启动 Web2Harness**。使用与你的平台、架构匹配的安装包，或从源码启动。
 2. **完成浏览器登录**。打开「连接与模型」，在应用浏览器中登录 ChatGPT，运行「检查连接」。
@@ -136,7 +136,7 @@ bun run dev:launcher
 
 | 版本 | 日期 | 更新内容 |
 | --- | --- | --- |
-| 1.2.0 | 待发布 | 适配 GPT-6、GPT-5.6 Sol 系列与思考档位，增加按模型汇总的本地用量及可恢复发送回执；新配置默认临时聊天。修复浏览器视口、重复段落及公式提取，更新安全依赖。 |
+| 1.2.0 | 2026-10-09 | 适配 GPT-6、GPT-5.6 Sol 系列与思考档位，增加按模型汇总的本地用量及可恢复发送回执；新配置默认临时聊天。修复浏览器视口、重复段落及公式提取，更新安全依赖。 |
 | 1.1.1 | 2026-10-05 | 保留 Codex 原始上下文、工具声明、命名空间、调用范围及 exec 原文，桥接传输协议独立组织；续聊校验历史前缀，不支持的内容明确报错、不静默裁剪。升级后需刷新 MCP 工具定义。修复并行任务自动切页打断模型选择的问题，新增三项每次发布必测的真实能力验收用例。 |
 | 1.1.0 | 2026-10-05 | 保留原生 Code Mode、带命名空间的自定义工具、输入格式与调用身份。内联 PDF／文本／源码通过真实附件传输，保留图片清晰度参数。新增手动及定时检查更新、检查时间、下载进度、异步校验与可读日志说明。 |
 | 1.0.2 | 2026-10-05 | 新增侧栏蓝色更新提醒，同步显示下载／安装状态。Windows 更新使用独立安装进度窗口，完成后重新打开应用；快捷方式图标保存到应用替换目录之外，并记录安装阶段耗时。修复套餐参考下拉列表深色配色，默认参考 Pro $200。由 1.0.1 等旧更新程序升级的那一次仍沿用原静默流程，新进度窗口用于后续更新。 |
