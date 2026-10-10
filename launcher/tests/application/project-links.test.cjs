@@ -59,23 +59,13 @@ test("native external-link policy permits exact project destinations and rejects
   assert.equal(opened.length, 4 + Object.keys(context.LIMITS_SOURCES).length);
 });
 
-test("repository invitation records only successful opening and never completes onboarding", async () => {
-  const state = { githubOpened: false, onboardingComplete: false };
-  const opened = [];
-  let fail = true;
-  const open = handler("launcher:open-repository", {
-    GITHUB_URL: "https://github.com/cmyk-labs/web2harness",
-    openWebUrl: async url => { if (fail) throw new Error("Cannot open browser"); opened.push(url); },
-    stateStore: { update: patch => Object.assign(state, patch) },
+test("continuing onboarding saves setup without a repository visit", () => {
+  const state = { onboardingComplete: false, autoStart: false };
+  const complete = handler("launcher:complete-onboarding", {
+    stateStore: { read: () => state, update: patch => Object.assign(state, patch) },
+    validateLanguage: value => value, validateBrowserInteractionMode: value => value,
+    updateTrayMenu() {}, logger: { info() {} },
   });
-  await assert.rejects(open(), /Cannot open browser/);
-  assert.equal(state.githubOpened, false);
-  fail = false;
-  await open();
-  assert.deepEqual(opened, ["https://github.com/cmyk-labs/web2harness"]);
-  assert.deepEqual(state, { githubOpened: true, onboardingComplete: false });
-  const unavailable = handler("launcher:open-repository", {
-    GITHUB_URL: "", openWebUrl: () => assert.fail("No fallback URL is allowed"),
-  });
-  await assert.rejects(unavailable(), /not configured/);
+  complete(null, "zh-CN", "automatic");
+  assert.equal(state.onboardingComplete, true);
 });

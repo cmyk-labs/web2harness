@@ -5,9 +5,9 @@
 **Web2Harness** — Bring ChatGPT web models into Codex, keep your native tools and existing workflow, and make the most of the web model usage available on your ChatGPT account to get more real work done.
 
 <p align="center">
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.2.0/web2harness-1.2.0-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 1.2.0"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.2.0/web2harness-1.2.0-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 1.2.0"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v1.2.0/web2harness-1.2.0-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 1.2.0"></a>
+  <a href="https://github.com/cmyk-labs/web2harness/releases/latest"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · Latest stable release"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/latest"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · Latest stable release"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/latest"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · Latest stable release"></a>
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@ Select a **(Web)** model in Codex to use your signed-in ChatGPT account for repo
 | Model switching and subagents | Use native and Web models within a task, with subagent delegation governed by the selected compatibility protocol. |
 | Desktop management | Sign in, configure modes, check connections, inspect runtime health, and export safe logs in the application. |
 
-**1.2.0:** Supports GPT-6 and GPT-5.6 Sol families and their available efforts, combines local usage by model, and defaults new configurations to Temporary Chat. Native Codex context and tool identities remain preserved; see [context separation](docs/architecture.md#native-tools).
+**2.0.0 updates:** Refines desktop layouts and usage views; adds raw JSON logs, full-history search, related-request filtering and configurable pagination; exports diagnostic bundles by date range, improves event coverage and redaction, and speeds up large log histories.
 
 Available models and efforts depend on the signed-in account and browser checks. See the [configuration and model reference](docs/reference.md); the application does not add account quota or unlock unavailable models.
 
@@ -89,9 +89,9 @@ A task typically follows **select a Web model → submit a task → receive a we
 
 ## Get started
 
-Have Codex available on your computer and a ChatGPT account you can sign in to. The header buttons download Windows x64, macOS Apple silicon and Linux x64 installers. Other processors: [macOS Intel](https://github.com/cmyk-labs/web2harness/releases/download/v1.2.0/web2harness-1.2.0-mac-x64.dmg) · [Linux arm64](https://github.com/cmyk-labs/web2harness/releases/download/v1.2.0/web2harness-1.2.0-linux-arm64.AppImage). Choose one matching installer; the [1.2.0 release](https://github.com/cmyk-labs/web2harness/releases/tag/v1.2.0) provides checksums and validation notes. This stable release is available through the application's update check. See the [user guide](docs/user-guide.md) for installation methods and platform requirements, or [run an existing checkout from source](#development).
+Have Codex available on your computer and a ChatGPT account you can sign in to. The header buttons open the [latest stable release](https://github.com/cmyk-labs/web2harness/releases/latest). Choose one installer for Windows x64, macOS Apple silicon/Intel, or Linux x64/arm64. Refer to the actual release assets for versions, checksums and validation notes; installed applications can check for available updates. See the [user guide](docs/user-guide.md) for installation methods and platform requirements, or [run an existing checkout from source](#development).
 
-1. **Start Web2Harness.** Use a package matching your platform and architecture, or run from source.
+1. **Start Web2Harness.** Use a package matching your platform and architecture, or run from source. Version 2.0.0 shows activation before language selection. Enter the publisher's license for this device; upgrades from 1.x also require activation. See [licensing](docs/licensing.md).
 2. **Sign in through the browser.** Open **Connection & Models**, sign in to ChatGPT in the application browser, and run **Check connection**.
 3. **Apply configuration.** Select **Native Tools** and **Automatic**, then choose **Apply configuration**.
 4. **Choose a Web model.** Refresh the Codex model catalog or restart the affected client as prompted. Select a model marked **(Web)** and one of its supported reasoning efforts.
@@ -123,6 +123,8 @@ bun run app
 
 For code changes or fix validation, launch the independent DEV profile:
 
+Prepare an isolated test license and public-key manifest as described in [licensing](docs/licensing.md) first. Source execution requires `WEB2HARNESS_LICENSE_KEYS_FILE`; release builds pin those public keys into the runtime.
+
 ```bash
 bun run dev:launcher
 ```
@@ -145,6 +147,7 @@ User-visible features, fixes, and compatibility changes are recorded by version,
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 2.0.0 | 2026-10-10 | Refines desktop layouts and usage views; adds raw JSON logs, full-history search, related-request filtering and configurable pagination; exports diagnostic bundles by date range, improves event coverage and redaction, and speeds up large log histories. |
 | 1.2.0 | 2026-10-09 | Adds GPT-6 and GPT-5.6 Sol family/effort selection, model-level local usage and recoverable send receipts. New configurations default to Temporary Chat. Stabilizes browser viewports, repeated paragraphs and formula extraction; updates security dependencies. |
 | 1.1.1 | 2026-10-05 | Preserve original Codex context and tool declarations, namespaces, call scopes, and raw exec input. Separate bridge transport instructions; verify retained-history prefixes and reject unsupported content without silent trimming. Refresh MCP tool definitions after upgrading. Fix automatic tab switches interrupting model selection during parallel tasks, and add three mandatory live release acceptance cases. |
 | 1.1.0 | 2026-10-05 | Preserve native Code Mode and namespaced custom tools, input formats and call identities. Transfer inline PDF/text/source files through real attachments and preserve image fidelity hints. Add manual and periodic update checks, check timestamps, download progress, responsive checksum verification and readable log summaries. |

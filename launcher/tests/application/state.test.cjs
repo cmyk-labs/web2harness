@@ -3,12 +3,36 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const vm = require("node:vm");
 const {
   SESSION_REFRESH_REMINDER_INTERVAL_MS,
   createStateStore,
   nextSessionRefreshReminderAt,
   validateSidebarState,
+  validateLogPageSize,
 } = require("../../electron/state.cjs");
+
+test("log page size is validated at IPC, persisted, and defaults safely for old or corrupt settings", t => {
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "web2harness-log-page-size-")), file = path.join(root, "state.json");
+  t.after(() => { assert.equal(path.dirname(root), fs.realpathSync(os.tmpdir())); assert.match(path.basename(root), /^web2harness-log-page-size-/); fs.rmSync(root, { recursive: true }); });
+  const main = fs.readFileSync(path.join(__dirname, "../../electron/main.cjs"), "utf8"), handlers = {};
+  const store = createStateStore(file);
+  vm.runInNewContext(main.slice(main.indexOf('handle("launcher:set-preference",'), main.indexOf('handle("launcher:sidebar-state",')), {
+    handle: (name, callback) => { handlers[name] = callback; }, stateStore: store, validateLogPageSize,
+  });
+  const set = value => handlers["launcher:set-preference"]({}, "logPageSize", value);
+  assert.equal(store.read().logPageSize, 100);
+  for (const value of [25, 50, 100, 200]) { set(value); assert.equal(createStateStore(file).read().logPageSize, value); }
+  for (const value of [0, 26, 1000000, "50", true, null, undefined]) {
+    assert.throws(() => set(value), /Unsupported log page size/);
+    assert.equal(store.read().logPageSize, 200); assert.equal(createStateStore(file).read().logPageSize, 200);
+  }
+  for (const value of [undefined, null, "200", 999]) {
+    fs.writeFileSync(file, JSON.stringify({ version: 1, logPageSize: value, language: "zh-CN", keepRunningOnClose: false }));
+    const state = createStateStore(file).read();
+    assert.equal(state.logPageSize, 100); assert.equal(state.language, "zh-CN"); assert.equal(state.keepRunningOnClose, false);
+  }
+});
 
 test("launcher state persists onboarding, language, and autostart atomically", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "web2harness-launcher-state-"));
@@ -34,6 +58,7 @@ test("launcher state persists onboarding, language, and autostart atomically", (
       browserSmokeVersion: null,
       sidebarOpen: true,
       sidebarWidth: 252,
+      logPageSize: 100,
       mcpGuideStep: 0,
       sessionRefreshReminderAt: null,
     });
@@ -64,6 +89,7 @@ test("launcher state persists onboarding, language, and autostart atomically", (
       browserSmokeVersion: "0.2.0",
       sidebarOpen: true,
       sidebarWidth: 252,
+      logPageSize: 100,
       mcpGuideStep: 0,
       sessionRefreshReminderAt: null,
     });
@@ -167,6 +193,7 @@ test("persisted sidebar corruption is repaired without changing the rest of laun
       browserSmokeVersion: null,
       sidebarOpen: true,
       sidebarWidth: 252,
+      logPageSize: 100,
       mcpGuideStep: 0,
       sessionRefreshReminderAt: null,
     });

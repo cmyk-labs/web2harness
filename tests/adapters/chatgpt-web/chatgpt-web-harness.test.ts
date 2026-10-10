@@ -1,4 +1,5 @@
 import { toolIdentityKey } from "../../../src/types";
+import { diagnosticReference, parseDiagnosticLine } from "../../../launcher/shared/diagnostic-event.cjs";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { rejects } from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -2139,10 +2140,11 @@ describe("ChatGPT outer-native harness v4", () => {
     let queuedCalls = 0;
     let resolveQueued!: () => void;
     const queued = new Promise<void>(resolve => { resolveQueued = resolve; });
-    const logger = spyOn(console, "info").mockImplementation((...args) => {
+    const logger = spyOn(console, "error").mockImplementation((...args) => {
       const line = args.join(" ");
       logs.push(line);
-      if (line.includes("broker trace=parallel-delivery queued call=") && ++queuedCalls === 2) resolveQueued();
+      const record = parseDiagnosticLine(line);
+      if (record?.event === "tool.queued" && record.detail.traceId === "parallel-delivery" && ++queuedCalls === 2) resolveQueued();
     });
     try {
       const token = await broker.register(extractChatGptTurnEnvironment(parsed(environmentXml)), 10_000, "parallel-delivery");
@@ -2162,9 +2164,12 @@ describe("ChatGPT outer-native harness v4", () => {
       expect(await broker.nextToolBatch(token)).toEqual(batch);
       for (const request of batch) broker.completeTool(token, request.callId, toolResult({ output: request.arguments?.cmd }));
       await Promise.all([first, second]);
-      expect(logs.filter(line => line.includes(" delivered "))).toEqual(
+      expect(logs.map(parseDiagnosticLine).filter(record => record?.event === "tool.delivered").map(record => ({
+        traceId: record!.detail.traceId, toolEventId: record!.detail.toolEventId,
+        deliveryState: record!.detail.deliveryState, replay: record!.detail.replay,
+      }))).toEqual(
         ["immediate", "replay"].flatMap(path => batch.map(request => (
-          `[chatgpt-web] broker trace=parallel-delivery delivered call=${request.callId.slice(0, 17)} path=${path} replay=${path === "replay"}`
+          { traceId: "parallel-delivery", toolEventId: diagnosticReference(request.callId), deliveryState: path, replay: path === "replay" }
         ))),
       );
       for (const privateValue of [token, claimed.bindingId, ...batch.map(request => request.callId), "git status --short"]) {

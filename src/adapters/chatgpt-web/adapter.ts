@@ -1,4 +1,7 @@
+import { diagnosticEvent } from "../../diagnostics";
 import { validateToolCallBatch } from "./tools/tool-call-policy";
+import { requireLicense } from "../../licensing/service";
+import { LicenseError } from "../../licensing/schema";
 import { createHash, randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import { isChatGptWebZeroRiskBackendModel } from "../../models/chatgpt-web-models";
@@ -982,7 +985,7 @@ export function createChatGptWebAdapter(
                   const sourceConversationKey = chatGptConversationKey(parsed, executionNamespace);
                   const runFreshCompaction = async (reason: string): Promise<string> => {
                     if (freshConversationPerTurn) console.info("[chatgpt-web] compaction uses configured fresh conversation mode");
-                    else console.warn(`[chatgpt-web] retained compaction fallback=${reason}`);
+                    else diagnosticEvent("warning", "browser.compaction_fallback", { reason, outcome: "fallback" });
                     // Fresh compaction is a bounded phase. The accepted compact prompt
                     // re-arms the five-minute liveness budget;
                     // transport time cannot consume the model-generation window.
@@ -1582,6 +1585,11 @@ export function createChatGptWebAdapter(
       );
       try {
         emit({ type: "heartbeat" });
+        try { await requireLicense(); }
+        catch (error) {
+          if (!(error instanceof LicenseError)) throw error;
+          throw new ChatGptWebAdapterError(error.message, { status: 403, errorType: "permission_error", code: `license_${error.state}`, retryable: false });
+        }
         await runChatGptWebTurn();
       } finally {
         clearInterval(heartbeat);

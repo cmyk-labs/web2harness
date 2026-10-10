@@ -1,4 +1,5 @@
 import { toolIdentityKey } from "../../../../src/types";
+import { diagnosticReference, parseDiagnosticLine } from "../../../../launcher/shared/diagnostic-event.cjs";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -49,6 +50,7 @@ describe("Zero Risk turn broker lifecycle", () => {
     const broker = TurnBroker.forSocket(socketPath);
     const logs: string[] = [];
     const logger = spyOn(console, "info").mockImplementation((...args) => { logs.push(args.join(" ")); });
+    const diagnosticLogger = spyOn(console, "error").mockImplementation((...args) => { logs.push(args.join(" ")); });
     try {
       // The TTL bounds human setup, not local named-pipe scheduling. Keep enough margin for loaded
       // Windows CI, then cross that exact boundary after activation to prove the turn remains live.
@@ -129,8 +131,11 @@ describe("Zero Risk turn broker lifecycle", () => {
       expect(() => broker.completeSafeTurn(requestId, "   ")).toThrow("must not be empty");
       await expect(callTurnBroker(socketPath, { method: "claim", token: requestId, contract: "safe" }))
         .rejects.toThrow("already terminal");
-      expect(logs.filter(line => line.includes(" delivered "))).toEqual([
-        `[chatgpt-web] broker trace=safe-lifecycle delivered call=${request!.callId.slice(0, 17)} path=waiter replay=false`,
+      expect(logs.map(parseDiagnosticLine).filter(record => record?.event === "tool.delivered").map(record => ({
+        traceId: record!.detail.traceId, toolEventId: record!.detail.toolEventId,
+        deliveryState: record!.detail.deliveryState, replay: record!.detail.replay,
+      }))).toEqual([
+        { traceId: "safe-lifecycle", toolEventId: diagnosticReference(request!.callId), deliveryState: "waiter", replay: false },
       ]);
       expect(logs.filter(line => line.includes("accepted safe completion"))).toEqual([
         "[chatgpt-web] broker trace=safe-lifecycle accepted safe completion",
@@ -140,6 +145,7 @@ describe("Zero Risk turn broker lifecycle", () => {
       }
     } finally {
       logger.mockRestore();
+      diagnosticLogger.mockRestore();
       await broker.close();
     }
   }, 15_000);

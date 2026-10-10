@@ -1,3 +1,4 @@
+import { PREFIX as DIAGNOSTIC_PREFIX } from "../../../../launcher/shared/diagnostic-event.cjs";
 import { validateContextFile } from "../prompt/context-attachments";
 import { validateInputFiles } from "../prompt/file-attachments";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -339,7 +340,7 @@ export class LauncherBrowserHelperClient {
     const output = createInterface({ input: child.stdout });
     output.on("line", line => this.handleLine(child, line));
     const errors = createInterface({ input: child.stderr });
-    errors.on("line", line => console.info(`[chatgpt-web-helper] ${line}`));
+    errors.on("line", line => console.info(line.startsWith(DIAGNOSTIC_PREFIX) ? line : `[chatgpt-web-helper] ${line}`));
     const failChild = (error: Error) => {
       const owned = this.child === child;
       this.handleExit(child, error);

@@ -2,6 +2,7 @@ import { useLimits } from "../limits/useLimits";
 import { pageName, translate } from "./labels";
 import { Connection } from "./pages/Connection";
 import { About } from "./pages/About";
+import { License } from "./pages/License";
 import { Diagnostics } from "./pages/Diagnostics";
 import { Overview } from "./pages/Overview";
 import { Preferences } from "./pages/Preferences";
@@ -35,6 +36,7 @@ export function WorkspaceContent(props: WorkspaceProps) {
         {page === "preferences" && <Preferences {...props} />}
         {page === "diagnostics" && <Diagnostics {...props} tracker={tracker} />}
         {page === "about" && <About {...props} />}
+        {page === "license" && <License {...props} />}
         {page === "runtime-controls" && <RuntimeControls {...props} />}
       </div>
     </div>

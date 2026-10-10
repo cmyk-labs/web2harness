@@ -29,7 +29,7 @@ test("quit waits for the installation transaction and prevents startup continuat
   let finish;
   const calls = [];
   const sandbox = {
-    shutdownInProgress: false, exitCommitted: false, quitting: false,
+      shutdownInProgress: false, exitCommitted: false, quitting: false, diagnosticHistory: null,
     updateController: { stop: () => calls.push("updates stopped") },
     runtimePreparation: new Promise(resolve => { finish = resolve; }), runtimeHost: null, browserHost: null, browserControl: null,
     runtimeSupervisor: { shutdown: async () => calls.push("shutdown") },
@@ -51,7 +51,7 @@ for (const shutdownFails of [false, true]) test(`package smoke follows normal sh
   let browserDestroyed = false;
   let windowDestroyed = false;
   const sandbox = {
-    Error, shutdownInProgress: false, exitCommitted: false, quitting: false, runtimePreparation: Promise.resolve(),
+      Error, shutdownInProgress: false, exitCommitted: false, quitting: false, runtimePreparation: Promise.resolve(), diagnosticHistory: null,
     updateController: { stop: () => calls.push("updates stopped") },
     runtimeRootProvider: () => "/fixture/runtime", runtimeHost: { currentOperation: () => null },
     runtimeSupervisor: { runtimeCommand: () => ({ executable: "/fixture/bun", args: ["--version"], cwd: "/fixture" }),
@@ -72,15 +72,17 @@ for (const shutdownFails of [false, true]) test(`package smoke follows normal sh
     } },
     spawnSync: () => ({ status: 0, stdout: "1.0.0\n", stderr: "" }),
     fs: { mkdirSync() {}, writeFileSync: () => calls.push("verified marker") }, path,
-    process: { platform: "fixture", env: { WEB2HARNESS_SMOKE_FILE: path.resolve("fixture-ready.json") } },
+    process: { platform: "fixture", argv: ["--launcher-smoke-test"], env: { WEB2HARNESS_SMOKE_FILE: path.resolve("fixture-ready.json") } },
+    licenseController: {}, verifyUnactivatedPackage: async () => calls.push("verified marker"),
     logger: { info() {} }, stopCatalogVerificationMonitor() {},
     showMainWindow() {}, publishOperation() {},
   };
   vm.runInNewContext(main.slice(main.indexOf("async function requestQuit()"), main.indexOf("async function start()")), sandbox);
-  const branch = main.slice(main.indexOf("  if (launcherSmokeTest) {"), main.indexOf("  if (IS_DEV_PROFILE) {", main.indexOf("  if (launcherSmokeTest) {")));
-  const result = vm.runInNewContext(`(async () => { const launcherSmokeTest = true; ${branch} })()`, sandbox);
+  const branch = main.slice(main.indexOf('  if (process.argv.includes("--launcher-smoke-test")) {'), main.indexOf("  // Activation precedes"));
+  assert.ok(branch.includes("verifyUnactivatedPackage"));
+  const result = vm.runInNewContext(`(async () => { ${branch} })()`, sandbox);
   if (shutdownFails) {
-    await assert.rejects(result, /could not shut down: Fixture persistence failure/);
+    await assert.rejects(result, /Package smoke shutdown failed: Fixture persistence failure/);
     assert.equal(windowDestroyed, false);
     assert.equal(browserDestroyed, false);
     assert.deepEqual(calls, ["verified marker", "runtime stopped"]);

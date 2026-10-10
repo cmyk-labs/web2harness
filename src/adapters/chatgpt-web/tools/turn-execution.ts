@@ -1,3 +1,4 @@
+import { diagnosticEvent, diagnosticError, diagnosticReference } from "../../../diagnostics";
 import { createHash } from "node:crypto";
 import type { AdapterEvent, CodexParsedRequest } from "../../../types";
 import type { BrokerToolRequest } from "./turn-broker";
@@ -314,13 +315,14 @@ export class ChatGptTurnSession {
       this.settledBrowserOutcome = outcome;
       const error = outcome.type === "error" && outcome.error instanceof ChatGptWebAdapterError
         ? outcome.error : undefined;
-      console.info(`[chatgpt-web] browser_settled ${JSON.stringify({
+      diagnosticEvent(outcome.type === "error" && error?.code !== "client_cancelled" ? "error" : "info", "browser.settled", {
         traceId: this.traceId,
         outcome: outcome.type,
         compaction: runtime.usageInput?._compactionRequest === true,
         ...(!runtime.usageInput?._compactionRequest ? { submission: runtime.submission?.phase ?? "unknown" } : {}),
         ...(error ? { code: error.code, retryable: error.retryable } : {}),
-      })}`);
+        ...(outcome.type === "error" ? { error: diagnosticError(outcome.error) } : {}),
+      });
       return outcome;
     });
   }
@@ -375,6 +377,7 @@ export class ChatGptTurnSession {
         throw new Error(`duplicate ChatGPT bridge tool call id: ${request.callId}`);
       }
       this.outstandingById.set(request.callId, request);
+      diagnosticEvent("info", "tool.native_round_emitted", { traceId: this.traceId, toolEventId: diagnosticReference(request.callId), toolName: request.wireName, outcome: "emitted" });
     }
     this.outstandingReasoning = [...reasoning];
     this.outstandingPrelude = [...prelude];
@@ -387,6 +390,7 @@ export class ChatGptTurnSession {
   markResultDelivered(callId: string): void {
     if (!this.outstandingById.delete(callId)) throw new Error(`ChatGPT bridge tool result does not match an outstanding call: ${callId}`);
     this.deliveredResultIds.add(callId);
+    diagnosticEvent("info", "tool.result_accepted", { traceId: this.traceId, toolEventId: diagnosticReference(callId), outcome: "accepted" });
     if (this.outstandingById.size === 0) {
       this.outstandingReasoning = [];
       this.outstandingPrelude = [];
@@ -466,6 +470,7 @@ export class ChatGptTurnSession {
   }
 
   cancel(reason?: Error): void {
+    diagnosticEvent("info", "browser.cancel_requested", { traceId: this.traceId, outcome: "cancelled", ...(reason ? { error: diagnosticError(reason) } : {}) });
     this.runtime.cancel(reason);
   }
 

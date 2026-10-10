@@ -1,3 +1,5 @@
+import { PREFIX, createDiagnosticRecord, type DiagnosticRecord } from "../../../../launcher/shared/diagnostic-event.cjs";
+import { diagnosticContext } from "../../../diagnostics";
 import { validateContextFile } from "../prompt/context-attachments";
 import { validateInputFiles } from "../prompt/file-attachments";
 import { validateSkillFiles } from "../prompt/skill-attachments";
@@ -94,12 +96,14 @@ const diagnosticOutput = createProcessLineWriter(stderr, handleOutputFailure);
 
 const writeProtocol = (message: unknown): boolean => protocolOutput.write(JSON.stringify(message));
 
-const diagnostic = (...values: unknown[]): void => {
-  diagnosticOutput.write(values.map(value => typeof value === "string" ? value : JSON.stringify(value)).join(" "));
+const diagnosticAt = (level: DiagnosticRecord["level"], ...values: unknown[]): void => {
+  const line = values.map(value => typeof value === "string" ? value : JSON.stringify(value)).join(" ");
+  diagnosticOutput.write(line.startsWith(PREFIX) ? line : PREFIX + JSON.stringify(createDiagnosticRecord(level, "browser.output", { ...diagnosticContext.getStore(), line })));
 };
+const diagnostic = (...values: unknown[]): void => diagnosticAt("info", ...values);
 console.info = diagnostic;
-console.warn = diagnostic;
-console.error = diagnostic;
+console.warn = (...values) => diagnosticAt("warning", ...values);
+console.error = (...values) => diagnosticAt("error", ...values);
 
 const abortControllers = new Map<string, AbortController>();
 const turnProgress = new Map<string, ChatGptMirroredTurnProgress>();
@@ -315,7 +319,7 @@ async function run(message: RunMessage): Promise<void> {
     } : {}),
   };
   try {
-    const text = await ChatGptBrowserWorker.forProvider(provider).run(turn);
+    const text = await diagnosticContext.run({ requestId: message.id, traceId: turn.traceId }, () => ChatGptBrowserWorker.forProvider(provider).run(turn));
     writeProtocol({ type: "result", id: message.id, text });
   } catch (error) {
     writeProtocol({

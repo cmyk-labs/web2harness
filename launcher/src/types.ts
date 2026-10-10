@@ -24,6 +24,7 @@ export interface LauncherState {
   zeroRiskProEnabled: boolean;
   sidebarOpen: boolean;
   sidebarWidth: number;
+  logPageSize: number;
   browserSmokePassed?: boolean;
   browserSmokeVersion?: string | null;
   coreSetupComplete?: boolean;
@@ -68,6 +69,11 @@ export interface BrowserTabState {
 }
 
 export interface LogRecord {
+  schemaVersion?: number;
+  eventId?: string;
+  component?: string;
+  id?: string;
+  source?: string;
   at: string;
   level: "debug" | "info" | "warning" | "error";
   event: string;
@@ -106,6 +112,41 @@ export interface StartupState {
   totalFiles?: number;
   reason?: string;
   message?: string;
+}
+
+export interface DiagnosticRange {
+  range: "all" | "24h" | "custom";
+  start?: string;
+  end?: string;
+  timeZone?: string;
+}
+export interface LogQuery {
+    pageSize?: number;
+  correlation?: { field: "traceId" | "requestId"; value: string };
+  level?: string;
+  source?: string;
+  search?: string;
+    cursor?: string;
+  before?: string;
+}
+export interface LogPage {
+    pageSize?: number;
+  records: LogRecord[];
+  total: number;
+  available: { start: string | null; end: string | null };
+    partial: boolean;
+    offset?: number;
+    cursor?: string;
+    nextCursor?: string | null;
+    previousCursor?: string | null;
+    pageBytes?: number;
+    expired?: boolean;
+    superseded?: boolean;
+}
+export interface DiagnosticExport {
+  path: string;
+  partial: boolean;
+  recordCount: number;
 }
 
 export interface LauncherSnapshot {
@@ -149,6 +190,8 @@ export interface WorkspaceStatus {
 }
 
 export interface LauncherApi {
+  licenseStatus(): Promise<import("../../src/licensing/schema").LicenseStatus>;
+  importLicense(code: string): Promise<import("../../src/licensing/schema").LicenseStatus>;
   retryStartup(): Promise<void>;
   onStartupState(listener: (state: StartupState) => void): () => void;
   workspaceStatus(): Promise<WorkspaceStatus>;
@@ -157,7 +200,6 @@ export interface LauncherApi {
   getLimits(): Promise<LimitsSnapshot>;
   setupLimits(): Promise<LimitsSnapshot>;
   setLanguage(language: Language): Promise<LauncherState>;
-  openRepository(): Promise<LauncherState>;
   completeOnboarding(language: Language, browserInteractionMode: BrowserInteractionMode): Promise<LauncherState>;
   openExternal(url: string): Promise<boolean>;
   setBrowserBounds(bounds: { x: number; y: number; width: number; height: number }): Promise<boolean>;
@@ -208,9 +250,11 @@ export interface LauncherApi {
     key: "keepRunningOnClose" | "showBrowserDuringTurns",
     value: boolean,
   ): Promise<LauncherState>;
+  setPreference(key: "logPageSize", value: number): Promise<LauncherState>;
   setSidebarState(state: { open: boolean; width: number }): Promise<LauncherState>;
   logs(limit?: number): Promise<LogRecord[]>;
-  exportLogs(): Promise<string | null>;
+  queryLogs(query?: LogQuery): Promise<LogPage>;
+  exportLogs(range?: DiagnosticRange): Promise<DiagnosticExport | null>;
   installUpdate(): Promise<boolean>;
   checkUpdate(): Promise<UpdateState>;
   windowState(): Promise<{ fullScreen: boolean; maximized: boolean }>;

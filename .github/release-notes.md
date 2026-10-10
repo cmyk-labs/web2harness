@@ -1,43 +1,41 @@
 ## 简体中文
 
-Web2Harness 1.2.0（`v1.2.0`）更新 Web 模型适配、本地用量统计和浏览器稳定性。
+Web2Harness 2.0.0（`v2.0.0`）优化桌面工作区和问题排查体验。
 
-- **模型与思考档位**：适配 GPT-5.6 Sol、GPT-5.6 Sol Pro、GPT-6、GPT-6 Pro；普通模型提供账号支持的思考档位，Pro 固定对应档位。兼容网页中的 6/GPT-6 名称及独立版本菜单，发送前核实模型与强度。
-- **通用三倍预算**：保留跨模型的三倍上下文及压缩预算，模型可用档位与单条消息边界保持独立。
-- **本地使用次数**：显示总次数及模型维度统计，合并思考档位；以网页接受的发送回执记录工具往返及压缩发送，去重并恢复待补记记录。官方限额参考单独展示，未知数值显示 -，说明统一置于表后。
-- **浏览器稳定性**：统一自动任务页与首页视口，减少切页、隐藏、缩放和其他任务结束对模型菜单的干扰。保留中文 Pro 页面正在生成的识别。
-- **回复与公式**：稳定匹配重复段落、文件预览移动和空段落加载；保留 KaTeX 原始公式与代码语言。已发送内容真实变化仍明确报错。
-- **默认临时聊天**：新配置及缺少历史偏好的配置默认使用临时聊天，保留已有明确的保存历史选择。
-- **依赖安全**：更新 MCP SDK、proxy-addr 和 source-map-js，保留本地原生打包补丁。
+- **桌面布局**：统一欢迎页、设置、关于和用量页面的字号、间距与控件对齐；名称旁显示版本，使用流程图保持展开，模式对照表补充执行能力与权限说明。
+- **用量展示**：保留总次数和模型维度列表，统一两张表的高度、列宽及操作区，简短说明放在表格外。
+- **原始日志**：直接查看脱敏后的 JSON，支持格式化、自动换行、级别/来源筛选、全文关键词搜索、复制和同次请求关联；复制反馈不再推挤界面。
+- **渐进加载**：后台索引、缓存搜索结果和游标分页，避免把全部日志一次性塞入页面。每页可选25、50、100、200条，默认100并记住选择；超长日志仍受单页大小限制。
+- **诊断包导出**：支持全部保留日志、最近24小时或自定义日期范围，汇集事件时间线、摘要、导出时状态与文件清单。查看器筛选不会缩小导出范围。
+- **诊断覆盖**：补全浏览器、模型选择、工具传递、运行时及更新过程的关键事件，保留耗时与关联标识；报告采集缺失和部分结果，并统一脱敏。
 
-### 升级与验证
+### 使用与验证
 
-保留已有模型、工具模式、账号和历史偏好。原生工具、文件上下文与通用预算继续使用本项目实现。安装包和更新可用性以实际发布资产为准。
+初次使用和从旧版升级请按[使用手册](https://github.com/cmyk-labs/web2harness/blob/v2.0.0/docs/user-guide.zh-CN.md)完成配置。已有模型、工具模式、账号和聊天历史偏好继续保留。下载时选择与系统和架构匹配的一个安装包，并核对 `checksums.txt`。
 
-本版本的三平台源码 CI、CAP-001～005，以及 Windows 独立 DEV 中的自动 MCP、原生工具读写、压缩续聊、请求重放去重和路由恢复已通过。Codex Voice 使用 v3 协议建立了真实 WebRTC 连接；该检查不包含麦克风采集或音频质量。Windows 候选包的嵌入 Bun 回归 67 项通过；维护者已确认补充人工验收完成并批准发布。
+发布目标为 Windows x64、macOS arm64/x64、Linux x64/arm64，各平台安装包由原生CI构建并检查。Windows包未做证书签名；macOS使用ad-hoc签名，未作Developer ID签名或公证。平台构建和包冒烟不等于各平台真实账号与人工安装验收。
 
-发布目标为 Windows x64、macOS arm64/x64、Linux x64/arm64；各原生包由对应平台 CI 构建和检查。认证交互自动验收覆盖 Windows，macOS/Linux 的认证交互未由本次自动验收独立复现。Windows 包未做证书签名，macOS 使用 ad-hoc 签名，未作 Developer ID 签名或公证。
+Windows安装、升级、实际激活、卸载及原生ZIP保存流程由维护者安排在发布后人工验收，本次发布不将这些项目列为已通过。
 
-退出活动 MCP 任务时，后台进程可能需要超时收尾后才完全退出。手动模式的剪贴板交接曾在自动验收环境受阻，该记录保留，不作为自动验收通过项。若遇到模型或连接器检查失败，请保留报错并检查对应选择、登录和插件工具定义；不要反复提交同一消息。安装或更新出现问题时保留配置及诊断信息，后续修复以新版本分发，不覆盖已有发布资产。
+出现问题时从「用量与诊断 → 运行日志」导出相应日期的诊断包，发送前检查其中信息。界面显示的是本应用保留的日志和本地计数；它们不是官方剩余额度。安装或更新失败时保留配置及诊断证据，不要反复覆盖安装目录；修复通过后续新版本分发。
 
 ## English
 
-Web2Harness 1.2.0 (`v1.2.0`) updates Web model integration, local usage accounting, and browser stability.
+Web2Harness 2.0.0 (`v2.0.0`) refines the desktop workspace and troubleshooting experience.
 
-- **Models and efforts**: Supports GPT-5.6 Sol, GPT-5.6 Sol Pro, GPT-6, and GPT-6 Pro, with account-supported efforts for ordinary models and fixed Pro effort. Recognizes both 6/GPT-6 labels and separate version menus; verifies family and effort before sending.
-- **Shared triple budget**: Retains the cross-model triple context and compaction budget. Available efforts and single-message boundaries remain independent.
-- **Local usage**: Shows the total and per-model counts, combining efforts. Accepted-send receipts cover tool round trips and compaction sends, with deduplication and pending delivery recovery. Policy references stay separate, unknown values show -, and concise notes follow each table.
-- **Browser stability**: Keeps consistent viewports for automatic primary/task pages across tab changes, hiding, zoom, and other tasks finishing. Preserves active-generation detection on Chinese Pro pages.
-- **Responses and formulas**: Aligns repeated paragraphs, moving file previews, and empty paragraphs that later hydrate. Preserves KaTeX source and code languages; genuine changes to delivered content still fail explicitly.
-- **Temporary Chat default**: New configurations and missing history preferences use Temporary Chat. Existing explicit history choices are preserved.
-- **Dependency security**: Updates the MCP SDK, proxy-addr, and source-map-js while retaining native packaging patches.
+- **Desktop layout**: Aligns typography, spacing and controls across welcome, settings, about and usage pages. Shows the version beside the product name, keeps the workflow diagram expanded, and clarifies execution capabilities and permissions in the mode comparison.
+- **Usage views**: Retains the total and per-model breakdown, aligns both tables and their controls, and moves concise notes below the panels.
+- **Raw logs**: Displays redacted JSON with formatting, word wrap, level/source filters, full-text search, copying and related-request filtering. Copy feedback no longer shifts the layout.
+- **Progressive loading**: Background indexing, cached search matches and cursor paging avoid loading the entire history into the page. Choose 25, 50, 100 or 200 records per page; the default is 100 and the preference is saved. Long records remain subject to the page byte limit.
+- **Diagnostic bundles**: Exports all retained logs, the last 24 hours or a custom date range, including a timeline, summary, export-time state and file manifest. Viewer filters do not restrict the export.
+- **Diagnostic coverage**: Adds key events for browser work, model selection, tool delivery, runtime and updates, with timing and correlation fields. Reports missing sources and partial results, with shared redaction.
 
-### Updating and validation
+### Use and validation
 
-Existing model, tool-mode, account, and history preferences are retained. Native Tools, Context as File, and shared budgets keep this project's implementation. Package and update availability depend on actual published assets.
+Follow the [user guide](https://github.com/cmyk-labs/web2harness/blob/v2.0.0/docs/user-guide.md) for first use and upgrades. Existing model, tool-mode, account and chat-history preferences are retained. Choose one package matching your OS and architecture and check `checksums.txt`.
 
-This candidate passed source CI on all three operating systems, CAP-001–005, and isolated Windows DEV checks for automatic MCP, native tool reads and patches, compaction continuation, exact-request replay deduplication, and route restoration. Codex Voice established a real WebRTC connection using protocol v3; microphone capture and audio quality were not tested. The Windows candidate passed all 67 embedded-Bun regressions. The maintainer confirmed completion of supplementary manual acceptance and authorized publication.
+Release targets are Windows x64, macOS arm64/x64 and Linux x64/arm64, built and checked by native CI. Windows packages are not certificate-signed. macOS uses ad-hoc signing without Developer ID signing or notarization. Builds and package smoke checks do not establish real-account or manual installation acceptance on every platform.
 
-Release targets are Windows x64, macOS arm64/x64, and Linux x64/arm64, built and checked by native-platform CI. Automated authenticated interaction acceptance covers Windows; it did not independently reproduce authenticated macOS/Linux interaction. Windows packages are not certificate-signed. macOS uses ad-hoc signing without Developer ID signing or notarization.
+The maintainer has scheduled manual Windows installation, upgrade, actual activation, uninstall and native ZIP-save acceptance after publication. These checks are not reported as passed for this release.
 
-Quitting an active MCP task can require timeout cleanup before the background process fully exits. Clipboard handoff in manual mode was blocked in the automated acceptance environment; that record remains and is not counted as an automated pass. If model or connector checks fail, retain the error and check the selected model, login, and plugin tool definitions instead of repeatedly submitting the same message. Preserve configuration and diagnostics if installation or updating fails; distributed fixes use a new version rather than replacing published assets.
+For problems, export the relevant date range from **Usage & diagnostics → Runtime logs** and review the bundle before sharing. Displayed logs and counts cover this application's retained local records, not an official remaining allowance. Preserve configuration and diagnostics after an installation or update failure instead of repeatedly overwriting the installation; fixes are distributed in subsequent versions.

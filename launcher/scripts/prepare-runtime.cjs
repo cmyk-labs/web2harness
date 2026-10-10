@@ -7,7 +7,8 @@ const repositoryRoot = path.resolve(launcherRoot, "..");
 const output = path.join(launcherRoot, "build", "runtime");
 const bun = process.env.WEB2HARNESS_BUN || process.execPath;
 
-const result = spawnSync(bun, ["run", "scripts/build-runtime-bundle.ts", output], {
+const result = spawnSync(bun, ["run", "scripts/build-runtime-bundle.ts", output,
+  ...(process.env.WEB2HARNESS_PACKAGE_TEST === "1" ? ["--development-license"] : [])], {
   cwd: repositoryRoot,
   env: process.env,
   stdio: "inherit",

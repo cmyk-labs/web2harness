@@ -256,7 +256,11 @@ Do not replace inline images with arbitrary local filesystem paths; model-only a
 
 ## Collect a support report
 
-After one focused reproduction, select **Usage & Diagnostics → Logs → Export safe log**, or use the startup diagnostic export if blocked there. Review the export and screenshots before sharing. Include:
+New structured events carry schemaVersion/eventId, source component, process identity and sequence; applicable operations add traceId/requestId/operationId, outcome, durationMs and error codes. Model-selection events distinguish the requested values from verified values and record a failed pre-send check; tool events distinguish queued, delivered and returned results. HTTP closure is a transport observation, not proof of model completion. Child stderr alone does not establish warning severity. Existing records may lack these fields; do not infer execution or root cause from a missing record. Permissions beyond observed sandbox/approval evidence remain unknown.
+
+The diagnostic bundle defaults to all related retained records. Choose the last 24 hours or a custom date/time range if useful; viewing filters do not affect export. Start with `summary.txt`, then correlate request/session identifiers in `timeline.jsonl`. `snapshot.json` describes export-time state, while `manifest.json` reports coverage and missing/corrupt/truncated sources. Raw conversations, tool input/output, and screenshots are excluded; request focused reproduction evidence when the bundle is insufficient.
+
+After one focused reproduction, select **Usage & Diagnostics → Logs → Export diagnostics**, or use the startup diagnostic export if blocked there. Review the export and screenshots before sharing. Include:
 
 - Web2Harness version, installation method, operating system, and architecture;
 - Codex Desktop or CLI version, and regular or DEV profile;

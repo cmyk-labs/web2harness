@@ -135,6 +135,8 @@ bun run check-version
 
 颜色、字号、尺寸和动效时长统一在 `launcher/src/tokens.css` 中维护。界面采用深灰背景、中性灰按钮和选中状态；绿色、橙色、红色分别表达正常、警告和错误。选中状态同时提供底色、边框或标记，不仅依赖颜色。各页面使用一致的标题层级、控件尺寸和内容边距，功能专属样式与对应组件放在同一模块。
 
+首次进入界面统一使用居中内容列，短窗口允许滚动。工作区内容左对齐，页面标题24px、正文14px、控件36px、左右边距32px（窄窗口20px）。概览使用步骤流程图保持展开；关于和授权管理先显示简要信息，补充原理及授权更新表单按需打开。
+
 界面变更须检查中英文、宽窄窗口、长内容、错误和禁用状态，以及键盘焦点、隐藏导航和系统减少动效设置。运行 `node launcher/scripts/smoke-workspace.mjs` 可通过独立浏览器和模拟 IPC 验证界面；用 `WORKSPACE_SMOKE_OUTPUT` 指定本次证据目录。截图须在页面切换和侧栏动画结束后采集。这类检查不代表真实 ChatGPT、原生嵌入浏览器或安装器验收。
 
 <a id="automated-checks"></a>
@@ -194,6 +196,8 @@ node --test launcher/tests/installation/runtime-install.test.cjs
 <a id="dev-profile"></a>
 
 ## DEV 配置与启动
+
+先运行 `bun run scripts/prepare-license-dev.ts` 准备绑定本机的测试授权，再设置输出的 `WEB2HARNESS_DEV_HOME` 和 `WEB2HARNESS_LICENSE_KEYS_FILE`。DEV 使用共享运行时和相同的激活检查。应用首先显示激活页，再进入语言选择，详见[离线授权](licensing.zh-CN.md)。测试及 `bun run verify` 自行准备临时测试资源。
 
 运行时开发从以下命令开始：
 

@@ -13,6 +13,9 @@ This document maintains repeatable live capability cases: prompts, pass criteria
 - [CAP-003: Three real agents performing parallel read-only analysis](#cap-003)
 - [CAP-004: Model family, effort and shared budget](#cap-004)
 - [CAP-005: Local send accounting and receipt recovery](#cap-005)
+- [CAP-006: Offline device licensing](#cap-006)
+- [CAP-007: Optional GitHub support (retired)](#cap-007)
+- [CAP-008: Runtime logs and diagnostic bundles](#cap-008)
 - [Candidate results](#result-record)
 - [Adding and maintaining cases](#extend-cases)
 
@@ -20,7 +23,7 @@ This document maintains repeatable live capability cases: prompts, pass criteria
 
 ## Release requirements and case index
 
-Run CAP-001 through CAP-005, subject to each case’s applicability, again on the current candidate before every release, including previews. All applicable cases must pass with recorded evidence before pushing a tag that triggers publication or making the release public. Failed, blocked, and unexecuted checks are not passes; retest after fixes and retain earlier failures. This is a manual publication gate: neither `bun run verify` nor GitHub Actions currently runs or enforces these cases automatically.
+Run CAP-001 through CAP-006 and CAP-008, subject to each case’s applicability, again on the current candidate before every release, including previews. All applicable cases must pass with recorded evidence before pushing a tag that triggers publication or making the release public. Failed, blocked, and unexecuted checks are not passes; retest after fixes and retain earlier failures. This is a manual publication gate: neither `bun run verify` nor GitHub Actions currently runs or enforces these cases automatically.
 
 | ID | Capability | Frequency | Key pass evidence |
 | --- | --- | --- | --- |
@@ -29,6 +32,9 @@ Run CAP-001 through CAP-005, subject to each case’s applicability, again on th
 | [CAP-003](#cap-003) | Real delegation, parallel execution, aggregation, and read-only boundaries | Every release | Three distinct agents, actual tool execution, completed results, and before/after file checks. |
 | [CAP-004](#cap-004) | Explicit family, five effort positions, triple budget and send accounting | Automatic-mode releases; DEV account with both families and Pro | Ten family/effort menu checks, four live read/write routes, catalog budgets and model receipts. |
 | [CAP-005](#cap-005) | Send accounting, receipt recovery and separate references | Automatic mode releases | Live sends/compaction, fault fixtures, bilingual UI and migration evidence. |
+| [CAP-006](#cap-006) | Offline activation and runtime enforcement | Every licensed release, additional to CAP-001–005 | Activation before language; actual signed import; expiry/device/tamper rejection; Web/MCP and artifact evidence. |
+| [CAP-007](#cap-007) | Optional GitHub support (retired) | No longer applicable | Feature removed; ID reserved. |
+| [CAP-008](#cap-008) | Runtime logs and diagnostic bundles | Every desktop release | Readable history; native ZIP export; date boundaries, redaction, correlation and collection coverage. |
 
 These cases do not replace the [release manual's](release.md#authenticated-runtime) cancellation, compaction, conversation reuse, MCP, platform, or installation/upgrade checks. Changes to candidate source or the loaded runtime that affect accepted behavior require new evidence for the changed candidate.
 
@@ -154,6 +160,41 @@ Applies to Automatic mode releases. Use an independently authenticated DEV profi
 
 Retain receipt/tool/file evidence, old-ledger migration results, lifecycle state and production-boundary comparison. Missing delivery evidence, duplicate charging, a replayed Web send, or an official balance derived from local rolling counts fails the case.
 
+<a id="cap-006"></a>
+
+## CAP-006: Offline device licensing
+
+This is an additional mandatory case for every licensed release. Use task-owned DEV storage and test keys, never production activation storage. The independent issuer stays outside Git. Customer installer acceptance uses a disposable OS and separately issued device licenses under the candidate's pinned public key.
+
+1. Without a license, activation must be the first functional screen, before language or browser setup. Capture a copyable device code and verify no Web/MCP submission occurs.
+2. Import supplied test licenses with perpetual, day-based and calendar-month validity. Check their displayed expiry, including month-end and leap-year cases. Activation precedes language setup and survives restart/upgrade. Invalid import preserves the old license.
+3. Reject altered signatures/payloads, unknown keys, another device, exact expiry and detected clock rollback. Direct Responses/compaction and automatic/manual MCP registration fail before browser work; health, cancellation, native Codex forwarding and CLI cleanup remain available.
+4. Under valid licenses, run a real native-tool task and real automatic/manual MCP tasks using an applicable baseline case. Retain tool/file evidence, process ownership and production boundary hashes. Mocked adapters do not replace authenticated acceptance.
+5. Confirm runtime environment variables cannot replace pinned keys. Inventory artifacts: no private keys, issuer, issuer dependencies or customer license. Missing production keys and test-key release attempts must fail. Package smoke verifies the actual unactivated screen, installed runtime and clean exit; it does not establish authenticated behavior.
+
+Record CLI/HTTP output, safe screenshots, expiry-test conclusions, artifact inventory and real tool evidence. Preserve initial failures. Missing test-device licenses or untested platforms remain unexecuted. Teardown only individually owned fixtures.
+
+<a id="cap-007"></a>
+
+## CAP-007: Optional GitHub support (retired)
+
+Retired on 2026-10-10 because the support/Star prompt and its sign-in interfaces were removed at the product owner’s request. Keep this ID reserved; there is no replacement case. Validate first-run setup and branding in both languages under the development manual’s desktop UI checks.
+
+<a id="cap-008"></a>
+
+## CAP-008: Runtime logs and diagnostic bundles
+
+Use the current desktop candidate in verified DEV storage. Create fault records only in owned fixtures; do not interrupt production networking, processes or authentication. Keep synthetic fixture results separate from actual desktop export evidence.
+
+1. In both languages and a narrow window, verify that complete redacted JSON is readable without a table or per-record expander. Compact/wrapped and globally formatted views must parse into identical records, retaining original timestamps, events, levels, duration and fields across language changes. Exercise full-JSON case-insensitive search, including highlights across key/value punctuation, level/source and exact trace/request filters, history pagination, keyboard selection and copying. Escaped quotes, newlines, Unicode and HTML-like text must remain literal JSON; wrapping must not overflow the page. Reading older records pauses updates; showing the latest resumes them.
+2. From the DEV desktop, export a ZIP through the native save dialog for all retained logs (the default), the last 24 hours and a custom local date/time range. Cancel once without creating a file. UI filters must not limit the exported records. Verify the recorded timezone and inclusive start/exclusive end, including exact-boundary fixture records; reject invalid ranges.
+3. Open the actual archive and inspect its summary, timeline, export-time snapshot and manifest. Reconstruct a known fixture timeout or tool/process failure using shared request/session/trace identifiers. Verify source timestamps, severity and safe correlation survive helper/service forwarding and export, including navigation error descriptions. Model selection must distinguish an attempted but failed check from verification, and tool delivery from execution results. Verify source coverage and checksums. Do not treat the export-time snapshot as the state at the time of the fault.
+4. In owned fixtures, cover rotated history, malformed records, missing/unreadable sources, oversized sources and persistence failures. Available records must remain exportable, with applicable partial collection, truncation and errors reported. Verify bounded launcher retention without deleting unrelated files.
+5. Verify that credential/content sentinels, raw tool content and browser profiles are absent. Check that export cannot overwrite application source data. Record screenshots, native save outcomes, archive inspection, fixture results and production boundary comparisons; preserve earlier failures.
+6. With a large owned fixture, verify cached cursor paging and search reuse, unchanged-source byte counts, stable pages across appends/rotation, explicit snapshot expiry and cancellation of superseded queries. Measure initial indexing, keyword search, cached page latency and memory separately. Cover byte-limited pages, complete oversized-record copying and bounded DOM nodes; pagination must not skip or repeat records. Exercise 25/50/100/200 records per page (default 100), persisted choice after reopening, and resetting to the first page without changing filters or pause state. Reject unsupported sizes and mismatched size/cursor pairs; a preference write failure must retain the previous selection.
+
+An unreadable ZIP, leaked sentinel, hidden collection failure, incorrect date boundary or lost fault correlation fails the case. Backend or renderer fixtures alone do not establish the native desktop save flow; record that step as unexecuted until exercised. No authenticated model task is required for this case; it does not replace the other cases' live tool acceptance. Preserve evidence and remove only individually owned fixtures.
+
 <a id="result-record"></a>
 
 ## Candidate results
@@ -169,6 +210,8 @@ Record version/commit and candidate-difference identifier, test date and operato
 | CAP-003 | Pending | Not executed | To record | To record |
 | CAP-004 | Pending | Not executed | To record | To record |
 | CAP-005 | Pending | Not executed | To record | To record |
+| CAP-006 | Pending | Not executed | To record | To record |
+| CAP-008 | Pending | Not executed | To record | To record |
 
 Use Passed / Failed / Not executed. A blocked check remains non-passing with its reason recorded. Distinguish model output, bridge conversion, the Codex executor, and permission/account/network conditions during diagnosis; do not blame one layer without evidence.
 
@@ -176,14 +219,14 @@ Use Passed / Failed / Not executed. A blocked check remains non-passing with its
 
 ## Adding and maintaining cases
 
-When adding a target capability or changing an existing one, add or update its live acceptance case and execute it before publication. Continue numbering at `CAP-006`; do not renumber for a new version or reuse old IDs. Keep English and Chinese IDs, prompt semantics, and pass criteria aligned, and update the index above.
+When adding a target capability or changing an existing one, add or update its live acceptance case and execute it before publication. Continue numbering at `CAP-009`; do not renumber for a new version or reuse old IDs. Keep English and Chinese IDs, prompt semantics, and pass criteria aligned, and update the index above.
 
 New cases join the every-release baseline by default. If a case only applies to specific modes, platforms, or accounts, document those conditions and the required environment; execute it for every applicable release. Do not narrow scope, lower pass criteria, or relabel unexecuted checks as inapplicable to bypass a failure. Retain retired IDs with the reason and replacement case reference.
 
 Use this format for additions:
 
 ```text
-ID and name: CAP-006: <target capability>
+ID and name: CAP-009: <target capability>
 Scope and frequency: <every release, or explicit mode/platform/account conditions>
 Prerequisites: <candidate, environment, permissions, fixture, and selected model>
 Prompt and steps: <copyable; no private paths or historical conversation IDs>

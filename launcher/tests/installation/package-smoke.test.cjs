@@ -57,7 +57,7 @@ function runWindowsHarness(root, { fail = false, exportFails = false, damageLice
       fs.writeFileSync(path.join(profile.userData, "storage-state.json"), "PRIVATE_PROFILE_SENTINEL");
       return { status: 1, stdout: "fixture stdout diagnostic", stderr: "fixture stderr diagnostic" };
     }
-    fs.writeFileSync(invocation.env.WEB2HARNESS_SMOKE_FILE, JSON.stringify({ ok: true,
+    fs.writeFileSync(invocation.env.WEB2HARNESS_SMOKE_FILE, JSON.stringify({ ok: true, activationRequired: true,
       packaged: true, runtimeVerified: true, version: "1.0.0", platform: "win32" }));
     const installed = path.join(profile.coreHome, "versions", "1.0.0-win32-x64");
     fs.mkdirSync(installed, { recursive: true });

@@ -9,7 +9,7 @@ import type { LimitsTracker } from "../../limits/useLimits";
 import { PageIntro, Section } from "../controls";
 import { Feedback } from "../Feedback";
 import { translate } from "../labels";
-import { presentLog } from "../log-presentation";
+import { Logs } from "./Logs";
 import { Report } from "../Report";
 import { workspaceBusy } from "../status";
 import type { WorkspaceProps } from "../types";
@@ -109,10 +109,10 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
                 {tracker.setupError || usage?.error}
               </div>
             )}
-            <div className="usagegrid">
+            <div className="usage-layout"><div className="usagegrid">
               <LocalUsage language={language} tracker={tracker} manual={manual} />
               <OfficialLimits language={language} />
-            </div>
+            </div></div>
           </>
         )}
         {tab === "health" && (
@@ -146,66 +146,7 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
             )}
           </>
         )}
-        {tab === "logs" && (
-          <>
-            <div className="flex between wrap" style={{ marginBottom: 16 }}>
-              <p style={{ fontSize: 12 }}>
-                {t(
-                  "最近的运行事件。导出时使用隐私安全日志。",
-                  "Recent runtime events. Exports use privacy-safe diagnostics.",
-                )}
-              </p>
-              <Button
-                disabled={working}
-                onClick={() =>
-                  void run(async () => {
-                    const file = await api.exportLogs();
-                    if (file)
-                      setNotice(t("日志已导出", "Diagnostics exported"));
-                  })
-                }
-              >
-                {copy.exportSafeLog}
-              </Button>
-            </div>
-            <div className="activity-table">
-              {logs.length ? (
-                [...logs].reverse().map((record, i) => {
-                  const presentation = presentLog(record, language);
-                  const date = new Date(record.at),
-                    time = Number.isNaN(date.getTime())
-                      ? record.at
-                      : date.toLocaleTimeString(language, {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        });
-                  return (
-                    <div className="activity-row" key={`${record.at}-${i}`}>
-                      <i
-                        className={`activity-dot ${record.level === "error" ? "is-error" : ""}`}
-                        aria-label={presentation.status}
-                      />
-                      <div>
-                        <strong>{presentation.title} · {presentation.status}</strong>
-                        <details>
-                          <summary>{t("技术详情", "Technical details")}</summary>
-                          <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{presentation.event}{"\n"}{presentation.detail}</pre>
-                        </details>
-                      </div>
-                      <time dateTime={record.at}>{time}</time>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="surface-empty">
-                  <Icon name="logs" />
-                  {copy.noLogs}
-                </div>
-              )}
-            </div>
-          </>
-        )}
+        {tab === "logs" && <Logs api={api} language={language} recent={logs} savedPageSize={snapshot.state.logPageSize} updateState={p.updateState} />}
       </div>
       {notice && (
         <Feedback

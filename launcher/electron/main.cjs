@@ -27,10 +27,13 @@ const { releaseRetainedConversation } = require("./runtime/retained-turn-release
 const { getAutostart, setAutostart } = require("./autostart.cjs");
 const {
   createLogger,
-  exportSanitizedLogs,
   installProcessDiagnosticGuards,
   registerLoggedIpc,
 } = require("./logging.cjs");
+const { runDiagnostics } = require("./diagnostics/service.cjs");
+const { createHistoryService } = require("./diagnostics/history-service.cjs");
+let diagnosticHistory = null;
+const { safeDetail } = require("./diagnostics/redaction.cjs");
 const { RuntimeHost } = require("./runtime/runtime.cjs");
 const { StartupState } = require("./startup-state.cjs");
 const startup = new StartupState(state => send("launcher:startup-state", state));
@@ -40,10 +43,13 @@ const { DEVELOPMENT_PROFILE, resolveLauncherProfile } = require("./profile.cjs")
 const { runtimeBundlePaths } = require("./runtime/runtime-command.cjs");
 const { registerInstallation, uninstallInProgress } = require("./installation/installation-record.cjs");
 const { createUpdateController } = require("./installation/update.cjs");
+const { createLicenseController } = require("./license-controller.cjs");
+const { verifyUnactivatedPackage } = require("./license-package-smoke.cjs");
 const {
   createStateStore,
   nextSessionRefreshReminderAt,
   validateSidebarState,
+  validateLogPageSize,
 } = require("./state.cjs");
 const {
   MIN_WINDOW_BOUNDS,
@@ -56,6 +62,7 @@ const SOURCE_ROOT = path.resolve(__dirname, "../..");
 const LAUNCHER_PROFILE = resolveLauncherProfile({ appData: app.getPath("appData") });
 const IS_DEV_PROFILE = LAUNCHER_PROFILE.kind === DEVELOPMENT_PROFILE;
 const CORE_HOME = LAUNCHER_PROFILE.coreHome;
+const licenseController = createLicenseController({ app, sourceRoot: SOURCE_ROOT, coreHome: CORE_HOME, log: (level, event, detail) => startupLogger?.[level === "warning" ? "warn" : level](event, detail) });
 const BROWSER_DESCRIPTOR_PATH = path.join(CORE_HOME, "runtime", "launcher-browser.json");
 const { repositoryUrl } = require("./installation/release-config.cjs");
 const { projectLinks } = require("./project-links.cjs");
@@ -243,7 +250,7 @@ const NATIVE_COPY = Object.freeze({
   "en": Object.freeze({
     openLauncher: "Open Web2Harness",
     quit: "Quit",
-    exportDiagnostics: "Export privacy-safe diagnostics",
+    exportDiagnostics: "Export diagnostic bundle",
     cancel: "Cancel",
     remove: "Remove",
     removeTitle: "Remove Web2Harness",
@@ -258,7 +265,7 @@ const NATIVE_COPY = Object.freeze({
   "zh-CN": Object.freeze({
     openLauncher: "打开 Web2Harness",
     quit: "退出",
-    exportDiagnostics: "导出隐私安全诊断",
+    exportDiagnostics: "导出诊断包",
     cancel: "取消",
     remove: "移除",
     removeTitle: "移除 Web2Harness",
@@ -489,10 +496,15 @@ function syncFreshConversationPreference(stateStore, config) {
 }
 
 function registerIpc({ logger, stateStore }) {
-  const handle = (channel, handler) => registerLoggedIpc(ipcMain, logger, channel, (...args) => {
+  const licensedActions = new Set(["launcher:complete-onboarding", "launcher:browser-smoke", "launcher:mcp-verify",
+    "launcher:setup-core", "launcher:setup-mcp", "launcher:tool-mode", "launcher:browser-interaction-mode"]);
+  const handle = (channel, handler) => registerLoggedIpc(ipcMain, logger, channel, async (...args) => {
     startup.assertAvailable(channel);
+    if (licensedActions.has(channel)) await licenseController.assertActive();
     return handler(...args);
   });
+  handle("launcher:license-status", () => licenseController.status());
+  handle("launcher:license-import", (_event, code) => licenseController.import(code));
   handle("launcher:retry-startup", () => {
     if (!startupFailed) throw new Error("Retry is available only after startup failure");
     for (const [key, value] of Object.entries(launchEnvironment)) {
@@ -548,11 +560,6 @@ function registerIpc({ logger, stateStore }) {
     const state = stateStore.update({ language: validateLanguage(language) });
     updateTrayMenu(state.language);
     return state;
-  });
-  handle("launcher:open-repository", async () => {
-    if (!GITHUB_URL) throw new Error("Project repository is not configured");
-    await openWebUrl(GITHUB_URL);
-    return stateStore.update({ githubOpened: true });
   });
   handle("launcher:complete-onboarding", (_event, language, rawInteractionMode) => {
     const current = stateStore.read();
@@ -720,7 +727,9 @@ function registerIpc({ logger, stateStore }) {
     if (app.isPackaged) {
       await prepareRuntimeInBackground({ app, verifyRoot: runtimeSupervisor.runtimeRootProvider() });
     }
-    return IS_DEV_PROFILE ? runtimeHost.devDoctor() : runtimeHost.doctor();
+    const report = await (IS_DEV_PROFILE ? runtimeHost.devDoctor() : runtimeHost.doctor());
+    logger[report.ok ? "info" : "warn"]("launcher.health_check", { report });
+    return report;
   });
   handle("launcher:cancel-turns", () => {
     // Both profiles cancel only their own supervisor-owned turns.
@@ -992,27 +1001,43 @@ function registerIpc({ logger, stateStore }) {
     return { state, credentialsRequired: false, targetMode: mode };
   });
   handle("launcher:set-preference", (_event, key, value) => {
+    if (key === "logPageSize") return stateStore.update({ logPageSize: validateLogPageSize(value) });
     const ordinary = key === "keepRunningOnClose" || key === "showBrowserDuringTurns";
     if (!ordinary) throw new Error("Unknown preference");
     return stateStore.update({ [key]: value === true });
   });
   handle("launcher:sidebar-state", (_event, value) => stateStore.update(validateSidebarState(value)));
   handle("launcher:logs", (_event, limit) => logger.recent(limit));
-  handle("launcher:export-logs", async () => {
+  const diagnosticOptions = { logsDirectory: app.getPath("logs"), coreHome: CORE_HOME, userData: launcherUserData };
+  diagnosticHistory = createHistoryService(diagnosticOptions);
+  handle("launcher:query-logs", (_event, query) => diagnosticHistory.query(query));
+  let exportingDiagnostics = false;
+  handle("launcher:export-logs", async (_event, input = {}) => {
+    if (exportingDiagnostics) throw new Error("Diagnostic export is already running");
+    exportingDiagnostics = true;
+    try {
     const date = new Date().toISOString().slice(0, 10);
     const copy = nativeCopyFor(stateStore.read().language);
     const result = await dialog.showSaveDialog(mainWindow, {
       title: copy.exportDiagnostics,
-      defaultPath: path.join(app.getPath("documents"), `web2harness-diagnostics-${date}.jsonl`),
-      filters: [{ name: "JSON Lines", extensions: ["jsonl"] }],
+      defaultPath: path.join(app.getPath("documents"), `web2harness-diagnostics-${date}.zip`),
+      filters: [{ name: "ZIP", extensions: ["zip"] }],
     });
     if (result.canceled || !result.filePath) return null;
-    const recordCount = exportSanitizedLogs({
-      filePath: logger.filePath,
-      destinationPath: result.filePath,
-    });
-    logger.info("launcher.logs_exported", { recordCount });
-    return result.filePath;
+    const collectorErrors = [];
+    let config = {};
+    try { config = runtimeHost?.runtimeConfigSnapshot()?.config ?? {}; }
+    catch (error) { collectorErrors.push({ source: "configuration", message: error.message }); }
+    const state = stateStore.read();
+    const snapshot = { version: app.getVersion(), platform: process.platform, arch: process.arch,
+      osRelease: require("node:os").release(), components: { electron: process.versions.electron, node: process.versions.node, chrome: process.versions.chrome },
+      profile: LAUNCHER_PROFILE.kind, configuration: Object.fromEntries(["mode", "browserInteractionMode", "experimentalContextFiles", "experimentalContextTripleBudget", "experimentalFreshConversationPerTurn", "useSavedChats", "experimentalSkillAttachments"].map(key => [key, config[key] ?? null])),
+      collectorErrors, language: state.language, startup: safeDetail(startup.snapshot()), logging: safeDetail(logger.health()),
+      browser: { status: browserHost?.snapshot()?.status ?? "unavailable" } };
+    const exported = await runDiagnostics("export", diagnosticOptions, input, result.filePath, snapshot);
+    logger.info("launcher.logs_exported", { recordCount: exported.recordCount, partial: exported.partial });
+    return exported;
+    } finally { exportingDiagnostics = false; }
   });
   handle("launcher:update-check", () => {
     if (!updateController) throw new Error("Launcher updates are unavailable");
@@ -1062,6 +1087,7 @@ async function requestQuit() {
     browserHost?.destroy();
     await browserControl?.close();
     updateController?.stop();
+    await diagnosticHistory?.close();
     exitCommitted = true;
     app.quit();
     return { ok: true };
@@ -1101,13 +1127,7 @@ async function start() {
     getInteractionMode: () => stateStore.read().browserInteractionMode,
     outboxDirectory: path.join(path.dirname(BROWSER_DESCRIPTOR_PATH), "usage-outbox"),
   });
-  if (IS_DEV_PROFILE && !stateStore.read().onboardingComplete) {
-    stateStore.update({
-      language: stateStore.read().language || "en",
-      onboardingComplete: true,
-      autoStart: false,
-    });
-  }
+  // DEV follows the same activation -> language -> setup flow as the packaged app.
   if (stateStore.read().sessionRefreshReminderAt === null) {
     stateStore.update({ sessionRefreshReminderAt: nextSessionRefreshReminderAt() });
   }
@@ -1130,6 +1150,10 @@ async function start() {
     filePath: path.join(app.getPath("logs"), "launcher.jsonl"),
     publish: (record) => send("launcher:log", record),
   });
+  startupLogger = logger;
+  logger.info("launcher.session_started", { version: app.getVersion(), platform: process.platform, arch: process.arch,
+    profile: LAUNCHER_PROFILE.kind, electron: process.versions.electron, node: process.versions.node, chrome: process.versions.chrome });
+  stateStore.observeChanges((detail) => logger.info("launcher.config_changed", detail));
   const startHidden = process.argv.includes("--hidden") && stateStore.read().onboardingComplete;
   nativeTheme.themeSource = "system";
   mainWindow = createWindow({
@@ -1156,6 +1180,18 @@ async function start() {
   await loadRenderer(mainWindow);
   if (quitting || !mainWindow || mainWindow.isDestroyed()) return;
   rendererLoaded = true;
+  if (process.argv.includes("--launcher-smoke-test")) {
+    await verifyUnactivatedPackage({ app, window: mainWindow, licenseController,
+      prepareRuntime: () => (runtimePreparation = prepareRuntimeInBackground({ app, coreHome: CORE_HOME,
+        resourcesPath: process.resourcesPath, startupOnly: Boolean(windowsInstallation) })) });
+    const shutdown = await requestQuit();
+    if (!shutdown.ok) throw new Error(`Package smoke shutdown failed: ${shutdown.message}`);
+    return;
+  }
+  // Activation precedes runtime/browser preparation and first-run language/setup screens.
+  if ((await licenseController.status()).state !== "active") showMainWindow();
+  await licenseController.waitForActivation();
+  if (quitting || !mainWindow || mainWindow.isDestroyed()) return;
   if (windowsInstallation) registerInstallation(windowsInstallation);
   logger.info("launcher.renderer_loaded", { elapsedMs: Date.now() - startupStartedAt });
   const runtimePreparationStartedAt = Date.now();
@@ -1258,54 +1294,15 @@ async function start() {
   if (quitting || !mainWindow || mainWindow.isDestroyed()) return;
   startup.ready();
   logger.info("launcher.workspace_initialized", { elapsedMs: Date.now() - startupStartedAt });
-  const launcherSmokeTest = process.argv.includes("--launcher-smoke-test");
   let startupAuthenticationRefresh = Promise.resolve();
-  if (!launcherSmokeTest && stateStore.read().browserInteractionMode === "automatic") {
+  if (stateStore.read().browserInteractionMode === "automatic") {
     startupAuthenticationRefresh = browserHost.refreshAuthentication().catch((error) => {
       logger.warn("browser.session_refresh_failed", {
         ...navigationErrorForLog(error),
       });
     });
   }
-  if (!launcherSmokeTest) updateController.start();
-  if (launcherSmokeTest) {
-    const smokeRuntimeRoot = runtimeRootProvider();
-    if (app.isPackaged && !smokeRuntimeRoot) {
-      throw new Error("Packaged launcher smoke test could not install its durable runtime");
-    }
-    const versionInvocation = runtimeSupervisor.runtimeCommand(["--version"]);
-    const versionResult = spawnSync(versionInvocation.executable, versionInvocation.args, {
-      cwd: versionInvocation.cwd,
-      encoding: "utf8",
-      timeout: 30_000,
-      windowsHide: true,
-    });
-    if (versionResult.error) throw versionResult.error;
-    if (versionResult.status !== 0 || versionResult.stdout.trim() !== app.getVersion()) {
-      throw new Error(
-        `Installed launcher runtime is not executable`
-        + ` (status=${versionResult.status ?? "unknown"}, stdout=${JSON.stringify(versionResult.stdout.trim())},`
-        + ` stderr=${JSON.stringify(versionResult.stderr.trim())})`,
-      );
-    }
-    const markerPath = process.env.WEB2HARNESS_SMOKE_FILE?.trim();
-    if (!markerPath || !path.isAbsolute(markerPath)) {
-      throw new Error("Packaged launcher smoke test requires an absolute WEB2HARNESS_SMOKE_FILE");
-    }
-    fs.mkdirSync(path.dirname(markerPath), { recursive: true });
-    fs.writeFileSync(markerPath, `${JSON.stringify({
-      ok: true,
-      version: app.getVersion(),
-      platform: process.platform,
-      packaged: app.isPackaged,
-      runtimeVerified: true,
-    })}\n`);
-    logger.info("launcher.package_smoke_verified");
-    // Use the regular shutdown sequence: persist the browser before destroying its window.
-    const shutdown = await requestQuit();
-    if (!shutdown.ok) throw new Error(`Packaged launcher could not shut down: ${shutdown.message}`);
-    return;
-  }
+  updateController.start();
   if (IS_DEV_PROFILE) {
     let config = null;
     try {

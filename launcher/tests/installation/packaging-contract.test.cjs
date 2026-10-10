@@ -246,7 +246,9 @@ test("CI packages and smoke-launches on macOS, Windows, and Linux", () => {
   const ci = fs.readFileSync(path.join(repositoryRoot, ".github", "workflows", "ci.yml"), "utf8");
   const release = fs.readFileSync(path.join(repositoryRoot, ".github", "workflows", "release.yml"), "utf8");
   assert.match(ci, /macos-15, ubuntu-latest, windows-latest/);
-  assert.match(ci, /bun run app:package/);
+  assert.match(ci, /bun run scripts\/package-license-fixture\.ts/);
+  assert.match(release, /WEB2HARNESS_LICENSE_KEYS_FILE/);
+  assert.match(release, /WEB2HARNESS_LICENSE_PUBLIC_KEYS_JSON/);
   assert.match(ci, /bun run app:smoke/);
   assert.match(ci, /prepare-linux-libnotify\.sh/);
   assert.match(ci, /prepare-linux-appimage-tools\.cjs/);

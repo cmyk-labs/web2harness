@@ -1,3 +1,4 @@
+import { diagnosticContext, diagnosticEvent, diagnosticError } from "./diagnostics";
 import { chatGptWebTraceId, createChatGptWebAdapter } from "./adapters/chatgpt-web/adapter";
 import { closeChatGptBrowserWorkers } from "./adapters/chatgpt-web/browser/browser-worker";
 import { closeTurnBrokers, TurnBroker } from "./adapters/chatgpt-web/tools/turn-broker";
@@ -19,6 +20,8 @@ import { rememberCompactionContinuation } from "./adapters/chatgpt-web/conversat
 import { bridgeToResponsesSSE } from "./responses/stream";
 import { buildResponseJSON } from "./responses/json";
 import { formatErrorResponse } from "./responses/encoding";
+import { requireLicense } from "./licensing/service";
+import { LicenseError } from "./licensing/schema";
 import type { AppConfig } from "./config";
 import { providerConfig } from "./config";
 import { assertDevRuntimeIsolation } from "./dev/isolation";
@@ -105,7 +108,7 @@ function streamFailureEvidence(
 }
 
 const reportHttpStreamFailure: HttpStreamFailureReporter = evidence => {
-  console.warn(`[web2harness] http_stream_failed ${JSON.stringify(evidence)}`);
+  diagnosticEvent("warning", "http.stream_failed", { ...evidence, networkPhase: "response-read", targetRole: "local-bridge" });
 };
 
 function emitHttpStreamFailure(
@@ -196,6 +199,10 @@ export class HttpTurnCounter {
     endpoint: HttpTrackedEndpoint = "unspecified",
   ): Promise<Response> {
     const id = this.nextId++;
+    const started = performance.now();
+    const requestContext: Record<string, unknown> = { ...diagnosticContext.getStore(), requestId: crypto.randomUUID(), httpTurnId: id, endpoint };
+    let responseStatus: number | undefined, failure: unknown, totalChunks = 0, totalBytes = 0;
+    diagnosticEvent("info", "http.request_started", { ...requestContext, outcome: "started" });
     const abort = new AbortController();
     let finish!: () => void;
     const done = new Promise<void>(resolve => { finish = resolve; });
@@ -212,6 +219,11 @@ export class HttpTurnCounter {
     const release = () => {
       if (released) return;
       released = true;
+      diagnosticEvent(failure && !abort.signal.aborted ? "error" : "info", "http.request_closed", {
+        ...requestContext, outcome: abort.signal.aborted ? "cancelled" : failure ? "failed" : "transport-closed",
+        httpStatus: responseStatus, chunks: totalChunks, bytes: totalBytes, durationMs: Math.round(performance.now() - started),
+        ...(failure ? { error: diagnosticError(failure) } : {}),
+      });
       this.active.delete(id);
       if (clientSignal && clientAbortListener) {
         clientSignal.removeEventListener("abort", clientAbortListener);
@@ -225,7 +237,7 @@ export class HttpTurnCounter {
     else clientSignal?.addEventListener("abort", clientAbortListener, { once: true });
 
     try {
-      const response = await run(abort.signal, identity => {
+      const response = await diagnosticContext.run(requestContext, () => run(abort.signal, identity => {
         if (!identity.threadId.trim() || !identity.turnId.trim()) {
           throw new Error("Native Codex turn identity must contain a threadId and turnId");
         }
@@ -236,7 +248,9 @@ export class HttpTurnCounter {
         tracked.identity = identity;
         const interruptedReason = this.interrupted.get(this.identityKey(identity));
         if (interruptedReason !== undefined && !abort.signal.aborted) abort.abort(interruptedReason);
-      });
+      }));
+      responseStatus = response.status;
+      diagnosticEvent("info", "http.response_headers", { ...requestContext, httpStatus: response.status, durationMs: Math.round(performance.now() - started) });
       if (!response.body) {
         release();
         return response;
@@ -270,8 +284,11 @@ export class HttpTurnCounter {
               }
               chunks += 1;
               bytes += chunk.value.byteLength;
+              totalChunks++; totalBytes += chunk.value.byteLength;
+              if (totalChunks === 1) diagnosticEvent("info", "http.first_chunk", { ...requestContext, durationMs: Math.round(performance.now() - started) });
               controller.enqueue(chunk.value);
             } catch (error) {
+              failure = error;
               if (!abort.signal.aborted) {
                 emitHttpStreamFailure(reportStreamFailure, streamFailureEvidence(
                   error,
@@ -324,9 +341,12 @@ export class HttpTurnCounter {
             if (chunk.done) break;
             chunks += 1;
             bytes += chunk.value.byteLength;
+              totalChunks++; totalBytes += chunk.value.byteLength;
+              if (totalChunks === 1) diagnosticEvent("info", "http.first_chunk", { ...requestContext, durationMs: Math.round(performance.now() - started) });
             // Consume eagerly so the lifecycle branch never backpressures the client branch.
           }
         } catch (error) {
+          failure = error;
           if (!abort.signal.aborted) {
             emitHttpStreamFailure(this.reportStreamFailure, streamFailureEvidence(
               error,
@@ -349,6 +369,7 @@ export class HttpTurnCounter {
         headers: response.headers,
       });
     } catch (error) {
+      failure = error;
       release();
       throw error;
     }
@@ -505,6 +526,11 @@ export async function responseRequest(
       return formatErrorResponse(502, "upstream_error", error instanceof Error ? error.message : String(error));
     }
   }
+  try { await requireLicense(); }
+  catch (error) {
+    const state = error instanceof LicenseError ? error.state : "invalid";
+    return Response.json({ error: { type: "permission_error", code: `license_${state}`, message: String(error), retryable: false } }, { status: 403 });
+  }
   const requestedPreviousResponseId = raw && typeof raw === "object" && !Array.isArray(raw)
     ? (raw as { previous_response_id?: unknown }).previous_response_id
     : undefined;
@@ -597,6 +623,9 @@ export async function responseRequest(
     if (!message.includes("requires native Codex turn_id metadata")
       && !message.includes("requires a current-turn user message")) throw error;
   }
+  const logContext = diagnosticContext.getStore();
+  if (logContext && traceId) { logContext.traceId = traceId; logContext.requestedModel = parsed.modelId; logContext.mode = config.mode; }
+  diagnosticEvent("info", "http.request_bound", { traceId, requestedModel: parsed.modelId, mode: config.mode, compaction });
   const cancelledError = traceId ? chatGptTurnSessions.cancelledError(traceId) : undefined;
   if (cancelledError) {
     // Codex retries unknown streamed response.failed codes. A replay after the user explicitly

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BrandMark } from "../../components/BrandMark";
+import { EntryBrand } from "./EntryBrand";
 import type { Language, StartupState } from "../../types";
 import "./StartupScreen.css";
 
@@ -25,15 +25,17 @@ const INSTALLATION_STAGES = new Set([
 ]);
 
 interface StartupScreenProps {
+  version?: string;
   state: StartupState;
   language: Language;
   devProfile?: boolean;
   retry?: () => Promise<unknown>;
   retryLabel?: string;
-  exportLogs?: () => Promise<string | null>;
+  exportLogs?: () => Promise<unknown>;
 }
 
 export function StartupScreen({
+  version,
   state,
   language,
   devProfile,
@@ -77,23 +79,22 @@ export function StartupScreen({
   }
 
   return (
-    <main className="startup-screen" aria-labelledby="startup-brand">
+    <main className="startup-screen entry-screen" aria-labelledby="startup-title">
       <header className="startup-titlebar draggable">
         {devProfile && <span>Web2Harness DEV</span>}
       </header>
-      <div className="startup-content">
-        <BrandMark />
-        <h1 id="startup-brand">Web2Harness</h1>
-        <p className="startup-subtitle" role={failed ? "alert" : undefined}>
+      <div className="startup-content entry-content">
+        <EntryBrand version={version} />
+        <h1 id="startup-title" role={failed ? "alert" : undefined}>
           {failed
             ? t("无法启动工作空间", "Unable to start your workspace")
             : t("正在启动工作空间", "Starting your workspace")}
-        </p>
+        </h1>
         {failed ? (
           <div className="startup-failure">
             <p>
               {t(
-                "启动准备未能完成。请查看详情或导出诊断日志后重试。",
+                "启动准备未能完成。请查看详情或导出诊断包后重试。",
                 "Startup could not complete. Review the details or export diagnostics, then try again.",
               )}
             </p>
@@ -122,11 +123,11 @@ export function StartupScreen({
                   onClick={() =>
                     void runAction(
                       exportLogs,
-                      t("诊断日志已导出。", "Diagnostic log exported."),
+                      t("诊断包已导出。", "Diagnostic bundle exported."),
                     )
                   }
                 >
-                  {t("导出诊断日志", "Export diagnostic log")}
+                  {t("导出诊断包", "Export diagnostics")}
                 </button>
               )}
             </div>

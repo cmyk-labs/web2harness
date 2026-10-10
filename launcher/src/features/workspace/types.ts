@@ -15,6 +15,7 @@ export type WorkspacePage =
   | "connection"
   | "diagnostics"
   | "about"
+  | "license"
   | "preferences";
 
 export type Translate = (zh: string, en: string) => string;

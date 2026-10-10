@@ -18,7 +18,7 @@ export function removeApplicationData(home: string, preserveRuntime = false): vo
     throw error;
   }
   for (const entry of entries) {
-    if (entry.name === "versions" || entry.name === ".web2harness-owner.json") continue;
+    if (entry.name === "versions" || entry.name === ".web2harness-owner.json" || entry.name === "licensing") continue;
     // Names come from this directory, never from configuration or user input.
     rmSync(join(root, entry.name), { recursive: true, force: true });
   }

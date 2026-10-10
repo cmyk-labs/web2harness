@@ -40,7 +40,7 @@ const workspaceSource = [
   "features/workspace/labels.ts", "features/workspace/status.ts",
   "features/workspace/useConnectionSetup.ts", "features/workspace/Report.tsx",
   "features/workspace/pages/Overview.tsx", "features/workspace/pages/Connection.tsx",
-  "features/workspace/pages/Preferences.tsx", "features/workspace/pages/Diagnostics.tsx",
+  "features/workspace/pages/Preferences.tsx", "features/workspace/pages/Diagnostics.tsx", "features/workspace/pages/Logs.tsx",
   "features/workspace/pages/RuntimeControls.tsx",
 ].map(readRenderer).join("\n");
 const stylesSource = fs.readFileSync(path.join(launcherRoot, "src", "styles.css"), "utf8");
@@ -249,8 +249,8 @@ test("DEV launcher exposes its profile and recognizes its MCP Bridge runtime", (
   assert.match(electronMain, /if \(IS_DEV_PROFILE\) \{[\s\S]*?config\?\.mode === "mcp-bridge"[\s\S]*?runtimeSupervisor\.startIfConfigured\(\)[\s\S]*?\} else void \(async \(\) => \{/);
   assert.match(electronMain, /await runtimeSupervisor\?\.shutdown\(\{ cancelActiveTurns: true, force: true \}\)/);
   assert.match(electronMain, /packaged:\s*app\.isPackaged && !IS_DEV_PROFILE/);
-  assert.match(electronMain, /IS_DEV_PROFILE && !stateStore\.read\(\)\.onboardingComplete/);
-  assert.match(electronMain, /onboardingComplete:\s*true,[\s\S]*?autoStart:\s*false/);
+  assert.doesNotMatch(electronMain, /IS_DEV_PROFILE && !stateStore\.read\(\)\.onboardingComplete/);
+  assert.match(electronMain, /await licenseController\.waitForActivation\(\)/);
   assert.match(appSource, /snapshot\.profile\s*===\s*["']development["']/);
   assert.match(appSource, /data-profile=\{snapshot\.profile\}/);
   assert.match(workspaceSource, /manualContextFilesUnavailable[\s\S]*?copy\.contextFilesBody/);
@@ -336,9 +336,9 @@ test("failed doctor reports retain every failed check", () => {
 });
 
 test("launcher shares only privacy-safe exported diagnostics", () => {
-  assert.match(workspaceSource, /api\.exportLogs\(\)/);
+  assert.match(workspaceSource, /api\.exportLogs\(input\)/);
   assert.match(preloadSource, /exportLogs:[\s\S]*?launcher:export-logs/);
-  assert.match(electronMain, /launcher:export-logs[\s\S]*?showSaveDialog[\s\S]*?exportSanitizedLogs/);
+  assert.match(electronMain, /launcher:export-logs[\s\S]*?showSaveDialog[\s\S]*?runDiagnostics\("export"/);
   assert.doesNotMatch(preloadSource, /launcher:open-logs/);
   assert.doesNotMatch(electronMain, /launcher:open-logs/);
 });

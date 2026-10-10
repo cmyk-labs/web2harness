@@ -298,12 +298,14 @@ function createUpdateController({
 
   async function performCheck() {
     transition({ status: "checking" });
+    logger?.info("launcher.update_check_started", { currentVersion, platform, arch });
     try {
       const release = await deps.fetchRelease();
       lastCheckedAt = new Date().toISOString();
       // GitHub's /releases/latest already excludes these, including for older launchers.
       if (release?.draft === true || release?.prerelease === true) {
         candidate = null;
+        logger?.info("launcher.update_check_completed", { currentVersion, outcome: "up-to-date" });
         return transition({ status: "up-to-date" });
       }
       const version = releaseVersion(release?.tag_name);
@@ -353,6 +355,9 @@ function createUpdateController({
     const available = candidate;
     pending = (async () => {
       transition({ status: "downloading", version: available.version });
+      const started = performance.now();
+      let phase = "download";
+      logger?.info("launcher.update_download_started", { version: available.version, phase });
       const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "web2harness-update-"));
       try {
         const checksums = await deps.downloadText(available.checksumsUrl);
@@ -361,9 +366,13 @@ function createUpdateController({
         await deps.downloadFile(available.assetUrl, assetPath, progress => {
           transition({ status: "downloading", version: available.version, ...progress });
         });
+        phase = "checksum";
+        logger?.info("launcher.update_download_completed", { version: available.version, durationMs: Math.round(performance.now() - started) });
         const actual = await deps.sha256(assetPath);
         if (actual !== expected) throw new Error(`SHA-256 verification failed for ${available.assetName}`);
 
+        logger?.info("launcher.update_checksum_verified", { version: available.version, outcome: "verified" });
+        phase = "handoff";
         const stagingRoot = path.join(tempRoot, "stage");
         if (platform === "darwin") deps.extractMac(assetPath, stagingRoot);
         if (platform === "linux") {
@@ -394,6 +403,7 @@ function createUpdateController({
         transition({ status: "installing", version: available.version });
         return { child, tempRoot, version: available.version };
       } catch (error) {
+        logger?.error?.("launcher.update_preparation_failed", { version: available.version, phase, message: error instanceof Error ? error.message : String(error), durationMs: Math.round(performance.now() - started) });
         fs.rmSync(tempRoot, { recursive: true, force: true });
         transition({ status: "available", version: available.version });
         throw error;

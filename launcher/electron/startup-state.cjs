@@ -1,5 +1,6 @@
 // Only shell functions may run while code is being installed or the browser initializes.
 const SHELL_CHANNELS = new Set([
+  "license-status", "license-import",
   "snapshot", "workspace-status", "set-language", "complete-onboarding", "open-social",
   "open-external", "set-preference", "sidebar-state", "autostart", "limits",
   "retry-startup", "logs", "export-logs", "window-state", "browser-bounds", "browser-surface-active",

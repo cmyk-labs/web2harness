@@ -8,6 +8,12 @@ const { configuredRepository } = require("../electron/installation/release-confi
 
 const root = path.resolve(__dirname, "..");
 const launcherManifest = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+const runtimeManifest = JSON.parse(fs.readFileSync(path.join(root, "build", "runtime", "manifest.json"), "utf8"));
+const testPackage = process.env.WEB2HARNESS_PACKAGE_TEST === "1";
+if (testPackage && process.env.GITHUB_REF?.startsWith("refs/tags/")) throw new Error("Tagged releases cannot package test keys");
+if (runtimeManifest.licensing?.required !== true || runtimeManifest.licensing?.purpose !== (testPackage ? "development" : "production")) {
+  throw new Error("Distributable installers require production public keys; test packages require explicit development keys");
+}
 const executable = "node";
 const electronBuilderCli = require.resolve("electron-builder/out/cli/cli.js", { paths: [root] });
 const requested = process.argv[2];

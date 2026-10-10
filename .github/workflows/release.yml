@@ -58,9 +58,14 @@ jobs:
         if: runner.os == 'Linux'
         run: bun run launcher/scripts/prepare-linux-appimage-tools.cjs
       - run: bun run verify
+      - name: Prepare pinned license public keys
+        run: bun run scripts/prepare-license-public-keys.ts
+        env:
+          WEB2HARNESS_LICENSE_PUBLIC_KEYS_JSON: ${{ vars.WEB2HARNESS_LICENSE_PUBLIC_KEYS_JSON }}
       - run: bun run app:package
         env:
           WEB2HARNESS_REPOSITORY: ${{ github.repository }}
+          WEB2HARNESS_LICENSE_KEYS_FILE: ${{ github.workspace }}/output/release-keys/public-keys.json
       - name: Verify Linux AppImage ABI on current Arch
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |

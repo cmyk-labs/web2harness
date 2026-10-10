@@ -17,6 +17,7 @@ This manual follows the system components and execution flow, defining security 
 - [Security boundaries and data protection](#security-boundaries)
 - [Model registry and protocol extension](#model-registry)
 - [Failure contracts](#failure-contracts)
+- [Runtime log history](#log-history)
 - [Development isolation](#development-isolation)
 
 <a id="system-context"></a>
@@ -292,6 +293,12 @@ Subagent compatibility is also explicit. Compatibility V1 applies a coordinated 
 | Browser tab closed, task cancelled, or capability retired | Settle owned work and revoke its ability to invoke tools |
 | Usage restriction | Surface the restriction; do not switch accounts, modes, or models to evade it |
 | Busy runtime or uncertain process ownership | Block replacement/shutdown rather than act on unrelated processes |
+
+<a id="log-history"></a>
+
+## Runtime log history
+
+Runtime log history uses a persistent background worker. It builds sanitized per-file disk caches and an in-memory index of record positions; unchanged files are reused. Search results retain matching positions in up to four snapshots, expiring after five minutes idle. Cursor paging offers 25/50/100/200 records (default 100) with a 512 KiB target; one larger record remains intact on its own page. The current index is bounded to 100,000 records and 128 MiB of cached JSON, with obsolete snapshots evicted to keep the steady-state cache within 256 MiB. The UI reports partial collection and expired snapshots explicitly. Page size is bound to each snapshot cursor and its page boundaries, while cached matching positions can be reused across sizes. The validated preference is stored in the launcher state. Only one query runs with one replaceable pending query, and cancellation cannot publish a partially rebuilt index. Date-based diagnostic export uses a separate collector and is independent of viewing filters and pagination.
 
 <a id="development-isolation"></a>
 

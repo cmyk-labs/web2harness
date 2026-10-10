@@ -41,8 +41,8 @@ export function Overview(p: WorkspaceProps) {
         </h1>
         <p className="overview-description">
           {t(
-            "将 ChatGPT 网页版模型接入 Codex，通过原生工具或 MCP 桥接执行任务。充分利用 Web 模型额度，延续熟悉的工作流。",
-            "Bring ChatGPT web models into Codex with native tools or MCP Bridge. Make the most of your ChatGPT plan in your existing workflow.",
+            "查看 ChatGPT、Codex 与运行服务的连接状态。",
+            "Review the connection status of ChatGPT, Codex and the runtime.",
           )}
         </p>
       </div>
@@ -198,7 +198,8 @@ export function Overview(p: WorkspaceProps) {
           <span className={`badge status-${tone}`}>{statusText}</span>
         </Row>
       </div>
-      <Section title={t("开始使用", "Get started")} />
+      <section className="usage-guide" aria-labelledby="usage-steps-title">
+      <h2 id="usage-steps-title">{t("使用步骤", "Usage steps")}</h2>
       <ol className="usage-flow" aria-label={t("使用步骤", "Usage steps")}>
         {[
           [
@@ -240,6 +241,7 @@ export function Overview(p: WorkspaceProps) {
           </li>
         ))}
       </ol>
+      </section>
     </>
   );
 }

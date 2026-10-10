@@ -19,3 +19,10 @@ output/
 notes.md
 dev-notes
 docs/dev-key.txt
+dev-key.txt
+signing-private.pem
+issued-records.jsonl
+*.w2h
+*.w2h.clock
+# Private publisher tooling stays local and must never be committed or packaged.
+tools/license-issuer/

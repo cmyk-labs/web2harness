@@ -87,6 +87,8 @@ Linux builds prepare compatible libnotify and an owned AppImage toolset using th
 
 ### Relocatable bundle
 
+All new releases require offline device licensing. Supply a production public manifest through `WEB2HARNESS_LICENSE_KEYS_FILE`; the release workflow reads the public-only repository variable `WEB2HARNESS_LICENSE_PUBLIC_KEYS_JSON`. Never place private signing keys or the privately maintained issuer in Git or CI. See [licensing](licensing.md). CI fixture packages use ephemeral development keys and must not be published. CAP-006 is required in addition to the existing capability baseline.
+
 `scripts/build-runtime-bundle.ts` builds the CLI and browser helper, installs production dependencies, embeds Bun, and writes a manifest with file hashes and bundle identity. Validate the relocated bundle, not just the source tree:
 
 ```bash
@@ -106,6 +108,8 @@ Windows `app:package` includes `launcher`'s `build:runtime`, which runs `scripts
 This gate is mandatory and stops package creation on failure. `bun run verify` runs launcher tests under Node; that result does not replace the embedded-Bun gate. Verify fresh deployment, same-version replacement/repair, copy and receipt failures, repeated cancellation, and retry after a setup process exits without rollback. Do not replace these tests with helper load-only probes. Fixtures still do not satisfy actual NSIS acceptance.
 
 ### Native package smoke
+
+Package smoke now verifies the actual **unactivated** screen, the durable runtime and clean shutdown. It deliberately starts without a customer license and must report `activationRequired: true`; it cannot bypass activation or claim authenticated Web/MCP coverage. Test activated startup and language setup separately with an issued test-device license.
 
 Run the candidate on its matching test OS:
 

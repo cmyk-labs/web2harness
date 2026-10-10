@@ -87,6 +87,8 @@ Linux 构建按工作流准备兼容 libnotify 和自有 AppImage 工具集。ar
 
 ### 可迁移运行时
 
+所有新版发布均要求离线设备授权。通过 `WEB2HARNESS_LICENSE_KEYS_FILE` 提供正式公钥清单，发布工作流读取纯公钥仓库变量 `WEB2HARNESS_LICENSE_PUBLIC_KEYS_JSON`。私钥和独立签发工具不得进入 Git 或 CI，详见[授权说明](licensing.zh-CN.md)。CI 夹具包使用临时开发公钥，不得发布。现有能力基线之外必须执行 CAP-006。
+
 `scripts/build-runtime-bundle.ts` 构建 CLI 和浏览器 helper，安装生产依赖，嵌入 Bun，并写入包含文件哈希和包身份的 manifest。验证迁移后的包，不能只验证源码树：
 
 ```bash
@@ -106,6 +108,8 @@ Windows 的 `app:package` 包含启动器 `build:runtime`，后者调用 `script
 此门禁是强制步骤，失败即停止打包。`bun run verify` 在 Node 下执行启动器测试，不能替代内嵌 Bun 门禁。覆盖全新部署、同版本替换/修复、复制和回执失败、重复取消，以及 setup 进程未回滚退出后的重试。不得用仅加载 helper 的探针替代。夹具仍不能满足真实 NSIS 验收。
 
 ### 原生包冒烟
+
+包冒烟现在验证真实的**未激活页面**、持久运行时及正常退出。它明确以无客户授权状态启动，须返回 `activationRequired: true`，不能绕过激活或宣称已覆盖认证 Web/MCP 行为。使用独立设备授权另行验收激活后启动与语言配置。
 
 在对应测试系统上运行候选包：
 

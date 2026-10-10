@@ -1,6 +1,6 @@
 {
   "name": "web2harness",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Bring ChatGPT web models into Codex, keep your native tools and existing workflow, and make the most of the web model usage available on your ChatGPT account to get more real work done.",
   "author": "cmyk-labs",
@@ -29,7 +29,9 @@
     "doctor": "bun run src/cli.ts doctor",
     "dev:launcher": "bun run src/cli.ts dev launcher",
     "dev:chat": "bun run src/cli.ts dev chat",
-    "test": "bun test ./tests",
+    "test": "bun test --preload ./tests/fixtures/license-preload.ts ./tests",
+    "license:device:build": "bun run scripts/build-device-code.ts",
+    "license:device": "bun run src/licensing/device-cli.ts",
     "audit": "bun audit",
     "check-version": "bun run scripts/check-version.ts",
     "typecheck": "bun x --no-install --bun tsc --noEmit",

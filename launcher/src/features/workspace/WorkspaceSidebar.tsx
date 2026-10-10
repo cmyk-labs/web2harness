@@ -1,5 +1,4 @@
 import { BrandMark } from "../../components/BrandMark";
-import { IconButton } from "../../components/Buttons";
 import type {
   BrowserState,
   Language,
@@ -23,7 +22,6 @@ export function WorkspaceSidebar({
   operation,
   onLanguageChange,
   changingLanguage,
-  openRepository,
   api,
   setError,
 }: {
@@ -35,7 +33,6 @@ export function WorkspaceSidebar({
   operation: OperationState | null;
   onLanguageChange: (language: Language) => void;
   changingLanguage: boolean;
-  openRepository: () => void;
   api: WorkspaceProps["api"];
   setError: WorkspaceProps["setError"];
 }) {
@@ -63,17 +60,10 @@ export function WorkspaceSidebar({
         <div className="sidebar-brand-identity">
           <BrandMark />
           <strong>Web2Harness</strong>
+          <span className="brand-version">v{snapshot.version}</span>
           {snapshot.profile === "development" && (
             <span className="dev-profile-badge">DEV</span>
           )}
-        </div>
-        <div className="sidebar-brand-actions">
-          <IconButton
-            icon="github"
-            label={t("在 GitHub 打开项目仓库", "Open project repository on GitHub")}
-            disabled={!snapshot.urls.github}
-            onClick={openRepository}
-          />
         </div>
       </div>
       <nav className="sidebar-nav" aria-label={t("主导航", "Main navigation")}>
@@ -87,7 +77,7 @@ export function WorkspaceSidebar({
               label: t("设置", "Settings"),
               pages: ["connection", "preferences"],
             },
-            { label: t("应用", "Application"), pages: ["diagnostics", "about"] },
+            { label: t("应用", "Application"), pages: ["license", "diagnostics", "about"] },
           ] as { label: string; pages: WorkspacePage[] }[]
         ).map((group) => (
           <section

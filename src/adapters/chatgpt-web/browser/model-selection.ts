@@ -1,3 +1,4 @@
+import { diagnosticEvent } from "../../../diagnostics";
 import { activateChatGptEffortMenu, parseChatGptEffortSliderState, readChatGptModelAnnouncements } from "../../../browser/session";
 import type { ChatGptWebAdapterEffort, ChatGptWebModelFamily } from "../../../models/chatgpt-web-models";
 import { ChatGptWebAdapterError } from "../adapter-error";
@@ -30,7 +31,7 @@ export async function selectChatGptModelFamily(
   try {
     const option = familyOption(menu, family);
     if (await option.count() > 1) throw familyError(family);
-    if (await option.count() === 1 && await option.getAttribute("aria-checked") === "true") return menu;
+    if (await option.count() === 1 && await option.getAttribute("aria-checked") === "true") { diagnosticEvent("info", "browser.model_family_verified", { modelFamily: family, outcome: "already-selected" }); return menu; }
     // The attached radio rows are inert while this composer-owned advanced view is collapsed.
     const powerView = menu.menu.locator('[data-model-picker-view]');
     if (await powerView.count() === 1) {
@@ -49,6 +50,7 @@ export async function selectChatGptModelFamily(
     }
     await option.waitFor({ state: "visible", timeout: 5_000 });
     await option.click({ timeout: 5_000 });
+    diagnosticEvent("info", "browser.model_family_action", { modelFamily: family, outcome: "action-returned" });
     // Choosing a family returns the open picker to its slider. Keep that surface:
     // Escape followed by an immediate reopen races the outgoing menu's cleanup.
     // Activation reuses the open menu and verifies its owner before returning it.
@@ -57,7 +59,7 @@ export async function selectChatGptModelFamily(
     do {
       const current = familyOption(selected, family);
       if (await current.count() > 1) throw familyError(family);
-      if (await current.count() === 1 && await current.getAttribute("aria-checked") === "true") return selected;
+      if (await current.count() === 1 && await current.getAttribute("aria-checked") === "true") { diagnosticEvent("info", "browser.model_family_verified", { modelFamily: family, outcome: "verified" }); return selected; }
       await new Promise(resolve => setTimeout(resolve, 50));
     } while (Date.now() < deadline);
     throw familyError(family);

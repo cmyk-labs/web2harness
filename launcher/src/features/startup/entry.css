@@ -1,0 +1,38 @@
+.entry-screen,
+.app-root.entry-screen,
+.workspace-ui.ui-page.entry-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding: calc(var(--height-titlebar) + 24px) 24px 72px;
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  scroll-padding-block: 24px;
+}
+
+.entry-screen > .entry-content {
+  width: min(100%, 520px);
+  flex: none;
+  margin-block: auto;
+}
+
+.entry-brand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  font: 15px/1.4 var(--font-ui-latin);
+  color: var(--color-text-primary);
+}
+.entry-brand strong { font-weight: 600; }
+.entry-brand .brand-mark { width: 28px; height: 28px; flex: none; }
+
+@media (max-width: 560px) {
+  .entry-screen,
+  .app-root.entry-screen,
+  .workspace-ui.ui-page.entry-screen { padding-inline: 20px; }
+}

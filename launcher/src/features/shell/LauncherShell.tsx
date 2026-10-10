@@ -47,6 +47,7 @@ export function LauncherShell({
   updateState: (state: LauncherState) => void;
 }) {
   const [surface, setSurface] = useState<WorkspacePage>("overview");
+  useEffect(() => () => { void api!.setBrowserSurfaceActive(false).catch(() => {}); }, []);
   const reducedMotion = useReducedMotion();
   const devProfile = snapshot.profile === "development";
   const [changingLanguage, setChangingLanguage] = useState(false);
@@ -286,10 +287,6 @@ export function LauncherShell({
           <WorkspaceSidebar
             api={api!}
             setError={setError}
-            openRepository={() => {
-              void api!.openExternal(snapshot.urls.github)
-                .catch((error) => setError(messageOf(error)));
-            }}
             onLanguageChange={(value) => void changeLanguage(value)}
             changingLanguage={changingLanguage}
             page={surface}

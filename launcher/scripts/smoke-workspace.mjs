@@ -22,8 +22,9 @@ await context.addInitScript(()=>{
  const listeners={};const state={version:1,language:'zh-CN',onboardingComplete:true,browserInteractionMode:'automatic',sidebarOpen:true,sidebarWidth:224,mcpGuideStep:0,sessionRefreshReminderAt:null,mcpRuntimeInstalled:false,mcpSetupComplete:false,coreSetupComplete:true,codexCatalogVerified:true,experimentalContextFiles:false,experimentalContextTripleBudget:false,experimentalSkillAttachments:false,experimentalFreshConversationPerTurn:false,useSavedChats:false,keepRunningOnClose:true,showBrowserDuringTurns:true,autoStart:false,zeroRiskProEnabled:false};
  const browser={status:'ready',authenticated:true,visible:false,tabs:[],activeTabId:'idle',maxTabs:5,zoomFactor:1};
  const status={configured:true,mode:'native-tools',interactionMode:'automatic',runtimeStatus:'ready',credentials:{automatic:false,manual:false},capabilities:{solAvailable:true,proAvailable:true,browserInteractionMode:'automatic'}};
- const snapshot={startup:{status:'ready',stage:'ready',elapsedMs:0},profile:'development',profilePaths:{coreHome:'fixture',codexHome:'fixture',userData:'fixture'},state,browser,connectorName:'DEV fixture',connectorNames:{automatic:'DEV fixture',manual:'Manual fixture'},mcpCredentialsConfigured:false,logs:[{at:'2026-09-30T08:30:00Z',event:'runtime.started',level:'info',detail:{mode:'native-tools',status:'ready',port:12345}},{at:'2026-09-30T08:31:00Z',event:'browser.connection_failed',level:'error',detail:{message:'Fixture connection error',retry:false}}],urls:{github:'https://example.invalid',connectors:'https://example.invalid',tunnels:'https://example.invalid',keys:'https://example.invalid'},platform:'win32',packaged:false,version:'1.0.0',smokePassed:true,operation:null,update:{status:'disabled'}};
+ const snapshot={startup:{status:'ready',stage:'ready',elapsedMs:0},profile:'development',profilePaths:{coreHome:'fixture',codexHome:'fixture',userData:'fixture'},state,browser,connectorName:'DEV fixture',connectorNames:{automatic:'DEV fixture',manual:'Manual fixture'},mcpCredentialsConfigured:false,logs:[{at:'2026-09-30T08:30:00Z',event:'runtime.started',level:'info',detail:{mode:'native-tools',status:'ready',port:12345}},{at:'2026-09-30T08:31:00Z',event:'browser.connection_failed',level:'error',detail:{message:'Fixture connection error',retry:false,traceId:'trace-fixture',durationMs:1234,errorDescription:'ERR_CONNECTION_RESET'}}],urls:{github:'https://example.invalid',connectors:'https://example.invalid',tunnels:'https://example.invalid',keys:'https://example.invalid'},platform:'win32',packaged:false,version:'1.0.0',smokePassed:true,operation:null,update:{status:'disabled'}};
  window.__fixture={state,status,snapshot,browser,calls:[],failApply:false,emitStartup:startup=>{snapshot.startup=startup;listeners.onStartupState?.(structuredClone(startup))},emitBrowser:delta=>{Object.assign(browser,delta);listeners.onBrowserState?.(structuredClone(browser))}};
+ state.logPageSize=100;
  const boot=new URL(location.href).searchParams;
  state.githubOpened=false;
  snapshot.urls.github='https://github.com/cmyk-labs/web2harness';
@@ -46,13 +47,10 @@ await context.addInitScript(()=>{
  const patch=delta=>{Object.assign(state,delta);listeners.onStateChanged?.({...state});return {...state}};
  Object.assign(window.__fixture,{patch,emitOperation:operation=>listeners.onOperation?.(operation)});
  const success=()=>{if(window.__fixture.failApply)throw new Error('Fixture setup failed')};
+ const license=window.__fixture.license={state:'active',deviceCode:'W2D1-WIN-'+'a'.repeat(64),licenseId:'fixture',expiresAt:null};
  window.codexWebLauncher=new Proxy({
- openRepository:async()=>{
-  window.__fixture.calls.push(['openRepository',snapshot.urls.github]);
-  if(window.__fixture.failRepository)throw new Error('Fixture repository opening failed');
-  if(window.__fixture.holdRepository)await new Promise(resolve=>window.__fixture.releaseRepository=resolve);
-  return patch({githubOpened:true});
- },
+ licenseStatus:async()=>({...license}),
+ importLicense:async code=>{if(window.__fixture.failLicenseImport)throw new Error('Fixture import unavailable');return code==='fixture-valid'?{...license}:{...license,state:'invalid'}},
  checkUpdate:async()=>{window.__fixture.calls.push(['checkUpdate']);const update={status:'up-to-date',lastCheckedAt:'2026-10-05T01:00:00Z'};window.__fixture.emitUpdate(update);return update},
  snapshot:async()=>{if(window.__fixture.holdSnapshot)await new Promise(resolve=>heldSnapshots.push(resolve));if(window.__fixture.failSnapshot)throw new Error('Fixture snapshot error');return structuredClone(snapshot)},workspaceStatus:async()=>{if(window.__fixture.failStatus)throw new Error('Fixture status unavailable');return structuredClone(status)},windowState:async()=>({fullScreen:false,maximized:false}),
  cancelTurns:async()=>{
@@ -68,9 +66,21 @@ await context.addInitScript(()=>{
   status.configured=false;status.mode=null;status.runtimeStatus='stopped';
   return {cancelled:false,state:patch({coreSetupComplete:false,codexCatalogVerified:false,mcpSetupComplete:false})};
  },
- exportLogs:async()=>{window.__fixture.calls.push(['exportLogs']);if(window.__fixture.failExport)throw new Error('Fixture export error');return window.__fixture.cancelExport?null:'fixture-diagnostics.jsonl'},
+ queryLogs:async(query={})=>{
+   window.__fixture.calls.push(['queryLogs',query]);
+   if(window.__fixture.expireLogs)return {records:[],total:0,available:{start:null,end:null},partial:false,expired:true};
+   const all=(window.__fixture.logRecords??snapshot.logs).map((record,index)=>({...record,id:String(index),source:record.event.startsWith('browser')?'browser':'runtime'}));
+   const filtered=all.filter(record=>(!query.level||query.level==='all'||record.level===query.level)&&(!query.source||query.source==='all'||record.source===query.source)&&(!query.search||JSON.stringify(record).toLowerCase().includes(query.search.toLowerCase()))&&(!query.before||record.at<=query.before)&&(!query.correlation||record.detail[query.correlation.field]===query.correlation.value)).reverse();
+   const offset=Number(query.cursor??0),limit=query.pageSize??100,records=[];let bytes=0;
+   for(const record of filtered.slice(offset,offset+limit)){const size=new TextEncoder().encode(JSON.stringify(record)+'\n').length;if(records.length&&bytes+size>512*1024)break;records.push(record);bytes+=size}
+   const next=offset+records.length;
+   if(query.cursor===undefined)window.__fixture.logStarts=[0];
+   const starts=window.__fixture.logStarts??=[0];if(!starts.includes(next))starts.push(next);
+   return {records,total:filtered.length,offset,cursor:String(offset),nextCursor:next<filtered.length?String(next):null,previousCursor:offset?String(starts[starts.indexOf(offset)-1]??0):null,available:{start:all[0]?.at??null,end:all.at(-1)?.at??null},partial:false};
+ },
+ exportLogs:async(range)=>{window.__fixture.calls.push(['exportLogs',range]);if(window.__fixture.failExport)throw new Error('Fixture export error');return window.__fixture.cancelExport?null:{path:'fixture-diagnostics.zip',partial:window.__fixture.partialExport??false,recordCount:2}},
  getLimits:async()=>({...{enabled:true,trackingSince:null,checkedAt:null,plan:null,totalMessages:0,unknownProMessages:0,incomplete:false,gapAt:null,models:["gpt-6-pro","gpt-5.6-pro","gpt-6-sol","gpt-5.6-sol"].map(model=>({model,last24Hours:0,last7Days:0})),windows:[]},...window.__fixture.usage}),
- setLanguage:async language=>patch({language}),setPreference:async(key,value)=>patch({[key]:value}),setContextFiles:async value=>patch({experimentalContextFiles:value,...(!value?{experimentalContextTripleBudget:false}:{})}),setContextTripleBudget:async value=>patch({experimentalContextTripleBudget:value}),setSkillAttachments:async value=>patch({experimentalSkillAttachments:value}),setFreshConversationPerTurn:async value=>patch({experimentalFreshConversationPerTurn:value}),setUseSavedChats:async value=>patch({useSavedChats:value}),
+ setLanguage:async language=>patch({language}),setPreference:async(key,value)=>{if(key==='logPageSize'&&window.__fixture.failLogPageSize)throw Error('Fixture preference save failed');return patch({[key]:value})},setContextFiles:async value=>patch({experimentalContextFiles:value,...(!value?{experimentalContextTripleBudget:false}:{})}),setContextTripleBudget:async value=>patch({experimentalContextTripleBudget:value}),setSkillAttachments:async value=>patch({experimentalSkillAttachments:value}),setFreshConversationPerTurn:async value=>patch({experimentalFreshConversationPerTurn:value}),setUseSavedChats:async value=>patch({useSavedChats:value}),
  setupCore:async()=>{window.__fixture.calls.push(['setupCore']);success();status.configured=true;status.mode='native-tools';status.interactionMode='automatic';status.capabilities.browserInteractionMode='automatic';patch({coreSetupComplete:true,mcpSetupComplete:false,codexCatalogVerified:false,browserInteractionMode:'automatic'});return {ok:true,stdout:'',restartRequired:true}},
  smokeTest:async()=>{window.__fixture.calls.push(['smokeTest']);snapshot.smokePassed=true;return {ok:true}},
  setupMcp:async input=>{window.__fixture.calls.push(['setupMcp',input]);success();status.mode='mcp-bridge';status.interactionMode=input.interactionMode;status.capabilities.browserInteractionMode=input.interactionMode;status.credentials[input.interactionMode]=true;patch({coreSetupComplete:true,mcpRuntimeInstalled:true,mcpSetupComplete:false,codexCatalogVerified:false,browserInteractionMode:input.interactionMode});return {ok:true}},
@@ -89,7 +99,7 @@ const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message)
 await page.screenshot({path:out+'/overview-zh.png'});
 check('No unsolicited recommendation modal',await page.locator('.bigger-context-recommendation-backdrop').count()===0);
 const metrics=await page.evaluate(()=>({sidebar:document.querySelector('.app-sidebar').getBoundingClientRect().width,padding:getComputedStyle(document.querySelector('.content')).padding,background:getComputedStyle(document.querySelector('.ui-page')).backgroundColor}));
-check('Workspace uses the shared sidebar and readable page spacing',metrics.sidebar===252&&metrics.padding==='32px 8px 64px');
+check('Workspace uses the shared sidebar and readable page spacing',metrics.sidebar===252&&metrics.padding==='24px 32px 40px');
 check('No page breadcrumb or workspace kicker',await page.locator('.topbar,.eyebrow').count()===0);
 check('Sidebar uses the approved H logo without repeated overview branding',await page.locator('.sidebar-brand-identity .brand-mark svg path').getAttribute('d')===brandMark.path&&await page.locator('.overview-intro .brand-mark,.overview-intro .overview-brand').count()===0);
 check('Ready overview has one management action and no setup warning',await page.locator('.content button').count()===1&&await page.getByRole('button',{name:'管理连接',exact:true}).count()===1&&await page.locator('.overview-notice').count()===0);
@@ -99,13 +109,12 @@ check('Healthy sidebar has a success indicator',await page.locator('.side-status
 check('Sidebar footer is one compact status line',await page.locator('.side-status').innerText()==='已就绪 · 原生工具'&&await page.locator('.side-status-text').evaluate(el=>getComputedStyle(el).whiteSpace)==='nowrap');
 check('Interaction detail remains accessible without an extra line',(await page.locator('.side-status').getAttribute('aria-label')).includes('自动交互')&&(await page.locator('.side-status').getAttribute('title')).includes('自动交互'));
 check('Chinese type uses a consistent local font family',await page.locator('.sidebar-item span').first().evaluate(el=>getComputedStyle(el).fontFamily.startsWith('"PingFang SC"')&&getComputedStyle(el).fontFamily.includes('Microsoft YaHei UI')&&!getComputedStyle(el).fontFamily.includes('Yu Gothic')));
-check('Overview explains positioning, capabilities and account usage value',await page.locator('.content h1').count()===1&&(await page.locator('.overview-lead').innerText()).includes('工作空间概览')&&(await page.locator('.overview-description').innerText()).includes('原生工具或 MCP 桥接')&&(await page.locator('.overview-description').innerText()).includes('Web 模型额度')&&await page.locator('.configuration-summary .row').count()===1);
-check('Usage instructions are an always-visible three-step flow',await page.locator('.usage-flow li').count()===3&&await page.locator('.usage-guide').count()===0&&await page.locator('.usage-flow').isVisible());
+check('Overview summarizes connections and the active configuration',await page.locator('.content h1').count()===1&&(await page.locator('.overview-description').innerText()).includes('ChatGPT、Codex')&&await page.locator('.configuration-summary .row').count()===1);
+check('Ready overview keeps all usage instructions expanded',await page.locator('.usage-flow li').count()===3&&await page.locator('.usage-flow').isVisible());
 check('Flow retains all original Chinese descriptions',JSON.stringify(await page.locator('.usage-flow p').allTextContents())===JSON.stringify(['使用你熟悉的客户端或命令行。','模型名称以 (Web) 标识。','在这里查看连接和运行状态。']));
 check('Flow uses three numbered nodes and two connectors',await page.locator('.usage-flow .flow-number').count()===3&&await page.locator('.usage-flow .flow-connector').count()===2);
 check('Preferences follows Connection under Settings',JSON.stringify(await page.getByRole('region',{name:'设置',exact:true}).getByRole('button').allTextContents())===JSON.stringify(['连接与模型','偏好设置'])&&await page.locator('.sidebar-footer .language-toggle').count()===1);
-await page.getByRole('button',{name:'在 GitHub 打开项目仓库',exact:true}).click();
-check('The sidebar GitHub icon opens the current project repository',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='openExternal'&&call[1]==='https://github.com/cmyk-labs/web2harness')));
+check('Sidebar has the installed version beside the product name and no repository button',await page.locator('.sidebar-brand-identity .brand-version').textContent()==='v1.0.0'&&await page.getByRole('button',{name:'在 GitHub 打开项目仓库',exact:true}).count()===0);
 check('Usage steps retain three outlined flow boxes',await page.locator('.usage-flow li').evaluateAll(nodes=>nodes.length===3&&nodes.every(node=>getComputedStyle(node).borderBottomWidth==='1px'&&getComputedStyle(node).borderTopWidth==='1px')));
 check('Open sidebar shows only its DEV badge',await page.locator('.titlebar-dev-profile').count()===0&&await page.locator('.sidebar-brand-identity .dev-profile-badge').count()===1);
 await page.locator('.app-titlebar .icon-button').first().click();await page.locator('.titlebar-dev-profile').waitFor();check('Collapsed sidebar moves DEV identification to titlebar',await page.locator('.app-shell:not(.is-sidebar-open)').count()===1);await page.locator('.app-titlebar .icon-button').first().click();await page.waitForTimeout(600);
@@ -283,11 +292,24 @@ await page.getByRole('button',{name:'Apply configuration',exact:true}).click();
 await page.waitForFunction(()=>window.__fixture.status.mode==='native-tools'&&window.__fixture.state.browserInteractionMode==='automatic');
 await page.evaluate(()=>window.__fixture.patch({codexCatalogVerified:true}));
 await nav('Usage & Diagnostics');
+const checkUsageAlignment=async label=>check(label,await page.locator('.usagegrid .card').evaluateAll(cards=>{
+  const near=(a,b)=>Math.abs(a-b)<1;
+  const rects=cards.map(card=>card.getBoundingClientRect());
+  const titles=cards.map(card=>card.querySelector('h3').getBoundingClientRect());
+  const tables=cards.map(card=>card.querySelector('table').getBoundingClientRect());
+  const heads=cards.map(card=>[...card.querySelectorAll('th')].map(cell=>cell.getBoundingClientRect()));
+  return near(rects[0].top,rects[1].top)&&near(rects[0].bottom,rects[1].bottom)&&near(titles[0].top,titles[1].top)&&near(tables[0].top,tables[1].top)
+    &&heads[0].every((cell,index)=>near(cell.width,heads[1][index].width)&&near(cell.height,heads[1][index].height)&&near(cell.left-tables[0].left,heads[1][index].left-tables[1].left))
+    &&heads.every(cells=>near(cells[0].width,cells[1].width*2)&&near(cells[1].width,cells[2].width));
+}));
 const localRow=model=>page.locator('.local-usage tbody tr').filter({has:page.getByRole('cell',{name:model,exact:true})});
 check('Empty total and all four models remain visible without effort details',await page.locator('.usage-total-value').innerText()==='0'&&await page.locator('.local-usage tbody tr').count()===4&&(await page.locator('.local-usage tbody td:not(:first-child)').allTextContents()).every(value=>value==='0')&&await page.locator('.usage-details').count()===0);
 const emptyLocalCounts=await page.locator('.local-usage table').innerText();
 check('Browsing policy does not pretend to identify a plan',await page.getByRole('combobox',{name:'Plan reference'}).inputValue()==='other'&&(await page.locator('.official-limits tbody td:last-child').allTextContents()).every(value=>value==='-'));
+await checkUsageAlignment('Unselected plan shares table header positions and column widths');
+await page.screenshot({path:out+'/usage-empty-en.png',fullPage:true});
 await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_200');
+await checkUsageAlignment('Adding a reference-period selector preserves table alignment');
 check('Requested future policy remains the default view',await page.getByRole('combobox',{name:'Reference period'}).inputValue()==='future');
 const policyRow=model=>page.locator('.official-limits tbody tr').filter({has:page.locator('td:first-child').filter({hasText:new RegExp('^'+model.replaceAll('.','\\.')+'$')})});
 check('Future weekly reference count is preserved',await policyRow('GPT-6 Pro').locator('td').nth(2).innerText()==='100');
@@ -306,19 +328,39 @@ await page.getByRole('combobox',{name:'Plan reference'}).selectOption('pro_200')
 await page.evaluate(()=>{window.__fixture.usage={plan:'pro_200',totalMessages:10,models:[{model:'gpt-6-pro',last24Hours:2,last7Days:4},{model:'gpt-5.6-pro',last24Hours:1,last7Days:2},{model:'gpt-6-sol',last24Hours:2,last7Days:3},{model:'gpt-5.6-sol',last24Hours:0,last7Days:0},{model:'pro-unknown',last24Hours:1,last7Days:1}],trackingSince:Date.now()-10000,lastRecordedAt:Date.now(),pendingMessages:1,pendingReceipts:1,incomplete:true,details:[{model:'gpt-6-sol',effort:'high',purpose:'tool-result',last24Hours:1,last7Days:2},{model:'gpt-6-sol',effort:'medium',purpose:'task',last24Hours:1,last7Days:1},{model:'gpt-6-pro',effort:'max',purpose:'task',last24Hours:2,last7Days:4},{model:'gpt-5.6-pro',effort:'max',purpose:'task',last24Hours:1,last7Days:2},{model:'pro-unknown',effort:'unknown',purpose:'unknown',last24Hours:1,last7Days:1}]};});
 await page.locator('.local-usage').getByRole('button',{name:'Refresh',exact:true}).click();
 await page.getByText('Records may be incomplete',{exact:true}).waitFor();
-check('Total equals model counts without adding pending sends or the Pro subtotal',await page.locator('.usage-total-value').innerText()==='10'&&(await page.locator('.local-usage tbody td:last-child').allTextContents()).reduce((sum,value)=>sum+Number(value),0)===10&&await localRow('GPT-6').locator('td').last().innerText()==='3'&&(await page.locator('.local-usage').innerText()).includes('Acceptance unconfirmed')&&(await page.locator('.local-usage').innerText()).includes('awaiting ledger write'));
+check('Total equals model counts without adding pending sends or the Pro subtotal',await page.locator('.usage-total-value').innerText()==='10'&&(await page.locator('.local-usage tbody td:last-child').allTextContents()).reduce((sum,value)=>sum+Number(value),0)===10&&await localRow('GPT-6').locator('td').last().innerText()==='3'&&(await page.locator('.local-usage-notes').innerText()).includes('Acceptance unconfirmed')&&(await page.locator('.local-usage-notes').innerText()).includes('awaiting ledger write'));
 check('All efforts and purposes remain grouped into one model row',await localRow('GPT-6').count()===1&&await localRow('GPT-6').innerText()==='GPT-6\t2\t3'&&await page.locator('.local-usage details').count()===0);
 check('Pro total includes both families and unidentified Pro without Sol',await page.locator('.local-usage tfoot tr').innerText()==='Pro total\t4\t7'&&await localRow('Pro (unknown model)').count()===1);
-check('Explanations follow their respective tables',await page.locator('.usagegrid .card').evaluateAll(cards=>cards.every(card=>card.querySelector('.usage-footnote').getBoundingClientRect().top>=card.querySelector('table').getBoundingClientRect().bottom)));
+check('Usage cards have equal heights and aligned notes outside their borders',await page.locator('.usagegrid .card').evaluateAll(cards=>{
+  const bounds=cards.map(card=>card.getBoundingClientRect());
+  return Math.abs(bounds[0].top-bounds[1].top)<1&&Math.abs(bounds[0].bottom-bounds[1].bottom)<1&&cards.every(card=>{
+    const note=document.getElementById(card.getAttribute('aria-describedby'));
+    const box=card.getBoundingClientRect(),foot=note.getBoundingClientRect();
+    return !card.contains(note)&&foot.top>box.bottom&&Math.abs(foot.left-box.left)<1;
+  });
+}));
+await checkUsageAlignment('English usage with extra model rows keeps equal panels and aligned columns');
+await page.setViewportSize({width:1180,height:1050});
+await checkUsageAlignment('Medium desktop width retains matching table headers and column widths');
+await page.screenshot({path:out+'/usage-en-1180.png',fullPage:true});
+await page.setViewportSize({width:1440,height:1050});
 await page.screenshot({path:out+'/usage-en.png',fullPage:true});
-check('Reference footer shows only check date and reference notice',await page.locator('.official-limits .usage-footnote').innerText()==='Checked · 2026-10-05 · For reference only');
+check('Reference footer shows only check date and reference notice',await page.locator('.official-limits-notes').innerText()==='Checked · 2026-10-05 · For reference only');
 await page.locator('.language-toggle').click();await page.getByRole('region',{name:'用量与诊断',exact:true}).waitFor();
 check('Chinese usage distinguishes local sends and references',await page.getByRole('heading',{name:'本地使用次数',exact:true}).count()===1&&await page.getByRole('heading',{name:'模型限额参考',exact:true}).count()===1);
-check('Chinese reference preserves the period and compact footer',(await page.locator('.official-limits').innerText()).includes('2026-10-30 起参考')&&await page.locator('.official-limits .usage-footnote').innerText()==='核对日期 · 2026-10-05 · 仅供参考');
+check('Chinese reference preserves the period and compact footer',(await page.locator('.official-limits').innerText()).includes('2026-10-30 起')&&await page.locator('.official-limits-notes').innerText()==='核对日期 · 2026-10-05 · 仅供参考');
+await checkUsageAlignment('Chinese usage retains matching table headers and column widths');
 await page.screenshot({path:out+'/usage-zh.png',fullPage:true});
+await page.setViewportSize({width:960,height:1050});
+check('Limited content width stacks panels before controls become crowded',await page.locator('.usagegrid').evaluate(grid=>grid.querySelector('.official-limits').getBoundingClientRect().top>grid.querySelector('.local-usage-notes').getBoundingClientRect().bottom));
+await page.screenshot({path:out+'/usage-zh-960.png',fullPage:true});
+await page.setViewportSize({width:1440,height:1050});
 await page.getByRole('combobox',{name:'套餐',exact:true}).click();await page.screenshot({path:out+'/plan-menu-zh.png'});await page.keyboard.press('Escape');
 await page.setViewportSize({width:390,height:1050});await page.waitForTimeout(250);
-check('Chinese usage fits narrow windows',await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
+check('Chinese usage fits narrow windows with each note immediately below its card',await page.locator('.ui-page').evaluate(el=>{
+  const boxes=['.local-usage','.local-usage-notes','.official-limits','.official-limits-notes'].map(selector=>el.querySelector(selector).getBoundingClientRect());
+  return el.scrollWidth<=el.clientWidth&&boxes.every((box,index)=>!index||box.top>=boxes[index-1].bottom);
+}));
 await page.screenshot({path:out+'/usage-zh-mobile.png',fullPage:true});
 await page.locator('.official-limits').scrollIntoViewIfNeeded();await page.screenshot({path:out+'/usage-zh-mobile-policy.png',fullPage:true});
 await page.setViewportSize({width:1440,height:1050});await page.locator('.language-toggle').click();await page.getByRole('region',{name:'Usage & Diagnostics',exact:true}).waitFor();
@@ -345,10 +387,149 @@ check('Health names and states fit narrow windows',await page.locator('.ui-page'
 await page.screenshot({path:out+'/health-zh-mobile.png',fullPage:true});
 await page.setViewportSize({width:1440,height:1050});await page.locator('.language-toggle').click();await page.getByRole('region',{name:'Usage & Diagnostics',exact:true}).waitFor();
 await page.getByRole('tab',{name:'Logs',exact:true}).click();
-check('Logs restore compact event, summary and time rows',await page.locator('.activity-row').count()===2&&await page.locator('.activity-row time').count()===2);
-check('Latest log appears first with readable summary',await page.locator('.activity-row').first().locator('strong').textContent()==='Browser connection failed · Error'&&(await page.locator('.activity-row').first().locator('pre').textContent()).includes('retry: false'));
-check('Raw JSON log blocks removed',await page.locator('.log').count()===0);
+await page.locator('.log-json-record').nth(1).waitFor();
+check('Log page size defaults to 100 with four bounded choices',await page.getByRole('combobox',{name:'Per page',exact:true}).inputValue()==='100'&&JSON.stringify(await page.locator('.log-page-size option').evaluateAll(nodes=>nodes.map(node=>Number(node.value))))==='[25,50,100,200]');
+check('Page size and display toggles align vertically',await page.locator('.log-format-options > label').evaluateAll(nodes=>{const centers=nodes.map(el=>{const r=el.getBoundingClientRect();return r.top+r.height/2});return Math.max(...centers)-Math.min(...centers)<1}));
+check('Filter inputs align and four log actions share one baseline',await page.locator('.log-toolbar :is(input,select)').evaluateAll(nodes=>new Set(nodes.map(el=>Math.round(el.getBoundingClientRect().bottom))).size===1)&&await page.locator('.log-selection-actions button').evaluateAll(nodes=>nodes.length===4&&new Set(nodes.map(el=>Math.round(el.getBoundingClientRect().top))).size===1&&new Set(nodes.map(el=>Math.round(el.getBoundingClientRect().height))).size===1));
+check('Logs show continuous JSON without a table or per-record expanders',await page.locator('.log-viewer table, .log-viewer details, #log-record-detail').count()===0&&await page.locator('.log-json-record').count()===2);
+const rawLog=await page.locator('.log-json-record pre').first().textContent();
+check('Compact JSON preserves complete fields without a detail click',!rawLog.includes('\n')&&JSON.parse(rawLog).detail.traceId==='trace-fixture'&&JSON.parse(rawLog).detail.durationMs===1234&&JSON.parse(rawLog).detail.retry===false);
+check('JSON view defaults to compact text with wrapping',!(await page.getByRole('checkbox',{name:'Format JSON',exact:true}).isChecked())&&await page.getByRole('checkbox',{name:'Word wrap',exact:true}).isChecked());
+await page.getByRole('searchbox',{name:'Search',exact:true}).fill('"level":"ERROR"');
+await page.waitForFunction(()=>document.querySelectorAll('.log-json-record').length===1);
+check('Case-insensitive full-JSON search highlights across keys and punctuation',await page.locator('.log-json-record mark').allTextContents().then(parts=>parts.join('')==='"level":"error"'));
+await page.getByRole('checkbox',{name:'Format JSON',exact:true}).check();
+check('Global formatting retains every JSON field and cross-token highlight',await page.locator('.log-json-record pre').first().textContent().then(value=>value.includes('\n')&&JSON.stringify(JSON.parse(value))===rawLog)&&await page.locator('.log-json-record mark').allTextContents().then(parts=>parts.join('')==='"level":"error"'));
+await page.screenshot({path:out+'/logs-formatted-en.png'});
+await page.getByRole('checkbox',{name:'Format JSON',exact:true}).uncheck();
+await page.getByRole('checkbox',{name:'Word wrap',exact:true}).uncheck();
+check('No-wrap mode provides horizontal scrolling inside the viewer',await page.locator('.log-json-scroll').evaluate(el=>el.scrollWidth>el.clientWidth)&&await page.locator('.log-json-record pre').first().evaluate(el=>getComputedStyle(el).whiteSpace==='pre'));
+await page.getByRole('checkbox',{name:'Word wrap',exact:true}).check();
+await page.getByRole('searchbox',{name:'Search',exact:true}).fill('');
+await page.getByRole('combobox',{name:'Level',exact:true}).selectOption('error');
+await page.waitForFunction(()=>document.querySelectorAll('.log-json-record').length===1);
+await page.locator('.log-json-record pre').first().focus();
+check('Keyboard selection enables record actions without opening another panel',await page.getByRole('button',{name:'Copy selected log',exact:true}).isEnabled()&&await page.locator('.log-json-record.is-selected').count()===1&&await page.locator('#log-record-detail').count()===0);
+await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__fixture.copiedLog=text}}}));
+const beforeCopyLayout=await page.locator('.log-selection-actions button, .log-json-scroll').evaluateAll(nodes=>nodes.map(el=>{const r=el.getBoundingClientRect();return [r.x,r.y,r.width,r.height]}));
+await page.getByRole('button',{name:'Copy selected log',exact:true}).click();
+await page.getByText('Copied',{exact:true}).waitFor();
+check('Copy feedback stays inside its fixed-width button without moving the log viewer',JSON.stringify(await page.locator('.log-selection-actions button, .log-json-scroll').evaluateAll(nodes=>nodes.map(el=>{const r=el.getBoundingClientRect();return [r.x,r.y,r.width,r.height]})))===JSON.stringify(beforeCopyLayout));
+await page.screenshot({path:out+'/logs-copy-en.png'});
+check('Copy preserves complete JSON rather than only the matched text',await page.evaluate(expected=>window.__fixture.copiedLog===expected,rawLog));
+check('Raw severity, duration and navigation cause remain visible',await page.locator('.log-json-record pre').first().textContent().then(value=>{const r=JSON.parse(value);return r.level==='error'&&r.detail.durationMs===1234&&r.detail.errorDescription==='ERR_CONNECTION_RESET'}));
+await page.getByRole('button',{name:'Related logs',exact:true}).click();
+await page.locator('.log-correlation').waitFor();
+check('Exact request association is visible and preserves the event name',await page.locator('.log-correlation').innerText().then(value=>value.includes('trace-fixture'))&&await page.locator('.log-json-record').first().textContent().then(value=>JSON.parse(value).event==='browser.connection_failed'));
+await page.getByRole('button',{name:'Clear correlation',exact:true}).click();
+await page.getByRole('combobox',{name:'Level',exact:true}).selectOption('error');
+await page.waitForFunction(()=>document.querySelectorAll('.log-json-record').length===1);
+if(await page.getByRole('button',{name:'Pause updates',exact:true}).count())await page.getByRole('button',{name:'Pause updates',exact:true}).click();
+check('Reading can pause updates without clearing records',await page.getByRole('button',{name:'Show latest',exact:true}).isVisible()&&await page.locator('.log-json-record').count()===1);
+await page.getByRole('button',{name:'Export diagnostics',exact:true}).click();
+check('Export defaults to all retained logs independently of the level filter',await page.getByRole('combobox',{name:'Time range',exact:true}).inputValue()==='all');
+await page.getByRole('combobox',{name:'Time range',exact:true}).selectOption('custom');
+await page.getByLabel('Start time',{exact:true}).fill('2026-10-10T09:00');
+await page.getByLabel('End time (exclusive)',{exact:true}).fill('2026-10-10T08:00');
+await page.getByRole('button',{name:'Save ZIP',exact:true}).click();
+await page.getByText('Start must be before end.',{exact:true}).waitFor();
+check('Invalid custom range is rejected before requesting export',!(await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='exportLogs'))));
+await page.getByLabel('End time (exclusive)',{exact:true}).fill('2026-10-10T10:00');
+await page.screenshot({path:out+'/logs-export-en.png'});
+await page.getByRole('button',{name:'Save ZIP',exact:true}).click();
+await page.getByText('Diagnostic bundle exported.',{exact:true}).waitFor();
+check('Custom export sends timestamps and timezone but no viewing filters',await page.evaluate(()=>{const options=window.__fixture.calls.findLast(call=>call[0]==='exportLogs')[1];return options.range==='custom'&&options.start.endsWith('Z')&&options.end.endsWith('Z')&&Boolean(options.timeZone)&&!('level'in options)&&!('search'in options)}));
+await page.getByRole('combobox',{name:'Level',exact:true}).selectOption('all');
+await page.getByRole('button',{name:'Show latest',exact:true}).click();
+await page.waitForFunction(()=>document.querySelectorAll('.log-json-record').length===2);
+check('Unselected live view disables copy instead of copying a stale record',await page.getByRole('button',{name:'Copy selected log',exact:true}).isDisabled());
+const literalMessage='İ 中文 😀 "quoted"\nline two <img src=x onerror="window.__injected=true"> [a+b]';
+await page.evaluate(message=>{window.__fixture.logRecords=[{at:'2026-09-30T08:32:00Z',event:'browser.literal_fixture',level:'warning',detail:{message,nested:{flag:false,amount:1.25e-7,missing:null},stack:'Frame one\nFrame two'}}]},literalMessage);
+await page.getByRole('searchbox',{name:'Search',exact:true}).fill('[a+b]');
+await page.waitForFunction(()=>document.querySelector('.log-json-record pre')?.textContent.includes('literal_fixture'));
+check('Unicode before a match does not shift literal search highlighting',await page.locator('.log-json-record mark').allTextContents().then(parts=>parts.join('')==='[a+b]'));
+check('Escapes and HTML-like log values stay literal and round-trip intact',await page.locator('.log-json-record pre').textContent().then(value=>JSON.parse(value).detail.message===literalMessage)&&await page.locator('.log-json-record img, .log-json-record script').count()===0&&await page.evaluate(()=>!window.__injected));
+await page.getByRole('checkbox',{name:'Format JSON',exact:true}).check();
+check('Formatted nested values and stack remain complete JSON',await page.locator('.log-json-record pre').textContent().then(value=>{const r=JSON.parse(value);return r.detail.message===literalMessage&&r.detail.nested.amount===1.25e-7&&r.detail.nested.missing===null&&r.detail.stack==='Frame one\nFrame two'}));
+await page.getByRole('searchbox',{name:'Search',exact:true}).fill('no-matching-fixture');
+await page.getByText('No matching records.',{exact:true}).waitFor();
+check('Empty search disables selected-record actions',await page.getByRole('button',{name:'Copy selected log',exact:true}).isDisabled()&&await page.getByRole('button',{name:'Related logs',exact:true}).isDisabled());
+await page.evaluate(()=>{window.__fixture.logRecords=Array.from({length:130},(_,n)=>({at:new Date(Date.UTC(2026,8,30)+n*1000).toISOString(),event:'browser.large_fixture',level:'info',detail:{retry:n,message:'x'.repeat(9000)}}));window.__fixture.logStarts=[0]});
+await page.getByRole('checkbox',{name:'Format JSON',exact:true}).uncheck();
+await page.getByRole('searchbox',{name:'Search',exact:true}).fill('');
+await page.waitForFunction(()=>document.querySelector('.log-json-record pre')?.textContent.includes('large_fixture')&&document.querySelector('.log-json-scroll').getAttribute('aria-busy')==='false');
+const firstCount=await page.locator('.log-json-record').count();
+check('Large JSON uses a byte-bounded page below 100 records',firstCount>0&&firstCount<100&&await page.locator('.log-pagination').textContent().then(text=>text.includes(`1–${firstCount} / 130`)));
+await page.getByRole('button',{name:'Next',exact:true}).click();
+await page.waitForFunction(n=>document.querySelector('.log-pagination')?.textContent.includes(`${n+1}–`)&&document.querySelector('.log-json-scroll').getAttribute('aria-busy')==='false',firstCount);
+check('Next fetches the next cursor without skipping byte-limited records',await page.locator('.log-json-record pre').first().textContent().then(value=>JSON.parse(value).detail.retry===129-firstCount)&&await page.evaluate(n=>window.__fixture.calls.some(call=>call[0]==='queryLogs'&&call[1].cursor===String(n)),firstCount));
+await page.getByRole('button',{name:'Previous',exact:true}).click();
+await page.waitForFunction(()=>document.querySelector('.log-pagination')?.textContent.includes('1–')&&document.querySelector('.log-json-scroll').getAttribute('aria-busy')==='false');
+check('Previous restores the complete first byte-limited page',await page.locator('.log-json-record').count()===firstCount);
+await page.evaluate(()=>{window.__fixture.expireLogs=true});
+await page.getByRole('button',{name:'Next',exact:true}).click();
+await page.getByText('This browsing snapshot has expired.',{exact:false}).waitFor();
+check('Expired snapshots offer explicit reload and disable paging',await page.getByRole('button',{name:'Reload',exact:true}).isVisible()&&await page.getByRole('button',{name:'Next',exact:true}).isDisabled());
+await page.evaluate(()=>{window.__fixture.expireLogs=false;window.__fixture.logRecords=[{at:'2026-09-30T08:32:00Z',event:'browser.oversized_fixture',level:'warning',detail:{stages:Array.from({length:80},()=>({message:'long-marker '+ 'z'.repeat(9000)}))}}]});
+await page.getByRole('button',{name:'Reload',exact:true}).click();
+await page.waitForFunction(()=>document.querySelector('.log-json-record pre')?.textContent.includes('oversized_fixture')&&document.querySelector('.log-json-scroll').getAttribute('aria-busy')==='false');
+check('Oversized JSON stays complete with a bounded DOM',await page.locator('.log-json-record span').count()===1&&await page.locator('.log-json-record pre').textContent().then(value=>JSON.parse(value).detail.stages.length===80));
+await page.locator('.log-json-record pre').first().focus();
+await page.getByRole('button',{name:'Copy selected log',exact:true}).click();
+check('Oversized copy includes the whole JSON record',await page.evaluate(()=>JSON.parse(window.__fixture.copiedLog).detail.stages.length===80));
+await page.getByRole('searchbox',{name:'Search',exact:true}).fill('long-marker');
+await page.waitForFunction(()=>document.querySelectorAll('.log-json-record mark').length===80);
+check('Long JSON keeps matches with fewer syntax nodes',await page.locator('.log-json-record span, .log-json-record mark').count()<200);
+await page.evaluate(()=>{window.__fixture.logRecords=Array.from({length:301},(_,n)=>({at:new Date(Date.UTC(2026,8,30)+n*1000).toISOString(),event:'browser.page_size_fixture',level:'info',detail:{retry:n}}))});
+await page.getByRole('searchbox',{name:'Search',exact:true}).fill('page_size_fixture');
+await page.getByRole('combobox',{name:'Level',exact:true}).selectOption('info');
+await page.getByRole('combobox',{name:'Source',exact:true}).selectOption('browser');
+await page.getByRole('combobox',{name:'Per page',exact:true}).selectOption('25');
+await page.waitForFunction(()=>document.querySelectorAll('.log-json-record').length===25&&document.querySelector('.log-json-scroll').getAttribute('aria-busy')==='false');
+check('25-row preference is saved and used by the query',await page.evaluate(()=>window.__fixture.state.logPageSize===25&&window.__fixture.calls.findLast(call=>call[0]==='queryLogs')[1].pageSize===25));
+await page.getByRole('button',{name:'Next',exact:true}).click();
+await page.waitForFunction(()=>document.querySelector('.log-pagination')?.textContent.includes('26–50 / 301')&&document.querySelector('.log-json-scroll').getAttribute('aria-busy')==='false');
+await page.locator('.log-json-record pre').first().focus();
+const pausedQuery=await page.evaluate(()=>window.__fixture.calls.findLast(call=>call[0]==='queryLogs')[1]);
+await page.getByRole('combobox',{name:'Per page',exact:true}).selectOption('50');
+await page.waitForFunction(()=>document.querySelector('.log-pagination')?.textContent.includes('1–50 / 301')&&document.querySelector('.log-json-scroll').getAttribute('aria-busy')==='false');
+check('Resizing returns to the first page and clears selected-record actions',await page.getByRole('button',{name:'Previous',exact:true}).isDisabled()&&await page.getByRole('button',{name:'Copy selected log',exact:true}).isDisabled());
+check('Resizing preserves keyword, filters and the paused timestamp',await page.evaluate(previous=>{const q=window.__fixture.calls.findLast(call=>call[0]==='queryLogs')[1];return q.search===previous.search&&q.level===previous.level&&q.source===previous.source&&q.before===previous.before&&!q.cursor},pausedQuery)&&await page.getByRole('button',{name:'Show latest',exact:true}).isVisible());
+await page.getByRole('combobox',{name:'Per page',exact:true}).selectOption('200');
+await page.waitForFunction(()=>document.querySelectorAll('.log-json-record').length===200&&document.querySelector('.log-json-scroll').getAttribute('aria-busy')==='false');
+check('200-row option fetches 200 short records',await page.locator('.log-pagination').textContent().then(text=>text.includes('1–200 / 301')));
+await page.getByRole('tab',{name:'Usage',exact:true}).click();await page.getByRole('tab',{name:'Logs',exact:true}).click();
+await page.waitForFunction(()=>document.querySelectorAll('.log-json-record').length===200&&document.querySelector('.log-json-scroll').getAttribute('aria-busy')==='false');
+check('Page-size choice survives leaving and reopening the logs view',await page.getByRole('combobox',{name:'Per page',exact:true}).inputValue()==='200');
+await page.evaluate(()=>{window.__fixture.failLogPageSize=true});
+await page.getByRole('combobox',{name:'Per page',exact:true}).selectOption('25');
+await page.getByRole('alert').filter({hasText:'Fixture preference save failed'}).waitFor();
+check('Preference save failure retains the existing page size and records',await page.getByRole('combobox',{name:'Per page',exact:true}).inputValue()==='200'&&await page.locator('.log-json-record').count()===200);
+await page.evaluate(()=>{window.__fixture.failLogPageSize=false});
+await page.getByRole('combobox',{name:'Per page',exact:true}).selectOption('100');
+await page.waitForFunction(()=>document.querySelectorAll('.log-json-record').length===100&&document.querySelector('.log-json-scroll').getAttribute('aria-busy')==='false');
+check('Saving a new page size clears the persistence error',await page.getByRole('alert').filter({hasText:'Fixture preference save failed'}).count()===0);
+await page.getByRole('searchbox',{name:'Search',exact:true}).fill('clear-page-size-fixture');
+await page.getByText('No matching records.',{exact:true}).waitFor();
+await page.evaluate(()=>{delete window.__fixture.logRecords});
+await page.getByRole('checkbox',{name:'Format JSON',exact:true}).uncheck();
+await page.getByRole('searchbox',{name:'Search',exact:true}).fill('');
+await page.waitForFunction(()=>document.querySelectorAll('.log-json-record').length===2);
 await page.screenshot({path:out+'/logs-en.png'});
+await page.locator('.language-toggle').click();
+await page.getByRole('tab',{name:'运行日志',exact:true}).waitFor();
+check('Switching to Chinese preserves exact original JSON and UTC timestamps',await page.locator('.log-json-record pre').first().textContent().then(value=>value===rawLog));
+await page.screenshot({path:out+'/logs-zh.png'});
+await page.setViewportSize({width:390,height:1050});await page.waitForTimeout(300);
+check('Narrow log actions form two aligned equal-width rows',await page.locator('.log-selection-actions button').evaluateAll(nodes=>{const r=nodes.map(el=>el.getBoundingClientRect());return r.length===4&&Math.abs(r[0].width-r[1].width)<1&&Math.abs(r[0].top-r[1].top)<1&&Math.abs(r[2].top-r[3].top)<1&&r[2].top>r[0].top}));
+check('Narrow wrapped JSON stays within its own viewer',await page.locator('.log-json-scroll').evaluate(el=>el.scrollWidth<=el.clientWidth));
+check('Page-size label and selector stay together inside a narrow page',await page.locator('.log-page-size').evaluate(el=>{const r=el.getBoundingClientRect(),s=el.querySelector('select').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&s.top>=r.top&&s.bottom<=r.bottom}));
+await page.getByRole('button',{name:'导出诊断包',exact:true}).click();
+check('Narrow Chinese logs and date controls stay within the page',await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
+await page.screenshot({path:out+'/logs-export-zh-390.png',fullPage:true});
+await page.getByRole('button',{name:'取消',exact:true}).click();
+await page.setViewportSize({width:1440,height:1050});
+await page.locator('.language-toggle').click();
 for(const width of [1440,900,390]){await page.setViewportSize({width,height:1050});for(const name of ['Overview','Connection & Models','Usage & Diagnostics']){await nav(name);await page.waitForTimeout(200);if(name==='Overview')check(`${width} flow layout preserves readable content`,await page.locator('.usage-flow li').evaluateAll((nodes,width)=>new Set(nodes.map(el=>Math.round(el.getBoundingClientRect().top))).size===(width>560?1:3),width));check(`${width} ${name} no horizontal overflow`,await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));if(name==='Overview')await page.screenshot({path:out+'/overview-en-'+width+'.png',fullPage:true});}await pref('Preferences');check(`${width} Preferences no horizontal overflow`,await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));}
 await page.waitForFunction(()=>getComputedStyle(document.querySelector('.surface-transition')).opacity==='1');
 await page.screenshot({path:out+'/preferences-en-mobile.png'});
@@ -377,17 +558,17 @@ await page.emulateMedia({reducedMotion:'no-preference'});
 await page.screenshot({path:out+'/startup-activity-en.png'});
 await page.evaluate(()=>window.__fixture.emitStartup({status:'failed',stage:'verifying-copy',elapsedMs:300,message:'Fixture disk error'}));
 await page.getByRole('button',{name:'Restart',exact:true}).waitFor();
-check('Failure stops progress and retains inline diagnostics',await page.getByRole('progressbar').count()===0&&await page.locator('.app-shell').count()===0&&await page.getByRole('button',{name:'Export diagnostic log',exact:true}).isEnabled());
+check('Failure stops progress and retains inline diagnostics',await page.getByRole('progressbar').count()===0&&await page.locator('.app-shell').count()===0&&await page.getByRole('button',{name:'Export diagnostics',exact:true}).isEnabled());
 await page.getByText('View details',{exact:true}).click();
 check('Failure details expand without entering the workspace',await page.getByText('Fixture disk error',{exact:true}).isVisible());
-await page.getByRole('button',{name:'Export diagnostic log',exact:true}).click();
-await page.getByText('Diagnostic log exported.',{exact:true}).waitFor();
+await page.getByRole('button',{name:'Export diagnostics',exact:true}).click();
+await page.getByText('Diagnostic bundle exported.',{exact:true}).waitFor();
 check('Failure exports through the safe log API',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='exportLogs')));
 await page.evaluate(()=>{window.__fixture.cancelExport=true});
-await page.getByRole('button',{name:'Export diagnostic log',exact:true}).click();
-check('Cancelling export does not report success',await page.getByText('Diagnostic log exported.',{exact:true}).count()===0);
+await page.getByRole('button',{name:'Export diagnostics',exact:true}).click();
+check('Cancelling export does not report success',await page.getByText('Diagnostic bundle exported.',{exact:true}).count()===0);
 await page.evaluate(()=>{window.__fixture.failExport=true});
-await page.getByRole('button',{name:'Export diagnostic log',exact:true}).click();
+await page.getByRole('button',{name:'Export diagnostics',exact:true}).click();
 await page.getByText('Fixture export error',{exact:true}).waitFor();
 check('Export failures remain recoverable on the startup screen',await page.getByRole('button',{name:'Restart',exact:true}).isEnabled());
 await page.getByRole('button',{name:'Restart',exact:true}).click();
@@ -405,16 +586,37 @@ check('Ready snapshot replaces startup with the workspace',await page.locator('.
 
 // Exercise real initial renderer mounting as well as events on an already mounted renderer.
 
+await nav('License');
+await page.getByRole('button',{name:'Update license',exact:true}).waitFor();
+check('Activated license shows status and expiry without the renewal form',await page.getByRole('textbox',{name:'License',exact:true}).count()===0&&(await page.locator('.license-summary').innerText()).includes('Perpetual'));
+await page.screenshot({path:out+'/license-active-en.png'});
+await page.getByRole('button',{name:'Update license',exact:true}).click();
+const renewal=page.getByRole('textbox',{name:'License',exact:true});
+check('Opening renewal focuses the license input',await renewal.evaluate(el=>el===document.activeElement));
+await renewal.fill('invalid');await page.getByRole('button',{name:'Update license',exact:true}).click();
+await page.getByRole('alert').filter({hasText:'Invalid license'}).waitFor();
+check('Rejected renewal preserves current activation',await page.evaluate(()=>window.__fixture.license.state==='active')&&(await page.locator('.license-summary').innerText()).includes('Activated'));
+await page.screenshot({path:out+'/license-renewal-error-en.png'});
+await page.getByRole('button',{name:'Cancel',exact:true}).click();
+check('Cancelling renewal returns keyboard focus to its action',await page.getByRole('button',{name:'Update license',exact:true}).evaluate(el=>el===document.activeElement));
+await page.getByRole('button',{name:'Update license',exact:true}).click();await renewal.fill('fixture-valid');
+await page.getByRole('button',{name:'Update license',exact:true}).click();await page.getByText('License saved',{exact:true}).waitFor();
+check('Successful renewal closes the form and clears the code',await renewal.count()===0);
+await page.locator('.language-toggle').click();await page.getByRole('region',{name:'产品授权',exact:true}).first().waitFor();
+check('License feedback follows the selected language',await page.getByText('授权已保存',{exact:true}).isVisible());
+await page.screenshot({path:out+'/license-active-zh.png'});
+await page.locator('.language-toggle').click();
+
 // Visual review of the shared system and the About page uses the same isolated IPC fixture.
 await nav('About');
-check('About retains both README slogan lines',await page.getByRole('heading',{name:'Reason with web models. Get it done in Codex.',exact:true}).count()===1);
-check('About explains three capabilities and identifies the current build',await page.locator('.about-capabilities section').count()===3&&(await page.locator('.about-footer').innerText()).includes('Windows · v1.0.0 · DEV'));
-await page.getByRole('button',{name:'Documentation',exact:true}).click();
-check('Documentation opens the localized repository entry through IPC',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='openExternal'&&call[1]==='https://github.com/cmyk-labs/web2harness/blob/main/README.md#documentation')));
-await page.getByRole('button',{name:'Open-source license',exact:true}).click();
-check('About retains the project license but omits X and the third-party shortcut',await page.locator('.about-links button').count()===3&&await page.getByRole('button',{name:/Third-party|Project updates/}).count()===0&&await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='openExternal'&&call[1]==='https://github.com/cmyk-labs/web2harness/blob/main/LICENSE')));
-check('About uses one compact page header without a repeated logo',await page.locator('.about-header h1').textContent()==='About'&&await page.locator('.about-header .brand-mark').count()===0&&await page.locator('.about-header').evaluate(el=>el.getBoundingClientRect().height<80));
-check('The operating diagram identifies three components and preserves tool boundaries',await page.locator('.operating-node').count()===3&&await page.locator('.operating-connector').count()===2&&await page.locator('.operating-modes > div').count()===3&&(await page.locator('.operating-loop').innerText()).includes('Codex sandbox and approval rules'));
+check('About shows a concise product description',await page.locator('.about-product').innerText().then(text=>text.includes('ChatGPT web models')&&text.includes('Codex')));
+check('About identifies the current build and platform',(await page.locator('.about-product').innerText()).includes('v1.0.0')&&(await page.locator('.about-metadata').innerText()).includes('Windows'));
+check('About omits repository links and the license metadata row',await page.locator('.about-links').count()===0&&await page.getByText('Resources & support',{exact:true}).count()===0&&await page.locator('.about-metadata > div').count()===1&&!(await page.locator('.about-metadata').innerText()).includes('MIT'));
+check('About keeps the operating explanation collapsed by default',await page.locator('.about-header h1').textContent()==='About'&&!await page.locator('.about-details').evaluate(el=>el.open));
+await page.locator('.about-details > summary').click();
+check('The operating diagram identifies three components and preserves tool boundaries',await page.locator('.operating-node').count()===3&&await page.locator('.operating-connector').count()===2&&await page.locator('.operating-modes tbody tr').count()===2&&(await page.locator('.operating-notes').innerText()).includes('sandbox and approval rules'));
+check('Mode comparison exposes four column headers and a recommendation',JSON.stringify(await page.locator('.operating-modes thead th').allTextContents())===JSON.stringify(['Mode','Execution capabilities','Differences from native Codex','When to use'])&&await page.locator('.mode-recommended').textContent()==='Recommended');
+check('Comparison distinguishes manual code orchestration from native permissions',(await page.locator('.operating-modes tbody tr').nth(1).innerText()).includes('manual mode does not expose arbitrary JavaScript')&&(await page.locator('.operating-notes').innerText()).includes('file permissions'));
 await page.evaluate(()=>window.__fixture.emitUpdate({status:'available',version:'1.0.1'}));
 await page.locator('.row').getByRole('button',{name:'Update to v1.0.1',exact:true}).click();
 check('About retains the existing update action',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='installUpdate')));
@@ -463,18 +665,19 @@ check('Manual update retry refreshes status and check time',await page.evaluate(
 await page.evaluate(()=>window.__fixture.emitUpdate({status:'disabled'}));
 await page.waitForFunction(()=>!document.querySelector('.sidebar-update'));
 check('Sidebar update stays hidden when no update is available',await page.locator('.sidebar-update').count()===0);
-await page.getByRole('button',{name:'Documentation',exact:true}).focus();
-await page.keyboard.press('Tab');
-check('Keyboard focus is visible on resource controls',await page.getByRole('button',{name:'GitHub repository',exact:true}).evaluate(el=>el===document.activeElement&&getComputedStyle(el).outlineWidth==='2px'));
+await page.getByRole('button',{name:'Check for updates',exact:true}).focus();
+check('Removed resource controls are absent from keyboard navigation',await page.getByRole('button',{name:'GitHub repository',exact:true}).count()===0);
 await page.locator('.content').evaluate(el=>{el.scrollTop=0});
+if(await page.locator('.about-details').evaluate(el=>el.open))await page.locator('.about-details > summary').click();
 await page.screenshot({path:out+'/about-en.png'});
 await page.locator('.language-toggle').click();await page.getByRole('region',{name:'关于',exact:true}).waitFor();
-check('About has the original Chinese project slogan',(await page.locator('.about-statement h2').innerText()).includes('用 Web 模型推理。'));
-await page.getByRole('button',{name:'使用文档',exact:true}).click();
-check('Chinese documentation resolves independently',await page.evaluate(()=>window.__fixture.calls.some(call=>call[0]==='openExternal'&&call[1]==='https://github.com/cmyk-labs/web2harness/blob/main/README.zh-CN.md#documentation')));
+check('Chinese About describes the product',(await page.locator('.about-product').innerText()).includes('统一管理连接'));
+check('Chinese About omits resources and repository links',await page.getByText('资源与支持',{exact:true}).count()===0&&await page.getByRole('button',{name:'使用文档',exact:true}).count()===0);
+if(!await page.locator('.about-details').evaluate(el=>el.open))await page.locator('.about-details > summary').click();
 await page.locator('.operating-diagram').scrollIntoViewIfNeeded();
 await page.screenshot({path:out+'/operating-diagram-zh.png'});
 await page.locator('.content').evaluate(el=>{el.scrollTop=0});
+await page.locator('.about-details > summary').click();
 await page.screenshot({path:out+'/about-zh.png'});
 await page.locator('.language-toggle').click();await page.getByRole('region',{name:'About',exact:true}).waitFor();
 const contrast=await page.evaluate(()=>{
@@ -486,13 +689,18 @@ const contrast=await page.evaluate(()=>{
 check('All three text levels exceed 4.5:1 on the workspace',contrast.every(ratio=>ratio>=4.5));
 for(const width of [1440,900,390]){
   await page.setViewportSize({width,height:900});
-  await nav('About');await waitLayout();
+  await nav('About');await waitLayout();if(await page.locator('.about-details').evaluate(el=>el.open))await page.locator('.about-details > summary').click();
   await page.locator('.content').evaluate(el=>{el.scrollTop=0});
   check(width+' About has no clipped content',await page.locator('.content').evaluate(el=>el.scrollWidth<=el.clientWidth));
   await page.screenshot({path:out+'/about-en-'+width+'.png'});
+  if(!await page.locator('.about-details').evaluate(el=>el.open))await page.locator('.about-details > summary').click();
   await page.locator('.operating-diagram').scrollIntoViewIfNeeded();
   check(width+' operating diagram preserves readable nodes',await page.locator('.operating-node').evaluateAll(nodes=>nodes.every(el=>el.scrollWidth<=el.clientWidth)));
   await page.screenshot({path:out+'/operating-diagram-en-'+width+'.png'});
+  await page.locator('.operating-modes-scroll').scrollIntoViewIfNeeded();
+  check(width+' mode table keeps page width bounded',await page.locator('.content').evaluate(el=>el.scrollWidth<=el.clientWidth));
+  if(width===390){await page.locator('.operating-modes-scroll').focus();await page.keyboard.press('ArrowRight');await page.waitForTimeout(200);check('Narrow mode table supports keyboard scrolling',await page.locator('.operating-modes-scroll').evaluate(el=>el.scrollLeft>0));await page.locator('.operating-modes-scroll').evaluate(el=>el.scrollLeft=0);}
+  await page.screenshot({path:out+'/mode-comparison-en-'+width+'.png'});
 }
 await page.setViewportSize({width:1280,height:720});
 for(const name of ['Overview','Runtime controls','Connection & Models','Preferences','Usage & Diagnostics','About']){
@@ -616,7 +824,7 @@ for(const firstRun of [false,true]){
  await startupPage.goto(`${origin}/?preparing${firstRun?'&first-run':''}`);
  await startupPage.getByText('正在检查本地安装',{exact:true}).waitFor();
  check(`Initial startup gates ${firstRun?'onboarding':'workspace'}`,await startupPage.locator('.app-shell,.onboarding').count()===0&&!await startupPage.evaluate(()=>window.__fixture.prematureContent));
- check(`Initial startup uses ${firstRun?'system':'saved'} language`,await startupPage.locator('.startup-subtitle').textContent()==='正在启动工作空间'&&await startupPage.locator('html').getAttribute('lang')==='zh-CN');
+ check(`Initial startup uses ${firstRun?'system':'saved'} language`,await startupPage.getByRole('heading',{name:'正在启动工作空间',exact:true}).textContent()==='正在启动工作空间'&&await startupPage.locator('html').getAttribute('lang')==='zh-CN');
  check('Warm path omits installation explanation',(await startupPage.locator('.startup-hint').textContent()).trim()==='');
  await startupPage.evaluate(()=>window.__fixture.emitStartup({status:'preparing',stage:'verifying-source',elapsedMs:200,completedFiles:697,totalFiles:3944}));
  await startupPage.getByText('当前阶段 · 697 / 3,944 个文件',{exact:true}).waitFor();
@@ -639,43 +847,28 @@ await startupPage.close();
 const welcomePage = await context.newPage();
 welcomePage.on('pageerror', error => errors.push(error.message));
 await welcomePage.goto(`${origin}/?first-run&production-ui`);
-await welcomePage.getByRole('button', { name: '跳过，开始配置', exact: true }).waitFor();
+await welcomePage.getByRole('button', { name: '继续配置', exact: true }).waitFor();
 await welcomePage.setViewportSize({ width: 1280, height: 720 });
-await welcomePage.screenshot({ path: out + '/welcome-star-zh.png' });
-check('First-use invitation is optional and does not open GitHub automatically',await welcomePage.evaluate(()=>window.__fixture.calls.every(call=>call[0]!=='openRepository'))&&await welcomePage.getByRole('button',{name:'跳过，开始配置',exact:true}).isEnabled());
+check('Welcome content is centered in the usable window',await welcomePage.locator('.entry-content').evaluate(el=>{const r=el.getBoundingClientRect();return Math.abs(r.left+r.width/2-innerWidth/2)<2&&Math.abs(r.top+r.height/2-innerHeight/2)<40}));
+check('Welcome restores the product slogan at the shared heading size',(await welcomePage.locator('h1').innerText()).replace(/\s+/g,' ').trim()==='用 Web 模型推理。 让 Codex 把事做完。'&&await welcomePage.locator('h1').evaluate(el=>getComputedStyle(el).fontSize==='24px'));
+await welcomePage.screenshot({ path: out + '/welcome-zh.png' });
+check('First-use setup has no support prompt or external launch',await welcomePage.locator('.onboarding-support').count()===0&&await welcomePage.getByRole('button',{name:/GitHub|Star/}).count()===0&&await welcomePage.evaluate(()=>window.__fixture.calls.every(call=>!['openExternal','openRepository','startGitHubSupport'].includes(call[0]))));
 await welcomePage.getByRole('radio', { name: 'English', exact: true }).click();
 await welcomePage.setViewportSize({ width: 390, height: 900 });
-check('The first-use invitation fits a narrow window',await welcomePage.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
-await welcomePage.screenshot({ path: out + '/welcome-star-en-mobile.png' });
+check('First-use setup fits a narrow window',await welcomePage.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
+await welcomePage.screenshot({ path: out + '/welcome-en-mobile.png' });
+await welcomePage.setViewportSize({width:640,height:360});
+await welcomePage.getByRole('button',{name:'Continue setup',exact:true}).scrollIntoViewIfNeeded();
+check('Short welcome windows keep the primary action reachable',await welcomePage.getByRole('button',{name:'Continue setup',exact:true}).evaluate(el=>{const r=el.getBoundingClientRect();return r.top>=46&&r.bottom<=innerHeight}));
+await welcomePage.screenshot({path:out+'/welcome-en-short.png'});
 await welcomePage.evaluate(() => { window.__fixture.failOnboarding = true; });
-await welcomePage.getByRole('button', { name: 'Skip and start setup', exact: true }).click();
+await welcomePage.getByRole('button', { name: 'Continue setup', exact: true }).click();
 await welcomePage.getByText('Fixture onboarding failed', { exact: true }).waitFor();
 check('Failed completion retains the welcome screen for retry',await welcomePage.locator('.onboarding').count()===1&&!await welcomePage.evaluate(()=>window.__fixture.state.onboardingComplete));
 await welcomePage.evaluate(() => { window.__fixture.failOnboarding = false; });
-await welcomePage.getByRole('button', { name: 'Skip and start setup', exact: true }).click();
+await welcomePage.getByRole('button', { name: 'Continue setup', exact: true }).click();
 await welcomePage.getByRole('region', { name: 'Overview', exact: true }).waitFor();
-check('Skipping completes onboarding without claiming a repository visit',await welcomePage.evaluate(()=>window.__fixture.state.onboardingComplete&&!window.__fixture.state.githubOpened&&window.__fixture.state.language==='en'));
-await welcomePage.goto(`${origin}/?first-run&production-ui`);
-await welcomePage.getByRole('button', { name: '在 GitHub 上 Star', exact: true }).waitFor();
-await welcomePage.evaluate(() => { window.__fixture.failRepository = true; });
-await welcomePage.getByRole('button', { name: '在 GitHub 上 Star', exact: true }).click();
-await welcomePage.getByText('Fixture repository opening failed', { exact: true }).waitFor();
-check('A failed repository launch leaves the skip path available',await welcomePage.getByRole('button',{name:'跳过，开始配置',exact:true}).isEnabled()&&!await welcomePage.evaluate(()=>window.__fixture.state.githubOpened));
-await welcomePage.evaluate(() => {
-  window.__fixture.failRepository = false;
-  window.__fixture.holdRepository = true;
-});
-await welcomePage.getByRole('button', { name: '在 GitHub 上 Star', exact: true }).click();
-const openingRepository = welcomePage.getByRole('button', { name: '正在打开…', exact: true });
-await openingRepository.waitFor();
-await openingRepository.evaluate(button => button.click());
-check('Pending repository opening prevents duplicate IPC calls',await openingRepository.isDisabled()&&await welcomePage.evaluate(()=>window.__fixture.calls.filter(call=>call[0]==='openRepository').length===2));
-await welcomePage.evaluate(() => { window.__fixture.holdRepository = false; window.__fixture.releaseRepository(); });
-await welcomePage.getByRole('button', { name: '继续配置', exact: true }).waitFor();
-check('Opening the repository never pretends that a Star was verified',await welcomePage.locator('.onboarding-repository-opened').isVisible()&&await welcomePage.evaluate(()=>window.__fixture.state.githubOpened&&!window.__fixture.state.onboardingComplete));
-await welcomePage.getByRole('button', { name: '继续配置', exact: true }).click();
-await welcomePage.getByRole('region', { name: '概览', exact: true }).waitFor();
-check('Continue after visiting GitHub enters the workspace',await welcomePage.locator('.onboarding').count()===0&&await welcomePage.evaluate(()=>window.__fixture.state.onboardingComplete));
+check('Language selection completes onboarding without external navigation',await welcomePage.evaluate(()=>window.__fixture.state.onboardingComplete&&window.__fixture.state.language==='en'&&window.__fixture.calls.every(call=>!['openExternal','openRepository','startGitHubSupport'].includes(call[0]))));
 await welcomePage.close();
 check('Renderer has no JavaScript errors',errors.length===0);
 await writeFile(out+'/results.json',JSON.stringify({passed:checks.length,checks,metrics,errors},null,2));console.log(JSON.stringify({passed:checks.length,metrics,errors}));

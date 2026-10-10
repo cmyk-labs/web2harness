@@ -543,13 +543,13 @@ class RuntimeSupervisor {
     this.lastChildOutput[name] = null;
     collectLines(child.stdout, (line) => {
       this.lastChildOutput[name] = redactText(line).slice(0, 1_000);
-      this.logger.info(`runtime.${name}_stdout`, { line });
+      if (!this.logger.ingest?.(line)) this.logger.info(`runtime.${name}_stdout`, { line, severity: "unknown" });
     }, (error) => {
       this.logger.warn(`runtime.${name}_stdout_unavailable`, { message: errorMessage(error) });
     });
     collectLines(child.stderr, (line) => {
       this.lastChildOutput[name] = redactText(line).slice(0, 1_000);
-      this.logger.warn(`runtime.${name}_stderr`, { line });
+      if (!this.logger.ingest?.(line)) this.logger.info(`runtime.${name}_stderr`, { line, severity: "unknown" });
     }, (error) => {
       this.logger.warn(`runtime.${name}_stderr_unavailable`, { message: errorMessage(error) });
     });
@@ -570,7 +570,7 @@ class RuntimeSupervisor {
       const statePersisted = this.tryWriteState(expected ? "stopping" : "degraded", detail);
       this.logger[expected ? "info" : "error"](
         error ? `runtime.${name}_spawn_failed` : `runtime.${name}_exited`,
-        error ? { message: error.message } : { code, signal },
+        error ? { message: error.message, pid: child.pid, expected } : { code, signal, pid: child.pid, expected },
       );
       if (!expected && restartable && statePersisted) this.scheduleRecovery(name);
     };

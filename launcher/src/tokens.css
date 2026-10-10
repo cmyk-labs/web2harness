@@ -39,6 +39,9 @@
   --color-text-secondary: #b9c0c9;
   --color-text-tertiary: #939da9;
   --color-text-disabled: rgb(255 255 255 / 32%);
+  --color-log-number: #b2c8d6;
+  --color-log-literal: #c6b8cc;
+  --color-log-match: #605023;
   --color-accent: #d8dce2;
   --color-accent-ink: #1b1f24;
   --color-background-accent: rgb(216 220 226 / 8%);
@@ -63,19 +66,19 @@
   --text-sm: 13px;
   --text-base: 14px;
   --text-lg: 16px;
-  --text-title: 30px;
+  --text-title: 24px;
 
   --height-titlebar: 46px;
-  --height-row: 42px;
-  --height-control: 38px;
+  --height-row: 38px;
+  --height-control: 36px;
   --sidebar-width: 252px;
   --content-width: 960px;
   --settings-width: 960px;
-  --space-page: clamp(24px, 4vw, 64px);
+  --space-page: 32px;
 
   --radius-xs: 4px;
   --radius-sm: 6px;
-  --radius-md: 8px;
+  --radius-md: 6px;
   --radius-lg: 12px;
   --radius-round: 999px;
 

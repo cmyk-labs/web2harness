@@ -19,6 +19,7 @@ export const pageName = (page: WorkspacePage, t: Translate) =>
     diagnostics: t("用量与诊断", "Usage & Diagnostics"),
     preferences: t("偏好设置", "Preferences"),
     about: t("关于", "About"),
+    license: t("产品授权", "License"),
   })[page];
 
 export const modeName = (mode: WorkspaceStatus["mode"], t: Translate) =>

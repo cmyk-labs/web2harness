@@ -15,6 +15,7 @@ import {
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { VERSION } from "../src/version";
 import { pruneRuntimeDevelopmentFiles } from "./runtime-distribution";
+import { readTrustedKeysFile } from "../src/licensing/keys";
 
 const root = resolve(import.meta.dir, "..");
 const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
@@ -44,7 +45,18 @@ function embeddedBunExecutable(): string {
   }
   return executable;
 }
-const output = resolve(process.argv[2] ?? join(root, "dist", "runtime"));
+const argumentsList = process.argv.slice(2);
+const developmentLicense = argumentsList.includes("--development-license");
+const keyFile = process.env.WEB2HARNESS_LICENSE_KEYS_FILE;
+if (!keyFile) throw new Error("Every build requires WEB2HARNESS_LICENSE_KEYS_FILE (public keys only)");
+const licenseKeys = readTrustedKeysFile(keyFile);
+if (licenseKeys.purpose !== (developmentLicense ? "development" : "production")) {
+  throw new Error("Release builds require production public keys; test bundles must use --development-license with development keys");
+}
+const positional = argumentsList.filter(arg => arg !== "--development-license");
+if (positional.length > 1 || positional.some(arg => arg.startsWith("--"))) throw new Error("Unknown runtime build arguments");
+const output = resolve(positional[0] ?? join(root, "dist", "runtime"));
+const licenseDefine = { __WEB2HARNESS_LICENSE_KEYS__: JSON.stringify(licenseKeys) };
 const appDir = join(output, "app");
 const runtimeDir = join(output, "runtime");
 const binDir = join(output, "bin");
@@ -57,6 +69,7 @@ mkdirSync(binDir, { recursive: true });
 const build = await Bun.build({
   entrypoints: [join(root, "src", "cli.ts")],
   target: "bun",
+  define: licenseDefine,
   minify: true,
   external: ["playwright-core"],
   packages: "external",
@@ -70,6 +83,7 @@ if (!build.success) {
 const browserHelperBuild = await Bun.build({
   entrypoints: [join(root, "src", "adapters", "chatgpt-web", "browser", "browser-helper-main.ts")],
   target: "node",
+  define: licenseDefine,
   format: "cjs",
   minify: true,
   external: ["playwright-core"],
@@ -211,6 +225,7 @@ writeFileSync(join(output, "manifest.json"), `${JSON.stringify({
   entrypoint: "app/cli.js",
   playwright: JSON.parse(readFileSync(playwrightPackage, "utf8")).version,
   distribution: { omittedDevelopmentFiles },
+  licensing: { required: true, purpose: licenseKeys.purpose, keyIds: Object.keys(licenseKeys.keys) },
   files,
 }, null, 2)}\n`);
 

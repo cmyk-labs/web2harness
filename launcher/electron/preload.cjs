@@ -7,6 +7,8 @@ function subscription(channel, listener) {
 }
 
 contextBridge.exposeInMainWorld("codexWebLauncher", {
+  licenseStatus: () => ipcRenderer.invoke("launcher:license-status"),
+  importLicense: (code) => ipcRenderer.invoke("launcher:license-import", code),
   retryStartup: () => ipcRenderer.invoke("launcher:retry-startup"),
   onStartupState: (listener) => subscription("launcher:startup-state", listener),
   workspaceStatus: () => ipcRenderer.invoke("launcher:workspace-status"),
@@ -15,7 +17,6 @@ contextBridge.exposeInMainWorld("codexWebLauncher", {
   getLimits: () => ipcRenderer.invoke("launcher:limits"),
   setupLimits: () => ipcRenderer.invoke("launcher:limits-setup"),
   setLanguage: (language) => ipcRenderer.invoke("launcher:set-language", language),
-  openRepository: () => ipcRenderer.invoke("launcher:open-repository"),
   completeOnboarding: (language, browserInteractionMode) => ipcRenderer.invoke(
     "launcher:complete-onboarding",
     language,
@@ -57,7 +58,8 @@ contextBridge.exposeInMainWorld("codexWebLauncher", {
   setPreference: (key, value) => ipcRenderer.invoke("launcher:set-preference", key, value),
   setSidebarState: (state) => ipcRenderer.invoke("launcher:sidebar-state", state),
   logs: (limit) => ipcRenderer.invoke("launcher:logs", limit),
-  exportLogs: () => ipcRenderer.invoke("launcher:export-logs"),
+  queryLogs: (query) => ipcRenderer.invoke("launcher:query-logs", query),
+  exportLogs: (range) => ipcRenderer.invoke("launcher:export-logs", range),
   installUpdate: () => ipcRenderer.invoke("launcher:update-install"),
   checkUpdate: () => ipcRenderer.invoke("launcher:update-check"),
   windowState: () => ipcRenderer.invoke("launcher:window-state"),

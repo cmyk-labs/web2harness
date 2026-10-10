@@ -1,3 +1,4 @@
+import { diagnosticContext, diagnosticEvent, diagnosticError } from "../../../diagnostics";
 import { randomUUID } from "node:crypto";
 import { createUsageDelivery } from "./usage-delivery";
 import { savedChatId } from "../../../../launcher/shared/saved-chat.cjs";
@@ -1380,7 +1381,9 @@ export class ChatGptBrowserWorker {
     chatGptSuspensionClock.start();
     const startedAt = performance.now();
     const suspendedAtStart = suspensionClock.suspendedMs();
-    console.info(`[chatgpt-web] browser turn ${traceId} stage=${stage} started`);
+    const operationId = randomUUID();
+    const stageContext = { ...diagnosticContext.getStore(), traceId, operationId, parentOperationId: diagnosticContext.getStore()?.operationId, stage, timeoutMs };
+    diagnosticEvent("info", "browser.stage_started", { ...stageContext, outcome: "started" });
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stageTimedOut = false;
@@ -1402,9 +1405,9 @@ export class ChatGptBrowserWorker {
         };
         timer = setTimeout(fireOrRearm, timeoutMs);
       });
-      actionPromise = action(controller.signal);
+      actionPromise = diagnosticContext.run(stageContext, () => action(controller.signal));
       const value = await Promise.race([actionPromise, timeout]);
-      console.info(`[chatgpt-web] browser turn ${traceId} stage=${stage} completed durationMs=${Math.round(performance.now() - startedAt)}`);
+      diagnosticEvent("info", "browser.stage_completed", { ...stageContext, outcome: "completed", durationMs: Math.round(performance.now() - startedAt) });
       return value;
     } catch (error) {
       let surfacedError = error;
@@ -1417,7 +1420,11 @@ export class ChatGptBrowserWorker {
           }
         }
       }
-      console.error(`[chatgpt-web] browser turn ${traceId} stage=${stage} failed durationMs=${Math.round(performance.now() - startedAt)}: ${surfacedError instanceof Error ? surfacedError.message : String(surfacedError)}`);
+      const failure = diagnosticError(surfacedError);
+      diagnosticEvent(failure.category === "cancelled" ? "info" : "error", "browser.stage_failed", {
+        ...stageContext, outcome: stageTimedOut ? "timeout" : failure.category === "cancelled" ? "cancelled" : "failed",
+        durationMs: Math.round(performance.now() - startedAt), error: failure,
+      });
       throw surfacedError;
     } finally {
       if (timer) clearTimeout(timer);
@@ -1489,169 +1496,188 @@ export class ChatGptBrowserWorker {
   }
 
   private async selectModelAndEffort(
-    page: Page,
-    modelId: string,
-    reasoning: string | undefined,
-    capabilities: ChatGptWebCapabilities,
-    captureDiagnostic?: (checkpoint: string) => Promise<void>,
-    trackUsage = false,
-    modelFamily?: "5.6" | "6",
+    page: Page, modelId: string, reasoning: string | undefined, capabilities: ChatGptWebCapabilities,
+    captureDiagnostic?: (checkpoint: string) => Promise<void>, trackUsage = false, modelFamily?: "5.6" | "6",
   ): Promise<SelectedChatGptWebModelMode> {
-    const mode = resolveChatGptWebModelMode(modelId, reasoning, capabilities);
-    const composer = await this.activeComposer(page);
-    const composerForm = composer.locator("xpath=ancestor::form[1]");
-    const uiEffortIndex = mode.uiEffortIndex;
-    if (uiEffortIndex === null) {
+    const execute = async (): Promise<SelectedChatGptWebModelMode> => {
+      const mode = resolveChatGptWebModelMode(modelId, reasoning, capabilities);
+      const composer = await this.activeComposer(page);
+      const composerForm = composer.locator("xpath=ancestor::form[1]");
+      const uiEffortIndex = mode.uiEffortIndex;
+      if (uiEffortIndex === null) {
+        await settleChatGptUi();
+        await throwIfChatGptRateLimitDialog(page);
+        const visibleControls = composerForm.locator(CHATGPT_EFFORT_CONTROL_SELECTOR).filter({ visible: true });
+        if (await visibleControls.count() > 0) {
+          throw chatGptModelControlUnavailableError(
+            "ChatGPT Luna was selected from a Luna-only capability probe, but the account now exposes a model selector; rerun setup",
+          );
+        }
+        // Enable Think during prompt attachment, after fresh connector selection. Ordinary Luna
+        // still clears a previous Think selection here; retained Think is checked on every attach.
+        if (!mode.thinkEnabled) await setChatGptThinkMode(composerForm, false, captureDiagnostic);
+        return trackUsage ? { ...mode, usageModel: "gpt-5.6-luna" } : mode;
+      }
+      const currentEffort = composerForm.locator(CHATGPT_EFFORT_CONTROL_SELECTOR).filter({ visible: true });
+      const effortWaitAbort = new AbortController();
+      try {
+        const ready = await Promise.race([
+          currentEffort.waitFor({ state: "visible", timeout: 70_000, signal: effortWaitAbort.signal }).then(() => "effort" as const),
+          chatGptRateLimitDialog(page).waitFor({ state: "visible", timeout: 70_000, signal: effortWaitAbort.signal }).then(() => "rate-limit" as const),
+          chatGptExpiredSessionAlert(page).waitFor({ state: "visible", timeout: 70_000, signal: effortWaitAbort.signal }).then(() => "session-expired" as const),
+        ]);
+        if (ready === "rate-limit") await throwIfChatGptRateLimitDialog(page);
+        if (ready === "session-expired") await throwIfChatGptSessionFailureAlert(page);
+      } catch (error) {
+        if (error instanceof ChatGptWebAdapterError) throw error;
+        await throwIfChatGptRateLimitDialog(page);
+        await throwIfChatGptSessionFailureAlert(page);
+        throw chatGptModelControlUnavailableError(
+          "ChatGPT rendered the composer but its model/effort control did not become ready",
+        );
+      } finally {
+        effortWaitAbort.abort();
+      }
       await settleChatGptUi();
       await throwIfChatGptRateLimitDialog(page);
-      const visibleControls = composerForm.locator(CHATGPT_EFFORT_CONTROL_SELECTOR).filter({ visible: true });
-      if (await visibleControls.count() > 0) {
-        throw chatGptModelControlUnavailableError(
-          "ChatGPT Luna was selected from a Luna-only capability probe, but the account now exposes a model selector; rerun setup",
-        );
+      diagnosticEvent("info", "browser.model_control_ready", { phase: "control", outcome: "visible" });
+      await captureDiagnostic?.("effort-control-ready");
+      await throwIfChatGptRateLimitDialog(page);
+      let activation = await activateChatGptEffortMenu(page, currentEffort);
+      diagnosticEvent("info", "browser.model_menu_opened", { method: activation.method, outcome: "opened" });
+      if (modelFamily) activation = await selectChatGptModelFamily(
+        activation, modelFamily, () => activateChatGptEffortMenu(page, currentEffort),
+      );
+      if (activation.method === "pointerdown") {
+        await captureDiagnostic?.("effort-menu-pointerdown-fallback");
       }
-      // Enable Think during prompt attachment, after fresh connector selection. Ordinary Luna
-      // still clears a previous Think selection here; retained Think is checked on every attach.
-      if (!mode.thinkEnabled) await setChatGptThinkMode(composerForm, false, captureDiagnostic);
-      return trackUsage ? { ...mode, usageModel: "gpt-5.6-luna" } : mode;
-    }
-    const currentEffort = composerForm.locator(CHATGPT_EFFORT_CONTROL_SELECTOR).filter({ visible: true });
-    const effortWaitAbort = new AbortController();
-    try {
-      const ready = await Promise.race([
-        currentEffort.waitFor({ state: "visible", timeout: 70_000, signal: effortWaitAbort.signal }).then(() => "effort" as const),
-        chatGptRateLimitDialog(page).waitFor({ state: "visible", timeout: 70_000, signal: effortWaitAbort.signal }).then(() => "rate-limit" as const),
-        chatGptExpiredSessionAlert(page).waitFor({ state: "visible", timeout: 70_000, signal: effortWaitAbort.signal }).then(() => "session-expired" as const),
-      ]);
-      if (ready === "rate-limit") await throwIfChatGptRateLimitDialog(page);
-      if (ready === "session-expired") await throwIfChatGptSessionFailureAlert(page);
-    } catch (error) {
-      if (error instanceof ChatGptWebAdapterError) throw error;
-      await throwIfChatGptRateLimitDialog(page);
-      await throwIfChatGptSessionFailureAlert(page);
-      throw chatGptModelControlUnavailableError(
-        "ChatGPT rendered the composer but its model/effort control did not become ready",
-      );
-    } finally {
-      effortWaitAbort.abort();
-    }
-    await settleChatGptUi();
-    await throwIfChatGptRateLimitDialog(page);
-    await captureDiagnostic?.("effort-control-ready");
-    await throwIfChatGptRateLimitDialog(page);
-    let activation = await activateChatGptEffortMenu(page, currentEffort);
-    if (modelFamily) activation = await selectChatGptModelFamily(
-      activation, modelFamily, () => activateChatGptEffortMenu(page, currentEffort),
-    );
-    if (activation.method === "pointerdown") {
-      await captureDiagnostic?.("effort-menu-pointerdown-fallback");
-    }
-    await captureDiagnostic?.("effort-menu-open-requested");
-    const effortSlider = activation.slider;
-    const sliderContainer = activation.sliderContainer;
-    const waitAbort = new AbortController();
-    try {
-      const ready = await Promise.race([
-        sliderContainer.waitFor({ state: "visible", timeout: 70_000, signal: waitAbort.signal })
-          .then(() => effortSlider.waitFor({ state: "attached", timeout: 70_000, signal: waitAbort.signal }))
-          .then(() => "slider" as const),
-        chatGptRateLimitDialog(page).waitFor({ state: "visible", timeout: 70_000, signal: waitAbort.signal }).then(() => "rate-limit" as const),
-        chatGptExpiredSessionAlert(page).waitFor({ state: "visible", timeout: 70_000, signal: waitAbort.signal }).then(() => "session-expired" as const),
-      ]);
-      if (ready === "rate-limit") await throwIfChatGptRateLimitDialog(page);
-      if (ready === "session-expired") await throwIfChatGptSessionFailureAlert(page);
-      await captureDiagnostic?.("effort-slider-visible");
-    } catch (error) {
-      if (error instanceof ChatGptWebAdapterError) throw error;
-      await throwIfChatGptRateLimitDialog(page);
-      await throwIfChatGptSessionFailureAlert(page);
-      throw chatGptModelControlUnavailableAdapterError(
-        `ChatGPT effort slider did not become ready for item index ${uiEffortIndex}`,
-      );
-    } finally {
-      waitAbort.abort();
-    }
-    const selectionUrl = page.url();
-    const readAvailableEffort = async (container: Locator, menu: Locator) => {
-      const state = await readChatGptEffortSnapshot(container)
-        .catch(error => { throw chatGptModelControlUnavailableAdapterError(String(error)); });
-      if (uiEffortIndex > state.max - state.min) {
-        const detail = uiEffortIndex === 4 ? await chatGptUnavailableProDetail(menu) : undefined;
+      await captureDiagnostic?.("effort-menu-open-requested");
+      const effortSlider = activation.slider;
+      const sliderContainer = activation.sliderContainer;
+      const waitAbort = new AbortController();
+      try {
+        const ready = await Promise.race([
+          sliderContainer.waitFor({ state: "visible", timeout: 70_000, signal: waitAbort.signal })
+            .then(() => effortSlider.waitFor({ state: "attached", timeout: 70_000, signal: waitAbort.signal }))
+            .then(() => "slider" as const),
+          chatGptRateLimitDialog(page).waitFor({ state: "visible", timeout: 70_000, signal: waitAbort.signal }).then(() => "rate-limit" as const),
+          chatGptExpiredSessionAlert(page).waitFor({ state: "visible", timeout: 70_000, signal: waitAbort.signal }).then(() => "session-expired" as const),
+        ]);
+        if (ready === "rate-limit") await throwIfChatGptRateLimitDialog(page);
+        if (ready === "session-expired") await throwIfChatGptSessionFailureAlert(page);
+        await captureDiagnostic?.("effort-slider-visible");
+      } catch (error) {
+        if (error instanceof ChatGptWebAdapterError) throw error;
+        await throwIfChatGptRateLimitDialog(page);
+        await throwIfChatGptSessionFailureAlert(page);
         throw chatGptModelControlUnavailableAdapterError(
-          `ChatGPT effort slider does not expose item index ${uiEffortIndex} (min=${state.min}; max=${state.max})`
-          + (uiEffortIndex === 4 ? " ChatGPT may have temporarily hidden Pro because you reached its usage limit." : ""),
-          detail,
+          `ChatGPT effort slider did not become ready for item index ${uiEffortIndex}`,
         );
+      } finally {
+        waitAbort.abort();
       }
-      if (!state.available[uiEffortIndex]) {
-        throw new ChatGptWebAdapterError(
-          `ChatGPT locks the browser option requested for ${mode.displayLabel} behind an upgrade. `
-          + "The message was not sent. Choose an available effort and run Repair Codex setup to refresh the model list.",
-          { status: 400, errorType: "invalid_request_error", code: "chatgpt_effort_locked", retryable: false },
-        );
-      }
-      return state;
-    };
-    let sliderState = await readAvailableEffort(sliderContainer, activation.menu);
-    const initialMin = sliderState.min;
-    const targetValue = initialMin + uiEffortIndex;
-    const sliderControl = effortSlider.locator("xpath=ancestor::*[@role='menuitem'][1]");
-    while (sliderState.value !== targetValue) {
-      await throwIfChatGptRateLimitDialog(page);
-      const direction = targetValue > sliderState.value ? 1 : -1;
-      const key = direction > 0 ? "ArrowRight" : "ArrowLeft";
-      const previousValue = sliderState.value;
-      await sliderControl.press(key);
-      const changeDeadline = Date.now() + 5_000;
-      do {
-        sliderState = await readAvailableEffort(sliderContainer, activation.menu);
-        if (sliderState.min !== initialMin) {
-          throw chatGptModelControlUnavailableError("ChatGPT changed its effort range origin during selection");
+      const selectionUrl = page.url();
+      const readAvailableEffort = async (container: Locator, menu: Locator) => {
+        const state = await readChatGptEffortSnapshot(container)
+          .catch(error => { throw chatGptModelControlUnavailableAdapterError(String(error)); });
+        if (uiEffortIndex > state.max - state.min) {
+          const detail = uiEffortIndex === 4 ? await chatGptUnavailableProDetail(menu) : undefined;
+          throw chatGptModelControlUnavailableAdapterError(
+            `ChatGPT effort slider does not expose item index ${uiEffortIndex} (min=${state.min}; max=${state.max})`
+            + (uiEffortIndex === 4 ? " ChatGPT may have temporarily hidden Pro because you reached its usage limit." : ""),
+            detail,
+          );
         }
-        if (sliderState.value !== previousValue) break;
-        await new Promise(resolveSleep => setTimeout(resolveSleep, 50));
-      } while (Date.now() < changeDeadline);
-      if (sliderState.value !== previousValue + direction) {
-        throw chatGptModelControlUnavailableError(
-          `ChatGPT effort slider did not move exactly one step with ${key}`
-          + ` (before=${previousValue}; after=${sliderState.value})`,
-        );
+        if (!state.available[uiEffortIndex]) {
+          throw new ChatGptWebAdapterError(
+            `ChatGPT locks the browser option requested for ${mode.displayLabel} behind an upgrade. `
+            + "The message was not sent. Choose an available effort and run Repair Codex setup to refresh the model list.",
+            { status: 400, errorType: "invalid_request_error", code: "chatgpt_effort_locked", retryable: false },
+          );
+        }
+        return state;
+      };
+      let sliderState = await readAvailableEffort(sliderContainer, activation.menu);
+      const initialMin = sliderState.min;
+      const targetValue = initialMin + uiEffortIndex;
+      diagnosticEvent("info", "browser.effort_selection", { previousValue: sliderState.value, targetValue, min: sliderState.min, max: sliderState.max });
+      const sliderControl = effortSlider.locator("xpath=ancestor::*[@role='menuitem'][1]");
+      while (sliderState.value !== targetValue) {
+        await throwIfChatGptRateLimitDialog(page);
+        const direction = targetValue > sliderState.value ? 1 : -1;
+        const key = direction > 0 ? "ArrowRight" : "ArrowLeft";
+        const previousValue = sliderState.value;
+        await sliderControl.press(key);
+        diagnosticEvent("debug", "browser.effort_action", { previousValue, targetValue, direction, outcome: "action-returned" });
+        const changeDeadline = Date.now() + 5_000;
+        do {
+          sliderState = await readAvailableEffort(sliderContainer, activation.menu);
+          if (sliderState.min !== initialMin) {
+            throw chatGptModelControlUnavailableError("ChatGPT changed its effort range origin during selection");
+          }
+          if (sliderState.value !== previousValue) break;
+          await new Promise(resolveSleep => setTimeout(resolveSleep, 50));
+        } while (Date.now() < changeDeadline);
+        if (sliderState.value !== previousValue + direction) {
+          throw chatGptModelControlUnavailableError(
+            `ChatGPT effort slider did not move exactly one step with ${key}`
+            + ` (before=${previousValue}; after=${sliderState.value})`,
+          );
+        }
       }
-    }
-    await settleChatGptUi();
-    const selectedState = await readAvailableEffort(sliderContainer, activation.menu);
-    if (selectedState.min !== initialMin || selectedState.value !== targetValue) {
-      throw chatGptModelControlUnavailableAdapterError("ChatGPT changed its effort range or selection before the menu closed");
-    }
-    await captureDiagnostic?.("effort-selected");
-    await page.keyboard.press("Escape");
-    await settleChatGptUi();
-    // While open, the trigger reads "Thinking effort", not the selected value. Read its
-    // closed label and reopen the menu once to prove the selection survived the commit.
-    const selectedMode: SelectedChatGptWebModelMode = {
-      ...mode,
-      ...(modelFamily ? { modelFamily } : {}),
-      selection: { url: selectionUrl, label: (await currentEffort.innerText()).trim() },
+      await settleChatGptUi();
+      const selectedState = await readAvailableEffort(sliderContainer, activation.menu);
+      if (selectedState.min !== initialMin || selectedState.value !== targetValue) {
+        throw chatGptModelControlUnavailableAdapterError("ChatGPT changed its effort range or selection before the menu closed");
+      }
+      await captureDiagnostic?.("effort-selected");
+      await page.keyboard.press("Escape");
+      await settleChatGptUi();
+      // While open, the trigger reads "Thinking effort", not the selected value. Read its
+      // closed label and reopen the menu once to prove the selection survived the commit.
+      const selectedMode: SelectedChatGptWebModelMode = {
+        ...mode,
+        ...(modelFamily ? { modelFamily } : {}),
+        selection: { url: selectionUrl, label: (await currentEffort.innerText()).trim() },
+      };
+      await this.assertSelectedEffort(page, selectedMode, false);
+      const confirmation = await activateChatGptEffortMenu(page, currentEffort);
+      await confirmation.slider.waitFor({ state: "attached", timeout: 5_000 });
+      const confirmedState = await readAvailableEffort(confirmation.sliderContainer, confirmation.menu);
+      if (confirmedState.min !== initialMin || confirmedState.value !== targetValue) {
+        throw chatGptModelControlUnavailableAdapterError("ChatGPT did not persist the requested effort after closing its menu");
+      }
+      if (modelFamily) await assertChatGptModelFamily(confirmation, modelFamily, mode.effort, uiEffortIndex, 1_000);
+      // A bare 'Pro' trigger does not identify the family selected by ChatGPT's Latest option.
+      // Unknown evidence remains visible as unclassified Pro usage in Limits.
+      if (trackUsage) {
+        selectedMode.usageModel = await readChatGptUsageModel(confirmation.slider, mode.effort === "max")
+          .catch(() => mode.effort === "max" ? "pro-unknown" as const : "other" as const);
+      }
+      await page.keyboard.press("Escape");
+      await settleChatGptUi();
+      await this.assertSelectedEffort(page, selectedMode, false);
+      await captureDiagnostic?.("effort-selection-confirmed");
+      return selectedMode;
     };
-    await this.assertSelectedEffort(page, selectedMode, false);
-    const confirmation = await activateChatGptEffortMenu(page, currentEffort);
-    await confirmation.slider.waitFor({ state: "attached", timeout: 5_000 });
-    const confirmedState = await readAvailableEffort(confirmation.sliderContainer, confirmation.menu);
-    if (confirmedState.min !== initialMin || confirmedState.value !== targetValue) {
-      throw chatGptModelControlUnavailableAdapterError("ChatGPT did not persist the requested effort after closing its menu");
-    }
-    if (modelFamily) await assertChatGptModelFamily(confirmation, modelFamily, mode.effort, uiEffortIndex, 1_000);
-    // A bare 'Pro' trigger does not identify the family selected by ChatGPT's Latest option.
-    // Unknown evidence remains visible as unclassified Pro usage in Limits.
-    if (trackUsage) {
-      selectedMode.usageModel = await readChatGptUsageModel(confirmation.slider, mode.effort === "max")
-        .catch(() => mode.effort === "max" ? "pro-unknown" as const : "other" as const);
-    }
-    await page.keyboard.press("Escape");
-    await settleChatGptUi();
-    await this.assertSelectedEffort(page, selectedMode, false);
-    await captureDiagnostic?.("effort-selection-confirmed");
-    return selectedMode;
+    const started = performance.now();
+    const context = { ...diagnosticContext.getStore(), operationId: randomUUID(), parentOperationId: diagnosticContext.getStore()?.operationId,
+      requestedModel: modelId, requestedEffort: reasoning ?? "default", modelFamily };
+    return diagnosticContext.run(context, async () => {
+      diagnosticEvent("info", "browser.model_selection_started", { outcome: "started" });
+      try {
+        const mode = await execute();
+        diagnosticEvent("info", "browser.model_selection_verified", { outcome: "verified", verifiedModel: modelId,
+          verifiedEffort: mode.effort, verification: "composer-controls", durationMs: Math.round(performance.now() - started) });
+        return mode;
+      } catch (error) {
+        const failure = diagnosticError(error);
+        diagnosticEvent(failure.category === "cancelled" ? "info" : "error", "browser.model_selection_failed", {
+          outcome: failure.category === "cancelled" ? "cancelled" : "failed", submission: "not-sent", verifiedModel: "unknown",
+          durationMs: Math.round(performance.now() - started), error: failure });
+        throw error;
+      }
+    });
   }
 
   private async assertSelectedEffort(page: Page, mode: SelectedChatGptWebModelMode, verifyFamily = true): Promise<void> {
@@ -3039,6 +3065,15 @@ export class ChatGptBrowserWorker {
   }
 
   private async runBrowserTurn(
+    turn: BrowserTurn, launcherSurfaceId?: string, maintenancePage?: Page, reuseConversation = false,
+    trackUsage = false, expectedConversationId?: string,
+  ): Promise<string> {
+    return diagnosticContext.run({ ...diagnosticContext.getStore(), traceId: turn.traceId,
+      requestedModel: turn.modelId, requestedEffort: turn.reasoning ?? "default", modelFamily: turn.modelFamily }, () =>
+      this.runBrowserTurnObserved(turn, launcherSurfaceId, maintenancePage, reuseConversation, trackUsage, expectedConversationId));
+  }
+
+  private async runBrowserTurnObserved(
     turn: BrowserTurn,
     launcherSurfaceId?: string,
     maintenancePage?: Page,
@@ -3359,7 +3394,7 @@ export class ChatGptBrowserWorker {
             : undefined,
         ),
       );
-      console.info(`[chatgpt-web] browser turn ${turn.traceId} submission accepted evidence=${finalSubmissionEvidence}`);
+      diagnosticEvent("info", "browser.submission_accepted", { traceId: turn.traceId, evidence: finalSubmissionEvidence, submission: "accepted" });
       let responseTurn = await this.waitForNewAssistantTurn(
         page,
         submissionBaseline,
@@ -3525,6 +3560,7 @@ export class ChatGptBrowserWorker {
         if (snapshot.responsePresent) {
           if (!capturedResponse) {
             capturedResponse = true;
+            diagnosticEvent("info", "browser.response_visible", { phase: "response", outcome: "observed" });
             await diagnostics.capture(page, "response-visible");
           }
           const textDelta = (() => {
@@ -3658,6 +3694,7 @@ export class ChatGptBrowserWorker {
         const state = await this.context.storageState();
         atomicWriteFile(this.config.storageStatePath, `${JSON.stringify(state)}\n`);
       }
+      diagnosticEvent("info", "browser.turn_completed", { outcome: "completed" });
       await diagnostics.capture(page, "turn-completed");
       if (this.config.useSavedChats && launcherSurfaceId) {
         const conversationId = savedChatId(page.url());
@@ -3702,6 +3739,8 @@ export class ChatGptBrowserWorker {
         + ` ${redactChatGptUiDiagnostic(error instanceof Error ? error.message : String(error))}`,
       );
       if (diagnosticPage && !diagnosticPage.isClosed()) {
+        const failure = diagnosticError(error);
+        diagnosticEvent(failure.category === "cancelled" ? "info" : "error", "browser.turn_failed", { outcome: failure.category === "cancelled" ? "cancelled" : "failed", error: failure });
         await diagnostics.capture(diagnosticPage, "turn-failed", error);
       }
       throw error;

@@ -23,7 +23,7 @@ This manual follows the application lifecycle: prepare an installation, connect 
 
 ## Requirements and distribution
 
-Desktop installers are available from the [1.0.0 preview release](https://github.com/cmyk-labs/web2harness/releases/tag/v1.0.0). Choose the installer matching your operating system and processor; one installer is sufficient. Review its validation and signing limitations before use. Formal installer acceptance is tracked separately in the [release manual](release.md).
+Desktop installers are available from the [latest stable release](https://github.com/cmyk-labs/web2harness/releases/latest). Choose the installer matching your operating system and processor; one installer is sufficient. Review its validation and signing limitations before use. Formal installer acceptance is tracked separately in the [release manual](release.md).
 
 | Requirement | Details |
 | --- | --- |
@@ -93,7 +93,9 @@ For repair, exit the affected application and rerun its installer. Setup retains
 
 ## Connect Codex for the first time
 
-On first use, choose the interface language. The welcome page invites you to Star the [project repository](https://github.com/cmyk-labs/web2harness); this is optional. **Star on GitHub** opens the repository in your default browser. Return to **Continue setup**, or choose **Skip and start setup** without opening GitHub. The app does not verify Stars or require a GitHub account. Once setup begins, the welcome page does not appear on ordinary restarts.
+Welcome and activation use centered layouts; short windows scroll to keep actions reachable. The welcome page places the product slogan and short introduction below the brand and version, followed by language selection and Continue setup. Workspace settings use a consistent left-aligned layout. The usage flow on Overview stays expanded.
+
+On first use, activate the device license, choose the interface language, then select **Continue setup** to enter the workspace. No GitHub sign-in or Star is required. Once first-run setup is complete, the welcome page does not appear on ordinary restarts.
 
 Browser login, local configuration, and Codex catalog verification are separate checks. Complete them in order:
 
@@ -125,7 +127,7 @@ Use Codex's task controls for deliberate interruption. **Runtime controls → Ca
 | **Browser** | Sign in, observe automatic execution, or perform a manual handoff. |
 | **Connection & Models** | Check connectivity, apply modes and credentials, and inspect model or connector readiness. |
 | **Preferences** | Set conversation history, reuse, window behavior, and optional experimental features. |
-| **Usage & Diagnostics** | Inspect observed usage, run diagnostics, control runtime turns, and export safe logs. |
+| **Usage & Diagnostics** | Inspect observed usage, run diagnostics, control runtime turns, and export diagnostic bundles. |
 
 The sidebar language control changes the launcher language. It does not change ChatGPT's website language. **Preferences** also controls background operation after window close, showing the browser when tasks start, and launch at system sign-in. DEV starts explicitly and does not offer sign-in autostart.
 
@@ -237,6 +239,8 @@ web2harness subagents native
 
 **Usage & Diagnostics → Usage** automatically records accepted Web sends in Automatic mode, without an enable switch or an account-check prerequisite. Each accepted send counts as one conversation turn, including tool-result follow-ups and compaction; observing the same send again does not count twice. Counts are grouped by the observed model family (thinking levels combined), with rolling **last 24 hours** and **last 7 days** columns. They do not reset at midnight or at the start of a calendar week, and the overlapping columns must not be added together.
 
+Local usage and model allowance references appear in two equal-height panels with aligned headings, toolbars and table headers. Both tables use the same column widths. Refresh sits beside the seven-day total; plan and reference-period labels sit above their selectors. Recording status and reference notes sit below their respective panels; limited content width stacks each panel with its notes.
+
 Records are stored locally by hashed account identity; the page shows the last identified account and preserves its start time across restarts. All identified account tiers can record sends. Older records are retained during upgrade; previously unidentified models remain in an unknown/legacy category. Earlier sends and activity outside this application cannot be reconstructed. Missed-send warnings remain for seven days across restarts and account checks. Manual interaction does not inspect browser usage or add automatic records; existing history remains visible.
 
 The page explicitly reports **Official usage period unconfirmed**: the current model documentation and verified DEV model menu do not provide this account’s complete Chat model-period boundaries. Rolling counts are auxiliary local statistics, not an implementation of official quota periods. Do not infer the official start from the first local record, your local midnight, Monday, or Work/Codex usage data.
@@ -254,7 +258,13 @@ The page explicitly reports **Official usage period unconfirmed**: the current m
 
 Pro $200 uses the **2026-10-30 onward** reference. The [official tier notice](https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers) confirms that eligible previous allowances end after October 29, but does not print the new count. The 100/week figure comes from a [subscriber’s public transcript of the OpenAI notification](https://community.openai.com/t/pro-200-is-fine-please-don-t-improve-it/1402079); the original email has not been independently verified. Both daily figures and Pro $100 retain the latest explicit [official numeric references](https://help.openai.com/bs-ba/articles/20001354). The daily figures are labeled **prior reference**, with applicability after October 29 unconfirmed; they are not automatically halved. [Business limits](https://help.openai.com/en/articles/12003714-chatgpt-business-models-and-limits) confirms the Business figures. Pro $500 and other unverified models have no fixed count filled in. Choosing a reference plan does not change the logged-in account or local counts. Local rolling counts do not determine official remaining usage or reset times, or trigger quota warnings from these reference values.
 
-For a failure, run **Usage & Diagnostics → Health checks → Run doctor**, then follow the earliest failed check. Checks use descriptive names and show **Passed**, **Not required**, **Needs attention**, or **Failed**. **Not required** means this mode does not need that component; it does not confirm a connection. Expand **Technical details** for the check identifier, original message and additional diagnostics. Production checks **Application configuration**; **Development configuration** appears only in the isolated DEV environment. Passing confirms only the reported configuration/service checks, not a real model or tool task. After one useful reproduction, select **Logs → Export safe log**. If startup is blocked, use the startup page's details and diagnostic export. Review the exported content before sharing and follow the [support-report checklist](troubleshooting.md#support-report).
+For a failure, run **Usage & Diagnostics → Health checks → Run doctor**, then follow the earliest failed check. Checks use descriptive names and show **Passed**, **Not required**, **Needs attention**, or **Failed**. **Not required** means this mode does not need that component; it does not confirm a connection. Expand **Technical details** for the check identifier, original message and additional diagnostics. Production checks **Application configuration**; **Development configuration** appears only in the isolated DEV environment. Passing confirms only the reported configuration/service checks, not a real model or tool task. After one useful reproduction, select **Logs → Export diagnostics**. If startup is blocked, use the startup page's details and diagnostic export. Review the exported content before sharing and follow the [support-report checklist](troubleshooting.md#support-report).
+
+Logs show complete redacted JSON records in a continuous text viewer, newest first. Compact JSON with word wrap is the default; Format JSON adds indentation for all displayed records. Event names, fields, messages and UTC timestamps remain unchanged when switching interface language. Search matches case-insensitive substrings in the full JSON of all available retained records, including field names and values, before pagination. Matches are highlighted in both compact and formatted views; level, source and exact trace/request filters narrow the results. Select a record with the mouse or keyboard to copy its complete JSON or Related logs. Reading or selecting records pauses updates; Show latest resumes them. The footer shows matching counts, retained time range and collection status.
+
+History pages load on demand from a background disk index. Per page, beside Word wrap, offers 25, 50, 100 (default), or 200 records and remembers your choice. Changing it returns to the first page and clears selection while preserving search, filters and the paused/live state. Pages normally stay within 512 KiB, so long records can fill a page before the selected count. A single oversized record occupies its own page and remains complete. Initial indexing and a new keyword search can take longer; subsequent pages reuse cached match positions. Files are reindexed when they change. Browsing uses a fixed snapshot; if it expires, reload explicitly. Long records use simpler text rendering with up to 200 highlighted matches per record; copying preserves the complete redacted JSON. Date-based ZIP export remains independent of paging.
+
+Export diagnostics defaults to all retained logs, with last-24-hours and custom local-time ranges available to the minute (start inclusive, end exclusive). Export ignores viewing filters. The ZIP contains a summary, redacted timeline, export-time environment/configuration snapshot, and collection manifest. Available browser checkpoints, update logs, and process errors are also collected. Missing, unreadable, corrupt, or truncated sources are listed; partial exports remain usable. Application logs rotate with a seven-day/100MiB retention bound; browser checkpoints retain the latest ten traces, and deleted history cannot be recovered. Credentials, conversation bodies, tool input/output, raw screenshots, and browser profiles are excluded by default; nothing is uploaded automatically.
 
 <a id="runtime-controls"></a>
 
@@ -271,13 +281,13 @@ Activity reflects the current browser and application observations; it does not 
 
 ## About the project
 
-The GitHub icon beside **Web2Harness** in the sidebar opens the current project repository. **About** presents the project slogan, capabilities, version, operating system and license. Its operating diagram shows how Codex, Web2Harness and ChatGPT Web exchange requests and results, with a brief explanation of each tool mode. Documentation, GitHub and project-license links open in the system browser. Third-party notices remain in the repository and distribution; there is no separate shortcut on this page.
+The sidebar shows the product name and current version. **About** contains a short product description, platform and update status. Expand **How it works** to see the request flow between Codex, Web2Harness and ChatGPT Web, followed by a table comparing the two desktop modes, Native Tools and MCP Bridge, by execution capabilities, differences from native Codex and usage recommendations. Native Tools is recommended for everyday coding. Two short notes explain task permissions and code orchestration. On narrow windows, the table scrolls horizontally. Third-party notices remain in the repository and distribution.
 
 When a release is available, a small blue update button appears at the bottom of the sidebar with the target version. **About** provides the same action. Both show downloading/installing states and are unavailable while a task is running. Preferences remains focused on conversations, window behavior and experimental features. Overview and Diagnostics continue to show connection and runtime status.
 
 Packaged applications check for stable updates at startup and every six hours. **About → Check for updates** retries immediately and shows the last check time or failure. While downloading, the update button displays a percentage when the server provides a total size, otherwise downloaded MB. SHA-256 verification uses asynchronous file reads to keep the interface responsive; installation still requires verification to pass. Development/source runs keep application updates disabled.
 
-**Usage & Diagnostics → Logs** shows readable event summaries with severity. Expand **Technical details** for the original event name and all recorded fields. Informational severity does not by itself mean that an operation succeeded.
+**Usage & Diagnostics → Logs** shows full redacted JSON directly, without opening a separate detail panel. Informational severity and successful delivery do not by themselves mean that a model or tool task succeeded.
 
 <a id="update"></a>
 

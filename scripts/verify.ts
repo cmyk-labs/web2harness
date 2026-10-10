@@ -1,14 +1,20 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { createLicenseFixture } from "../tests/fixtures/license-fixture";
 
 const root = resolve(import.meta.dir, "..");
 const scratch = mkdtempSync(join(tmpdir(), "web2harness-verify-"));
 const runtimeBundle = join(scratch, "runtime");
+const licenseFixture = await createLicenseFixture(join(scratch, "license-fixture"));
+process.env.WEB2HARNESS_LICENSE_KEYS_FILE = licenseFixture.keyFile;
+process.env.WEB2HARNESS_LICENSE_FILE = licenseFixture.licenseFile;
 
 async function run(args: string[]): Promise<void> {
   const child = Bun.spawn([process.execPath, ...args], {
     cwd: root,
+    env: { ...process.env, WEB2HARNESS_LICENSE_KEYS_FILE: licenseFixture.keyFile,
+      WEB2HARNESS_LICENSE_FILE: licenseFixture.licenseFile },
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
@@ -26,7 +32,7 @@ try {
   await run(["run", "launcher:typecheck"]);
   await run(["run", "launcher:test"]);
   await run(["run", "launcher:build"]);
-  await run(["run", "scripts/build-runtime-bundle.ts", runtimeBundle]);
+  await run(["run", "scripts/build-runtime-bundle.ts", runtimeBundle, "--development-license"]);
   await run([
     "run",
     "scripts/generate-third-party-notices.ts",

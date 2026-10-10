@@ -274,9 +274,11 @@ code {
 
 .sidebar-brand-identity {
   display: flex;
+  flex-wrap: wrap;
   min-width: 0;
   align-items: center;
   gap: 6px;
+  font-size: 15px;
 }
 
 .sidebar-brand-identity strong {
@@ -286,6 +288,13 @@ code {
   font-weight: 600;
   letter-spacing: -0.025em;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-version {
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-weight: 400;
   white-space: nowrap;
 }
 
@@ -639,8 +648,8 @@ code {
 .browser-toolbar {
   position: relative;
   display: flex;
-  height: 42px;
-  flex: 0 0 42px;
+  height: 40px;
+  flex: 0 0 40px;
   align-items: center;
   gap: 8px;
   padding: 0 8px;
@@ -879,18 +888,20 @@ code {
 }
 
 .content-scroll {
-  width: min(var(--content-width), calc(100% - 2 * var(--space-page)));
+  width: 100%;
+  max-width: calc(var(--content-width) + 2 * var(--space-page));
   height: 100%;
-  margin: 0 auto;
+  margin: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 32px 8px 64px;
+  padding: 24px var(--space-page) 40px;
   scroll-padding-block: 24px;
 }
 
 .content-scroll.is-narrow {
-  width: min(var(--settings-width), calc(100% - 2 * var(--space-page)));
+  width: 100%;
+  max-width: calc(var(--settings-width) + 2 * var(--space-page));
 }
 
 .content-scroll.is-fit {
@@ -935,7 +946,7 @@ code {
 }
 
 .surface-header {
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .surface-header > span {

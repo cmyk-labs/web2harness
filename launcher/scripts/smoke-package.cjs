@@ -78,6 +78,7 @@ function smokeEnvironment() {
     WEB2HARNESS_HOME: coreHome,
     CODEX_HOME: path.join(scratch, "codex-home"),
     WEB2HARNESS_SMOKE_FILE: markerPath,
+    WEB2HARNESS_LICENSE_FILE: path.join(scratch, "unactivated.w2h"),
   };
 }
 
@@ -125,6 +126,7 @@ try {
   if (marker.ok !== true
     || marker.packaged !== true
     || marker.runtimeVerified !== true
+    || marker.activationRequired !== true
     || marker.version !== expectedVersion
     || marker.platform !== process.platform) {
     throw new Error(`Unexpected packaged launcher marker: ${JSON.stringify(marker)}`);

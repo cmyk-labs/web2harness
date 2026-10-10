@@ -1,6 +1,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { renameAtomicFile } = require("./common/atomic-file.cjs");
+const { randomUUID } = require("node:crypto");
+const { logFiles, pruneLogs } = require("./diagnostics/log-files.cjs");
+
+const { createDiagnosticRecord, safeDetail, parseDiagnosticLine } = require("../shared/diagnostic-event.cjs");
 
 const MAX_LOG_BYTES = 4 * 1024 * 1024;
 const MAX_MEMORY_RECORDS = 300;
@@ -8,6 +12,7 @@ const MAX_LOG_STRING_CHARS = 16 * 1024;
 
 function redactText(value) {
   const redacted = value
+    .replace(/W2H1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[license]")
     .replace(/tunnel_[a-f0-9]{32}/g, "[tunnel-id]")
     .replace(/\bsk-[A-Za-z0-9_-]{12,}\b/g, "[runtime-key]")
     .replace(/\bBearer\s+[A-Za-z0-9._~-]{20,}\b/gi, "Bearer [redacted]");
@@ -52,7 +57,7 @@ function sanitizeForExport(value, seen = new WeakSet()) {
 }
 
 function exportSanitizedLogs({ filePath, destinationPath }) {
-  const sourcePaths = [`${filePath}.1`, filePath];
+  const sourcePaths = logFiles(filePath);
   const destination = path.resolve(destinationPath);
   if (sourcePaths.some(sourcePath => path.resolve(sourcePath) === destination)) {
     throw new Error("Refusing to overwrite a launcher source log with an exported diagnostic");
@@ -124,11 +129,12 @@ function readRecent(filePath) {
             || !["debug", "info", "warning", "error"].includes(record.level)
             || typeof record.event !== "string") return [];
           return [{
+            ...(record.schemaVersion === 2 ? { schemaVersion: 2, eventId: record.eventId, component: record.component } : {}),
             at: record.at,
             level: record.level,
             event: record.event,
             detail: record.detail && typeof record.detail === "object"
-              ? sanitize(record.detail)
+              ? safeDetail(record.detail)
               : {},
           }];
         } catch {
@@ -142,36 +148,44 @@ function readRecent(filePath) {
 
 function createLogger({ filePath, publish }) {
   const records = readRecent(filePath);
+  const sessionId = randomUUID();
+  let lastPruned = 0;
+  let writeFailure = null;
 
-  const append = (level, event, detail = {}) => {
-    const record = {
-      at: new Date().toISOString(),
-      level,
-      event,
-      detail: detail && typeof detail === "object" && !Array.isArray(detail) ? sanitize(detail) : {},
-    };
+  const append = (level, event, detail = {}, external) => {
+    const record = external ?? createDiagnosticRecord(level, event, { ...safeDetail(detail), sessionId });
+    if (external) record.detail = { ...safeDetail(record.detail), launcherSessionId: sessionId };
     records.push(record);
     if (records.length > MAX_MEMORY_RECORDS) records.splice(0, records.length - MAX_MEMORY_RECORDS);
     try {
       fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
       const stat = fs.statSync(filePath, { throwIfNoEntry: false });
       if (stat && stat.size >= MAX_LOG_BYTES) {
-        fs.rmSync(`${filePath}.1`, { force: true });
-        renameAtomicFile(filePath, `${filePath}.1`);
+        renameAtomicFile(filePath, path.join(path.dirname(filePath), `launcher.${Date.now()}-${randomUUID()}.jsonl`));
+        lastPruned = 0;
       }
       fs.appendFileSync(filePath, `${JSON.stringify(record)}\n`, { mode: 0o600 });
-    } catch {}
+      if (Date.now() - lastPruned > 3600000) { pruneLogs(filePath); lastPruned = Date.now(); }
+      writeFailure = null;
+    } catch (error) { writeFailure = { at: record.at, code: error.code ?? "LOG_WRITE_FAILED", message: redactText(error.message) }; }
     publish?.(record);
     return record;
   };
 
   return {
+    ingest: (line) => {
+      const record = parseDiagnosticLine(line);
+      if (!record) return false;
+      append(record.level, record.event, record.detail, record);
+      return true;
+    },
     debug: (event, detail) => append("debug", event, detail),
     info: (event, detail) => append("info", event, detail),
     warn: (event, detail) => append("warning", event, detail),
     error: (event, detail) => append("error", event, detail),
     recent: (limit = 150) => records.slice(-Math.max(1, Math.min(300, limit))),
     filePath,
+    health: () => ({ writeFailure }),
   };
 }
 

@@ -30,6 +30,7 @@ import { existingMcpBridgeSetupCredentials, preflightSetup, setup, type SetupOpt
 import { installRuntimeKeyBytes, managedRuntimeKeyPath, stopTunnel, tunnelStatus, waitForTunnelReady } from "./runtime/tunnel";
 import { getTunnelServiceStatus, restartTunnelService, startTunnelService, stopTunnelService, uninstallTunnelService } from "./runtime/tunnel-service";
 import { VERSION } from "./version";
+import { licenseCommand } from "./licensing/cli";
 import { runDevCommand } from "./dev/cli";
 
 const HELP = `web2harness ${VERSION}
@@ -41,6 +42,7 @@ Usage:
   web2harness setup --mcp-bridge --tunnel-id ID --runtime-key-file PATH [options]
   web2harness login
   web2harness doctor [--json]
+  web2harness license <device|status|import --stdin>
   web2harness route <status|connect|disconnect>
   web2harness subagents <status|compatibility-v1|native>
   web2harness browser check
@@ -594,6 +596,7 @@ async function main(): Promise<void> {
     throw new Error("--home does not apply to DEV mode; use WEB2HARNESS_DEV_HOME for an explicit isolated DEV profile");
   }
   if (command === "help") stdout.write(HELP);
+  else if (command === "license") await licenseCommand(args);
   else if (command === "setup") await setupCommand(args);
   else if (command === "login") await loginCommand(args);
   else if (command === "doctor" || command === "status") await doctorCommand(args);

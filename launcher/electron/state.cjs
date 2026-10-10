@@ -1,4 +1,5 @@
 const languages = require("./languages.json");
+const { defaultPageSize, pageSizes } = require("../shared/log-pagination.json");
 const fs = require("node:fs");
 const { writePrivateFileAtomic } = require("./common/atomic-file.cjs");
 const SIDEBAR_MIN_WIDTH = 240;
@@ -24,6 +25,7 @@ const DEFAULT_STATE = Object.freeze({
   browserSmokeVersion: null,
   sidebarOpen: true,
   sidebarWidth: 252,
+  logPageSize: defaultPageSize,
   mcpGuideStep: 0,
   sessionRefreshReminderAt: null,
 });
@@ -86,6 +88,7 @@ function readState(filePath) {
     if (!Number.isInteger(state.mcpGuideStep) || state.mcpGuideStep < 0 || state.mcpGuideStep > 2) {
       state.mcpGuideStep = DEFAULT_STATE.mcpGuideStep;
     }
+    if (!pageSizes.includes(state.logPageSize)) state.logPageSize = defaultPageSize;
     if (state.sessionRefreshReminderAt !== null
       && (typeof state.sessionRefreshReminderAt !== "string"
         || !Number.isFinite(Date.parse(state.sessionRefreshReminderAt)))) {
@@ -120,16 +123,26 @@ function validateSidebarState(value) {
   return { sidebarOpen: value.open, sidebarWidth: Math.round(value.width) };
 }
 
+function validateLogPageSize(value) {
+  if (!pageSizes.includes(value)) throw new Error("Unsupported log page size");
+  return value;
+}
+
 function createStateStore(filePath) {
   let state = readState(filePath);
+  let observer;
   return {
+    observeChanges(callback) { observer = callback; },
     read() {
       return structuredClone(state);
     },
     update(patch) {
       const next = { ...state, ...patch, version: 1 };
       writeState(filePath, next);
+      const changed = Object.keys(patch).filter(key => ["language", "autoStart", "keepRunningOnClose", "browserInteractionMode", "experimentalContextFiles", "experimentalContextTripleBudget", "experimentalSkillAttachments", "experimentalFreshConversationPerTurn", "useSavedChats", "zeroRiskProEnabled"].includes(key) && state[key] !== next[key]);
+      const changes = changed.map(changedKey => ({ changedKey, previous: state[changedKey], next: next[changedKey] }));
       state = next;
+      if (changes.length) { try { observer?.({ changes, outcome: "persisted" }); } catch {} }
       return structuredClone(next);
     },
   };
@@ -142,4 +155,5 @@ module.exports = {
   createStateStore,
   nextSessionRefreshReminderAt,
   validateSidebarState,
+  validateLogPageSize,
 };
