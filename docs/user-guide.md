@@ -182,6 +182,8 @@ Apply MCP Bridge with **Manual** interaction using its separate tunnel and key. 
 4. Only after sending in ChatGPT, select **Sent** in the launcher. Wait for the connector to bind the active task.
 5. Repeat the handoff and confirm the model, effort, and connector for each subsequent turn.
 
+Keep the task page open to continue in the same conversation. Its normal address change after the first send preserves continuity. Reloading or switching conversations requires a fresh page with the full Codex context.
+
 The application neither operates nor inspects the ChatGPT page in this mode. Browser usage inspection, automatic context-file and skill uploads, and automatic **New each turn** behavior are unavailable. The optional **Manual Pro model** advertises a larger context profile; enable it only with the required account access and manually select Pro each turn. The application cannot verify that choice, and the larger budget does not work with every effort. See the [model reference](reference.md).
 
 The handoff succeeds when MCP binds the active task and a response returns to Codex. If it waits indefinitely, record the last completed handoff step. “Zero Risk” is the mode's label; account limits and Codex tool permissions still apply.

@@ -916,6 +916,26 @@ class BrowserHost {
     const invalidateConversation = (url, inPlace) => {
       // History state updates and anchor scrolling keep the same document/context.
       if (inPlace && url.split("#", 1)[0] === tab.url?.split("#", 1)[0]) return;
+      // A first send promotes ChatGPT's local draft URL to its server conversation ID.
+      // This is still the initial full-context document, even if Sent was already confirmed.
+      // Only accept the observed root -> local UUID -> server UUID route sequence;
+      // reloads, other chats, origins, queries and resumed turns remain invalidating.
+      if (inPlace && !tab.manualConversationReused && tab.status === "running"
+        && ["awaiting-user", "sent", "running"].includes(tab.manualState)) {
+        try {
+          const previous = new URL(tab.url);
+          const next = new URL(url);
+          const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+          const local = new RegExp(`^/c/local-chatgpt:${uuid}$`, "i");
+          const saved = new RegExp(`^/c/${uuid}$`, "i");
+          const from = decodeURIComponent(previous.pathname);
+          const to = decodeURIComponent(next.pathname);
+          if (previous.origin === CHATGPT_ORIGIN && next.origin === CHATGPT_ORIGIN
+            && previous.search === next.search
+            && ((from === "/" && local.test(to))
+              || (local.test(from) && saved.test(to)))) return;
+        } catch { /* An unrecognized URL cannot establish continuity. */ }
+      }
       // Initial login/navigation still carries full context. A later document change
       // cannot prove that an incremental continuation belongs to the same conversation.
       if (!tab.conversationKey

@@ -3049,6 +3049,65 @@ test("navigation cannot silently continue a resumed manual turn with only its de
   }
 });
 
+test("first manual send retains the same-document draft-to-server route after Sent", () => {
+  const local = "/c/local-chatgpt%3A37b0dbe6-dcc1-476c-bacf-c0e95bbad157";
+  const saved = "/c/6aca1361-9220-83e8-967e-e1d011dd6096";
+  for (const query of ["", "?temporary-chat=true"]) {
+    for (const state of ["awaiting-user", "sent", "running"]) {
+      const { fixture } = manualTurnFixture();
+      const key = "a".repeat(64);
+      const first = fixture.beginManualTurn("manual_initial", process.pid, "full context", key);
+      const tab = fixture.turnTabs.get(first.tabId);
+      const contents = new EventEmitter();
+      contents.setWindowOpenHandler = () => {};
+      tab.view = { webContents: contents };
+      tab.url = `https://chatgpt.com/${query}`;
+      fixture.bindManualTurnContents(tab);
+      if (state !== "awaiting-user") fixture.confirmManualSent(tab.id);
+      if (state === "running") fixture.markManualTurnStarted("manual_initial", process.pid);
+      for (const route of [local, local, saved]) {
+        const url = `https://chatgpt.com${route}${query}`;
+        contents.emit("did-start-navigation", {}, url, true, true);
+        contents.emit("did-navigate-in-page", {}, url, true);
+        assert.equal(tab.conversationKey, key);
+      }
+      if (state === "awaiting-user") fixture.confirmManualSent(tab.id);
+      fixture.endManualTurn("manual_initial", process.pid, "completed", true);
+      const next = fixture.beginManualTurn("manual_next", process.pid, "full history", key, "new request only");
+      assert.equal(next.reused, true);
+      assert.equal(next.tabId, first.tabId);
+      assert.equal(tab.prompt, "new request only");
+      fixture.cancelManualTurn("manual_next", process.pid);
+    }
+  }
+});
+
+test("manual draft promotion rejects reloads, other origins and changed history mode", () => {
+  const local = "/c/local-chatgpt%3A37b0dbe6-dcc1-476c-bacf-c0e95bbad157";
+  const saved = "/c/6aca1361-9220-83e8-967e-e1d011dd6096";
+  for (const [from, to, inPlace] of [
+    ["https://chatgpt.com/", `https://chatgpt.com${local}`, false],
+    ["https://chatgpt.com/", `https://example.com${local}`, true],
+    ["https://chatgpt.com/?temporary-chat=true", `https://chatgpt.com${local}`, true],
+    [`https://chatgpt.com${saved}`, `https://chatgpt.com${local}`, true],
+    [`https://chatgpt.com${local}`, `https://chatgpt.com${saved}`, false],
+  ]) {
+    const { fixture } = manualTurnFixture();
+    const first = fixture.beginManualTurn("manual_initial", process.pid, "full context", "a".repeat(64));
+    const tab = fixture.turnTabs.get(first.tabId);
+    const contents = new EventEmitter();
+    contents.setWindowOpenHandler = () => {};
+    tab.view = { webContents: contents };
+    tab.url = from;
+    fixture.bindManualTurnContents(tab);
+    fixture.confirmManualSent(tab.id);
+    contents.emit("did-start-navigation", {}, to, inPlace, true);
+    assert.equal(tab.conversationKey, undefined);
+    fixture.endManualTurn("manual_initial", process.pid, "completed", true);
+    assert.equal(fixture.turnTabs.has(tab.id), false);
+  }
+});
+
 test("navigation after the first manual submission prevents retaining the changed page", () => {
   const { fixture } = manualTurnFixture();
   const first = fixture.beginManualTurn("manual_initial", process.pid, "original context", "a".repeat(64));
