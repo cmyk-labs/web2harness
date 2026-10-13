@@ -7,8 +7,7 @@ import { Onboarding } from "./features/startup/Onboarding";
 import { StartupScreen } from "./features/startup/StartupScreen";
 import { copyFor } from "./i18n";
 import { api as launcherApi } from "./ipc";
-import { LicensePanel } from "./features/licensing/LicensePanel";
-import type { LicenseStatus } from "../../src/licensing/schema";
+import { LicenseProvider, useLicense } from "./features/licensing/LicenseContext";
 import { messageOf } from "./lib/errors";
 import type {
   BrowserState,
@@ -21,31 +20,13 @@ import type {
 } from "./types";
 
 export function App() {
+  if (!launcherApi) return <FatalMessage message="Launcher IPC is unavailable." />;
+  return <LicenseProvider api={launcherApi}><LauncherApp /></LicenseProvider>;
+}
+
+function LauncherApp() {
   const api = launcherApi;
-  const [license, setLicense] = useState<LicenseStatus | null>(null);
-  const [licenseError, setLicenseError] = useState<string | null>(null);
-  const licenseRevision = useRef(0);
-  const acceptLicense = useCallback((status: LicenseStatus) => {
-    licenseRevision.current++;
-    setLicenseError(null);
-    setLicense(status);
-  }, []);
-  const refreshLicense = useCallback(() => {
-    if (!api) return;
-    setLicenseError(null);
-    const revision = ++licenseRevision.current;
-    void api.licenseStatus().then(status => {
-      if (revision === licenseRevision.current) setLicense(status);
-    }, () => {
-      if (revision === licenseRevision.current) { setLicense(null); setLicenseError("unavailable"); }
-    });
-  }, [api]);
-  useEffect(() => {
-    refreshLicense();
-    const interval = setInterval(refreshLicense, 60_000);
-    window.addEventListener("focus", refreshLicense);
-    return () => { clearInterval(interval); window.removeEventListener("focus", refreshLicense); };
-  }, [refreshLicense]);
+  const license = useLicense();
   const [snapshot, setSnapshot] = useState<LauncherSnapshot | null>(null);
   const [browser, setBrowser] = useState<BrowserState | null>(null);
   const [operation, setOperation] = useState<OperationState | null>(null);
@@ -172,13 +153,14 @@ export function App() {
         elapsedMs: 0,
       });
 
-  if (license?.state !== "active") {
-    return <div className="app-root license-gate entry-screen" data-theme="dark" data-language={language} data-platform={snapshot?.platform}>
-      <LicensePanel api={api} language={language} status={license} onStatus={acceptLicense} activation version={snapshot?.version} devProfile={snapshot?.profile === "development"} loadError={licenseError} onRetry={refreshLicense} />
+  if (!license.active && snapshot && (license.status || license.error)) {
+    return <div className="app-root" data-theme="dark" data-language={language} data-platform={snapshot.platform} data-profile={snapshot.profile}>
+      <LauncherShell browser={browser} copy={copy} language={language} logs={logs} operation={operation}
+        setError={setError} snapshot={{ ...snapshot, state: { ...snapshot.state, language } }} updateState={updateState} />
     </div>;
   }
 
-  if (!snapshot || startupState.status !== "ready") {
+  if (!snapshot || startupState.status !== "ready" || !license.active) {
     return (
       <div
         className="app-root"

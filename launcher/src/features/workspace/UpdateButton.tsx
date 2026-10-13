@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLicense } from "../licensing/LicenseContext";
 import { Icon } from "../../components/icons";
 import { messageOf } from "../../lib/errors";
 import { translate } from "./labels";
@@ -9,6 +10,7 @@ export function UpdateButton({
   api, snapshot, browser, operation, setError, sidebar = false,
 }: Pick<WorkspaceProps, "api" | "snapshot" | "browser" | "operation" | "setError"> & { sidebar?: boolean }) {
   const [pending, setPending] = useState(false);
+  const { active: licensed } = useLicense();
   const t = translate(snapshot.state.language ?? "en");
   const update = snapshot.update;
   if (update.status !== "available" && update.status !== "downloading" && update.status !== "installing") return null;
@@ -32,7 +34,7 @@ export function UpdateButton({
     <button
       type="button"
       className={sidebar ? "sidebar-update" : "btn update-install"}
-      disabled={pending || busy || snapshot.startup.status !== "ready" || update.status !== "available"}
+      disabled={!licensed || pending || busy || snapshot.startup.status !== "ready" || update.status !== "available"}
       title={busy ? t("当前任务结束后即可更新", "Update when the current task finishes") : label}
       onClick={() => void install()}
     >

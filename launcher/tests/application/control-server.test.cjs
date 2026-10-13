@@ -39,6 +39,7 @@ test("disconnect cancels pending browser initialization and destroys only its ow
       },
     });
     const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
       logger: { info() {}, warn() {}, error() {} }, getPreferences: () => ({}), getBrowserHost: () => host,
     }).start();
     const { endpoint, token } = server.descriptor();
@@ -80,6 +81,7 @@ test("Limits receipts require the active automatic owner and survive reconnect w
     beginTurn: () => ({ surfaceId: "a".repeat(32), reused: false, connectorBound: false }),
   };
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger: { info() {}, warn() {}, error() {} },
     getBrowserHost: () => host, getPreferences: () => ({}), limits,
   }).start();
@@ -112,6 +114,7 @@ test("Limits receipts require the active automatic owner and survive reconnect w
 test("native proxy resolution requires owner auth, restricts targets, and works without browser automation", async () => {
   const resolved = [];
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger: { info() {}, warn() {}, error() {} },
     getBrowserHost: () => { throw new Error("proxy resolution must not inspect browser contents"); },
     getPreferences: () => { throw new Error("proxy resolution must not depend on integration mode"); },
@@ -159,6 +162,7 @@ test("browser control server authenticates and owns turn visibility", async () =
     },
   };
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger: {
       info: (event, detail) => logs.push(["info", event, detail]),
       warn: (event, detail) => logs.push(["warn", event, detail]),
@@ -270,6 +274,7 @@ test("browser control server withholds a new turn lease until its browser surfac
   const surfaceReady = new Promise((resolve) => { releaseSurface = resolve; });
   const beginCalled = new Promise((resolve) => { reportBegin = resolve; });
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger: { info() {}, warn() {}, error() {} },
     getBrowserHost: () => ({
       browserInteractionMode: () => "automatic",
@@ -344,6 +349,7 @@ test("manual control keeps start idempotency separate from long Sent observation
   };
   const logs = [];
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger: {
       info: (event, detail) => logs.push([event, detail]),
       warn() {},
@@ -386,6 +392,7 @@ test("manual control keeps start idempotency separate from long Sent observation
 test("manual start has one explicit bounded body allowance and automatic turns stay disabled", async () => {
   let started = 0;
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger: { info() {}, warn() {}, error() {} },
     getBrowserHost: () => ({
       browserInteractionMode: () => "manual",
@@ -421,6 +428,7 @@ test("manual start has one explicit bounded body allowance and automatic turns s
 test("manual control rejects session inspection before any browser helper can run", async () => {
   let inspected = false;
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger: { info() {}, warn() {}, error() {} },
     getBrowserHost: () => ({
       browserInteractionMode: () => "manual",
@@ -478,6 +486,7 @@ test("manual-to-automatic transaction exposes capability inspection and preserve
     snapshot: () => ({ activeTabId: "home" }),
   });
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger: { info() {}, warn() {}, error() {} },
     getBrowserHost: () => host,
     getPreferences: () => ({ browserInteractionMode: "manual" }),
@@ -529,6 +538,7 @@ test("browser control server reports a missing retained conversation as a typed 
     },
   };
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger: { info() {}, warn() {} },
     getBrowserHost: () => host,
     getPreferences: () => ({ showBrowserDuringTurns: false }),
@@ -581,6 +591,7 @@ test("browser control server releases only ready tabs for an authenticated conve
     },
   };
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger: { info() {}, warn() {} },
     getBrowserHost: () => host,
     getPreferences: () => ({}),
@@ -619,6 +630,7 @@ test("browser control server releases only ready tabs for an authenticated conve
 
 test("browser control server rejects malformed retained-conversation contracts", async () => {
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger: { info() {}, warn() {} },
     getBrowserHost: () => ({ beginTurn: () => assert.fail("invalid request reached browser host") }),
     getPreferences: () => ({}),

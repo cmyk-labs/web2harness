@@ -125,6 +125,7 @@ test("retained tool rounds restore the hidden viewport cleared by the previous h
 test("saved conversation control validates metadata, authentication, owner and naming acknowledgement", async t => {
   const { host, tab } = hostFixture(fixture(t));
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger: { info() {}, warn() {}, error() {} }, getPreferences: () => ({}), getBrowserHost: () => host,
   }).start();
   const { endpoint, token } = server.descriptor();

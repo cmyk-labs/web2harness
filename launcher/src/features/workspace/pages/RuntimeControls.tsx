@@ -1,3 +1,4 @@
+import { useLicense } from "../../licensing/LicenseContext";
 import { useRef, useState } from "react";
 import { Button } from "../../../components/Buttons";
 import { copyFor, localizeRuntimeMessage } from "../../../i18n";
@@ -20,6 +21,7 @@ export function RuntimeControls({
   updateState,
   setError,
 }: WorkspaceProps) {
+  const { active: licensed } = useLicense();
   const language = snapshot.state.language ?? "en";
   const t = translate(language);
   const copy = copyFor(language);
@@ -27,7 +29,7 @@ export function RuntimeControls({
   const pending = useRef(false);
   const [notice, showNotice, dismissNotice] = useFeedback();
   const operationRunning = operation?.status === "running";
-  const controlsDisabled = snapshot.startup.status !== "ready" || !!working || operationRunning;
+  const controlsDisabled = !licensed || snapshot.startup.status !== "ready" || !!working || operationRunning;
   const removalDisabled = controlsDisabled || workspaceBusy(browser, operation);
   const ready = workspaceReady(status, snapshot, browser);
   const tone = workspaceTone(status, snapshot, browser, operation);

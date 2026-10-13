@@ -6,6 +6,7 @@ import type { WorkspaceProps } from "../types";
 import { EntryBrand } from "../../startup/EntryBrand";
 import { OperatingDiagram } from "./OperatingDiagram";
 import "./about.css";
+import { useLicense } from "../../licensing/LicenseContext";
 
 export function About({
   api,
@@ -15,6 +16,7 @@ export function About({
   setError,
 }: WorkspaceProps) {
   const language = snapshot.state.language ?? "en";
+  const { active: licensed } = useLicense();
   const t = translate(language);
   const platform =
     { win32: "Windows", darwin: "macOS", linux: "Linux" }[snapshot.platform] ??
@@ -37,7 +39,7 @@ export function About({
           ? `${t("上次检查：", "Last checked: ")}${new Date(snapshot.update.lastCheckedAt).toLocaleString(language)}`
           : t("启动时及每 6 小时自动检查，也可手动检查。", "Checked at startup and every 6 hours, or manually.")
       }>
-        <button type="button" className="btn" disabled={["disabled", "checking", "downloading", "installing"].includes(snapshot.update.status)}
+        <button type="button" className="btn" disabled={!licensed || ["disabled", "checking", "downloading", "installing"].includes(snapshot.update.status)}
           onClick={() => { void api.checkUpdate().catch(error => setError(messageOf(error))); }}>
           {snapshot.update.status === "checking" ? t("正在检查…", "Checking…") : t("检查更新", "Check for updates")}
         </button>

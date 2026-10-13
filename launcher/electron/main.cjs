@@ -44,6 +44,7 @@ const { runtimeBundlePaths } = require("./runtime/runtime-command.cjs");
 const { registerInstallation, uninstallInProgress } = require("./installation/installation-record.cjs");
 const { createUpdateController } = require("./installation/update.cjs");
 const { createLicenseController } = require("./license-controller.cjs");
+const { guardLicensedIpc } = require("./license-access.cjs");
 const { verifyUnactivatedPackage } = require("./license-package-smoke.cjs");
 const {
   createStateStore,
@@ -358,15 +359,17 @@ function windowStateSnapshot(window) {
 function createWindow({ logger, stateStore, windowStatePath, startHidden }) {
   const isMac = process.platform === "darwin";
   const state = stateStore.read();
-  const windowState = readWindowState(windowStatePath, screen.getAllDisplays());
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const windowState = readWindowState(windowStatePath, [primaryDisplay,
+    ...screen.getAllDisplays().filter((display) => display.id !== primaryDisplay.id)]);
   const window = new BrowserWindow({
     width: windowState.bounds.width,
     height: windowState.bounds.height,
     ...(Number.isFinite(windowState.bounds.x) && Number.isFinite(windowState.bounds.y)
       ? { x: windowState.bounds.x, y: windowState.bounds.y }
       : {}),
-    minWidth: MIN_WINDOW_BOUNDS.width,
-    minHeight: MIN_WINDOW_BOUNDS.height,
+    minWidth: Math.min(MIN_WINDOW_BOUNDS.width, windowState.bounds.width),
+    minHeight: Math.min(MIN_WINDOW_BOUNDS.height, windowState.bounds.height),
     title: LAUNCHER_PROFILE.displayName,
     icon: APP_ICON_PATH,
     show: false,
@@ -428,8 +431,6 @@ function createWindow({ logger, stateStore, windowStatePath, startHidden }) {
   }
   window.once("ready-to-show", () => {
     if (!state.onboardingComplete && !Number.isFinite(windowState.bounds.x)) window.center();
-    if (windowState.maximized) window.maximize();
-    if (windowState.fullscreen) window.setFullScreen(true);
     if (mainWindow === window) mainWindowReadyToShow = true;
     if (mainWindowShowRequested) showMainWindow();
     else if (!startHidden) window.show();
@@ -496,13 +497,10 @@ function syncFreshConversationPreference(stateStore, config) {
 }
 
 function registerIpc({ logger, stateStore }) {
-  const licensedActions = new Set(["launcher:complete-onboarding", "launcher:browser-smoke", "launcher:mcp-verify",
-    "launcher:setup-core", "launcher:setup-mcp", "launcher:tool-mode", "launcher:browser-interaction-mode"]);
-  const handle = (channel, handler) => registerLoggedIpc(ipcMain, logger, channel, async (...args) => {
+  const handle = (channel, handler) => registerLoggedIpc(ipcMain, logger, channel, guardLicensedIpc(licenseController, channel, async (...args) => {
     startup.assertAvailable(channel);
-    if (licensedActions.has(channel)) await licenseController.assertActive();
     return handler(...args);
-  });
+  }));
   handle("launcher:license-status", () => licenseController.status());
   handle("launcher:license-import", (_event, code) => licenseController.import(code));
   handle("launcher:retry-startup", () => {
@@ -1216,6 +1214,7 @@ async function start() {
   };
   browserControl = await new BrowserControlServer({
     logger,
+    assertLicensed: () => licenseController.assertActive(),
     getBrowserHost: () => browserHost,
     getPreferences: () => syncFreshConversationPreference(stateStore, runtimeHost.runtimeConfigSnapshot().config),
     resolveProxy: url => session.fromPartition(LAUNCHER_PROFILE.browserPartition).resolveProxy(url),

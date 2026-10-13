@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLicense } from "../licensing/LicenseContext";
 import {
   availableChatGptWebModelRoutes,
   chatGptWebRouteEfforts,
@@ -23,6 +24,7 @@ export function useConnectionSetup(p: WorkspaceProps) {
     setError,
     activateBrowser,
   } = p;
+  const { active: licensed } = useLicense();
   const language = snapshot.state.language ?? "en",
     t = translate(language),
     copy = copyFor(language);
@@ -44,7 +46,7 @@ export function useConnectionSetup(p: WorkspaceProps) {
     message: string;
   } | null>(null);
   const busy =
-      snapshot.startup.status !== "ready" ||
+      !licensed || snapshot.startup.status !== "ready" ||
       working ||
       workspaceBusy(browser, operation),
     manual = interaction === "manual";
@@ -149,14 +151,14 @@ export function useConnectionSetup(p: WorkspaceProps) {
     clearDraftDetails();
   };
   const chooseMode = (value: "native-tools" | "mcp-bridge") => {
-    if (busy || value === draft) return;
+    if ((licensed && busy) || value === draft) return;
     setDraft(value);
     if (value === "native-tools") setInteraction("automatic");
     setDirty(true);
     clearDraftDetails();
   };
   const chooseInteraction = (value: BrowserInteractionMode) => {
-    if (busy || value === interaction) return;
+    if ((licensed && busy) || value === interaction) return;
     setInteraction(value);
     setDirty(true);
     clearDraftDetails();

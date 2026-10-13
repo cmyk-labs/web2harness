@@ -39,12 +39,13 @@ function writeJson(response, status, body) {
 }
 
 class BrowserControlServer {
-  constructor({ logger, getBrowserHost, getPreferences, resolveProxy, limits }) {
+  constructor({ logger, getBrowserHost, getPreferences, resolveProxy, limits, assertLicensed }) {
     this.logger = logger;
     this.getBrowserHost = getBrowserHost;
     this.getPreferences = getPreferences;
     this.resolveProxy = resolveProxy;
     this.limits = limits;
+    this.assertLicensed = assertLicensed ?? (async () => { throw new Error("License verifier unavailable"); });
     this.token = randomBytes(32).toString("base64url");
     this.port = 0;
     this.server = createServer((request, response) => {
@@ -115,6 +116,15 @@ class BrowserControlServer {
     if (request.method !== "POST" || (!isTurn && !isTurnRelease && !isSessionInspect && !isProxyResolution && !manualAction)) {
       writeJson(response, 404, { error: "not_found" });
       return;
+    }
+    // Admission is checked even if a caller already knows the control token.
+    // Heartbeats, results and cancellation of admitted work can still drain.
+    if (request.url === "/v1/turn/start" || manualAction === "start" || isSessionInspect || isProxyResolution) {
+      try { await this.assertLicensed(); }
+      catch {
+        writeJson(response, 403, { error: "license_required" });
+        return;
+      }
     }
     try {
       const body = await readJson(

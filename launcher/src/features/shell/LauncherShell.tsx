@@ -24,8 +24,9 @@ import type { WorkspacePage } from "../workspace/types";
 import { WorkspaceContent } from "../workspace/WorkspaceContent";
 import { WorkspaceSidebar } from "../workspace/WorkspaceSidebar";
 import { TitleBar } from "./TitleBar";
+import { useLicense } from "../licensing/LicenseContext";
 
-const COMPACT_SIDEBAR_QUERY = "(max-width: 820px)";
+const COMPACT_SIDEBAR_QUERY = "(max-width: 1000px)";
 
 export function LauncherShell({
   browser,
@@ -46,7 +47,8 @@ export function LauncherShell({
   snapshot: LauncherSnapshot;
   updateState: (state: LauncherState) => void;
 }) {
-  const [surface, setSurface] = useState<WorkspacePage>("overview");
+  const { active: licensed } = useLicense();
+  const [surface, setSurface] = useState<WorkspacePage>(licensed ? "overview" : "license");
   useEffect(() => () => { void api!.setBrowserSurfaceActive(false).catch(() => {}); }, []);
   const reducedMotion = useReducedMotion();
   const devProfile = snapshot.profile === "development";
@@ -77,7 +79,7 @@ export function LauncherShell({
     [],
   );
   const browserSurfaceActive =
-    surface === "browser" && !(compactSidebar && sidebarOpen);
+    licensed && surface === "browser" && !(compactSidebar && sidebarOpen);
   const [status, setStatus] = useState<WorkspaceStatus | null>(null),
     [statusError, setStatusError] = useState<string | null>(null);
   const [sessionReminderBusy, setSessionReminderBusy] = useState(false),
@@ -115,13 +117,13 @@ export function LauncherShell({
     (tab) => tab.active && tab.interactionMode === "manual",
   );
   useEffect(() => {
-    if (!selectedManualTab) return;
+    if (!licensed || !selectedManualTab) return;
     setSurface("browser");
     setSidebarOpen(false);
     void api!
       .setBrowserSurfaceActive(true)
       .catch((error) => setError(messageOf(error)));
-  }, [selectedManualTab?.id, selectedManualTab?.manualState, setError]);
+  }, [licensed, selectedManualTab?.id, selectedManualTab?.manualState, setError]);
   const automaticTurn = browser?.tabs.find(
     (tab) =>
       tab.active &&
@@ -129,7 +131,7 @@ export function LauncherShell({
       tab.status === "running",
   );
   useEffect(() => {
-    if (!automaticTurn || !snapshot.state.showBrowserDuringTurns) return;
+    if (!licensed || !automaticTurn || !snapshot.state.showBrowserDuringTurns) return;
     setSurface("browser");
     if (compactSidebar) setSidebarOpen(false);
   }, [
@@ -137,6 +139,7 @@ export function LauncherShell({
     automaticTurn?.traceId,
     snapshot.state.showBrowserDuringTurns,
     compactSidebar,
+    licensed,
   ]);
   // Browser ownership, measurement and native surface behavior are retained unchanged.
   useLayoutEffect(() => {
@@ -309,18 +312,21 @@ export function LauncherShell({
             transition={{ duration: reducedMotion ? 0 : 0.12 }}
           >
             {surface === "browser" ? (
-              snapshot.startup.status !== "ready" ? (
+              licensed && snapshot.startup.status !== "ready" ? (
                 <div className="workspace-ui ui-page" />
               ) : (
+                <fieldset className="browser-preview" disabled={!licensed}>
                 <BrowserSurface
-                  browser={browser}
+                  browser={licensed ? browser : null}
                   browserSlotRef={browserSlotRef}
                   copy={copy}
                   interactionMode={snapshot.state.browserInteractionMode}
                   operation={operation}
                   platform={snapshot.platform}
                   setError={setError}
+                  previewNotice={!licensed ? (language === "zh-CN" ? "填写有效授权码后，即可登录 ChatGPT 并使用浏览器功能。" : "Activate a valid license to sign in to ChatGPT and use the browser.") : undefined}
                 />
+                </fieldset>
               )
             ) : (
               <WorkspaceContent
@@ -343,7 +349,7 @@ export function LauncherShell({
         </AnimatePresence>
       </section>
       <AnimatePresence>
-        {sessionReminderDue && (
+        {licensed && sessionReminderDue && (
           <SessionRefreshReminder
             busy={sessionReminderBusy}
             copy={copy}

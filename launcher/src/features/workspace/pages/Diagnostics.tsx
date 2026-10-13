@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLicense } from "../../licensing/LicenseContext";
 import { Button } from "../../../components/Buttons";
 import { Icon } from "../../../components/icons";
 import { copyFor } from "../../../i18n";
@@ -26,6 +27,7 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
     browser,
     operation,
   } = p;
+  const { active: licensed } = useLicense();
   const language = snapshot.state.language ?? "en",
     t = translate(language),
     copy = copyFor(language);
@@ -34,13 +36,13 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
     [working, setWorking] = useState(false),
     [notice, setNotice, dismissNotice] = useFeedback();
   const busy =
-      snapshot.startup.status !== "ready" ||
+      !licensed || snapshot.startup.status !== "ready" ||
       working ||
       workspaceBusy(browser, operation),
     manual = snapshot.state.browserInteractionMode === "manual",
     usage = tracker.snapshot;
   const run = async (action: () => Promise<void>) => {
-    if (working) return;
+    if (busy) return;
     setWorking(true);
     setError(null);
     setNotice("");

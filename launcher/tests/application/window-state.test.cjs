@@ -11,14 +11,14 @@ const {
 
 const displays = [{ workArea: { x: 0, y: 0, width: 1512, height: 982 } }];
 
-test("window state preserves visible bounds and desktop modes", () => {
+test("startup preserves normal bounds but does not restore maximized or fullscreen modes", () => {
   assert.deepEqual(normalizeWindowState({
     bounds: { x: 120, y: 80, width: 1280, height: 800 },
     maximized: true,
-    fullscreen: false,
+    fullscreen: true,
   }, displays), {
     bounds: { x: 120, y: 80, width: 1280, height: 800 },
-    maximized: true,
+    maximized: false,
     fullscreen: false,
   });
 });
@@ -27,7 +27,7 @@ test("window state drops off-screen positions and enforces minimum dimensions", 
   assert.deepEqual(normalizeWindowState({
     bounds: { x: 9000, y: 9000, width: 200, height: 100 },
   }, displays), {
-    bounds: { width: 720, height: 600 },
+    bounds: { x: 396, y: 191, width: 720, height: 600 },
     maximized: false,
     fullscreen: false,
   });
@@ -37,7 +37,37 @@ test("window state caps corrupt oversized dimensions", () => {
   const state = normalizeWindowState({
     bounds: { width: Number.MAX_SAFE_INTEGER, height: Number.MAX_SAFE_INTEGER },
   }, displays);
-  assert.deepEqual(state.bounds, { width: 16_384, height: 16_384 });
+  assert.deepEqual(state.bounds, { x: 0, y: 0, width: 1512, height: 982 });
+  assert.deepEqual(normalizeWindowState({ bounds: { width: Infinity, height: NaN } }).bounds,
+    { width: 1120, height: 720 });
+});
+
+test("first launch fits a short display work area and centers without a saved position", () => {
+  assert.deepEqual(normalizeWindowState(null, [{ workArea: { x: 40, y: 24, width: 1280, height: 680 } }]).bounds,
+    { x: 120, y: 24, width: 1120, height: 680 });
+});
+
+test("partially visible oversized windows keep every edge inside the selected work area", () => {
+  assert.deepEqual(normalizeWindowState({ bounds: { x: 100, y: -80, width: 1500, height: 950 } },
+    [{ workArea: { x: 0, y: 0, width: 1280, height: 680 } }]).bounds,
+    { x: 0, y: 0, width: 1280, height: 680 });
+});
+
+test("restore chooses the largest overlap including displays with negative coordinates", () => {
+  const screens = [displays[0], { workArea: { x: -1280, y: 0, width: 1280, height: 680 } }];
+  assert.deepEqual(normalizeWindowState({ bounds: { x: -1100, y: 100, width: 1120, height: 720 } }, screens).bounds,
+    { x: -1120, y: 0, width: 1120, height: 680 });
+});
+
+test("disconnected displays fall back to the primary work area", () => {
+  assert.deepEqual(normalizeWindowState({ bounds: { x: -6000, y: 0, width: 1120, height: 720 } }, displays).bounds,
+    { x: 196, y: 131, width: 1120, height: 720 });
+});
+
+test("small work areas take priority over minimum bounds and invalid display data is ignored", () => {
+  assert.deepEqual(normalizeWindowState(null, [{ workArea: { x: 0, y: 0, width: 0, height: 0 } },
+    { workArea: { x: 0, y: 0, width: 640, height: 480 } }]).bounds,
+    { x: 0, y: 0, width: 640, height: 480 });
 });
 
 test("window state is stored atomically with owner-only permissions", () => {

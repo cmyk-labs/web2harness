@@ -13,15 +13,21 @@ function finiteNumber(value, fallback) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function overlapsDisplay(bounds, displays) {
-  return displays.some((display) => {
-    const area = display?.workArea;
-    if (!area) return false;
-    return bounds.x < area.x + area.width
-      && bounds.x + bounds.width > area.x
-      && bounds.y < area.y + area.height
-      && bounds.y + bounds.height > area.y;
-  });
+function visibleWorkArea(bounds, displays) {
+  const areas = displays.map((display) => display?.workArea).filter((area) =>
+    area && [area.x, area.y, area.width, area.height].every(Number.isFinite)
+      && area.width > 0 && area.height > 0);
+  let selected = areas[0];
+  let overlap = 0;
+  for (const area of areas) {
+    const width = Math.max(0, Math.min(bounds.x + bounds.width, area.x + area.width) - Math.max(bounds.x, area.x));
+    const height = Math.max(0, Math.min(bounds.y + bounds.height, area.y + area.height) - Math.max(bounds.y, area.y));
+    if (width * height > overlap) {
+      selected = area;
+      overlap = width * height;
+    }
+  }
+  return { area: selected, overlaps: overlap > 0 };
 }
 
 function normalizeWindowState(value, displays = []) {
@@ -38,15 +44,24 @@ function normalizeWindowState(value, displays = []) {
         Math.max(MIN_WINDOW_BOUNDS.height, finiteNumber(bounds.height, DEFAULT_WINDOW_STATE.bounds.height)),
       ),
     },
-    maximized: saved.maximized === true,
-    fullscreen: saved.fullscreen === true,
+    // Restore normal bounds, but always open visibly in a normal window.
+    maximized: false,
+    fullscreen: false,
   };
-  if (Number.isFinite(bounds.x) && Number.isFinite(bounds.y)) {
-    const positioned = { ...state.bounds, x: bounds.x, y: bounds.y };
-    if (displays.length === 0 || overlapsDisplay(positioned, displays)) {
-      state.bounds.x = bounds.x;
-      state.bounds.y = bounds.y;
-    }
+  const hasPosition = Number.isFinite(bounds.x) && Number.isFinite(bounds.y);
+  const { area, overlaps } = visibleWorkArea({ ...state.bounds, x: bounds.x, y: bounds.y }, displays);
+  if (area) {
+    // Work areas are in DIP, including the OS display scale and taskbar inset.
+    // Small displays take precedence over the usual minimum window size.
+    state.bounds.width = Math.min(state.bounds.width, area.width);
+    state.bounds.height = Math.min(state.bounds.height, area.height);
+    const x = hasPosition && overlaps ? bounds.x : area.x + (area.width - state.bounds.width) / 2;
+    const y = hasPosition && overlaps ? bounds.y : area.y + (area.height - state.bounds.height) / 2;
+    state.bounds.x = Math.round(Math.max(area.x, Math.min(x, area.x + area.width - state.bounds.width)));
+    state.bounds.y = Math.round(Math.max(area.y, Math.min(y, area.y + area.height - state.bounds.height)));
+  } else if (hasPosition) {
+    state.bounds.x = bounds.x;
+    state.bounds.y = bounds.y;
   }
   return state;
 }

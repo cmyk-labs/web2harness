@@ -102,7 +102,7 @@ const metrics=await page.evaluate(()=>({sidebar:document.querySelector('.app-sid
 check('Workspace uses the shared sidebar and readable page spacing',metrics.sidebar===252&&metrics.padding==='24px 32px 40px');
 check('No page breadcrumb or workspace kicker',await page.locator('.topbar,.eyebrow').count()===0);
 check('Sidebar uses the approved H logo without repeated overview branding',await page.locator('.sidebar-brand-identity .brand-mark svg path').getAttribute('d')===brandMark.path&&await page.locator('.overview-intro .brand-mark,.overview-intro .overview-brand').count()===0);
-check('Ready overview has one management action and no setup warning',await page.locator('.content button').count()===1&&await page.getByRole('button',{name:'管理连接',exact:true}).count()===1&&await page.locator('.overview-notice').count()===0);
+check('Ready overview keeps connection management and adds a license link without setup warnings',await page.locator('.content button').count()===2&&await page.getByRole('button',{name:'管理连接',exact:true}).count()===1&&await page.locator('.overview-license').getByRole('button',{name:'管理授权',exact:true}).count()===1&&await page.locator('.overview-notice').count()===0);
 check('Healthy overview status values share the success tone',await page.locator('.card .value').evaluateAll(nodes=>new Set(nodes.map(node=>getComputedStyle(node).color)).size===1));
 check('Sidebar restores three Chinese groups',JSON.stringify(await page.locator('.sidebar-group h2').allTextContents())===JSON.stringify(['工作区','设置','应用']));
 check('Healthy sidebar has a success indicator',await page.locator('.side-status .status-dot.status-success').count()===1);
@@ -135,7 +135,7 @@ const waitLayout=()=>page.waitForFunction(()=>{
   const sidebar=document.querySelector('.app-sidebar');
   const target=shell.classList.contains('is-sidebar-open')?parseFloat(getComputedStyle(sidebar).getPropertyValue('--sidebar-width')):0;
   const surface=document.querySelector('.surface-transition');
-  return window.matchMedia('(max-width:820px)').matches===shell.classList.contains('is-compact')&&Math.abs(sidebar.getBoundingClientRect().width-target)<.5&&(!surface||Number(getComputedStyle(surface).opacity)>.99);
+  return window.matchMedia('(max-width:1000px)').matches===shell.classList.contains('is-compact')&&Math.abs(sidebar.getBoundingClientRect().width-target)<.5&&(!surface||Number(getComputedStyle(surface).opacity)>.99);
 });
 const nav=async name=>{await waitLayout();if(await page.locator('.app-shell.is-compact:not(.is-sidebar-open)').count())await page.locator('.app-titlebar .icon-button').first().click();await page.getByRole('navigation').getByRole('button',{name,exact:true}).click();if(['Overview','概览'].includes(name))await page.getByRole('region',{name,exact:true}).waitFor();else if(!['Browser','浏览器'].includes(name))await page.getByRole('region',{name,exact:true}).waitFor();await waitLayout()};
 const pref=async name=>{await waitLayout();if(await page.locator('.app-shell.is-compact:not(.is-sidebar-open)').count())await page.locator('.app-titlebar .icon-button').first().click();await page.getByRole('button',{name,exact:true}).click();await page.getByRole('region',{name,exact:true}).waitFor()};
@@ -351,9 +351,9 @@ check('Chinese usage distinguishes local sends and references',await page.getByR
 check('Chinese reference preserves the period and compact footer',(await page.locator('.official-limits').innerText()).includes('2026-10-30 起')&&await page.locator('.official-limits-notes').innerText()==='核对日期 · 2026-10-05 · 仅供参考');
 await checkUsageAlignment('Chinese usage retains matching table headers and column widths');
 await page.screenshot({path:out+'/usage-zh.png',fullPage:true});
-await page.setViewportSize({width:960,height:1050});
+await page.setViewportSize({width:780,height:1050});await waitLayout();
 check('Limited content width stacks panels before controls become crowded',await page.locator('.usagegrid').evaluate(grid=>grid.querySelector('.official-limits').getBoundingClientRect().top>grid.querySelector('.local-usage-notes').getBoundingClientRect().bottom));
-await page.screenshot({path:out+'/usage-zh-960.png',fullPage:true});
+await page.screenshot({path:out+'/usage-zh-780.png',fullPage:true});
 await page.setViewportSize({width:1440,height:1050});
 await page.getByRole('combobox',{name:'套餐',exact:true}).click();await page.screenshot({path:out+'/plan-menu-zh.png'});await page.keyboard.press('Escape');
 await page.setViewportSize({width:390,height:1050});await page.waitForTimeout(250);
@@ -742,7 +742,7 @@ const waitControlsLayout = () => controlsPage.waitForFunction(() => {
   const sidebar = document.querySelector('.app-sidebar');
   const target = shell.classList.contains('is-sidebar-open')
     ? parseFloat(getComputedStyle(sidebar).getPropertyValue('--sidebar-width')) : 0;
-  return window.matchMedia('(max-width:820px)').matches === shell.classList.contains('is-compact')
+  return window.matchMedia('(max-width:1000px)').matches === shell.classList.contains('is-compact')
     && Math.abs(sidebar.getBoundingClientRect().width - target) < .5
     && Number(getComputedStyle(document.querySelector('.surface-transition')).opacity) > .99;
 });
@@ -870,6 +870,42 @@ await welcomePage.getByRole('button', { name: 'Continue setup', exact: true }).c
 await welcomePage.getByRole('region', { name: 'Overview', exact: true }).waitFor();
 check('Language selection completes onboarding without external navigation',await welcomePage.evaluate(()=>window.__fixture.state.onboardingComplete&&window.__fixture.state.language==='en'&&window.__fixture.calls.every(call=>!['openExternal','openRepository','startGitHubSupport'].includes(call[0]))));
 await welcomePage.close();
+// Restore-size checks use a fresh fixture so earlier error states cannot hide layout regressions.
+for (const language of ['zh-CN', 'en']) {
+  const sizingPage = await context.newPage();
+  sizingPage.on('pageerror', error => errors.push(error.message));
+  await sizingPage.goto(origin);
+  await sizingPage.locator('.app-shell').waitFor();
+  await sizingPage.evaluate(language => window.__fixture.patch({ language }), language);
+  const diagnostics = language === 'zh-CN' ? '用量与诊断' : 'Usage & Diagnostics';
+  await sizingPage.getByRole('navigation').getByRole('button', { name: diagnostics, exact: true }).click();
+  await sizingPage.getByRole('tab', { name: language === 'zh-CN' ? '运行日志' : 'Logs', exact: true }).click();
+  for (const size of [{width:1440,height:900},{width:1120,height:720},{width:900,height:650},{width:830,height:600},{width:720,height:600}]) {
+    await sizingPage.setViewportSize(size);
+    await sizingPage.waitForTimeout(450);
+    const layout = await sizingPage.evaluate(() => {
+      const content = document.querySelector('.content-scroll'), workspace = document.querySelector('.workspace');
+      const pagination = document.querySelector('.log-pagination').getBoundingClientRect();
+      const logs = document.querySelector('.log-json-scroll').getBoundingClientRect();
+      return { fullWidth: Math.abs(content.getBoundingClientRect().width-workspace.getBoundingClientRect().width)<1,
+        paginationVisible: pagination.top>=46 && pagination.bottom<=innerHeight,
+        readableLogs: logs.height>=120 && logs.bottom<=pagination.top,
+        horizontalOverflow: content.scrollWidth>content.clientWidth+1,
+        compact: document.querySelector('.app-shell').classList.contains('is-compact'),
+        fontSize: getComputedStyle(content).fontSize };
+    });
+    const label = `${language} ${size.width}x${size.height}`;
+    check(`${label}: log pagination and readable body stay visible`,layout.paginationVisible&&layout.readableLogs);
+    check(`${label}: no clipped controls or duplicate narrow width inset`,!layout.horizontalOverflow&&(size.width>1120||layout.fullWidth));
+    check(`${label}: sidebar adapts without scaling text`,layout.compact===(size.width<=1000)&&layout.fontSize==='14px');
+    if (size.width===1120||size.width===720) await sizingPage.screenshot({path:out+`/logs-${language}-${size.width}.png`});
+  }
+  await sizingPage.getByRole('button', { name: language === 'zh-CN' ? '导出诊断包' : 'Export diagnostics', exact: true }).click();
+  const save = sizingPage.getByRole('button', { name: language === 'zh-CN' ? '保存 ZIP' : 'Save ZIP', exact: true });
+  await save.scrollIntoViewIfNeeded();
+  check(`${language}: short window export action remains reachable`,await save.evaluate(el=>{const r=el.getBoundingClientRect();return r.top>=46&&r.bottom<=innerHeight}));
+  await sizingPage.close();
+}
 check('Renderer has no JavaScript errors',errors.length===0);
 await writeFile(out+'/results.json',JSON.stringify({passed:checks.length,checks,metrics,errors},null,2));console.log(JSON.stringify({passed:checks.length,metrics,errors}));
 }catch(error){

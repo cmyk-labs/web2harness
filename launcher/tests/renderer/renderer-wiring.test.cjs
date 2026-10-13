@@ -541,15 +541,17 @@ test("conversation reuse persists the inverse setting and stays disabled in manu
   const source = preferences.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "Preferences").getText(preferences).replace(/^export\s+/, "");
   const code = ts.transpileModule(source, {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,jsxFactory:"element",jsxFragmentFactory:"Fragment"}}).outputText;
   const visit = tree => Array.isArray(tree) ? tree.flatMap(visit) : tree && typeof tree === "object" ? [tree,...visit(tree.children ?? [])] : [];
-  for (const language of ["en","zh-CN"]) for (const manual of [false,true]) for (const configured of [false,true]) {
+  for (const language of ["en","zh-CN"]) for (const manual of [false,true]) for (const configured of [false,true]) for (const licensed of [false,true]) {
     let invoked, saved;
     const sandbox = {element:(type,props,...children)=>({type,props:props??{},children}),Fragment:'Fragment',useState:value=>[value,()=>{}],useFeedback:()=>[null,()=>{},()=>{}],translate:language=>(zh,en)=>language==='en'?en:zh,copyFor:()=>({}),workspaceBusy:()=>false};
+    sandbox.useLicense = () => ({ active: licensed });
     for(const name of ['PageIntro','Section','Row','Segment','Toggle','Button'])sandbox[name]=name;
     vm.runInNewContext(code+'\nrender=Preferences;',sandbox);
     const tree=sandbox.render({api:{setFreshConversationPerTurn:async value=>{invoked=value;return {experimentalFreshConversationPerTurn:value}}},snapshot:{startup:{status:"ready"},state:{language,browserInteractionMode:manual?'manual':'automatic',coreSetupComplete:configured,experimentalFreshConversationPerTurn:false},urls:{},update:{}},updateState:state=>saved=state,setError:error=>{if(error)throw Error(error)},refresh:async()=>{}});
     const control=visit(tree).find(node=>node.type==='Segment' && node.props.label===(language==='en'?'Conversation reuse':'会话复用'));
-    assert.ok(control);assert.equal(control.props.value,true);assert.equal(control.props.disabled,manual||!configured);
+    assert.ok(control);assert.equal(control.props.value,true);assert.equal(control.props.disabled,!licensed||manual||!configured);
     if(!control.props.disabled){control.props.onChange(false);await new Promise(resolve=>setImmediate(resolve));assert.equal(invoked,true);assert.equal(saved.experimentalFreshConversationPerTurn,true);}
+    if(!licensed){control.props.onChange(false);await new Promise(resolve=>setImmediate(resolve));assert.equal(invoked,undefined);assert.equal(saved,undefined);}
   }
 });
 

@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { useLicense } from "../../licensing/LicenseContext";
 import { Button } from "../../../components/Buttons";
 import { localizeRuntimeMessage } from "../../../i18n";
 import { PageIntro, Row, Section, Segment, Toggle } from "../controls";
@@ -9,6 +10,7 @@ import type { WorkspaceProps } from "../types";
 import { useConnectionSetup } from "../useConnectionSetup";
 
 export function Connection(p: WorkspaceProps) {
+  const { active: licensed } = useLicense();
   const { status, operation } = p;
   const {
     api,
@@ -252,7 +254,7 @@ export function Connection(p: WorkspaceProps) {
         aria-label={t("工具模式", "Tool mode")}
         onKeyDown={(event) => {
           if (
-            busy ||
+            (licensed && busy) ||
             !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
               event.key,
             )
@@ -273,7 +275,7 @@ export function Connection(p: WorkspaceProps) {
             role="radio"
             aria-checked={draft === mode}
             tabIndex={draft === mode ? 0 : -1}
-            disabled={busy}
+            disabled={licensed && busy}
             key={mode}
             onClick={() => chooseMode(mode)}
           >
@@ -323,7 +325,7 @@ export function Connection(p: WorkspaceProps) {
             label={t("网页交互方式", "Browser interaction")}
             value={interaction}
             onChange={chooseInteraction}
-            disabled={busy}
+            disabled={licensed && busy}
             options={[
               { value: "automatic", label: t("自动", "Automatic") },
               { value: "manual", label: t("手动", "Manual") },
@@ -333,7 +335,7 @@ export function Connection(p: WorkspaceProps) {
           <strong>{t("自动", "Automatic")}</strong>
         )}
       </div>
-      {pending && (
+      {licensed && pending && (
         <div className="pending-configuration note" role="status">
           <strong>
             {t("待应用", "Pending")}: {modeName(draft, t)} ·{" "}
@@ -347,7 +349,7 @@ export function Connection(p: WorkspaceProps) {
           </p>
         </div>
       )}
-      {busy && (
+      {licensed && busy && (
         <div className="note" role="status">
           {operation?.status === "running"
             ? localizeRuntimeMessage(

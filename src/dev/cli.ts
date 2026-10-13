@@ -1,4 +1,5 @@
 import { createInterface } from "node:readline/promises";
+import { requireLicense } from "../licensing/service";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { runDevCodex } from "./codex";
@@ -287,6 +288,7 @@ export async function runDevCommand(args: string[]): Promise<void> {
   }
   if (action === "codex") {
     activateDevProfileEnvironment(paths);
+    await requireLicense();
     if (args[0] === "--") args.shift();
     process.exitCode = await runDevCodex(paths, args);
     return;
@@ -376,6 +378,7 @@ export async function runDevCommand(args: string[]): Promise<void> {
   }
   if (action === "setup") {
     activateDevProfileEnvironment(paths);
+    await requireLicense();
     const browserOnly = takeFlag(args, "--browser-only");
     const nativeTools = takeFlag(args, "--native-tools");
     const mcpBridge = takeFlag(args, "--mcp-bridge");
@@ -439,6 +442,7 @@ export async function runDevCommand(args: string[]): Promise<void> {
   if (action !== "chat") throw new Error(`Unknown DEV action: ${action}\n\n${DEV_HELP}`);
 
   activateDevProfileEnvironment(paths);
+  await requireLicense();
   const simulated = takeFlag(args, "--simulate");
   const store = new DevChatStore(paths.chatsPath);
   const requestedModel = modelFromCli(takeOption(args, "--model"));

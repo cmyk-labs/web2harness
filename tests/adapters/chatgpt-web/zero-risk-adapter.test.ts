@@ -129,6 +129,7 @@ for (const scenario of [
     },
   });
   const server = await new BrowserControlServer({
+    assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
     logger, getBrowserHost: () => host, getPreferences: () => ({}),
   }).start();
   writeFileSync(config.chatgptWeb!.browserHostDescriptorPath!, JSON.stringify({

@@ -70,6 +70,52 @@ test.skipIf(!process.env.LAUNCHER_TEST_ELECTRON)("finishing another Electron tab
         expect(await page.getByRole("menu").isVisible()).toBe(true);
       }
     }
+    // Inspect real native child-view bounds: renderer screenshots omit these layers.
+    // No browser pane exists on the welcome page, so no renderer bounds IPC will arrive.
+    for (const boundsReady of [false, true]) {
+      await app.evaluate((_, measured) => {
+        const host = (globalThis as any).viewportFixture;
+        host.visible = false;
+        host.surfaceActive = false;
+        host.boundsReady = measured;
+        host.window.setSize(720, 600);
+        host.syncViewVisibility();
+      }, boundsReady);
+      await Bun.sleep(200);
+      const initialBounds = await app.evaluate(() => {
+        const host = (globalThis as any).viewportFixture;
+        return [host.view, ...[...host.turnTabs.values()].map((tab: any) => tab.view)]
+          .map(view => view.getBounds());
+      });
+      const before = await dimensions();
+      await page.getByRole("button", { name: "Models", exact: true }).dispatchEvent("click");
+      expect(await page.getByRole("menu").isVisible()).toBe(true);
+      for (const action of ['resize', 'maximize', 'unmaximize']) {
+        await app.evaluate((_, action) => {
+          const window = (globalThis as any).viewportFixture.window;
+          if (action === 'resize') window.setSize(1120, 760);
+          else if (action === 'maximize') window.maximize();
+          else window.unmaximize();
+        }, action);
+        await Bun.sleep(250);
+        const placement = await app.evaluate(() => {
+          const host = (globalThis as any).viewportFixture;
+          return { size: host.window.getContentSize(), maximized: host.window.isMaximized(),
+            views: [host.view, ...[...host.turnTabs.values()].map((tab: any) => tab.view)]
+              .map(view => ({ bounds: view.getBounds(), visible: view.getVisible() })) };
+        });
+        expect(placement.maximized).toBe(action === 'maximize');
+        for (const [index, view] of placement.views.entries()) {
+          expect(view.visible).toBe(true);
+          expect(view.bounds.x + view.bounds.width).toBeLessThan(0);
+          expect(view.bounds.y + view.bounds.height).toBeLessThan(0);
+          expect(view.bounds).toEqual(initialBounds[index]);
+        }
+        expect(await dimensions()).toEqual(before);
+        expect(await page.getByRole("menu").isVisible()).toBe(true);
+        console.log(JSON.stringify({ boundsReady, action, ...placement }));
+      }
+    }
   } finally {
     await app.close();
     if (dirname(resolve(userData)) !== resolve(tmpdir()) || !basename(userData).startsWith("launcher-viewport-")) {

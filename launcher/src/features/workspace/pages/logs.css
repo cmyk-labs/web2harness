@@ -1,4 +1,8 @@
-.log-viewer { min-width: 0; }
+.content-scroll:has(.log-viewer) { display: flex; flex-direction: column; padding-bottom: 20px; }
+.content-scroll:has(.log-viewer) > * { flex: none; }
+.content-scroll:has(.log-viewer) > [role="tabpanel"] { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.log-viewer { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.log-viewer > * { flex: none; }
 .log-toolbar { display: grid; grid-template-columns: 128px 152px minmax(0, 1fr); align-items: end; gap: 12px; }
 .log-export-fields { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
 .log-viewer label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 12px; color: var(--color-text-secondary); }
@@ -21,7 +25,7 @@
 .log-button-label { display: grid; }
 .log-button-label > span { grid-area: 1 / 1; }
 .log-button-placeholder { visibility: hidden; }
-.log-json-scroll { height: clamp(320px, 50vh, 600px); overflow: auto; border: 1px solid var(--color-border-heavy); background: var(--color-background-sidebar); }
+.log-viewer > .log-json-scroll { flex: 1 0 120px; min-height: 120px; height: 0; overflow: auto; border: 1px solid var(--color-border-heavy); background: var(--color-background-sidebar); }
 .log-json-record { min-width: 100%; width: max-content; border-left: 2px solid transparent; }
 .log-json-scroll.is-wrapped .log-json-record { content-visibility: auto; contain-intrinsic-size: auto 100px; }
 .log-json-record.is-error { border-left-color: var(--color-text-error); }

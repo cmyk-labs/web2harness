@@ -135,7 +135,7 @@ Development records under `dev-notes/` remain outside Git. Formal documentation 
 
 Maintain colors, typography, dimensions and motion durations in `launcher/src/tokens.css`. The interface uses graphite surfaces with neutral gray buttons and selection states. Green, orange and red convey healthy, warning and error states. Selection also uses a background, border or marker rather than color alone. Keep page headings, controls and content spacing consistent; place feature-specific styles beside their components.
 
-Entry screens share a centered content column with scrolling in short windows. Workspace pages use left-aligned content, 24px page headings, 14px body text, 36px controls and 32px horizontal padding (20px in narrow windows). Keep the Overview usage flow expanded. About and license management show concise summaries; additional explanations and renewal inputs open on request.
+Welcome and preparation screens share a centered content column with scrolling in short windows. Workspace pages, including Product license, use left-aligned content, 24px page headings, 14px body text, 36px controls and 32px horizontal padding (20px in narrow windows). Keep the Overview usage flow expanded. About and activated license management show concise summaries; additional explanations and renewal inputs open on request. Unlicensed pages remain readable; backend checks also protect actions.
 
 Review both languages, wide and narrow windows, long content, errors and disabled states, as well as keyboard focus, hidden navigation and the system reduced-motion preference. Run `node launcher/scripts/smoke-workspace.mjs` to exercise the UI with an independent browser and mocked IPC; set `WORKSPACE_SMOKE_OUTPUT` to the task's evidence directory. Capture screenshots after page and sidebar transitions have settled. These checks do not establish authenticated ChatGPT, native embedded-browser or installer acceptance.
 
@@ -197,7 +197,7 @@ Conversation changes need real tool-result rounds, later user turns, replay prot
 
 ## DEV profile and startup
 
-Prepare a device-bound test license first with `bun run scripts/prepare-license-dev.ts`, then set the printed `WEB2HARNESS_DEV_HOME` and `WEB2HARNESS_LICENSE_KEYS_FILE`. DEV uses the shared runtime and the same activation checks. The first application screen is activation, preceding language selection. See [offline licensing](licensing.md). Tests and `bun run verify` prepare their own temporary test resources.
+Prepare a device-bound test license first with `bun run scripts/prepare-license-dev.ts`, then set the printed `WEB2HARNESS_DEV_HOME` and `WEB2HARNESS_LICENSE_KEYS_FILE`. DEV uses the shared runtime and the same activation checks. Without activation, Product license opens first and other pages remain available for browsing; first-time language selection follows activation. See [offline licensing](licensing.md). Tests and `bun run verify` prepare their own temporary test resources.
 
 Start runtime development with:
 

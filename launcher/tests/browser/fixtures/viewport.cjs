@@ -14,6 +14,7 @@ app.whenReady().then(async () => {
     turnTabs: new Map(), selectedTabId: "second", closedTurnOwners: new Map(),
     syncPowerSaveBlocker() {}, snapshot() { return {}; }, writeDescriptor() {},
   });
+  host.bindWindowVisibility();
   for (const id of ["first", "second"]) {
     const view = new WebContentsView({ webPreferences: { backgroundThrottling: false } });
     const tab = {

@@ -30,6 +30,68 @@ test("manual prompt handoff keeps ordinary turns at one minute and compaction at
   assert.equal(MANUAL_COMPACTION_SUBMIT_TIMEOUT_MS, 120_000);
 });
 
+for (const boundsReady of [false, true]) {
+  test(`native window changes keep hidden views outside the window with pane measured=${boundsReady}`, () => {
+    let size = [1120, 720];
+    const window = Object.assign(new EventEmitter(), {
+      getContentSize: () => size, isVisible: () => true, isMinimized: () => false,
+    });
+    const makeView = () => ({
+      bounds: null, visible: null, emulations: [],
+      setBounds(bounds) { this.bounds = bounds; },
+      getBounds() { return this.bounds; },
+      setVisible(visible) { this.visible = visible; },
+      webContents: { enableDeviceEmulation(options) { this.emulations.push(options); }, emulations: [] },
+    });
+    const primary = makeView();
+    const tabs = ['automatic', 'manual'].map(interactionMode => ({ id: interactionMode, interactionMode,
+      status: 'running', rendererReady: true, view: makeView() }));
+    const host = Object.assign(Object.create(BrowserHost.prototype), {
+      window, view: primary, boundsReady, bounds: {x:280,y:64,width:840,height:656},
+      visible: false, surfaceActive: false, primaryRendererReady: true,
+      authView: null, selectedTabId: 'home', turnTabs: new Map(tabs.map(tab=>[tab.id,tab])),
+      getBrowserInteractionMode: () => 'automatic',
+    });
+    host.bindWindowVisibility();
+    window.emit('show');
+    const views = [primary, ...tabs.map(tab=>tab.view)];
+    const initialBounds = views.map(view=>({ ...view.bounds }));
+    for (const [event, nextSize] of [
+      ['resize',[1440,852]], ['maximize',[1920,1080]], ['enter-full-screen',[2560,1440]],
+      ['leave-full-screen',[1920,1080]], ['unmaximize',[1120,720]],
+    ]) {
+      size = nextSize;
+      // The compositor can grow the window before delivering the JS event.
+      for (const view of views) {
+        assert.ok(view.bounds.x + view.bounds.width < 0 && view.bounds.y + view.bounds.height < 0,
+          `${event}: hidden view must remain outside even before the event arrives`);
+      }
+      window.emit(event);
+      for (const [index, view] of views.entries()) {
+        assert.equal(view.visible,true, `${event}: retain drawable viewport for browser ownership and active turns`);
+        assert.deepEqual(view.bounds,initialBounds[index],`${event}: do not move or resize hidden renderers`);
+      }
+    }
+    assert.equal(primary.webContents.emulations.length,1);
+    assert.equal(tabs[0].view.webContents.emulations.length,1);
+    if (boundsReady) {
+      host.visible = true;
+      host.surfaceActive = true;
+      host.selectedTabId = tabs[0].id;
+      host.syncViewVisibility();
+      size = [1920, 1080];
+      window.emit('resize');
+      assert.deepEqual(tabs[0].view.bounds,host.bounds,'selected browser pane still follows renderer measurements');
+      assert.ok(primary.bounds.x + primary.bounds.width < 0);
+      assert.ok(tabs[1].view.bounds.x + tabs[1].view.bounds.width < 0);
+    }
+    for (const event of window.eventNames()) {
+      window.off(event,host.windowVisibilityListener);
+    }
+    assert.equal(window.eventNames().length,0);
+  });
+}
+
 test("Electron and Bun agree on the exact launcher idle surface", () => {
   const clientSource = fs.readFileSync(
     resolve(__dirname, "../../../src/browser/launcher-client.ts"),
@@ -259,7 +321,7 @@ test("primary browser initialization keeps its view offscreen but visible until 
     calls.push(["load", url]);
     currentUrl = url;
   };
-  const hiddenBounds = { x: 1121, y: 721, width: 1120, height: 720 };
+  const hiddenBounds = { x: -1121, y: -721, width: 1120, height: 720 };
   const fixture = Object.assign(Object.create(BrowserHost.prototype), {
     view: {
       setBounds: bounds => calls.push(["bounds", bounds]),
@@ -562,7 +624,7 @@ test("hidden turn tabs receive an explicit renderer viewport before moving offsc
   BrowserHost.prototype.syncViewVisibility.call(fixture);
 
   assert.deepEqual(events, [
-    ["home-bounds", { x: 1121, y: 721, width: 1120, height: 720 }],
+    ["home-bounds", { x: -1121, y: -721, width: 1120, height: 720 }],
     ["home-visible", true],
     ["emulate", {
       screenPosition: "desktop",
@@ -572,7 +634,7 @@ test("hidden turn tabs receive an explicit renderer viewport before moving offsc
       viewSize: { width: 1120, height: 720 },
       scale: 1,
     }],
-    ["bounds", { x: 1121, y: 721, width: 1120, height: 720 }],
+    ["bounds", { x: -1121, y: -721, width: 1120, height: 720 }],
     ["visible", true],
   ]);
   assert.deepEqual(tab.deviceEmulationViewport, { width: 1120, height: 720 });
@@ -618,7 +680,7 @@ test("turn tabs use the hidden viewport when the launcher window is hidden", () 
   BrowserHost.prototype.syncViewVisibility.call(fixture);
 
   assert.deepEqual(events, [
-    ["home-bounds", { x: 1121, y: 721, width: 840, height: 656 }],
+    ["home-bounds", { x: -841, y: -657, width: 840, height: 656 }],
     ["home-visible", true],
     ["emulate", {
       screenPosition: "desktop",
@@ -628,7 +690,7 @@ test("turn tabs use the hidden viewport when the launcher window is hidden", () 
       viewSize: { width: 840, height: 656 },
       scale: 1,
     }],
-    ["bounds", { x: 1121, y: 721, width: 840, height: 656 }],
+    ["bounds", { x: -841, y: -657, width: 840, height: 656 }],
     ["visible", true],
   ]);
   assert.deepEqual(tab.deviceEmulationViewport, { width: 840, height: 656 });
@@ -662,7 +724,7 @@ test("new turn tabs defer device emulation until their renderer finishes loading
   BrowserHost.prototype.presentTurnView.call(fixture, tab, false);
 
   assert.deepEqual(events, [
-    ["bounds", { x: 1121, y: 721, width: 1120, height: 720 }],
+    ["bounds", { x: -1121, y: -721, width: 1120, height: 720 }],
     ["visible", true],
   ]);
   assert.equal(tab.deviceEmulationViewport, null);
@@ -708,7 +770,7 @@ test("visible turn tabs keep the explicit viewport across background transitions
   BrowserHost.prototype.syncViewVisibility.call(fixture);
 
   assert.deepEqual(events, [
-    ["home-bounds", { x: 1121, y: 721, width: 840, height: 656 }],
+    ["home-bounds", { x: -841, y: -657, width: 840, height: 656 }],
     ["home-visible", true],
     ["emulate", {
       screenPosition: "desktop", screenSize: { width: 840, height: 656 },
@@ -2345,7 +2407,7 @@ for (const reused of [false, true]) {
         assert.deepEqual(bounds.get(selected.id), fixture.bounds);
         assert.deepEqual(emulation.get(selected.id), { width: 868, height: 633 });
         assert.deepEqual(emulation.get(child.id), { width: 868, height: 633 });
-        assert.equal(bounds.get(child.id).x > 1120, true);
+        assert.ok(bounds.get(child.id).x + bounds.get(child.id).width < 0);
       } else {
         assert.deepEqual(bounds.get(child.id), fixture.bounds);
         assert.deepEqual(emulation.get(child.id), { width: 868, height: 633 });
@@ -3516,8 +3578,8 @@ test("background tabs retain the measured browser pane size across selection and
     window: { getContentSize: () => [1120, 720] },
   });
   const hidden = host.hiddenTurnBounds();
-  assert.deepEqual(hidden, { x: 1121, y: 721, width: 710, height: 568 });
-  assert.ok(hidden.x > 1120 && hidden.y > 720, "the pane remains entirely offscreen");
+  assert.deepEqual(hidden, { x: -711, y: -569, width: 710, height: 568 });
+  assert.ok(hidden.x + hidden.width < 0 && hidden.y + hidden.height < 0, "the pane remains entirely offscreen");
   const sizes = [];
   const tab = {
     status: "running", rendererReady: true, deviceEmulationDirty: true,
@@ -3561,7 +3623,7 @@ test("automatic primary checks keep an explicit viewport and manual mode restore
   fixture.primaryRendererReady = true;
   fixture.presentPrimaryView(false);
   assert.deepEqual(calls.slice(-3), [["emulate", { width: 1120, height: 720 }],
-    ["bounds", { x: 1121, y: 721, width: 1120, height: 720 }], ["visible", true]]);
+    ["bounds", { x: -1121, y: -721, width: 1120, height: 720 }], ["visible", true]]);
   fixture.presentPrimaryView(false);
   assert.equal(calls.filter(([event]) => event === "emulate").length, 1);
   fixture.primaryDeviceEmulationDirty = true;
@@ -3578,7 +3640,7 @@ test("automatic primary checks keep an explicit viewport and manual mode restore
   fixture.presentPrimaryView(false);
   assert.equal(calls.filter(([event]) => event === "emulate").length, 4);
   assert.equal(fixture.primaryDeviceEmulationViewport, null);
-  assert.deepEqual(calls.slice(-3), [["bounds", { x: 1281, y: 801, width: 1280, height: 800 }], ["disable"], ["visible", true]]);
+  assert.deepEqual(calls.slice(-3), [["bounds", { x: -1281, y: -801, width: 1280, height: 800 }], ["disable"], ["visible", true]]);
 });
 
 test("zero native window size preserves measured pane bounds and offscreen placement", () => {
@@ -3595,10 +3657,10 @@ test("zero native window size preserves measured pane bounds and offscreen place
   host.setBounds(pane);
   assert.deepEqual(host.bounds, pane);
   assert.equal(host.boundsReady, true);
-  assert.deepEqual(host.hiddenTurnBounds(), { x: 1121, y: 722, width: 868, height: 633 });
+  assert.deepEqual(host.hiddenTurnBounds(), { x: -869, y: -634, width: 868, height: 633 });
   host.setBounds(pane, 1.25);
   assert.deepEqual(host.bounds, { x: 315, y: 110, width: 1085, height: 791 });
-  assert.deepEqual(host.hiddenTurnBounds(), { x: 1401, y: 902, width: 1085, height: 791 });
+  assert.deepEqual(host.hiddenTurnBounds(), { x: -1086, y: -792, width: 1085, height: 791 });
   nativeSize = [1000, 700];
   host.setBounds(pane);
   assert.deepEqual(host.bounds, { x: 252, y: 88, width: 748, height: 612 });

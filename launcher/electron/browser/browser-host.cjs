@@ -423,10 +423,7 @@ class BrowserHost {
       },
     });
     window.contentView.addChildView(this.view);
-    this.windowVisibilityListener = () => this.syncViewVisibility();
-    for (const event of WINDOW_VISIBILITY_EVENTS) {
-      this.window.on(event, this.windowVisibilityListener);
-    }
+    this.bindWindowVisibility();
     this.view.webContents.setZoomFactor(this.state.zoomFactor);
     this.bindShellZoomShortcuts(this.window.webContents);
     this.bindShellZoomShortcuts(this.view.webContents);
@@ -443,6 +440,13 @@ class BrowserHost {
 
   async ready() {
     await this.initializationReady;
+  }
+
+  bindWindowVisibility() {
+    this.windowVisibilityListener = () => this.syncViewVisibility();
+    for (const event of WINDOW_VISIBILITY_EVENTS) {
+      this.window.on(event, this.windowVisibilityListener);
+    }
   }
 
   async initializePrimaryView() {
@@ -1535,8 +1539,11 @@ class BrowserHost {
       // Electron collapses a hidden WebContentsView's renderer viewport to 0x0. Keep running
       // turn views visible to Chromium and move them wholly outside the launcher content area so
       // Playwright retains a real viewport without exposing the task to the user.
-      x: Math.max(width, Math.round(contentWidth || 0)) + 1,
-      y: Math.max(height, Math.round(contentHeight || 0)) + 1,
+      // Anchor above/left of the content origin. Bottom/right placement can be exposed
+      // for a frame when the native window grows, before a JS resize listener runs.
+      // This stays outside every window size without moving or resizing active pages.
+      x: -width - 1,
+      y: -height - 1,
       width,
       height,
     };

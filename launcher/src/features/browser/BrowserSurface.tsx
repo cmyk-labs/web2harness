@@ -30,6 +30,7 @@ export function BrowserSurface({
   operation,
   platform,
   setError,
+  previewNotice,
 }: {
   browser: BrowserState | null;
   browserSlotRef: (node: HTMLDivElement | null) => void;
@@ -38,6 +39,7 @@ export function BrowserSurface({
   operation: OperationState | null;
   platform: string;
   setError: (error: string | null) => void;
+  previewNotice?: string;
 }) {
   const [passkeyContinuationRequested, setPasskeyContinuationRequested] =
     useState(false);
@@ -272,13 +274,13 @@ export function BrowserSurface({
                   : copy.stepAccount}
             </h1>
             <p>
-              {manualInteraction
+              {previewNotice ?? (manualInteraction
                 ? copy.stepAccountBody
                 : browser?.authenticated
                   ? copy.noActiveTaskBody
                   : passkeyWaiting
                     ? copy.passkeyContinueBody
-                    : copy.stepAccountBody}
+                    : copy.stepAccountBody)}
             </p>
             <div className="browser-empty-actions">
               <PrimaryButton

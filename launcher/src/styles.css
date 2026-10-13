@@ -2583,12 +2583,14 @@ code {
   font-size: var(--text-sm);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   .content-scroll,
   .content-scroll.is-narrow {
-    width: calc(100% - 48px);
+    padding-inline: 20px;
   }
+}
 
+@media (max-width: 900px) {
   .wizard-stepper em {
     display: none;
   }
@@ -2605,7 +2607,6 @@ code {
 
   .content-scroll,
   .content-scroll.is-narrow {
-    width: calc(100% - 36px);
     padding-top: 34px;
   }
 

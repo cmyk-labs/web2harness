@@ -43,6 +43,8 @@ Ordinary users may install and use the application on their own workstation. Dev
 
 ## Install and start
 
+The application opens in a normal window, initially 1120×720, and remembers its normal size and position within the current display's available area. It does not restore maximized or fullscreen mode at startup. You can still maximize, restore or minimize it using the window controls. Narrow windows collapse the sidebar and adapt the content layout without scaling text; long pages scroll, and the log viewer keeps its pagination below a separately scrollable log area.
+
 ### Select a download
 
 | Device | Installer |
@@ -93,9 +95,9 @@ For repair, exit the affected application and rerun its installer. Setup retains
 
 ## Connect Codex for the first time
 
-Welcome and activation use centered layouts; short windows scroll to keep actions reachable. The welcome page places the product slogan and short introduction below the brand and version, followed by language selection and Continue setup. Workspace settings use a consistent left-aligned layout. The usage flow on Overview stays expanded.
+Welcome uses a centered layout; short windows scroll to keep actions reachable. The welcome page places the product slogan and short introduction below the brand and version, followed by language selection and Continue setup. Workspace pages, including Product license, use a consistent left-aligned layout. The usage flow on Overview stays expanded, with an added license status and link.
 
-On first use, activate the device license, choose the interface language, then select **Continue setup** to enter the workspace. No GitHub sign-in or Star is required. Once first-run setup is complete, the welcome page does not appear on ordinary restarts.
+On first use, activate the device license in **License**, choose the interface language, then select **Continue setup** to enter the workspace. Before activation, all pages are readable, but configuration, sign-in and runtime actions are disabled. Initial activation and later updates use the same License page. No GitHub sign-in or Star is required. Once first-run setup is complete, the welcome page does not appear on ordinary restarts.
 
 Browser login, local configuration, and Codex catalog verification are separate checks. Complete them in order:
 

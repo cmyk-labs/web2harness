@@ -11,6 +11,7 @@ import { workspaceBusy, workspaceReady, workspaceTone } from "./status";
 import type { WorkspacePage } from "./types";
 import { WorkspaceIcon } from "./WorkspaceIcon";
 import { UpdateButton } from "./UpdateButton";
+import { useLicense } from "../licensing/LicenseContext";
 import type { WorkspaceProps } from "./types";
 
 export function WorkspaceSidebar({
@@ -37,11 +38,12 @@ export function WorkspaceSidebar({
   setError: WorkspaceProps["setError"];
 }) {
   const t = translate(snapshot.state.language ?? "en");
+  const { active: licensed } = useLicense();
   const busy = workspaceBusy(browser, operation);
   const ready = workspaceReady(status, snapshot, browser);
   const tone = workspaceTone(status, snapshot, browser, operation);
   const statusText =
-    snapshot.startup.status === "failed"
+    !licensed ? t("需要激活", "Activation required") : snapshot.startup.status === "failed"
       ? t("准备失败", "Preparation failed")
       : snapshot.startup.status !== "ready"
         ? t("正在准备", "Preparing")
@@ -103,7 +105,7 @@ export function WorkspaceSidebar({
           </section>
         ))}
       </nav>
-      <UpdateButton api={api} snapshot={snapshot} browser={browser} operation={operation} setError={setError} sidebar />
+      {licensed && <UpdateButton api={api} snapshot={snapshot} browser={browser} operation={operation} setError={setError} sidebar />}
       <div className="sidebar-footer">
         <div
           className="side-status"
@@ -120,7 +122,7 @@ export function WorkspaceSidebar({
         <button
           type="button"
           className="language-toggle"
-          disabled={changingLanguage}
+          disabled={changingLanguage || !licensed}
           aria-label={t("切换为英文", "Switch to Chinese")}
           title={t("切换为英文", "Switch to Chinese")}
           onClick={() =>

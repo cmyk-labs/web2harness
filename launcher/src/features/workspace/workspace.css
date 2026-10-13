@@ -1,4 +1,16 @@
 /* Workspace components. Shell and native browser layout live in styles.css. */
+.workspace-ui .overview-license {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+.workspace-ui .overview-license h2 { margin: 0; font-size: var(--text-base); }
+.workspace-ui .overview-license p { margin: 6px 0 0; color: var(--color-text-secondary); }
+.browser-preview { border: 0; padding: 0; margin: 0; min-width: 0; height: 100%; display: flex; flex-direction: column; }
 .workspace-ui.ui-page {
   position: relative;
   height: 100%;

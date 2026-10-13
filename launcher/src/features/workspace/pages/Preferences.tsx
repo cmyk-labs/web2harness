@@ -1,3 +1,4 @@
+import { useLicense } from "../../licensing/LicenseContext";
 import { useState } from "react";
 import { copyFor } from "../../../i18n";
 import type { LauncherState } from "../../../types";
@@ -11,12 +12,13 @@ import { useFeedback } from "../useFeedback";
 export function Preferences(p: WorkspaceProps) {
   const { api, snapshot, updateState, setError, refresh, browser, operation } =
     p;
+  const { active: licensed } = useLicense();
   const t = translate(snapshot.state.language ?? "en"),
     copy = copyFor(snapshot.state.language ?? "en");
   const [working, setWorking] = useState(false),
     [message, setMessage, dismissMessage] = useFeedback();
   const busy =
-      snapshot.startup.status !== "ready" ||
+      !licensed || snapshot.startup.status !== "ready" ||
       working ||
       workspaceBusy(browser, operation),
     manual = snapshot.state.browserInteractionMode === "manual",

@@ -9,10 +9,13 @@ import {
 } from "../status";
 import type { WorkspaceProps } from "../types";
 import { WorkspaceIcon } from "../WorkspaceIcon";
+import { useLicense } from "../../licensing/LicenseContext";
+import { licenseLabel } from "../../licensing/LicensePanel";
 
 export function Overview(p: WorkspaceProps) {
   const { snapshot, status, browser, operation, navigate } = p;
   const t = translate(snapshot.state.language ?? "en");
+  const license = useLicense();
   const busy = workspaceBusy(browser, operation),
     ready = workspaceReady(status, snapshot, browser);
   const manual = snapshot.state.browserInteractionMode === "manual";
@@ -21,7 +24,7 @@ export function Overview(p: WorkspaceProps) {
   const awaitingConnector =
     status?.mode === "mcp-bridge" && !snapshot.state.mcpSetupComplete;
   const tone = workspaceTone(status, snapshot, browser, operation);
-  const statusText =
+  const statusText = !license.active ? t("需要激活", "Activation required") :
     snapshot.startup.status === "failed"
       ? t("准备失败", "Preparation failed")
       : snapshot.startup.status !== "ready"
@@ -46,6 +49,19 @@ export function Overview(p: WorkspaceProps) {
           )}
         </p>
       </div>
+      <section className="overview-license panel" aria-label={t("产品授权", "Product license")}>
+        <div>
+          <h2>{t("产品授权", "Product license")}</h2>
+          <p>{license.active
+            ? `${t("已激活 · 有效期：", "Activated · Valid until: ")}${license.status?.expiresAt === null
+              ? t("永久", "Perpetual") : new Date(license.status!.expiresAt!).toLocaleString(snapshot.state.language === "zh-CN" ? "zh-CN" : "en-US")}`
+            : license.error ? t("无法读取授权状态，请前往产品授权重新检查。", "Unable to read license status. Check again in License.")
+              : license.status?.state === "missing" ? t("请先填写有效授权码，才能使用功能。", "Enter a valid license before using the application features.")
+                : license.status ? licenseLabel(license.status.state, snapshot.state.language === "zh-CN")
+                  : t("正在检查授权…", "Checking license…")}</p>
+        </div>
+        <Button onClick={() => navigate("license")}>{license.active ? t("管理授权", "Manage license") : t("前往激活", "Activate")}</Button>
+      </section>
       <Section title={t("连接状态", "Connection status")} />
       <div className="overview-status cards">
         {[
@@ -172,6 +188,7 @@ export function Overview(p: WorkspaceProps) {
           </div>
           {!busy && (
             <Button
+              disabled={!license.active}
               onClick={() =>
                 navigate(tone === "error" ? "diagnostics" : "connection")
               }
@@ -186,7 +203,7 @@ export function Overview(p: WorkspaceProps) {
       <Section
         title={t("当前生效配置", "Active configuration")}
         meta={
-          <Button onClick={() => navigate("connection")}>
+          <Button disabled={!license.active} onClick={() => navigate("connection")}>
             {t("管理连接", "Manage connection")}
           </Button>
         }

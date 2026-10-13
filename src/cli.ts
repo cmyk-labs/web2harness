@@ -31,6 +31,8 @@ import { installRuntimeKeyBytes, managedRuntimeKeyPath, stopTunnel, tunnelStatus
 import { getTunnelServiceStatus, restartTunnelService, startTunnelService, stopTunnelService, uninstallTunnelService } from "./runtime/tunnel-service";
 import { VERSION } from "./version";
 import { licenseCommand } from "./licensing/cli";
+import { requireLicense } from "./licensing/service";
+import { cliCommandRequiresLicense } from "./licensing/access";
 import { runDevCommand } from "./dev/cli";
 
 const HELP = `web2harness ${VERSION}
@@ -595,6 +597,7 @@ async function main(): Promise<void> {
   if (command === "dev" && home) {
     throw new Error("--home does not apply to DEV mode; use WEB2HARNESS_DEV_HOME for an explicit isolated DEV profile");
   }
+  if (cliCommandRequiresLicense(command, args)) await requireLicense();
   if (command === "help") stdout.write(HELP);
   else if (command === "license") await licenseCommand(args);
   else if (command === "setup") await setupCommand(args);

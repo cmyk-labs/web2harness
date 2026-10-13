@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
+import { useLicense } from "../../licensing/LicenseContext";
 import type { DiagnosticRange, Language, LauncherApi, LauncherState, LogPage, LogQuery, LogRecord } from "../../../types";
 import { defaultPageSize, pageSizes } from "../../../../shared/log-pagination.json";
 import { jsonLogParts } from "../log-presentation";
@@ -20,6 +21,7 @@ export function Logs({ api, language, recent, savedPageSize, updateState }: {
   api: LauncherApi; language: Language; recent: LogRecord[]; savedPageSize: number; updateState: (state: LauncherState) => void;
 }) {
   const t = translate(language);
+  const { active: licensed } = useLicense();
   const [level, setLevel] = useState("all"), [source, setSource] = useState("all"), [search, setSearch] = useState("");
   const [page, setPage] = useState<LogPage | null>(null), [cursor, setCursor] = useState<string | undefined>();
   const offset = page?.offset ?? 0;
@@ -71,6 +73,7 @@ export function Logs({ api, language, recent, savedPageSize, updateState }: {
   const nextPage = (value: string | null | undefined) => { if (!value) return; setBefore(current => current ?? new Date().toISOString()); setCursor(value); setSelectedId(null); scroll.current?.scrollTo({ top: 0 }); };
   async function changePageSize(value: number) {
     if (savingPageSize || value === pageSize || !pageSizes.includes(value)) return;
+    if (!licensed) { setPageSize(value); setCursor(undefined); setSelectedId(null); return; }
     setSavingPageSize(true); setPageSizeError("");
     try {
       const state = await api.setPreference("logPageSize", value);
@@ -80,6 +83,7 @@ export function Logs({ api, language, recent, savedPageSize, updateState }: {
     finally { setSavingPageSize(false); }
   }
   async function saveExport() {
+    if (!licensed) return;
     setExportError(""); setNotice("");
     const input: DiagnosticRange = { range, timeZone };
     if (range === "custom") {
@@ -150,7 +154,7 @@ export function Logs({ api, language, recent, savedPageSize, updateState }: {
       </div>
       <p>{t("可导出范围", "Available range")}：{formatTime(page?.available.start ?? null)} — {formatTime(page?.available.end ?? null)} · {timeZone}</p>
       <p>{t("导出包含所选时段的全部相关日志，已脱敏，不受上方筛选影响。", "Includes all related retained logs in the selected period, redacted and independent of the filters above.")}</p>
-      <div className="log-actions"><button className="btn primary" disabled={exporting} onClick={() => void saveExport()}>{exporting ? t("正在打包…", "Preparing…") : t("保存 ZIP", "Save ZIP")}</button>
+      <div className="log-actions"><button className="btn primary" disabled={!licensed || exporting} onClick={() => void saveExport()}>{exporting ? t("正在打包…", "Preparing…") : t("保存 ZIP", "Save ZIP")}</button>
         <button className="btn" disabled={exporting} onClick={() => { setExportOpen(false); exportButton.current?.focus(); }}>{t("取消", "Cancel")}</button></div>
       {exportError && <p className="log-error" role="alert">{exportError}</p>}
     </section>}
