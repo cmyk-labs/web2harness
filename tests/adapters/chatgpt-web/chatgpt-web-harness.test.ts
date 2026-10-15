@@ -128,9 +128,11 @@ const toolCapabilities = { localToolsEnabled: true, solAvailable: true, extraHig
 const browserOnlyCapabilities = { localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: true };
 
 function brokerTestEndpoint(name: string): string {
+  // macOS has a long TMPDIR and a 103-byte Unix socket path limit.
+  const socketId = createHash("sha256").update(`${process.pid}:${name}`).digest("hex").slice(0, 24);
   return process.platform === "win32"
     ? defaultBrokerEndpoint(join(tmpdir(), name), "win32")
-    : join(tmpdir(), `${name}.sock`);
+    : join(tmpdir(), `w2h-${socketId}.sock`);
 }
 
 async function sealBrowserRound(socketPath: string, token: string, turn: BrowserTurn, calls?: Array<{ name: string; arguments: Record<string, unknown> }>, answer = "done", fence = true) {

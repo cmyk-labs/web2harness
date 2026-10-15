@@ -42,7 +42,8 @@ const spawnArguments = {
 
 function fixture() {
   const parent = resolve(tmpdir());
-  const prefix = "w2h-discovery-continuation-";
+  // Leave room for runtime/turn-broker.sock under macOS's long TMPDIR.
+  const prefix = "w2h-disc-";
   const root = mkdtempSync(join(parent, prefix));
   return { root, cleanup() {
     if (resolve(root) !== root || dirname(root) !== parent || !basename(root).startsWith(prefix)) {
