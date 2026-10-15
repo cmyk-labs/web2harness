@@ -39,9 +39,10 @@ function writeJson(response, status, body) {
 }
 
 class BrowserControlServer {
-  constructor({ logger, getBrowserHost, getPreferences, resolveProxy, limits, assertLicensed }) {
+  constructor({ logger, getBrowserHost, getRequestQueue, getPreferences, resolveProxy, limits, assertLicensed }) {
     this.logger = logger;
     this.getBrowserHost = getBrowserHost;
+    this.getRequestQueue = getRequestQueue;
     this.getPreferences = getPreferences;
     this.resolveProxy = resolveProxy;
     this.limits = limits;
@@ -97,6 +98,19 @@ class BrowserControlServer {
       writeJson(response, 401, { error: "unauthorized" });
       return;
     }
+    if (request.method === "POST" && request.url?.startsWith("/v1/queue/")) {
+      const action = request.url.slice("/v1/queue/".length);
+      try {
+        if (["enqueue", "send-begin"].includes(action)) await this.assertLicensed();
+        const queue = this.getRequestQueue?.();
+        if (!queue) throw new Error("Request scheduler is not ready");
+        const result = await queue.request(action, await readJson(request));
+        writeJson(response, 200, result);
+      } catch (error) {
+        writeJson(response, 409, { error: error.message, code: error.code ?? "queue_request_failed" });
+      }
+      return;
+    }
     const isTurn = request.url === "/v1/turn/start"
       || request.url === "/v1/turn/heartbeat"
       || request.url === "/v1/turn/usage"
@@ -112,6 +126,7 @@ class BrowserControlServer {
       ["/v1/manual/started", "started"],
       ["/v1/manual/end", "end"],
       ["/v1/manual/cancel", "cancel"],
+      ["/v1/manual/request-finish", "request-finish"],
     ]).get(request.url);
     if (request.method !== "POST" || (!isTurn && !isTurnRelease && !isSessionInspect && !isProxyResolution && !manualAction)) {
       writeJson(response, 404, { error: "not_found" });
@@ -174,6 +189,13 @@ class BrowserControlServer {
       if (!Number.isInteger(body.helperPid) || body.helperPid < 1) {
         throw new Error("browser helper pid is invalid");
       }
+      if (request.url === "/v1/turn/start" || manualAction === "start") {
+        if (this.getRequestQueue) {
+          const queue = this.getRequestQueue();
+          if (!queue) throw new Error("Browser request queue is not ready");
+          queue.assertAdmission(body.traceId);
+        }
+      }
       if (body.conversationKey !== undefined && !/^[a-f0-9]{64}$/.test(body.conversationKey)) {
         throw new Error("conversationKey is invalid");
       }
@@ -196,6 +218,9 @@ class BrowserControlServer {
       if (body.retain !== undefined && typeof body.retain !== "boolean") {
         throw new Error("retain is invalid");
       }
+      if (body.awaitingToolResults !== undefined && typeof body.awaitingToolResults !== "boolean") {
+        throw new Error("awaitingToolResults is invalid");
+      }
       if (body.savedChat !== undefined && (request.url !== "/v1/turn/start" || !validSavedChatTask(body.savedChat))) {
         throw new Error("savedChat is invalid");
       }
@@ -209,6 +234,10 @@ class BrowserControlServer {
         throw new Error("refreshViewport is only valid for a turn heartbeat");
       }
       if (manualAction) {
+        if (manualAction === "request-finish") {
+          writeJson(response, 200, host.requestManualFinish(body.traceId, body.helperPid));
+          return;
+        }
         if (manualAction === "start") {
           if (host.browserInteractionMode() !== "manual") {
             throw new Error("Zero Risk is not enabled");
@@ -304,6 +333,7 @@ class BrowserControlServer {
           body.helperPid,
           body.status,
           body.retain === true,
+          body.awaitingToolResults === true,
         );
         writeJson(response, 200, { ok: true, ...release });
         return;
@@ -367,6 +397,7 @@ class BrowserControlServer {
           body.message,
           body.retain === true,
           body.connectorBound === true,
+          body.awaitingToolResults === true,
         );
         this.logger.info("browser.turn_ended", { traceId: body.traceId, status: body.status });
         writeJson(response, 200, { ok: true, ...release });

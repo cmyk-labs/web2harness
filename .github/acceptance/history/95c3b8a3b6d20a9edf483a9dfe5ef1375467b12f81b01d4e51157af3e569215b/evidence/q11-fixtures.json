@@ -1,0 +1,38 @@
+{
+  "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "cases": [
+    "Q11"
+  ],
+  "status": "pass",
+  "layer": "fixture",
+  "summary": "Current-candidate synthetic pressure passed: 50 queued requests with 200 MiB of held fixture buffers, separate count and 256 MiB waiting-byte overload rejection, metadata-only pages of 25 rows, 1000 timed queries and sampled RSS. Cleanup returns waiting bytes to zero. Body-budget overload/cleanup fixtures and UI pagination also passed. This does not establish real browser concurrency or a hard RSS limit.",
+  "tests": [
+    "launcher/tests/request-scheduler.test.cjs",
+    "tests/http-body-budget.test.ts",
+    "tests/responses/server-body-budget.test.ts"
+  ],
+  "pressure": {
+    "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+    "layer": "fixture",
+    "status": "pass",
+    "requests": 50,
+    "heldInputBytes": 209715200,
+    "waitingBudgetPeakBytes": 268435456,
+    "baselineRssBytes": 57925632,
+    "observedPeakRssBytes": 268091392,
+    "queryCount": 1000,
+    "queryP95Ms": 0.017399999999952342,
+    "queryMaxMs": 0.21330000000000382,
+    "maxPageBytes": 5192,
+    "pageLimit": 25,
+    "countOverloadRejected": true,
+    "byteOverloadRejected": true,
+    "noBodiesOrLeasesInPages": true,
+    "settledWaitingBytes": 0,
+    "notes": "Synthetic in-memory scheduler pressure; observed RSS is sampled process memory, separate from waiting-byte accounting and the independent HTTP allocation estimate. Not real browser concurrency."
+  },
+  "rawEvidence": {
+    "path": "output/2026-10-14-release-candidate/verify-final.log",
+    "sha256": "fbba6ee3e42d0f3c99b93f095e1124f1f348ad299d671123365085fbaf7b9b52"
+  }
+}

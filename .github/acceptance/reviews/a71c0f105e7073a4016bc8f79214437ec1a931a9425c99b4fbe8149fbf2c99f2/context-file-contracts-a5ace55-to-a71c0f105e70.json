@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 2,
+  "id": "context-file-contracts-a5ace55-to-a71c0f105e70",
+  "runId": "context-file-contracts-a5ace55",
+  "targetSourceId": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+  "reviewer": "Codex",
+  "at": "2026-10-15T14:41:49.054Z",
+  "checkIds": [
+    "context.file-contracts"
+  ],
+  "changes": [
+    {
+      "path": "docs/development.md",
+      "before": "f6379dd6266b99d24d5b69a1b37756737adb891a634bd599a1811d7aedb98e84",
+      "after": "bc84070b41525c6a43d4609d0d72745a4f0a5aad929dd63058fa171471000232",
+      "impact": "reviewed-unaffected",
+      "reason": "Corrects stale80% upload wording to the already implemented/accepted32KiB complete-context threshold and processing-before-send rule; behavior and acceptance criteria unchanged.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "docs/development.zh-CN.md",
+      "before": "900fe55060f1c4351f4890b22565006a3f49e33e4c3e6056321259fbe8285310",
+      "after": "17000e03cb6001aa881a37d13c560715e5f69519cd6a3602ef4f7f6f1319fb7f",
+      "impact": "reviewed-unaffected",
+      "reason": "Chinese counterpart of the corrected existing file-transport operating instructions.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "docs/troubleshooting.md",
+      "before": "66ff9e4ba0cadf2c5428d1c800174a23061f4e232930beb1cf8a5592f38d4e25",
+      "after": "c6216e7c2172ef3ba14b1a14bc19ff8f0b1081915f80bac5aa67215ab5bb19ac",
+      "impact": "reviewed-unaffected",
+      "reason": "Documents bounded catalog GET reuse and cancellation diagnosis; retains no credential/model substitution, no blind task replay and no browser restart policy. Supplemental review: Documents the new zero-local-activity error and bounded settling, with explicit remote-cause and unsupported-evidence limits. No acceptance criteria weakened.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        },
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    },
+    {
+      "path": "docs/troubleshooting.zh-CN.md",
+      "before": "78add32e1609f45f9b1b5b79500f140c4c5489fb5c2382e40c99aaa1d4436841",
+      "after": "28a847f394ff5f006873be5609e2711b5739d26d9a86c4de1bf358694031b26e",
+      "impact": "reviewed-unaffected",
+      "reason": "Chinese counterpart of catalog recovery/diagnostic guidance. Supplemental review: Equivalent Chinese failure interpretation and recovery boundaries.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        },
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/browser-helper-main.ts",
+      "before": "f9577be45c8ed7e358f124fe32925aa033c3b4c288bd8859cc142732cf333462",
+      "after": "63aec3ae753e0180cd19e96292050e5f3eae0539804cc3551fb529d6072ce9af",
+      "impact": "reviewed-unaffected",
+      "reason": "Validates optional fingerprint shape and advertises delivery-observation compatibility. Existing prompt and tool execution routes unchanged; final helper protocol tests pass.",
+      "support": [
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/browser-worker.ts",
+      "before": "16e219a2ed92094df8e5cb9b84638fcda73f38ae9de74f872a5e54e776c70c32",
+      "after": "e2f976923bc27a9ae0e7cfb4561c57c2e3150fe2e434eb6105fa2364c3347f6e",
+      "impact": "reviewed-unaffected",
+      "reason": "Only automatic MCP with an observed current-binding call and broker revision0 receives additional terminal guarding, including the second DOM projection. Reuses the existing single fence deadline. Ordinary prose, accepted batches, manual/native modes and physical lifecycle retain their behavior; scoped regressions and actual4-round MCP flow confirm those intersections. Historical remote absence remains open.",
+      "support": [
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/launcher-helper-client.ts",
+      "before": "1296fa88d00c19517fbbbdbb24ba472a418098c037a34c74c2833d93473687fe",
+      "after": "7ab6b07b25d4086a4855c744a845854a4abd37b328ff8fb4ede3d4f512cc9133",
+      "impact": "reviewed-unaffected",
+      "reason": "Forwards the prepared round fingerprint and rejects older helpers rather than losing the guard. Metadata and abort/release tests passed; live helper loaded the current source.",
+      "support": [
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/mcp-call-observation.ts",
+      "before": null,
+      "after": "dd57ae42f0b11aa2d8df0c7f66a38afed53d62233c6a9421dfa95a84008dc7c1",
+      "impact": "reviewed-unaffected",
+      "reason": "Adds bounded current-binding positive evidence and existing-grace settling for zero local activity. No prompt resubmission or tool execution from browser arguments; no foreign-binding authority. New synthetic missing/late receipt cases and real current-binding/result observations supplement existing tool contracts.",
+      "support": [
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/stream-evidence.ts",
+      "before": "7c7b5ac33bd4fecace374457b349b53da9bc9ed39268c193708e129dd4a93049",
+      "after": "bc75526a6bbb1691a8a6e667b5ed8eb29726b430cda10c81788e2585b1e17cfc",
+      "impact": "reviewed-unaffected",
+      "reason": "Projects only message identity, role, binding match and parent/result counts into the read-only observer. Existing body-free SSE accounting remains; original page/readiness tests pass and real7 calls/results were correlated. Native and manual flows provide no observation binding.",
+      "support": [
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/prompt/compile.ts",
+      "before": "cc1ceeb19f4f184b5ee4269e7107ab1878534f991137a4a179b65d011ae97d41",
+      "after": "dc7cbad65d69128da9bc671e69e681ec6d0bbf3b46910587af9f80c23bdfa75c",
+      "impact": "reviewed-unaffected",
+      "reason": "Adds only an internal SHA256 current-binding fingerprint for automatic handoff; canonical source, actual prompt text, budgets, context files, tools and permissions are unchanged. Prompt tests cover automatic/manual distinction.",
+      "support": [
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/tools/completion-fence.ts",
+      "before": "e2a166d2d5eefa99a8d9b3b15a133b5561e1e625f57d0d6acf0e8cf842df9a93",
+      "after": "ea4ec9e338e59182a0a505a0d41faf14d705a8ffd41d94f7c1a57ec5de8f640a",
+      "impact": "reviewed-unaffected",
+      "reason": "Adds an explicit not-received error reason to the existing bounded fence; default behavior and shared deadline remain. Missing, active, late and already-ready paths pass tests.",
+      "support": [
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    },
+    {
+      "path": "src/codex/model-catalog-fetches.ts",
+      "before": null,
+      "after": "dea71382bebe89d7722aa19e7843ec814f711f99cc1dc73a3e83843dfdb96808",
+      "impact": "reviewed-unaffected",
+      "reason": "New per-server in-flight idempotent catalog GET sharing, keyed by query and all headers. Caller disconnect does not reset an identical cold upstream attempt. No cross-auth/account/query sharing; failures/delivered responses removed, abandoned pending30s/unclaimed success10s bounds, shutdown abort. Content-free diagnostics only. Final51 scoped regressions and actual native/MCP catalog/task observations support existing unrelated contracts.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "src/server.ts",
+      "before": "289f90b8edb5e78b0714d305c6169cfcaaa6b91fcf6ed95dca8cad4063e3afee",
+      "after": "feeb5621e690a3a45e1b3fcf03e20903d82c82741fd8bb49a64f31800619058d",
+      "impact": "reviewed-unaffected",
+      "reason": "Uses the shared catalog fetch owner and original client signal, keeps per-response augmentation and existing upstream auth/model selection, distinguishes client disconnect from upstream failures, and closes owned catalog attempts on shutdown. This affects only catalog GET/cancellation health; turn bodies, tools, queue and licensing are unchanged. Server-model/lifecycle regressions and actual30-round native execution confirm integration.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/browser/launcher-helper-client.test.ts",
+      "before": "d983629a93fe890d9a929f14954cf96e5ad19a65f099e4389fc87a96de4dca59",
+      "after": "8a67223c616fc129876e065137977fcd067c2b753fd753656620a0e1d3f8ae21",
+      "impact": "reviewed-unaffected",
+      "reason": "Extends unchanged helper metadata/old-version tests to fingerprint propagation and clean rejection; no oracle weakened.",
+      "support": [
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/browser/mcp-call-observation.test.ts",
+      "before": null,
+      "after": "856868c08d113f4f501f3c94db0abbf3be96f21a89a16dcdb5403c2a5ea36c03",
+      "impact": "reviewed-unaffected",
+      "reason": "New bound/foreign/quoted/malformed/limited projection cases, actual isolated broker late-receipt flow, missing-receipt terminal error and Responses failure contract. Does not simulate authenticated root-cause resolution.",
+      "support": [
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/prompt/prompt-contract.test.ts",
+      "before": "ff1d11d615ce8e7a9c4e604d2aaf57b7f9b6d047723ad0340a60e1eac646d5c0",
+      "after": "ca9562ddffcab2e496aab5f78a2aed762e675a719f5c2c8f93338a3e0c94b42d",
+      "impact": "reviewed-unaffected",
+      "reason": "Confirms internal observation identity is automatic-MCP only and absent from task context; existing prompt assertions remain.",
+      "support": [
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    },
+    {
+      "path": "tests/responses/server-model-retry.test.ts",
+      "before": null,
+      "after": "c21fbc83ffe5d01660738420d6ac19a6d06c7d80c9b8046da4229495606d1db9",
+      "impact": "reviewed-unaffected",
+      "reason": "Adds pre-abort/no-forward, actual Bun HTTP disconnect/retry sharing, concurrent per-config augmentation, header/query isolation, result expiry, failure disposal, abandonment and shutdown regressions. No existing acceptance oracle is weakened.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    }
+  ],
+  "resolvedFailures": [],
+  "environment": {
+    "status": "revalidated",
+    "reason": "Same independent DEV, verified actual connector. Runtime/helper/MCP source current. Supplemental real MCP read/patch/readback/final confirms affected normal path;47 final scoped and139 prior browser contracts support changed failure handling. Retain original failure history and separately report two unclassified external exits. No new manual, compaction, agent or artifact claims.",
+    "evidence": [
+      {
+        "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+        "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+      }
+    ]
+  }
+}

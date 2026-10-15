@@ -1,0 +1,29 @@
+{
+  "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "loadedSourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "runtimeSha256": "711c85ee5a72caaa282ca810385c4a5d5cc597f8ba3d74cb38c58826d36240c2",
+  "cases": [
+    "CAP-003"
+  ],
+  "status": "fail",
+  "layer": "authenticated-dev",
+  "summary": "Exactly three real read-only GPT-6 Sol/medium children were created, but the parent finalized before receiving results. A continuation used -c sandbox_mode=read-only; native turn records instead reported workspace-write for the resumed parent. The mismatch was detected, and only the exact DEV CLI tree was terminated after PID/creation-time/fixture-command ownership checks. No child tool calls or file changes were observed; all 551 file hashes stayed unchanged. Queue inspection then showed no residual active requests. This driver attempt fails both completion and read-only acceptance; no pass is inferred from creation or initial exit zero.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-release-candidate/cap3-retry/cap003-audit.private.json",
+      "sha256": "0650916c0a90ce4e39215b2b11743b1ee059a150d048ec8d7e41a9d3f8e7c76e"
+    },
+    {
+      "path": "output/2026-10-15-release-candidate/cap3-retry/cap003-resume-owner.json",
+      "sha256": "3bb8a158911af7180e27ba29472d4a03755c5a36958babae5a1bdb96c4fba2fe"
+    },
+    {
+      "path": "output/2026-10-15-release-candidate/cap3-retry/cap003-resume-status.json",
+      "sha256": "3cd784c70465d5cd3ac5cf1a78623301851a83df6f42e91a3a86969608a35bf8"
+    },
+    {
+      "path": "output/2026-10-15-release-candidate/cap3-retry/cancel-owned.json",
+      "sha256": "76aa749b14fa985549ffc97b06e4fb2ca98cfeb981f6b4cc5d76387e49892157"
+    }
+  ]
+}

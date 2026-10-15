@@ -7,6 +7,7 @@ const workspaceIcons: Record<string, IconName> = {
   connection: "setup",
   diagnostics: "logs",
   preferences: "settings",
+  "runtime-parameters": "controls",
   about: "info",
   arrow: "chevron",
   terminal: "activity",

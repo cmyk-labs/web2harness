@@ -1,0 +1,628 @@
+{
+  "schemaVersion": 2,
+  "id": "reviewed-5bb51e-verify02-ui01-fixtures-to-f525683abfe5",
+  "runId": "reviewed-5bb51e-verify02-ui01-fixtures",
+  "targetSourceId": "f525683abfe564cc272e1250c2f1a02a57c37c4534f0488c7dec47ad686a183d",
+  "reviewer": "Codex",
+  "at": "2026-10-15T13:55:41.838Z",
+  "checkIds": [
+    "accounting.recovery",
+    "accounting.ui",
+    "queue.contracts",
+    "mcp.contracts",
+    "mcp.retention",
+    "queue.standalone"
+  ],
+  "changes": [
+    {
+      "path": "AGENTS.md",
+      "before": "078eda3e9cd6cdfc6b0b98c7734c06a98a483644d2b0ad18d6d17865d985d9d7",
+      "after": "59c47fb847a608494249f706d51030aa836d01ac65981b5fcedabd677637aa34",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "AGENTS.zh-CN.md",
+      "before": "a6479d063dc38ce68d9d382345cf093e7dfc504673bb16ee1ecb41bd3c0a1409",
+      "after": "744e6d249be771d6700bca3a067e59f594a455e8fdb1cf720c1f172c1a10689c",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "README.md",
+      "before": "ea18e989f3a8c090ba3af8f6dd4588941e5bbbe1c72bde9abeaad48e2bc74707",
+      "after": "ac40f60674a20e6844326d104d6a78b091f3c19f331611ab1bfdf5c80ef4acad",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "README.zh-CN.md",
+      "before": "0faa8d13f7c0d3151388eaafdd50ecbbee6e45cd29ec05021ae4873af3435429",
+      "after": "916a15592089c59688b6a6ecc328fd2331447246dab28abce9c6b67d37616379",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-evidence.md",
+      "before": "48955fdf9210fd2ce79a6835d3a09e1b613c20c7e330ef3c75c2d6d720cc6659",
+      "after": "e8a7135c026afba90cdcdbf893a91c9b2ab97ebfd6a287a7737cff04d764bc6f",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-evidence.zh-CN.md",
+      "before": "1253f6a8fb02e4d1a0f937e5cf52bef5d76a6dcb0c064cd9dc0a37ecab631c79",
+      "after": "efdaac8dd6586b8cdef85723b0f54c5e9b5b77d755055f1a6446f04d8b32b079",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-protocol.md",
+      "before": null,
+      "after": "8afadbf50997605fb51def353220026acce3198d6d85b616a979972403f2b51c",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-protocol.zh-CN.md",
+      "before": null,
+      "after": "b72f0a2025c321555bbd52403c288214a5e556b2fdc38b9a172174f83b719e84",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-tests.md",
+      "before": "2de679524aa227eb48cda8aaf156a053981fb20510403822364f450ea0db56f8",
+      "after": "adb085855e1191802f58c73fc243c92159d2ff9738e0f428f87cf35ffaedd51d",
+      "impact": "reviewed-unaffected",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged. Additional review: Bilingual queue documentation; only queue.desktop criteria change, which is not inherited in this review. Additional review: Documents threshold/fidelity/processing and a shared sentinel read-patch-readback flow; existing capability requirements retained.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "docs/acceptance-tests.zh-CN.md",
+      "before": "697417cda17f7285bc98e5285ea152a4253a2c5552322041f7a4d379bb2d899a",
+      "after": "1105346467523204b9ddfbc7755c0c9b12821bf3fe9f6492cbfccc1e71e7cc39",
+      "impact": "reviewed-unaffected",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged. Additional review: Bilingual queue documentation; only queue.desktop criteria change, which is not inherited in this review. Additional review: Chinese counterpart of new file transport criteria; no change to existing observations.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "docs/development.md",
+      "before": "2477e6d41c2c1d14656f6d6879831020fe8ff04fe09e7d60b60407462e106ea7",
+      "after": "bc84070b41525c6a43d4609d0d72745a4f0a5aad929dd63058fa171471000232",
+      "impact": "reviewed-unaffected",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged. Additional review: Bilingual queue documentation; only queue.desktop criteria change, which is not inherited in this review. Additional review: Corrects stale80% upload wording to the already implemented/accepted32KiB complete-context threshold and processing-before-send rule; behavior and acceptance criteria unchanged.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "docs/development.zh-CN.md",
+      "before": "fc388b608c8d6b42b1a3bf92d1421ff3798886da542cf3b5507015bcb38c874a",
+      "after": "17000e03cb6001aa881a37d13c560715e5f69519cd6a3602ef4f7f6f1319fb7f",
+      "impact": "reviewed-unaffected",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged. Additional review: Bilingual queue documentation; only queue.desktop criteria change, which is not inherited in this review. Additional review: Chinese counterpart of the corrected existing file-transport operating instructions.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "docs/reference.md",
+      "before": "b707b92b1362948dcdbc83a2520b309a87d2127566a1700c7cffbc573474aa3c",
+      "after": "e0fa35740ce24f77b72b299b0d2c20283a528f3f9e7742701df8014ac6342b56",
+      "impact": "reviewed-unaffected",
+      "reason": "Documents complete-file transport,32KiB boundary and unchanged budgets/options/mode restrictions; no other behavior change.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "docs/reference.zh-CN.md",
+      "before": "7acea48f26ec22eb2e5d6c8a71eccf570e212c8b9b3c7661190bad7d62807574",
+      "after": "9130894b820775971309ec410db107031aef369eced851ed3884838486fac5b3",
+      "impact": "reviewed-unaffected",
+      "reason": "Chinese counterpart of the file-transport reference.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "docs/release.md",
+      "before": "af9ef5d3469b9ece20303cdc523406e9d4db792eea1078583180358749562106",
+      "after": "5672b43d4d4a529dd5c2264ec9895898cf1d75ecbb07ba4ab9fd8f0cf4fa2ca4",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/release.zh-CN.md",
+      "before": "9ae7f810ea8083fc578ee2d02b94cdfac2baca0f329eb1e0a13c4a4a00a46da8",
+      "after": "0915999798947b444edfae8d65bb052262090115cf114be0513f88e1e44e6b6f",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/troubleshooting.md",
+      "before": "3011f34abbf00353cab0e25364b0bae49ec7371fb04d1b31260385fc0179fdd6",
+      "after": "167008d814586b95679ad901af3336f41506454dfc45025d57202963e0c03c34",
+      "impact": "reviewed-unaffected",
+      "reason": "Explains bounded conversation-priority transport diagnostics and their limits; no behavioral promise or acceptance criterion changes. Additional review: Explains input versus rendering stalls, lossless encoding and exact expanded ownership. Does not infer all historical failures share a root cause. Additional review: Documents bounded catalog GET reuse and cancellation diagnosis; retains no credential/model substitution, no blind task replay and no browser restart policy.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        },
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        },
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "docs/troubleshooting.zh-CN.md",
+      "before": "56969220d424e419e2b9db2d95d816a6b1ea29ef65e549f2a8b246bf5bfe1086",
+      "after": "8c5d348eaa7a0a2ac365f4d102381f6ccf1fe28442206b53990016acaffdc18c",
+      "impact": "reviewed-unaffected",
+      "reason": "Chinese equivalent of the bounded transport diagnostic explanation; no behavioral promise or acceptance criterion changes. Additional review: Chinese counterpart of the rendering/ownership investigation guidance. Additional review: Chinese counterpart of catalog recovery/diagnostic guidance.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        },
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        },
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "docs/user-guide.md",
+      "before": "8d4fb6f9e62a17d3053c2b722bdce041d3b3a6b594b2fa4858db7465b12d4f34",
+      "after": "21943d3c7ba92e43827a07f7431e068b3fbced4fc20383e49c50e7087ce6bf40",
+      "impact": "unrelated",
+      "reason": "Bilingual queue documentation; only queue.desktop criteria change, which is not inherited in this review."
+    },
+    {
+      "path": "docs/user-guide.zh-CN.md",
+      "before": "53ff3b574accfc88863f9594cdfd2c2e44400c893f8ae58155061a9532be6014",
+      "after": "e89ec22c1d46b147ad4ed93235cdb870dfc64b5e13c63192d31ae83489289b96",
+      "impact": "unrelated",
+      "reason": "Bilingual queue documentation; only queue.desktop criteria change, which is not inherited in this review."
+    },
+    {
+      "path": "launcher/electron/browser/browser-host.cjs",
+      "before": "b80c379dea7adb3704c4a6f07eb45c893ce62bee69f3c3219ef5144eff79a621",
+      "after": "b696b094cdfd05db0c1bec6f5e51b84f8e6780b2bed25850b723abe878f26106",
+      "impact": "reviewed-unaffected",
+      "reason": "Only teardown guards changed: capture released view.webContents before closing home/turn/auth views and before auth-home refresh. Missing/already destroyed content no longer interrupts cleanup. Live close, owner cancellation and waiter resolution remain unchanged; no admission, prompt, model, connector, budget or send path changed. Three reproduced regressions, 159 related checks, full verification and real DEV graceful close/restart support this review.",
+      "support": [
+        {
+          "path": "evidence/release-gaps-d7d5295fe640.json",
+          "sha256": "49d7644ff061d59086e41f45ca0a33a910b3609a38002229ba754c2a2f3a7592"
+        }
+      ]
+    },
+    {
+      "path": "launcher/electron/runtime/request-queue.cjs",
+      "before": "32324e8589f6e18aeb3863d076976006c469449b5dc022cbad877311075f8400",
+      "after": "12355d3ba34efac146e472ed40ffb922137015d825dccab4fb95dc620cbfdd08",
+      "impact": "reviewed-unaffected",
+      "reason": "Only query snapshots capture/return the new groups list. Persistence, ownership, physical settlement and controls are unchanged. Host queries and renderer are exercised together in the isolated UI flow.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "launcher/scripts/smoke-queue.mjs",
+      "before": null,
+      "after": "96930b428da1fc65068385ca85a9a18466e23bedb5fd5a14f99a661e4f56bbd0",
+      "impact": "unrelated",
+      "reason": "New isolated renderer/real-host query fixture covers only current queue display/filter changes; independent headless browser and private receipts, no model execution or credentials."
+    },
+    {
+      "path": "launcher/scripts/smoke-workspace.mjs",
+      "before": "f74df0b190be4d6783c61b8f8ef5b16feda4fea0a09287b2829f5d42da97b089",
+      "after": "a61da5efd03ff6a96a32578ef0993f2238114f89b4bf723b070d0e54c1fec603",
+      "impact": "unrelated",
+      "reason": "Adds an explicit queue-only branch, retaining the original default suite and shared mocked IPC setup. No production/DEV product path added; no prior passed check assertion removed."
+    },
+    {
+      "path": "launcher/shared/request-scheduler.cjs",
+      "before": "116a109b95cebba0a6eb80adc694cd78842842de232b9ce69948a71ddd75970a",
+      "after": "552972d9439f5121a715caacba2ac46c4239c77053d33f71c67a43bf297ab1b5",
+      "impact": "reviewed-unaffected",
+      "reason": "Only query builds session choices before session filtering/pagination, then applies the original session filter to rows. Admission, capacity, fairness, deadlines, leases, sends and cancellation are unchanged. Shared scheduler/host tests passed, including 26-session facets, search and stable snapshots.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "launcher/shared/request-scheduler.d.cts",
+      "before": "a4a86bafe86050df53ccb3a7f0d56b1ee765d55255c7520f4a84d3f7d58ca117",
+      "after": "d64bf4bbe465219bbf9d7c0a3fa58536b758a1b9e8e38931f9049a25669cc94c",
+      "impact": "reviewed-unaffected",
+      "reason": "QueuePage adds groups metadata; execution and owner contracts are unchanged.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "launcher/src/features/workspace/RequestQueue.tsx",
+      "before": "c72c95e12b0687dc69714c0fa2377ae383026726388d39879546ec90532e36ad",
+      "after": "11c5e7af956e5629c96f706dbc3858fc3b45a4f37e29cf4b0ec8ffacda83d6f4",
+      "impact": "unrelated",
+      "reason": "Queue-only renderer uses query-scoped sessions, abbreviated IDs with full titles, live first page and stable later pages, resets stale selection, distinct no-match message and accessible selector names. Metadata/actions remain separate; license checks and controls unchanged."
+    },
+    {
+      "path": "launcher/src/features/workspace/pages/queue.css",
+      "before": "e0498d2402bb4c21dc57afa658b92361b90883b1c2f3272e85192b29f99ba3d3",
+      "after": "733ded3f995aacee9930f4c1cfba40b89443dcd22889a7ff93d5e9a90231342a",
+      "impact": "unrelated",
+      "reason": "Only request-queue typography and spacing use shared description tokens, headers have medium weight and empty feedback collapses. Settings/control rules outside the queue stay unchanged. Computed typography equality, visible focus and bilingual widths are checked."
+    },
+    {
+      "path": "launcher/src/i18n.ts",
+      "before": "aef2794195b9633484642ccf6a0be38eadcbccbb0b103dcbd5fb3c8ebb96101e",
+      "after": "2d33c6a05653287aaa6dac12c22cc3504fb3dea97d84eb6fa559f4bd5ca4c1a8",
+      "impact": "reviewed-unaffected",
+      "reason": "Bilingual existing-option help now states32KiB, upload processing and original budget. No layout, queue labels, setting default or IPC contract changes.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "launcher/tests/browser/browser-host.test.cjs",
+      "before": "375e6423536c58324f0237762efdbbeb5467a4b3216be6a816f6f25adcaedd2f",
+      "after": "cfba4f48e8e101a52e5a1955156cbd0fb9dbe192b294abadd822859d7ce09d45",
+      "impact": "reviewed-unaffected",
+      "reason": "Three new targeted regressions reproduce absent WebContents, remaining live-view closure/waiter cleanup, auth-home release and cancelled turn removal. Existing assertions and evidence oracles remain intact.",
+      "support": [
+        {
+          "path": "evidence/release-gaps-d7d5295fe640.json",
+          "sha256": "49d7644ff061d59086e41f45ca0a33a910b3609a38002229ba754c2a2f3a7592"
+        }
+      ]
+    },
+    {
+      "path": "launcher/tests/request-queue.test.cjs",
+      "before": "2913a2eed494a72afad3b7af62c8678f75d56f973a247b9201c2d03935bc0c82",
+      "after": "d44c2b26ba8d15c41cfc670628bc21dd27d96f531c951add4760918ce59bc77d",
+      "impact": "unrelated",
+      "reason": "Adds current-state/search session facets across pages and empty-to-arrival/terminal transitions. Existing scheduler/host oracles retained."
+    },
+    {
+      "path": "scripts/acceptance-evidence.ts",
+      "before": "e5cf37abc429c5e8c2264e85c9558ae0c26dd7d271ac7638a6542c8435157c9a",
+      "after": "6ab7585417bf4641d5af34b7aeff1b9485e1721dad0bf24a7ac3a617727f0cfc",
+      "impact": "unrelated",
+      "reason": "Acceptance evidence/catalog tooling only; not loaded by product execution. Mapping was checked against the documented original behavior and required evidence level."
+    },
+    {
+      "path": "scripts/acceptance/catalog.ts",
+      "before": null,
+      "after": "70bc6e4cedd3328cd0e23ad1d93a0884d5d6cd115ac55d75470bce0feced8d9d",
+      "impact": "reviewed-unaffected",
+      "reason": "Acceptance evidence/catalog tooling only; not loaded by product execution. Mapping was checked against the documented original behavior and required evidence level. Additional review: Only queue.desktop criterion explicitly adds the changed session/model behavior. No inherited check criterion changes; actual desktop remains a gap. Additional review: Adds two explicit fixture/live context-file checks; all existing check definitions and criteria hashes stay unchanged. New checks receive actual evidence, not inherited passes.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "scripts/acceptance/checker.ts",
+      "before": null,
+      "after": "98c4d1b6a0a3afde3bd01af198d1847d8cbbb4cfa92276c1549c21b98cd36e09",
+      "impact": "unrelated",
+      "reason": "Acceptance evidence/catalog tooling only; not loaded by product execution. Mapping was checked against the documented original behavior and required evidence level."
+    },
+    {
+      "path": "src/adapters/chatgpt-web/adapter.ts",
+      "before": "29df3386a9eef85f3a1bcda8266ffba4509af812de919fae81ba0d27b419d2b5",
+      "after": "5d144488a9026243a0fdf1906cdd907105c10efd64aa3ff8d9fa3ef20346c2f4",
+      "impact": "reviewed-unaffected",
+      "reason": "Only scheduling.model now derives the requested family/Pro label. Execution modelId, family, effort, tools, permissions, retry key, grouping, timing and actual browser selection remain unchanged. The actual routed adapter admission is exercised by ten family/effort fixtures.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/attachment-upload.ts",
+      "before": null,
+      "after": "cbb9d4203078b57d17d0ddf22245d60bf65e0dcc233f6ac4273845f58b673408",
+      "impact": "reviewed-unaffected",
+      "reason": "New current-frame/origin/named-file processing observer. Bounded parsing, explicit HTTP/processing failure, abort-aware completion and listener teardown; no request-body logging. Real Chromium error/cancel/incomplete and native TXT06 confirm this affected path without changing unrelated transport, license or queue contracts.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/browser-worker.ts",
+      "before": "0e2457be8eae7b0c356259cc448b34cee59c418c7fa1f42cecc1da2f6b9226a6",
+      "after": "16e219a2ed92094df8e5cb9b84638fcda73f38ae9de74f872a5e54e776c70c32",
+      "impact": "reviewed-unaffected",
+      "reason": "Only the managed-chrome fallback admission model label uses the same helper. Actual execution and ownership are unchanged; two independent workers sharing one owned fixture host preserve backend/family/effort and query the actual admitted records. Additional review: Only three diagnostic event sites and an input-duration timestamp were added relative to d7d529. The sequential activation, single Enter, acceptance observation, abort signal, 20-second budget, ownership and retry logic are unchanged. 147 scoped checks and actual licensed DEV file work support the bounded diagnostic-only impact. Additional review: Expanded long user bubbles are compared exactly, then uniqueness/assistant/history ownership is rechecked. File admission waits for all owned processing completion plus visible cards before send readiness. Send-once, unknown-send rejection, queue lease, model selection, permissions and broker semantics remain. Scoped binding/worker fixtures and real native flows confirm the changed shared boundary; no claim of a new MCP, compaction or agent acceptance.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        },
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        },
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/turn-evidence.ts",
+      "before": "979c35233ded13bd0e0e544b43f10c6bd7993252bdf17cbdccc1395b5002dff8",
+      "after": "46986a940e9e28aaacf207fc735d1754279a41e1ab2767c0cb4fbd1dab773272",
+      "impact": "reviewed-unaffected",
+      "reason": "Bounded diagnostic recorder now evicts asset entries for recent conversation events and classifies late conversation callbacks after the request-handle budget or rebind. Retention limits, sticky request/send flags and all execution decisions are unchanged. Three regressions reproduced on the baseline; scoped tests and real HTTP200 evidence verify the recorder.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/user-message.ts",
+      "before": null,
+      "after": "cdd50fcfdc56af7abacd803d50ea3905634c943f151a880a8b49bbb8a67c4453",
+      "impact": "reviewed-unaffected",
+      "reason": "Pure exact reconstruction of supported user DOM, including paragraphs and fenced text; rejects unsupported/truncated/different content. Does not use prefix or token-only matches. Real DOM regressions and inline05 confirm handling; does not change execution metadata or broker routing.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/prompt/compile.ts",
+      "before": "a1078ffea43e9643a3bbe5193356f03c3e483fcbc67a9a3aec6821b1ba1e6847",
+      "after": "cc1ceeb19f4f184b5ee4269e7107ab1878534f991137a4a179b65d011ae97d41",
+      "impact": "reviewed-unaffected",
+      "reason": "Lossless JSON backtick encoding prevents a reproduced Markdown regex stall. Existing Context as File option now uses a complete-envelope UTF-8 >32768 threshold. Original values/roles/tools/history, budget accounting, route restrictions and manual-mode boundaries remain. Exact boundary/fidelity fixtures and real inline05/TXT06 native flows support reuse of unrelated model/queue/tool properties; new file criteria have separate observations.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "src/codex/model-catalog-fetches.ts",
+      "before": null,
+      "after": "dea71382bebe89d7722aa19e7843ec814f711f99cc1dc73a3e83843dfdb96808",
+      "impact": "reviewed-unaffected",
+      "reason": "New per-server in-flight idempotent catalog GET sharing, keyed by query and all headers. Caller disconnect does not reset an identical cold upstream attempt. No cross-auth/account/query sharing; failures/delivered responses removed, abandoned pending30s/unclaimed success10s bounds, shutdown abort. Content-free diagnostics only. Final51 scoped regressions and actual native/MCP catalog/task observations support existing unrelated contracts.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "src/models/chatgpt-web-queue-model.ts",
+      "before": null,
+      "after": "a5c2fdedefe3ef72445529614bb503febbc4e5407aa4905d3940046f0f98b1a6",
+      "impact": "reviewed-unaffected",
+      "reason": "New pure metadata formatter maps the shared backend alias plus family and max effort to Sol/Pro labels; it is used only in scheduling metadata. Luna/manual profiles remain untouched. It does not select or send a model.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "src/server.ts",
+      "before": "289f90b8edb5e78b0714d305c6169cfcaaa6b91fcf6ed95dca8cad4063e3afee",
+      "after": "feeb5621e690a3a45e1b3fcf03e20903d82c82741fd8bb49a64f31800619058d",
+      "impact": "reviewed-unaffected",
+      "reason": "Uses the shared catalog fetch owner and original client signal, keeps per-response augmentation and existing upstream auth/model selection, distinguishes client disconnect from upstream failures, and closes owned catalog attempts on shutdown. This affects only catalog GET/cancellation health; turn bodies, tools, queue and licensing are unchanged. Server-model/lifecycle regressions and actual30-round native execution confirm integration.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "tests/acceptance-evidence-v2.test.ts",
+      "before": null,
+      "after": "26447bd9bcbc0acad48ae41490d733ff5b33e86d7751cd4b8df9309efbb0abe1",
+      "impact": "reviewed-unaffected",
+      "reason": "New synthetic evidence-checker tests only; existing product fixtures and their pass criteria are unchanged.",
+      "support": [
+        {
+          "path": "reviews/03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a/scope-review.json",
+          "sha256": "f8498354e43ad759028cf8746f4e91788ae22b38eb8fc220984930bcc711db3f"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/browser/attachment-upload.test.ts",
+      "before": null,
+      "after": "fa04f50f6df9593c8e27d776072f271739b24c56947cf59e9b2f0ab563fdd10c",
+      "impact": "reviewed-unaffected",
+      "reason": "New actual Chromium processing tests cover delayed503, enabled-send while processing, own-file matching, errors, cancellation, all-file completion and missing terminal event.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/browser/browser-turn-binding.test.ts",
+      "before": "a92782dad58306ec12db9b4b596ca3d967fc30ef47c02b7a1e95ad8c6e4d8fb3",
+      "after": "b13ff15c2a8502b71d0ed22e467880bc4ce2289255ec697c32566136f63f147e",
+      "impact": "reviewed-unaffected",
+      "reason": "Adds exact expanded/rejected/competing-turn cases and actual HTTP-backed attachment readiness. Existing binding assumptions are retained, not relaxed.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/browser/browser-worker-contract.test.ts",
+      "before": "8a6a6b96850fb5b3ccf47ed60e51ef71e7656ff9fae92ef2b2eba6dddaeebbc0",
+      "after": "48b709bb445a8f8d42a96773aa674c660f9ea5170b5af70cdd954cd39c804e4c",
+      "impact": "reviewed-unaffected",
+      "reason": "Removes redundant old fake attachment test lacking the new CDP contract; actual DOM+HTTP attachment test supplies stronger coverage. Other worker checks passed. Historical failure remains in raw log.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/browser/turn-evidence.test.ts",
+      "before": null,
+      "after": "e69375c82e141807a98e7ecc0b185e6d4accbf43db5629337fcf51c2254d2b5f",
+      "impact": "reviewed-unaffected",
+      "reason": "Three new budget/priority/rebind regressions exercise real event listeners. Existing evidence oracles are unchanged; no fixture is relabeled as authenticated acceptance.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/prompt/context-attachments.test.ts",
+      "before": "fba69275cb0745d7655912ae96ecdf6e63ac9ad2bade99ffc341765e7ae959d5",
+      "after": "c5d0f70498d61ebb4bfb01f94a99a92798fe99eea9c91ec01355fa96d9ae1a9a",
+      "impact": "reviewed-unaffected",
+      "reason": "Replaces old heuristic threshold assertions with exact inclusive32768 boundary, UTF-8 fidelity and standard/triple-independent transport checks; existing integrity/count/budget rejection retained.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/prompt/prompt-contract.test.ts",
+      "before": "b2bf7ab99f7b1e393cd2e079e8ae97386792e258d6d793248a9438dc6bf1149f",
+      "after": "ff1d11d615ce8e7a9c4e604d2aaf57b7f9b6d047723ad0340a60e1eac646d5c0",
+      "impact": "reviewed-unaffected",
+      "reason": "New lossless backtick tests preserve keys, source values, literal escapes and historical handles; no oracle weakening.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/queue-model-metadata.test.ts",
+      "before": null,
+      "after": "5e6a6814befb05e9e5f812e2822ad6fbaed196e086d7653b27d9aa5dcb5febab",
+      "impact": "reviewed-unaffected",
+      "reason": "New real route-to-adapter admission regression and shared scheduler model searches; browser responses are stubbed. No change to prior test oracles.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "tests/browser/standalone-request-queue.test.ts",
+      "before": "f51a6ac797a772aa58660651048ded49d872c5ea0622e5328fb358b1b817b3fa",
+      "after": "25f161feb14db02af6f7e70d1809a42fad4b182481bde9a3e2c7ac2ed3274ebc",
+      "impact": "reviewed-unaffected",
+      "reason": "Strengthens existing managed-worker test to use actual canonical backend/family metadata and inspect owner-serialized admission receipts; retains concurrency and delayed preparation assertions.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "tests/responses/server-model-retry.test.ts",
+      "before": null,
+      "after": "c21fbc83ffe5d01660738420d6ac19a6d06c7d80c9b8046da4229495606d1db9",
+      "impact": "reviewed-unaffected",
+      "reason": "Adds pre-abort/no-forward, actual Bun HTTP disconnect/retry sharing, concurrent per-config augmentation, header/query isolation, result expiry, failure disposal, abandonment and shutdown regressions. No existing acceptance oracle is weakened.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    }
+  ],
+  "environment": {
+    "status": "revalidated",
+    "reason": "Same independent DEV profile/browser and verified actual connector binding. Actual native and Automatic MCP catalog/tool/agent flows completed; current51 catalog/lifecycle regressions support the GET-only change. Retain only original properties; no new manual/compaction/artifact or historical remote-cause claim.",
+    "evidence": [
+      {
+        "path": "evidence/catalog-closure-f525683abfe5.json",
+        "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+      }
+    ]
+  },
+  "resolvedFailures": []
+}

@@ -251,7 +251,7 @@ export function BrowserSurface({
         {browser?.loading ? <i className="browser-loading-line" /> : null}
       </div>
       {selectedManualTab &&
-      ["awaiting-user", "sent"].includes(
+      ["awaiting-user", "sent", "awaiting-finish"].includes(
         selectedManualTab.manualState ?? "",
       ) ? (
         <ManualTurnGuide

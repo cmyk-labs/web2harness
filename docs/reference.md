@@ -10,6 +10,8 @@ Defaults apply to new configurations; existing explicit settings follow the load
 
 - [Configuration ownership and application](#configuration-ownership)
 - [Runtime and launcher settings](#runtime-settings)
+- [Standalone queue controls](#standalone-request-queue)
+- [HTTP request body limits](#http-body-limits)
 - [Model catalog and reasoning effort](#models)
 - [Context and transport budgets](#context-budgets)
 - [Profiles and data locations](#data-locations)
@@ -55,6 +57,60 @@ The defaults in these tables describe a new runtime configuration. Setup may ret
 | `zeroRiskProEnabled` | `false` | Boolean. In manual mode, also publish the Pro-sized manual model entry. The user must select Pro in ChatGPT for each turn; the launcher cannot verify that selection. |
 
 Automatic and manual MCP configurations use separate tunnel IDs and connector identities. The regular automatic connector is `Codex Native2`; the DEV automatic connector is `Codex Native2 DEV`; the manual connector is `Codex Zero Risk`. The active `appName` and `tunnel` must match the chosen interaction mode. A successful check for one interaction path does not verify the other.
+
+
+<a id="request-scheduling"></a>
+
+### Global Web request scheduling
+
+Edit the independent **Runtime parameters → Request scheduling** page and choose **Save settings**. Restore defaults changes only the draft until saved. Values belong to the current Launcher's `launcher-state.json`, not individual sessions.
+
+| Parameter | Default | Choices | Application |
+| --- | --- | --- | --- |
+| Concurrent Web turns | 4 | 1–5 | Applies to new dispatches; lowering it does not terminate running work |
+| Queue timeout | 15 minutes | 5, 10, 15, 30, 60 minutes | Determines the deadline of newly queued requests only |
+| Minimum send interval | 3 seconds | Integer 1–60 seconds | Controls actual automatic-send permits, not manual clicks |
+
+Sessions, models, main agents and child agents sharing one Launcher browser environment use the same queue. DEV and production are independent. Standalone managed Chrome uses a separate profile-owned queue with the same scheduler implementation, defaults and ranges; it does not join or control the Launcher queue. Fair dispatch rotates sessions and prioritizes requests waiting at least 60 seconds. Each queue allows at most 64 waiting requests and a 256 MiB estimated waiting-body budget, separate from the [HTTP body budget](#http-body-limits). Neither budget is a process memory cap or a Codex child-agent limit. Resource overflow fails explicitly.
+
+Waiting does not occupy a Web slot; execution deadlines start after admission. Pause stops new dispatches while admitted work continues. Cancelling active work retains its slot until physical cleanup. Rate limits and uncertain sends pause dispatch; stop remaining work, check the cause and explicitly confirm recovery. Old requests are not automatically resent.
+
+Launcher redacted receipts live in the application home's `runtime/request-queue.json`, limited to 4096 entries and 24 hours, without prompts, tool arguments or lease secrets. Unfinished work becomes interrupted after restart, without automatic replay. Use runtime logs and diagnostic bundles for longer-term investigation.
+
+<a id="standalone-request-queue"></a>
+
+### Standalone queue controls
+
+With `browserHost: "managed-chrome"`, the canonical `storageStatePath` identifies one queue owner across processes. Filesystem aliases and Windows path casing resolve to the same owner; other runtimes join it through authenticated loopback transport. Distinct canonical profiles and Launcher environments remain independent. Joining does not create another execution pool.
+
+Private state lives in `<canonical storageStatePath>.request-queue/`: `owner.json` holds the owner identity and transport credential; `receipts.json` holds settings, pause/send state and redacted receipts (4096 entries, 24 hours). Do not publish the owner descriptor. Retained request IDs cannot execute again.
+
+The CLI reads the selected home's runtime configuration and prints JSON. These commands reject Launcher-hosted configuration; use its UI instead.
+
+| Command | Contract |
+| --- | --- |
+| `browser queue status` | Read persisted receipts without contacting or starting a browser. `ownerPresent` reports a descriptor's presence, not verified liveness. |
+| `browser queue configure --concurrency N --timeout-minutes N --send-interval-seconds N` | Supply all three integer settings once, using the ranges above. Requires an unowned queue; saves settings for the next standalone runtime. It does not update a running owner. |
+| `browser queue recover --confirm-browser-stopped` | Offline recovery after the old runtime and its owned browsers have stopped. Refuses a live or unverifiable owner; marks unfinished receipts failed with `runtime_restarted_outcome_unknown`, clears pause/uncertain-send state, and preserves receipts without replay. |
+
+A lost owner, stale lock or unfinished receipt never triggers automatic takeover or recovery. PID death or heartbeat expiry cannot prove browser cleanup. Unknown sends and rate limits pause dispatch; investigate and stop the owned runtime/browser before explicit recovery. The recovery command does not stop processes or resend work. Start fresh requests only after resolving the cause.
+
+<a id="http-body-limits"></a>
+
+### HTTP request body limits
+
+Each Responses service shares one **256 MiB estimated allocation budget** across `/v1/responses` and `/v1/responses/compact`, including native passthrough. Separate service instances have separate budgets. This fixed protection is independent of Web execution slots and queue waiting-body accounting.
+
+| Limit | Value | Rejection |
+| --- | --- | --- |
+| Encoded request body | 64 MiB per request | HTTP 413 `request_body_too_large` |
+| Decoded JSON body | 128 MiB per request | HTTP 413 `request_body_too_large` |
+| JSON container nesting | 512 levels | HTTP 413 `request_body_too_large` |
+| Aggregate allocation estimate | 256 MiB per service | HTTP 503 `request_body_overloaded`, `retryable: true`, `Retry-After: 1` |
+
+Identity and zstd encoding are supported. Incremental accounting covers reader/decoder costs, zstd windows, retained encoded bytes and estimated JSON strings/structures and copies before parsing; dense JSON and compression cannot bypass it. The aggregate estimate can reject a request below the individual size limits. It is **not a hard RSS cap** or a measurement of total process memory.
+
+Reservations remain charged while requests wait, execute and deliver responses; a disconnect does not release execution memory before cleanup settles. Parsing/decompression failures and cancellation release their reservations after reader/decoder cleanup. HTTP 503 indicates body admission overload, not queue recovery or permission to replay an uncertain browser send.
 
 <a id="conversation-and-attachments"></a>
 
@@ -282,6 +338,8 @@ For Sol/Pro, the ordinary visible-text budget is the smaller of the explicit mes
 
 ### Context as File and triple budget
 
+With Context as File enabled, the complete serialized context stays inline up to 32 KiB (32768 UTF-8 bytes). Above that threshold it becomes one integrity-checked TXT attachment; the composer contains the file-reading and bridge instructions. The size includes JSON escapes, roles, tools and results, not just the latest user text. File processing must report completion for every owned attachment before sending. An upload failure stops the turn before Send rather than falling back to the full inline prompt. This threshold changes transport only; all context and compaction budget checks still apply. The existing preference remains explicit, and manual Zero Risk and Luna retain their documented restrictions.
+
 `experimentalContextFiles` changes how sufficiently large context is sent. `experimentalContextTripleBudget` is a separate opt-in that takes effect only with file transport. For the automatic GPT-5.6 and GPT-6 Sol/Pro policies, it multiplies the context window and compaction threshold by three while retaining the effective percentage. For example, ordinary Pro-account Sol becomes `333579` / `285000`, and a Pro route becomes `336579` / `285000`.
 
 The triple budget does not multiply the visible-message token cap, character cap or account usage quota; per-image token reserves remain unchanged. It does not multiply Luna's browser budget. Manual mode rejects file transport and uses its own fixed budgets. A successful upload does not prove that all uploaded context was used by the browser model.
@@ -364,6 +422,7 @@ The installed executable is `web2harness`. From a source checkout, replace it wi
 | `subagents status` | Inspect the configured collaboration protocol and route state. |
 | `subagents compatibility-v1` / `subagents native` | Change the protocol; restart Codex and the launcher. |
 | `browser check` | Check the configured browser engine or launcher browser. Manual mode checks host liveness without ChatGPT DOM inspection. |
+| `browser queue status`, `configure …`, `recover --confirm-browser-stopped` | Inspect saved standalone receipts, configure the next runtime, or explicitly recover a stopped owner. Managed Chrome only; see [standalone queue controls](#standalone-request-queue). |
 | `setup [options]` | Validate and configure runtime, account capabilities and Codex integration. This changes the selected environment. |
 | `login` | Run the supported browser-login flow; launcher-owned login remains under launcher control. |
 | `serve` | Start the selected runtime's Responses server in the foreground. |
@@ -436,6 +495,8 @@ The following modules define the contracts in this reference. For directory owne
 | Persisted schema migration | [Shared migration](../launcher/shared/config-migration.cjs), a pure module used by both Bun and the desktop; validation and file writes remain with their callers. |
 | Profiles and desktop preferences | [Launcher profiles](../launcher/electron/profile.cjs), [launcher state](../launcher/electron/state.cjs), [DEV profile](../src/dev/profile.ts), [DEV commands](../src/dev/cli.ts). |
 | Runtime controls | [Stall watchdog](../src/stall-timeout.ts), [tunnel storage](../src/runtime/tunnel.ts). |
+| Request scheduling | [Shared scheduler](../launcher/shared/request-scheduler.cjs), [Launcher owner](../launcher/electron/runtime/request-queue.cjs), [standalone owner](../src/browser/standalone-request-queue.ts), [CLI controls](../src/browser/standalone-queue-command.ts), [cross-process transport](../src/browser/standalone-queue-transport.ts). |
+| HTTP body admission | [Streaming reader](../src/http-body.ts), [service allocation budget](../src/http-body-budget.ts), [zstd window guard](../src/http-body-zstd.ts), [endpoint lifecycle](../src/server.ts). |
 | Model identity and availability | [Route registry](../src/models/chatgpt-web-model-registry.ts), [account-aware resolution](../src/models/chatgpt-web-models.ts), [model types](../src/models/chatgpt-web-model-types.ts). |
 | Context and compaction budgets | [Context and transport policy](../src/models/chatgpt-web-context.ts), [input estimation and Luna boundary](../src/adapters/chatgpt-web/prompt/input-tokens.ts), [source preservation](../src/adapters/chatgpt-web/prompt/source-context.ts). |
 | Catalog and selection validation | [Catalog augmentation](../src/models/model-catalog.ts), [native context override reading](../src/codex/integration-document.ts), [browser family verification](../src/adapters/chatgpt-web/browser/model-selection.ts). |

@@ -1,6 +1,8 @@
 import { diagnosticEvent, diagnosticError, diagnosticReference } from "../../../diagnostics";
 import { createHash } from "node:crypto";
 import type { AdapterEvent, CodexParsedRequest } from "../../../types";
+import { captureSourceContext } from "../../../responses/context-source";
+import { requestFingerprint } from "../../../request-identity";
 import type { BrokerToolRequest } from "./turn-broker";
 import { ChatGptWebAdapterError, chatGptBrowserTabClosedError, chatGptTurnSupersededError } from "../adapter-error";
 import {
@@ -141,6 +143,7 @@ export class ChatGptTextFeed {
 }
 
 interface ChatGptTurnRuntimeBase {
+  handoff?: { result?: { terminal: import("./tool-batch-handoff").HandoffTerminal; requests: BrokerToolRequest[] } };
   browser: Promise<string>;
   /** Physical helper/Playwright settlement, including the launcher end/release acknowledgement. */
   physicalSettlement: Promise<void>;
@@ -221,11 +224,20 @@ export function chatGptTurnRoundKey(parsed: CodexParsedRequest): string {
     || !Array.isArray((body as { input?: unknown }).input)) {
     throw new Error("ChatGPT web requires the complete native Codex input for round replay");
   }
-  return executionKey(parsed, {
+  return requestFingerprint("chatgpt-response-round", {
+    modelId: parsed.modelId,
     threadId: identity.threadId,
     turnId: identity.turnId,
     purpose: parsed._compactionRequest ? "compaction" : "response",
     input: (body as { input: unknown[] }).input,
+    // Input alone can replay calls authorized by an older tool catalog or policy. The source
+    // retains lossless model controls; parsed tools/options also cover discovery and routing.
+    // Exclude derived message timestamps and transport state so identical retries still dedupe.
+    source: parsed.context.source ?? captureSourceContext(body),
+    tools: parsed.context.tools,
+    options: parsed.options,
+    modelFamily: parsed._chatgptModelFamily,
+    compactionResponseFormat: parsed._compactionResponseFormat,
   });
 }
 
@@ -536,12 +548,8 @@ export class ChatGptTurnSessions {
       existing.touch();
       return existing;
     }
-    const active = [...this.entries.values()].filter(session => session.isActive()).length;
-    if (active >= MAX_CHATGPT_BROWSER_TABS) {
-      throw new Error(
-        `ChatGPT Web supports at most ${MAX_CHATGPT_BROWSER_TABS} simultaneous browser turns; close or finish a browser tab before starting another`,
-      );
-    }
+    // Browser capacity is leased by the shared Launcher queue. This registry also
+    // contains waiting requests; its bounded receipt budget is not a Web concurrency cap.
     if (this.entries.size >= this.maxEntries) throw new Error(`ChatGPT web session registry is full (${this.maxEntries} entries)`);
     const session = new ChatGptTurnSession(start(), traceId, ownerKey, nativeTurnId, nativeThreadId, instruction);
     this.entries.set(key, session);

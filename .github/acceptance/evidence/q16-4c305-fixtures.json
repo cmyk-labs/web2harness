@@ -1,0 +1,23 @@
+{
+  "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "cases": [
+    "Q16"
+  ],
+  "status": "pass",
+  "layer": "fixture",
+  "summary": "Dependency-controlled lifecycle fixtures passed: waiting/running work blocks unsafe shutdown/update/removal transitions and global cancellation retains physical cleanup obligations. Actual installation, upgrade and uninstall remain maintainer-owned and unexecuted by the agent. Current-candidate full verification: 1132 core and 570 launcher tests, audits, type checks, builds, relocated runtime smoke; 325 UI checks. No authenticated acceptance is asserted.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-release-candidate/verify.log",
+      "sha256": "0454c1d4839d7233a20779d52f0f39cdebc9a12b734e580aac4b1b5424a0ae41"
+    },
+    {
+      "path": "output/2026-10-15-release-candidate/workspace-ui-02/results.json",
+      "sha256": "a05c971cf5a511cc03ed1ac263a0d39be6e960eafd492a64e28dbc8f6aa2c661"
+    },
+    {
+      "path": "output/2026-10-15-release-candidate/queue-pressure.json",
+      "sha256": "41d6e0ead5eb3c2b3ceb3a6538c6d593b6d76b5572ce8cbe84ce71382a1d21e3"
+    }
+  ]
+}

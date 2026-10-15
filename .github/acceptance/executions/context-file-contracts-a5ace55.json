@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "id": "context-file-contracts-a5ace55",
+  "source": {
+    "path": "sources/a5ace55e99059c6318a19b5c1af1b90d91d9a438dca5e938d5a257205fbf4037.json",
+    "sha256": "1aa4648e2838b22bfc40b7de1abe15ea29e3d1c325e287c2eed6d1f8341a032d"
+  },
+  "recordedAt": "2026-10-15T10:54:06.737Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Bun prompt/contracts plus actual isolated local Chromium DOM/network fixtures; not authenticated tool acceptance.",
+  "observations": [
+    {
+      "checkId": "context.file-contracts",
+      "criteriaHash": "c82d8841dcc9b783baecc6f8bccd66f68e4cb2c82fc558d60733f83ee836945d",
+      "outcome": "pass",
+      "at": "2026-10-15T10:39:53.368Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "not-applicable",
+      "effort": "not-applicable",
+      "summary": "Exact UTF-8 threshold/fidelity, budget/integrity/count rejection, all own upload completion and errors/cancellation/no-inline-fallback confirmed by targeted fixtures and affected contracts.",
+      "evidence": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    }
+  ]
+}

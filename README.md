@@ -147,6 +147,7 @@ User-visible features, fixes, and compatibility changes are recorded by version,
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 2.1.0 | Unreleased | Adds a shared web-request queue with concurrency, expiry and send-interval controls; improves multi-agent tool handoff, retained-chat input preparation and request diagnostics; adds candidate-specific release evidence and build-only candidate artifacts. |
 | 2.0.0 | 2026-10-10 | Refines desktop layouts and usage views; adds raw JSON logs, full-history search, related-request filtering and configurable pagination; exports diagnostic bundles by date range, improves event coverage and redaction, and speeds up large log histories. |
 | 1.2.0 | 2026-10-09 | Adds GPT-6 and GPT-5.6 Sol family/effort selection, model-level local usage and recoverable send receipts. New configurations default to Temporary Chat. Stabilizes browser viewports, repeated paragraphs and formula extraction; updates security dependencies. |
 | 1.1.1 | 2026-10-05 | Preserve original Codex context and tool declarations, namespaces, call scopes, and raw exec input. Separate bridge transport instructions; verify retained-history prefixes and reject unsupported content without silent trimming. Refresh MCP tool definitions after upgrading. Fix automatic tab switches interrupting model selection during parallel tasks, and add three mandatory live release acceptance cases. |
@@ -169,7 +170,8 @@ Start with the user guide. Go directly to troubleshooting for a failure, and con
 | Components, request flow, conversation lifecycle, and permission boundaries | [Architecture](docs/architecture.md) |
 | Source development, contributions and review, isolated tests, naming, and documentation maintenance | [Development manual](docs/development.md) |
 | Builds, packages, acceptance, publication, rollback, and security maintenance | [Release manual](docs/release.md) |
-| Mandatory live capability cases for each release, evidence, and case extensions | [Acceptance tests](docs/acceptance-tests.md) |
+| Change impact, shared test flows, evidence inheritance and completion criteria | [Acceptance protocol](docs/acceptance-protocol.md) |
+| Capability requirements, reusable cases and evidence/checker formats | [Acceptance tests](docs/acceptance-tests.md) · [Evidence](docs/acceptance-evidence.md) |
 
 See [Contributing and review](docs/development.md#contributing) for submissions, [Report a vulnerability](docs/release.md#vulnerability-reporting) for private reports, and the [repository instructions](AGENTS.md) for automated work.
 

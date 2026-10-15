@@ -57,6 +57,7 @@ test("setup reports localized real stages and persists bounded fields without pr
 
 test("Windows changes only owned fixture shortcut icons, preserving targets, arguments and unrelated links", {
   skip: process.platform !== "win32",
+  timeout: 30_000,
 }, t => {
   const options = fixture(t), icon = stageShortcutIcon(options);
   const own = path.join(options.root, "owned.lnk"), other = path.join(options.root, "other.lnk"), absent = path.join(options.root, "absent.lnk");
@@ -64,8 +65,10 @@ test("Windows changes only owned fixture shortcut icons, preserving targets, arg
   // Only private fixture links: no desktop, start-menu, registry or installed application access.
   function powershell(script) {
     const result = spawnSync("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], {
-      encoding: "utf8", windowsHide: true, env: { ...process.env, W2H_FIXTURE: JSON.stringify({ own, other, target }) },
+      encoding: "utf8", windowsHide: true, timeout: 10_000,
+      env: { ...process.env, W2H_FIXTURE: JSON.stringify({ own, other, target }) },
     });
+    assert.equal(result.error, undefined, "fixture PowerShell must complete within its deadline");
     assert.equal(result.status, 0, result.stderr);
     return result.stdout.trim();
   }

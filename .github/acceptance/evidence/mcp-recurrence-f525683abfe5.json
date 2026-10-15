@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 2,
+  "kind": "historical-mcp-recurrence-review",
+  "recordedAt": "2026-10-15T14:09:13.744Z",
+  "targetSourceId": "f525683abfe564cc272e1250c2f1a02a57c37c4534f0488c7dec47ad686a183d",
+  "ownerDirection": "Determine whether this is rare; repair if it is not. No risk acceptance or issue closure was authorized.",
+  "finding": "At least two separate correctly permissioned tasks on the historical e844 daemon/browser candidate show browser tool messages without tool results or local receipt. This is historical recurrence, not proof of current frequency. Current8af completed25 rounds; its success does not establish rarity or resolve the cause.",
+  "occurrences": [
+    {
+      "traceId": "070c8e7b7ac0",
+      "at": "2026-10-14T14:42:50.853Z",
+      "sourceId": "e84476463a7b8cc26f307b01cf404e44be62809870be89947639f06924314e56",
+      "flow": "retained-connector-input-repair/main-three-02",
+      "browserBodyChars": 145,
+      "toolMessageSeen": true,
+      "toolResultSeen": false,
+      "localRevision": 0,
+      "localReceiptBracket": [
+        36,
+        37
+      ]
+    },
+    {
+      "traceId": "6dcc1c9df19d",
+      "at": "2026-10-14T15:11:58.217Z",
+      "sourceId": "e84476463a7b8cc26f307b01cf404e44be62809870be89947639f06924314e56",
+      "flow": "multi-agent-handoff/main-three-01",
+      "browserBodyChars": 0,
+      "toolMessageSeen": true,
+      "toolResultSeen": false,
+      "localRevision": 0,
+      "localReceiptBracket": [
+        41,
+        42
+      ],
+      "separateProcedureDeviation": "Parent used shell writing instead of the required native apply_patch before the missing handoff."
+    }
+  ],
+  "exclusions": [
+    {
+      "traceId": "a2dd0b61f669",
+      "reason": "Wrong read-only/never acceptance preconditions."
+    },
+    {
+      "traceId": "45f2de18fa4c",
+      "reason": "Empty reply without original complete SSE cannot establish the same failure cause."
+    }
+  ],
+  "limitations": [
+    "Both historical brackets are MCP PID4304 with older source1a7a689f04eb; do not claim fully matched e844 runtime modules or infer mixed-source causation.",
+    "Original remote error and target payload structure were not retained. The historical temporary conversation is unavailable.",
+    "740 scanned traces include multiple versions, fixtures, modes and preconditions; neither that count nor25 dependent success rounds is a reliability denominator.",
+    "Earlier failures remain distinct; no new product fix or release readiness is claimed."
+  ],
+  "nextStep": "Retain the open defect. Correlate content-free remote call/error metadata and exact local receipts at the next occurrence during an otherwise required MCP flow. Do not repeat equivalent parent-plus-three acceptance merely for confidence or replay a sent task.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/mcp-occurrences.private.json",
+      "sha256": "dad307d744eba8b13298bf1997e769ed252ebc4622bb4a7ba72953c6956a6fc9"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/mcp-repeat-boundary.private.json",
+      "sha256": "8077231b496b67d1219427556e8c3687bbc9936e308b48b58c40306681004087"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/mcp-original-contiguous-log.private.json",
+      "sha256": "65f4b6b532f0c0f916ba05890eb5a29afc50ffbf81e97bcdb691a7f1ab0c85f8"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-main-three-automatic-02-confirmed.private.json",
+      "sha256": "b90f60395b8e1c555cd15a5d7b231201ba457d2a3e9585a5a5a03f5a899a92df"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "loadedSourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "runtimeSha256": "4c18bb1b5055c56a31d71552f3f0b6f8432773d9c3f43ba0c34fec46c34543fd",
+  "cases": [
+    "CAP-001"
+  ],
+  "status": "fail",
+  "layer": "authenticated-dev",
+  "summary": "Operator selected ordinary-tool automatic MCP for Code Mode cases. Native reads/patch/readback succeeded for CAP-001 but did not use Promise.all inside Code Mode; CAP-002 reported unavailable exec/wait and produced no marker. This is a failed acceptance precondition, not a passing substitution.",
+  "rawEvidence": {
+    "path": "output/2026-10-14-release-candidate/cap12-automatic-audit.private.json",
+    "sha256": "e4d5b50716d8c5c10a2595524df1246f1669cb5187aff512eda1ade30e3c3bd0"
+  },
+  "runtimeInventory": "output/2026-10-14-release-candidate/candidate-final.json"
+}

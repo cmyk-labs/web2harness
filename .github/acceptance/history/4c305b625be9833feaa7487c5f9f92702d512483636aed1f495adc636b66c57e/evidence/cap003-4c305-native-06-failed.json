@@ -1,0 +1,33 @@
+{
+  "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "loadedSourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "runtimeSha256": "1f64954d7ad32218fe73fb7a2b530e0cb5a506ded5d520d5aa70c9ab70ef4222",
+  "cases": [
+    "CAP-003"
+  ],
+  "status": "fail",
+  "layer": "authenticated-dev",
+  "summary": "Three actual child agents completed overlapping read-only GPT-6 Sol/medium tasks under on-request/auto_review. Actual GitHub README and MIT license access and local source reads were verified. The parent received child results but its next prompt-attachment stage stalled in one unresponsive DEV renderer; the parent did not aggregate or close the children. Content-free CDP checks showed other pages and the launcher responsive, while a renderer consumed approximately five CPU seconds in a five-second observation. The 60-second stage deadline remained blocked awaiting the browser action/cleanup for approximately 496 seconds. Closing only the verified owned task tab cancelled the turn and restored an idle queue. All 551 source-copy file hashes were unchanged. The initial renderer hang is not attributed to the prior network interruption; unbounded stage settlement is a separate reproducible code risk to repair.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-acceptance-resume/cap3-06/cap003-status.json",
+      "sha256": "dbccb0c83f91784b1b8faad894adf24c9fa8df90fe0ec36496ad8335d4d08bb6"
+    },
+    {
+      "path": "output/2026-10-15-acceptance-resume/cap3-06/cap003-audit.private.json",
+      "sha256": "0c1cf5f1657020cdeebb58dcc3ebb3b92287f5b95893888872fbf858b459f895"
+    },
+    {
+      "path": "output/2026-10-15-acceptance-resume/cap3-06/cap003-tools-review.private.json",
+      "sha256": "f45a30f15a283206ed3a41af7cb261ea225c3d71ba258e3a8818d31ad2dbd10f"
+    },
+    {
+      "path": "output/2026-10-15-acceptance-resume/cap3-06/cap003-timing.private.json",
+      "sha256": "41dc9acd0dfedebede3e993d5649a326eb230af37c11ed10c4fa8a2feb0757ac"
+    },
+    {
+      "path": "output/2026-10-15-acceptance-resume/hung-cancellation.private.json",
+      "sha256": "80053684ddf3e9431785c0cbe2025f868ccce6181ad5e0dd1dbab1a2eed0b502"
+    }
+  ]
+}

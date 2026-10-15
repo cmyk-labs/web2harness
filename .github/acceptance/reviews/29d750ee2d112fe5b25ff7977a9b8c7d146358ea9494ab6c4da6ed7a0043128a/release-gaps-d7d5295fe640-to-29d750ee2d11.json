@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 2,
+  "id": "release-gaps-d7d5295fe640-to-29d750ee2d11",
+  "runId": "release-gaps-d7d5295fe640",
+  "targetSourceId": "29d750ee2d112fe5b25ff7977a9b8c7d146358ea9494ab6c4da6ed7a0043128a",
+  "reviewer": "Codex",
+  "at": "2026-10-15T10:00:42.044Z",
+  "checkIds": [
+    "license.contracts",
+    "diagnostics.desktop",
+    "diagnostics.performance"
+  ],
+  "changes": [
+    {
+      "path": "docs/troubleshooting.md",
+      "before": "3011f34abbf00353cab0e25364b0bae49ec7371fb04d1b31260385fc0179fdd6",
+      "after": "5b7d1cfeeea646ef1d00a77888c31d9ac953a6108fdad9b858063df90b916ff4",
+      "impact": "reviewed-unaffected",
+      "reason": "Explains bounded conversation-priority transport diagnostics and their limits; no behavioral promise or acceptance criterion changes.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        }
+      ]
+    },
+    {
+      "path": "docs/troubleshooting.zh-CN.md",
+      "before": "56969220d424e419e2b9db2d95d816a6b1ea29ef65e549f2a8b246bf5bfe1086",
+      "after": "7f8108a5dd9a39a99484d77d231cd5330fc3d2944af738315094f08489547434",
+      "impact": "reviewed-unaffected",
+      "reason": "Chinese equivalent of the bounded transport diagnostic explanation; no behavioral promise or acceptance criterion changes.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/browser-worker.ts",
+      "before": "783e612223ec71cf18de833c9d5056144180dcc9e2a02f2ec4d26613b11dae4d",
+      "after": "cc7d85e1ef2518574f75bdb216abefeffc0699cf5e12e028e138c6c53b73ed61",
+      "impact": "reviewed-unaffected",
+      "reason": "Only three diagnostic event sites and an input-duration timestamp were added relative to d7d529. The sequential activation, single Enter, acceptance observation, abort signal, 20-second budget, ownership and retry logic are unchanged. 147 scoped checks and actual licensed DEV file work support the bounded diagnostic-only impact.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/turn-evidence.ts",
+      "before": "979c35233ded13bd0e0e544b43f10c6bd7993252bdf17cbdccc1395b5002dff8",
+      "after": "46986a940e9e28aaacf207fc735d1754279a41e1ab2767c0cb4fbd1dab773272",
+      "impact": "reviewed-unaffected",
+      "reason": "Bounded diagnostic recorder now evicts asset entries for recent conversation events and classifies late conversation callbacks after the request-handle budget or rebind. Retention limits, sticky request/send flags and all execution decisions are unchanged. Three regressions reproduced on the baseline; scoped tests and real HTTP200 evidence verify the recorder.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/browser/turn-evidence.test.ts",
+      "before": null,
+      "after": "e69375c82e141807a98e7ecc0b185e6d4accbf43db5629337fcf51c2254d2b5f",
+      "impact": "reviewed-unaffected",
+      "reason": "Three new budget/priority/rebind regressions exercise real event listeners. Existing evidence oracles are unchanged; no fixture is relabeled as authenticated acceptance.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        }
+      ]
+    }
+  ],
+  "environment": {
+    "status": "revalidated",
+    "reason": "Same isolated DEV and actual model/effort. Targeted automation, browser authentication, actual connector binding and a normal-metadata native file task support unchanged properties. This reuse excludes the failing read/patch aggregate, parent/three startup and current artifact. Native cold-catalog failures remain open release issues; retained historical properties are not a fresh all-path startup pass.",
+    "evidence": [
+      {
+        "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+        "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+      },
+      {
+        "path": "evidence/native-observation-29d750ee2d11.json",
+        "sha256": "52f74c82432016acc6aa1f49b9bedd0c3c48a4e5b8405788e0a6649758036703"
+      }
+    ]
+  }
+}

@@ -1,3 +1,4 @@
+import { exactTool, gatewayToolNameIsValid, excludedGatewayTools, execGateway, gatewayNestedToolName, gatewayToolCatalogProgram, execGatewayResultProgram, execGatewayProgram, execCommandGatewayProgram } from "./mcp-gateway";
 import { originalToolSpecification } from "../prompt/source-context";
 import { createHash, randomBytes } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -9,6 +10,9 @@ import type { ChatGptTurnEnvironment } from "../prompt/environment";
 import { CODEX_COMPACTION_CONTROL_WIRE_NAME } from "./native-compaction-control";
 import { callTurnBroker, TurnBrokerTimeoutError, type BrokerToolResult } from "./turn-broker";
 import { observeMcpToolCalls } from "./mcp-observation";
+import { BRIDGE_TOOL_NAMES, safeVisibleTools } from "./mcp-tool-policy";
+import { TOOL_BATCH_HANDOFF_PROTOCOL } from "./tool-batch-handoff";
+import { createHandoffMcpServer, HANDOFF_TOOL_NAMES } from "./mcp-handoff-server";
 
 interface ClaimedTurn {
   bindingId: string;
@@ -17,17 +21,6 @@ interface ClaimedTurn {
 }
 
 export type ChatGptMcpContract = "native" | "safe";
-
-const BRIDGE_TOOL_NAMES = new Set([
-  "codex_turn_start",
-  "codex_exec",
-  "codex_write_stdin",
-  "codex_apply_patch",
-  "codex_view_image",
-  "codex_tool_inventory",
-  "codex_tool_call",
-  "codex_turn_complete",
-]);
 
 const turnTokenSchema = z.string().min(20).max(256);
 const jsonArgumentsSchema = z.record(z.string(), z.unknown()).default({});
@@ -109,35 +102,6 @@ function wireName(tool: CodexTool): string {
   return toolIdentityKey(tool.namespace, tool.name);
 }
 
-function exactTool(environment: ChatGptTurnEnvironment, name: string): CodexTool | undefined {
-  return environment.tools.find(tool => (!tool.namespace || tool.namespace === "functions") && tool.name === name);
-}
-
-function gatewayToolNameIsValid(name: string): boolean {
-  return /^[A-Za-z0-9_$]+$/.test(name);
-}
-
-function safeVisibleTools(environment: ChatGptTurnEnvironment, contract: ChatGptMcpContract): CodexTool[] {
-  if (contract === "native") return environment.tools;
-  const bridgeNamespaces = new Set(environment.tools
-    .filter(tool => tool.namespace && BRIDGE_TOOL_NAMES.has(tool.name))
-    .map(tool => tool.namespace!));
-  return environment.tools.filter(tool => (
-    tool.name !== CODEX_COMPACTION_CONTROL_WIRE_NAME
-    && !BRIDGE_TOOL_NAMES.has(tool.name)
-    // Zero Risk does not expose model-authored JavaScript. Automatic MCP Bridge mode keeps the native
-    // Codex exec surface with its original body and runtime validation.
-    && ((tool.namespace !== undefined && tool.namespace !== "functions") || tool.name !== "exec")
-    && (!tool.namespace || !bridgeNamespaces.has(tool.namespace))
-  ));
-}
-
-function excludedGatewayTools(environment: ChatGptTurnEnvironment, contract: ChatGptMcpContract): string[] {
-  if (contract === "native") return [];
-  const visible = new Set(safeVisibleTools(environment, contract));
-  return environment.tools.filter(tool => !visible.has(tool)).map(tool => namespacedToolName(tool.namespace, tool.name));
-}
-
 function browserToolDescription(tool: CodexTool): string { return tool.description; }
 function browserToolParameters(tool: CodexTool): Record<string, unknown> { return tool.parameters; }
 
@@ -164,15 +128,6 @@ function asMcpResult(value: BrokerToolResult) {
   };
 }
 
-function execGateway(environment: ChatGptTurnEnvironment): CodexTool | undefined {
-  const tool = exactTool(environment, "exec");
-  return tool?.freeform ? tool : undefined;
-}
-
-function gatewayNestedToolName(toolName: string): string {
-  return toolName.replace(/[^A-Za-z0-9_$]/g, "_");
-}
-
 interface GatewayToolDescriptor {
   name: string;
   description: string;
@@ -185,29 +140,6 @@ interface GatewayToolCatalogPage {
 
 function gatewayToolDescription(tool: GatewayToolDescriptor): string {
   return tool.description;
-}
-
-function gatewayToolCatalogProgram(options: {
-  query?: string;
-  offset: number;
-  limit: number;
-  excludedNames: string[];
-}): string {
-  const needle = options.query?.trim().toLowerCase() ?? "";
-  return [
-    "if (typeof ALL_TOOLS === \"undefined\" || !Array.isArray(ALL_TOOLS)) throw new Error(\"Native nested tool registry is unavailable\");",
-    `const excludedNames = new Set(${JSON.stringify(options.excludedNames)});`,
-    `const needle = ${JSON.stringify(needle)};`,
-    "const visibleName = name => {",
-    "  return typeof name === \"string\" && /^[A-Za-z0-9_$]+$/.test(name) && !excludedNames.has(name);",
-    "};",
-    "const matches = ALL_TOOLS",
-    "  .filter(tool => visibleName(tool?.name))",
-    "  .map(tool => ({ name: tool.name, description: typeof tool.description === \"string\" ? tool.description : \"\" }))",
-    "  .filter(tool => !needle || (tool.name + \"\\n\" + tool.description).toLowerCase().includes(needle));",
-    `const page = matches.slice(${options.offset}, ${options.offset + options.limit});`,
-    "text(JSON.stringify({ tools: page, total: matches.length }));",
-  ].join("\n");
 }
 
 function gatewayToolCatalogPage(response: {
@@ -255,76 +187,18 @@ function gatewayToolCatalogPage(response: {
   return { tools, total: catalog.total as number };
 }
 
-function execGatewayResultProgram(invocation: string[]): string {
-  return [
-    ...invocation,
-    "const emit = value => {",
-    "  if (Array.isArray(value)) { for (const item of value) emit(item); return; }",
-    "  if (value && typeof value === \"object\") {",
-    "    if (value.type === \"image\") { image(value); return; }",
-    "    if (value.type === \"audio\") { audio(value); return; }",
-    "    if (value.type === \"text\" && typeof value.text === \"string\") { text(value.text); return; }",
-    "    if (typeof value.image_url === \"string\" && typeof value.output_hint === \"string\") { generatedImage(value); return; }",
-    "    if (typeof value.image_url === \"string\") { image(value.image_url, value.detail ?? \"auto\"); return; }",
-    "    if (typeof value.audio_url === \"string\") { audio(value.audio_url); return; }",
-    "    if (Array.isArray(value.content)) { for (const item of value.content) emit(item); return; }",
-    "  }",
-    "  text(value);",
-    "};",
-    "emit(result);",
-  ].join("\n");
-}
-
-function execGatewayProgram(
-  nestedToolName: string,
-  freeform: boolean,
-  payload: { arguments?: Record<string, unknown>; input?: string },
-  excludedNames: string[],
-): string {
-  if (!gatewayToolNameIsValid(nestedToolName) || excludedNames.includes(nestedToolName)) {
-    throw new Error(`Codex nested tool is not available in this turn: ${nestedToolName}`);
-  }
-  const gatewayName = gatewayNestedToolName(nestedToolName);
-  if (gatewayName !== nestedToolName) {
-    throw new Error(`Codex nested tool name is invalid: ${nestedToolName}`);
-  }
-  const nestedInput = freeform ? payload.input ?? "" : payload.arguments ?? {};
-  return execGatewayResultProgram([
-    "if (typeof ALL_TOOLS === \"undefined\" || !Array.isArray(ALL_TOOLS)) throw new Error(\"Native nested tool registry is unavailable\");",
-    `const nestedToolName = ${JSON.stringify(gatewayName)};`,
-    `const excludedNames = new Set(${JSON.stringify(excludedNames)});`,
-    "if (excludedNames.has(nestedToolName)) throw new Error(\"Native nested tool is not callable through the structured gateway\");",
-    "if (!ALL_TOOLS.some(tool => tool?.name === nestedToolName)) throw new Error(\"Native nested tool is not listed in this turn\");",
-    "const nestedTool = tools[nestedToolName];",
-    "if (typeof nestedTool !== \"function\") throw new Error(\"Native nested tool is listed but unavailable\");",
-    `const result = await nestedTool(${JSON.stringify(nestedInput)});`,
-  ]);
-}
-
-function execCommandGatewayProgram(
-  execCommandArguments: Record<string, unknown>,
-  shellCommandArguments: Record<string, unknown>,
-): string {
-  const execCommandName = gatewayNestedToolName("exec_command");
-  const shellCommandName = gatewayNestedToolName("shell_command");
-  return execGatewayResultProgram([
-    "if (typeof ALL_TOOLS === \"undefined\" || !Array.isArray(ALL_TOOLS)) throw new Error(\"Native command tool registry is unavailable\");",
-    "const nativeCommandNames = new Set(ALL_TOOLS.map(tool => tool?.name));",
-    `const nativeCommandCandidates = ${JSON.stringify([execCommandName, shellCommandName])}.filter(name => nativeCommandNames.has(name));`,
-    "if (nativeCommandCandidates.length !== 1) throw new Error(\"Expected exactly one native command tool; found \" + (nativeCommandCandidates.join(\", \") || \"none\"));",
-    "const nativeCommandName = nativeCommandCandidates[0];",
-    "const nativeCommand = tools[nativeCommandName];",
-    "if (typeof nativeCommand !== \"function\") throw new Error(\"Native command tool \" + nativeCommandName + \" is listed but unavailable\");",
-    `const nativeCommandInput = nativeCommandName === ${JSON.stringify(execCommandName)} ? ${JSON.stringify(execCommandArguments)} : ${JSON.stringify(shellCommandArguments)};`,
-    "const result = await nativeCommand(nativeCommandInput);",
-  ]);
-}
-
 export async function runChatGptMcpServer(options: {
   brokerSocketPath: string;
   contract?: ChatGptMcpContract;
+  protocol?: typeof TOOL_BATCH_HANDOFF_PROTOCOL;
 }): Promise<void> {
   const contract = options.contract ?? "native";
+  if (options.protocol !== undefined) {
+    if (options.protocol !== TOOL_BATCH_HANDOFF_PROTOCOL) throw new Error("Unsupported MCP handoff protocol");
+    const server = createHandoffMcpServer({ brokerSocketPath: options.brokerSocketPath, contract });
+    await server.connect(observeMcpToolCalls(new StdioServerTransport(), HANDOFF_TOOL_NAMES));
+    return;
+  }
   const server = new McpServer(
     { name: contract === "safe" ? "codex-safe" : "codex-native", version: VERSION },
     contract === "safe" ? { instructions: ZERO_RISK_MCP_INSTRUCTIONS } : undefined,

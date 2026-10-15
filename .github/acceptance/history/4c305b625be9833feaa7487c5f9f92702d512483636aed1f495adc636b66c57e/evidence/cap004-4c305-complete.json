@@ -1,0 +1,37 @@
+{
+  "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "loadedSourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "runtimeSha256": "1f64954d7ad32218fe73fb7a2b530e0cb5a506ded5d520d5aa70c9ab70ef4222",
+  "cases": [
+    "CAP-004"
+  ],
+  "status": "pass",
+  "layer": "authenticated-dev",
+  "summary": "Current unchanged 4c305 candidate: both model families and all five effort-menu positions were exercised through the shared adapter (10 combinations). Four real Native Tools routes (5.6 Sol/medium, 5.6 Pro/max, 6 Sol/medium, 6 Pro/max) completed native read, apply_patch and byte-for-byte command verification, with actual model/effort/permissions/workspace and accepted-send ledger checks. Initial newline mismatches were detected by commands and corrected by the models; original failures are retained. Standard/triple catalog budgets and unchanged effort groups/transport limits passed. Existing candidate DOM/history/text extraction regressions passed in full verify. The previously omitted isolated Electron viewport test is now explicitly enabled and passed 90 assertions at 100%/125% zoom, zero native size, tab completion, hide/show and resize/maximize. Its first restricted-environment timeout is retained. Fixtures are distinguished from authenticated model paths; no installer acceptance is claimed.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-release-candidate/cap004-audit.private.json",
+      "sha256": "1a12079304d22f961dcd3d20a68f2314178f24e6c0c069d756409119c69470ac"
+    },
+    {
+      "path": "output/2026-10-15-release-candidate/cap004-catalog.json",
+      "sha256": "bfbecd1e4a1b61fbc04568340147088f56c6f4d9524b6fb33ee248d3f3a644fd"
+    },
+    {
+      "path": "output/2026-10-15-release-candidate/cap004-menu.private.json",
+      "sha256": "790fb5a066fec81041f0ec351362ab260d96cd1b451defb4cfad8865c0ce4aa0"
+    },
+    {
+      "path": "output/2026-10-15-release-candidate/verify.log",
+      "sha256": "0454c1d4839d7233a20779d52f0f39cdebc9a12b734e580aac4b1b5424a0ae41"
+    },
+    {
+      "path": "output/2026-10-15-acceptance-resume/electron-viewport.log",
+      "sha256": "2a7a7c3475bed98db754fed1f2355be4270fec54912336cb0a927d07b08f85ec"
+    },
+    {
+      "path": "output/2026-10-15-acceptance-resume/electron-viewport-02.log",
+      "sha256": "db5a92d1f04ca26ea700328d086f4af380076f0fbee8e87b0ad7afa22349776f"
+    }
+  ]
+}

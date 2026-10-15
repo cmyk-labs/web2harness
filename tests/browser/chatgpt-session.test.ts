@@ -6,10 +6,43 @@ import {
   CHATGPT_EFFORT_MENU_SELECTOR,
   CHATGPT_EFFORT_SLIDER_CONTAINER_SELECTOR,
   activateChatGptEffortMenu,
+  closeChatGptEffortMenu,
   assertNewChatPage,
   chatGptNewChatUrl,
   detectChatGptAccountCapabilities,
 } from "../../src/browser/session";
+
+test("effort closing acknowledges its owner when Escape is ignored and never reopens a closed picker", async () => {
+  for (const escapeWorks of [true, false]) {
+    let expanded = true, escapes = 0, toggles = 0;
+    const control: any = {
+      getAttribute: async (name: string) => name === "aria-expanded" ? String(expanded)
+        : name === "data-state" ? expanded ? "open" : "closed" : null,
+      dispatchEvent: async (event: string) => { expect(event).toBe("pointerdown"); toggles++; expanded = !expanded; },
+    };
+    const page: any = { keyboard: { press: async (key: string) => {
+      expect(key).toBe("Escape"); escapes++; if (escapeWorks) expanded = false;
+    } } };
+    await closeChatGptEffortMenu(page, control, { settleMs: 0 });
+    expect(expanded).toBeFalse();
+    expect(escapes).toBe(1);
+    expect(toggles).toBe(escapeWorks ? 0 : 1);
+    await closeChatGptEffortMenu(page, control, { settleMs: 0 });
+    expect(escapes).toBe(1);
+    expect(toggles).toBe(escapeWorks ? 0 : 1);
+  }
+});
+
+test("effort closing rejects missing ownership and a picker that ignores both close actions", async () => {
+  let actions = 0;
+  const page: any = { keyboard: { press: async () => { actions++; } } };
+  const control: any = { getAttribute: async () => null, dispatchEvent: async () => { actions++; } };
+  await expect(closeChatGptEffortMenu(page, control, { settleMs: 0 })).rejects.toThrow("owner state");
+  expect(actions).toBe(0);
+  control.getAttribute = async (name: string) => name === "aria-expanded" ? "true" : "open";
+  await expect(closeChatGptEffortMenu(page, control, { settleMs: 0 })).rejects.toThrow("did not close");
+  expect(actions).toBe(2);
+});
 
 test("saved chats start empty and cannot reuse an arbitrary conversation or a Temporary Chat", async () => {
   expect(chatGptNewChatUrl()).toBe("https://chatgpt.com/?temporary-chat=true");
@@ -19,11 +52,15 @@ test("saved chats start empty and cannot reuse an arbitrary conversation or a Te
     let url = "https://chatgpt.com/c/previous-task";
     const navigations: string[] = [];
     const absent: any = { filter: () => absent, last: () => absent, isVisible: async () => false };
-    const composer: any = { count: async () => 1, nth: () => composer, isVisible: async () => true };
+    const composer: any = { count: async () => 1, nth: () => composer, filter: () => composer,
+      first: () => composer, isVisible: async () => true };
     const page: any = {
       url: () => url,
       goto: async (next: string) => { url = next; navigations.push(next); },
       locator: (selector: string) => selector === CHATGPT_COMPOSER_SELECTOR ? composer : absent,
+      evaluate: async () => ({ documentComplete: true, surfaceBound: true, composers: 1, editable: true,
+        userTurns: 0, assistantTurns: 0, stopButtons: 0, unknownEditors: 0, signIn: false, expired: false,
+        verification: false, subscriptionFailure: false }),
     };
     expect(await prepare.call({ activeComposer: async () => composer }, page, undefined, saved)).toBe(composer);
     expect(navigations).toEqual([chatGptNewChatUrl(saved)]);

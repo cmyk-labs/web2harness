@@ -1,0 +1,284 @@
+{
+  "schemaVersion": 2,
+  "id": "release-gaps-d7d5295fe640-to-a5ace55e9905",
+  "runId": "release-gaps-d7d5295fe640",
+  "targetSourceId": "a5ace55e99059c6318a19b5c1af1b90d91d9a438dca5e938d5a257205fbf4037",
+  "reviewer": "Codex",
+  "at": "2026-10-15T10:54:06.737Z",
+  "checkIds": [
+    "license.contracts",
+    "diagnostics.desktop",
+    "diagnostics.performance"
+  ],
+  "changes": [
+    {
+      "path": "docs/acceptance-tests.md",
+      "before": "92172f9af74cefb76fba367eaecf2e973349b65d8a4e4bca4320edbddc6c51af",
+      "after": "adb085855e1191802f58c73fc243c92159d2ff9738e0f428f87cf35ffaedd51d",
+      "impact": "reviewed-unaffected",
+      "reason": "Documents threshold/fidelity/processing and a shared sentinel read-patch-readback flow; existing capability requirements retained.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "docs/acceptance-tests.zh-CN.md",
+      "before": "9e9fd03565725032f425eebca08694c38b72a56449bd1054e4c0b0febea20fd4",
+      "after": "1105346467523204b9ddfbc7755c0c9b12821bf3fe9f6492cbfccc1e71e7cc39",
+      "impact": "reviewed-unaffected",
+      "reason": "Chinese counterpart of new file transport criteria; no change to existing observations.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "docs/reference.md",
+      "before": "b707b92b1362948dcdbc83a2520b309a87d2127566a1700c7cffbc573474aa3c",
+      "after": "e0fa35740ce24f77b72b299b0d2c20283a528f3f9e7742701df8014ac6342b56",
+      "impact": "reviewed-unaffected",
+      "reason": "Documents complete-file transport,32KiB boundary and unchanged budgets/options/mode restrictions; no other behavior change.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "docs/reference.zh-CN.md",
+      "before": "7acea48f26ec22eb2e5d6c8a71eccf570e212c8b9b3c7661190bad7d62807574",
+      "after": "9130894b820775971309ec410db107031aef369eced851ed3884838486fac5b3",
+      "impact": "reviewed-unaffected",
+      "reason": "Chinese counterpart of the file-transport reference.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "docs/troubleshooting.md",
+      "before": "3011f34abbf00353cab0e25364b0bae49ec7371fb04d1b31260385fc0179fdd6",
+      "after": "66ff9e4ba0cadf2c5428d1c800174a23061f4e232930beb1cf8a5592f38d4e25",
+      "impact": "reviewed-unaffected",
+      "reason": "Explains bounded conversation-priority transport diagnostics and their limits; no behavioral promise or acceptance criterion changes. Additional review: Explains input versus rendering stalls, lossless encoding and exact expanded ownership. Does not infer all historical failures share a root cause.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        },
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "docs/troubleshooting.zh-CN.md",
+      "before": "56969220d424e419e2b9db2d95d816a6b1ea29ef65e549f2a8b246bf5bfe1086",
+      "after": "78add32e1609f45f9b1b5b79500f140c4c5489fb5c2382e40c99aaa1d4436841",
+      "impact": "reviewed-unaffected",
+      "reason": "Chinese equivalent of the bounded transport diagnostic explanation; no behavioral promise or acceptance criterion changes. Additional review: Chinese counterpart of the rendering/ownership investigation guidance.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        },
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "launcher/src/i18n.ts",
+      "before": "aef2794195b9633484642ccf6a0be38eadcbccbb0b103dcbd5fb3c8ebb96101e",
+      "after": "2d33c6a05653287aaa6dac12c22cc3504fb3dea97d84eb6fa559f4bd5ca4c1a8",
+      "impact": "reviewed-unaffected",
+      "reason": "Bilingual existing-option help now states32KiB, upload processing and original budget. No layout, queue labels, setting default or IPC contract changes.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "scripts/acceptance/catalog.ts",
+      "before": "a9c93fdc14913c1828fe962146f7986e7582b6695e52f5e19cebedf8069a00a1",
+      "after": "70bc6e4cedd3328cd0e23ad1d93a0884d5d6cd115ac55d75470bce0feced8d9d",
+      "impact": "reviewed-unaffected",
+      "reason": "Adds two explicit fixture/live context-file checks; all existing check definitions and criteria hashes stay unchanged. New checks receive actual evidence, not inherited passes.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/attachment-upload.ts",
+      "before": null,
+      "after": "cbb9d4203078b57d17d0ddf22245d60bf65e0dcc233f6ac4273845f58b673408",
+      "impact": "reviewed-unaffected",
+      "reason": "New current-frame/origin/named-file processing observer. Bounded parsing, explicit HTTP/processing failure, abort-aware completion and listener teardown; no request-body logging. Real Chromium error/cancel/incomplete and native TXT06 confirm this affected path without changing unrelated transport, license or queue contracts.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/browser-worker.ts",
+      "before": "783e612223ec71cf18de833c9d5056144180dcc9e2a02f2ec4d26613b11dae4d",
+      "after": "16e219a2ed92094df8e5cb9b84638fcda73f38ae9de74f872a5e54e776c70c32",
+      "impact": "reviewed-unaffected",
+      "reason": "Only three diagnostic event sites and an input-duration timestamp were added relative to d7d529. The sequential activation, single Enter, acceptance observation, abort signal, 20-second budget, ownership and retry logic are unchanged. 147 scoped checks and actual licensed DEV file work support the bounded diagnostic-only impact. Additional review: Expanded long user bubbles are compared exactly, then uniqueness/assistant/history ownership is rechecked. File admission waits for all owned processing completion plus visible cards before send readiness. Send-once, unknown-send rejection, queue lease, model selection, permissions and broker semantics remain. Scoped binding/worker fixtures and real native flows confirm the changed shared boundary; no claim of a new MCP, compaction or agent acceptance.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        },
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/turn-evidence.ts",
+      "before": "979c35233ded13bd0e0e544b43f10c6bd7993252bdf17cbdccc1395b5002dff8",
+      "after": "46986a940e9e28aaacf207fc735d1754279a41e1ab2767c0cb4fbd1dab773272",
+      "impact": "reviewed-unaffected",
+      "reason": "Bounded diagnostic recorder now evicts asset entries for recent conversation events and classifies late conversation callbacks after the request-handle budget or rebind. Retention limits, sticky request/send flags and all execution decisions are unchanged. Three regressions reproduced on the baseline; scoped tests and real HTTP200 evidence verify the recorder.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/user-message.ts",
+      "before": null,
+      "after": "cdd50fcfdc56af7abacd803d50ea3905634c943f151a880a8b49bbb8a67c4453",
+      "impact": "reviewed-unaffected",
+      "reason": "Pure exact reconstruction of supported user DOM, including paragraphs and fenced text; rejects unsupported/truncated/different content. Does not use prefix or token-only matches. Real DOM regressions and inline05 confirm handling; does not change execution metadata or broker routing.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/prompt/compile.ts",
+      "before": "a1078ffea43e9643a3bbe5193356f03c3e483fcbc67a9a3aec6821b1ba1e6847",
+      "after": "cc1ceeb19f4f184b5ee4269e7107ab1878534f991137a4a179b65d011ae97d41",
+      "impact": "reviewed-unaffected",
+      "reason": "Lossless JSON backtick encoding prevents a reproduced Markdown regex stall. Existing Context as File option now uses a complete-envelope UTF-8 >32768 threshold. Original values/roles/tools/history, budget accounting, route restrictions and manual-mode boundaries remain. Exact boundary/fidelity fixtures and real inline05/TXT06 native flows support reuse of unrelated model/queue/tool properties; new file criteria have separate observations.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/browser/attachment-upload.test.ts",
+      "before": null,
+      "after": "fa04f50f6df9593c8e27d776072f271739b24c56947cf59e9b2f0ab563fdd10c",
+      "impact": "reviewed-unaffected",
+      "reason": "New actual Chromium processing tests cover delayed503, enabled-send while processing, own-file matching, errors, cancellation, all-file completion and missing terminal event.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/browser/browser-turn-binding.test.ts",
+      "before": "a92782dad58306ec12db9b4b596ca3d967fc30ef47c02b7a1e95ad8c6e4d8fb3",
+      "after": "b13ff15c2a8502b71d0ed22e467880bc4ce2289255ec697c32566136f63f147e",
+      "impact": "reviewed-unaffected",
+      "reason": "Adds exact expanded/rejected/competing-turn cases and actual HTTP-backed attachment readiness. Existing binding assumptions are retained, not relaxed.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/browser/browser-worker-contract.test.ts",
+      "before": "8a6a6b96850fb5b3ccf47ed60e51ef71e7656ff9fae92ef2b2eba6dddaeebbc0",
+      "after": "48b709bb445a8f8d42a96773aa674c660f9ea5170b5af70cdd954cd39c804e4c",
+      "impact": "reviewed-unaffected",
+      "reason": "Removes redundant old fake attachment test lacking the new CDP contract; actual DOM+HTTP attachment test supplies stronger coverage. Other worker checks passed. Historical failure remains in raw log.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/browser/turn-evidence.test.ts",
+      "before": null,
+      "after": "e69375c82e141807a98e7ecc0b185e6d4accbf43db5629337fcf51c2254d2b5f",
+      "impact": "reviewed-unaffected",
+      "reason": "Three new budget/priority/rebind regressions exercise real event listeners. Existing evidence oracles are unchanged; no fixture is relabeled as authenticated acceptance.",
+      "support": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/prompt/context-attachments.test.ts",
+      "before": "fba69275cb0745d7655912ae96ecdf6e63ac9ad2bade99ffc341765e7ae959d5",
+      "after": "c5d0f70498d61ebb4bfb01f94a99a92798fe99eea9c91ec01355fa96d9ae1a9a",
+      "impact": "reviewed-unaffected",
+      "reason": "Replaces old heuristic threshold assertions with exact inclusive32768 boundary, UTF-8 fidelity and standard/triple-independent transport checks; existing integrity/count/budget rejection retained.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/prompt/prompt-contract.test.ts",
+      "before": "b2bf7ab99f7b1e393cd2e079e8ae97386792e258d6d793248a9438dc6bf1149f",
+      "after": "ff1d11d615ce8e7a9c4e604d2aaf57b7f9b6d047723ad0340a60e1eac646d5c0",
+      "impact": "reviewed-unaffected",
+      "reason": "New lossless backtick tests preserve keys, source values, literal escapes and historical handles; no oracle weakening.",
+      "support": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    }
+  ],
+  "environment": {
+    "status": "revalidated",
+    "reason": "Same isolated DEV, current authenticated readiness and actual native inline/file tool flows support the shared prompt/browser changes. Scoped fixtures preserve unchanged route selection, tool and budget contracts. This review retains only original properties: it is not new MCP/agent/compaction or artifact execution. Open catalog/MCP/queue issues remain open.",
+    "evidence": [
+      {
+        "path": "evidence/context-files-a5ace55e9905.json",
+        "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+      }
+    ]
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "id": "native-context-a5ace55-file-06",
+  "source": {
+    "path": "sources/a5ace55e99059c6318a19b5c1af1b90d91d9a438dca5e938d5a257205fbf4037.json",
+    "sha256": "1aa4648e2838b22bfc40b7de1abe15ea29e3d1c325e287c2eed6d1f8341a032d"
+  },
+  "recordedAt": "2026-10-15T10:54:06.737Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Verified owned authenticated DEV launcher26864/runtime26040, actual dev:codex. Existing isolated license enforced; production auth not copied. Standard budget; file option enabled only in DEV.",
+  "observations": [
+    {
+      "checkId": "native.read-patch",
+      "criteriaHash": "345a5264d2384477be07e71ebc29bea2abd670ba55a9b431caa47b2b56e0604b",
+      "outcome": "pass",
+      "at": "2026-10-15T10:45:14.024Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "loadedSourceId": "a5ace55e99059c6318a19b5c1af1b90d91d9a438dca5e938d5a257205fbf4037",
+      "runtimeSha256": "86b1c72c63d4d63eab4308c0718ca4d63af48498e0a5cd84509bc5312f11e502",
+      "summary": "Two actual parallel reads, native patch and command readback;185 independently verified bytes including complete-file markers. Earlier cold startup remains an independent release issue.",
+      "evidence": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "checkId": "context.files",
+      "criteriaHash": "88e5eaed4324e91a50f1423345df1d6ea98dd08f3f2d1c50850bb940c27f30c3",
+      "outcome": "pass",
+      "at": "2026-10-15T10:45:14.024Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "loadedSourceId": "a5ace55e99059c6318a19b5c1af1b90d91d9a438dca5e938d5a257205fbf4037",
+      "runtimeSha256": "86b1c72c63d4d63eab4308c0718ca4d63af48498e0a5cd84509bc5312f11e502",
+      "summary": "Complete TXT drove begin/middle/end markers and actual file tools; processing completed before Send; all three smaller continuation envelopes used inline.",
+      "evidence": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    },
+    {
+      "checkId": "license.native",
+      "criteriaHash": "17a120a43fc025681730b0961391478cf06f6dec7d0876d152d7a6fd9d8609b1",
+      "outcome": "pass",
+      "at": "2026-10-15T10:45:14.024Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "loadedSourceId": "a5ace55e99059c6318a19b5c1af1b90d91d9a438dca5e938d5a257205fbf4037",
+      "runtimeSha256": "86b1c72c63d4d63eab4308c0718ca4d63af48498e0a5cd84509bc5312f11e502",
+      "summary": "Actual native commands and patch completed with the independently licensed DEV runtime;185 bytes verified.",
+      "evidence": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    }
+  ]
+}

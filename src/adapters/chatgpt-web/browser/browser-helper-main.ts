@@ -1,5 +1,6 @@
 import { PREFIX, createDiagnosticRecord, type DiagnosticRecord } from "../../../../launcher/shared/diagnostic-event.cjs";
 import { diagnosticContext } from "../../../diagnostics";
+import { isCompletionFenceState, isCompletionFenceCommit, type CompletionFenceState, type CompletionFenceCommit } from "../tools/completion-fence";
 import { validateContextFile } from "../prompt/context-attachments";
 import { validateInputFiles } from "../prompt/file-attachments";
 import { validateSkillFiles } from "../prompt/skill-attachments";
@@ -29,11 +30,14 @@ interface RunMessage {
   };
   turn: {
     traceId: string;
+    preparationDeadline?: number;
+    queueTicket?: import("../../../browser/request-queue-client").QueueTicket;
     modelId: string;
     reasoning?: string;
     usagePurpose?: "task" | "tool-result" | "compaction";
     modelFamily?: "5.6" | "6";
     capabilities: ChatGptWebCapabilities;
+    nativeToolDefinitions?: import("../../../types").CodexTool[];
     nativeConnector?: boolean;
     resumeAvailable?: boolean;
     retainConversation?: boolean;
@@ -79,8 +83,8 @@ type InputMessage = RunMessage
   | MaintenanceMessage
   | { type: "prepared_selected_ack"; id: string; prepared: CompiledChatGptWebPrompt }
   | { type: "send_activation_ack"; id: string }
-  | { type: "completion_fence_begin_ack"; id: string; requestId: number; revision: number | null }
-  | { type: "completion_fence_commit_ack"; id: string; requestId: number; committed: boolean }
+  | { type: "completion_fence_begin_ack"; id: string; requestId: number; result: CompletionFenceState }
+  | { type: "completion_fence_commit_ack"; id: string; requestId: number; result: CompletionFenceCommit }
   | { type: "progress"; id: string; snapshot: ChatGptExternalTurnProgressSnapshot }
   | { type: "abort"; id: string; reason?: "compaction_handoff_accepted" }
   | { type: "shutdown" };
@@ -114,12 +118,12 @@ const sendActivationWaiters = new Map<string, {
 }>();
 const completionFenceBeginWaiters = new Map<string, {
   requestId: number;
-  resolve: (revision: number | undefined) => void;
+  resolve: (result: CompletionFenceState) => void;
   reject: (error: Error) => void;
 }>();
 const completionFenceCommitWaiters = new Map<string, {
   requestId: number;
-  resolve: (committed: boolean) => void;
+  resolve: (result: CompletionFenceCommit) => void;
   reject: (error: Error) => void;
 }>();
 let completionFenceRequestId = 0;
@@ -176,6 +180,8 @@ async function run(message: RunMessage): Promise<void> {
   if (message.turn.nativeConnector !== undefined && typeof message.turn.nativeConnector !== "boolean") {
     throw new Error("Browser helper native connector flag is invalid");
   }
+  if (message.turn.preparationDeadline !== undefined && (!Number.isSafeInteger(message.turn.preparationDeadline)
+    || message.turn.preparationDeadline <= 0)) throw new Error("Browser helper preparation deadline is invalid");
   if (message.turn.retainConversation !== undefined && typeof message.turn.retainConversation !== "boolean") {
     throw new Error("Browser helper conversation retention flag is invalid");
   }
@@ -231,11 +237,14 @@ async function run(message: RunMessage): Promise<void> {
   const prepareSelected = async () => ({ ...await promptSelection.wait(), release: () => {} });
   const turn: BrowserTurn = {
     traceId: message.turn.traceId,
+    ...(message.turn.preparationDeadline !== undefined ? { preparationDeadline: message.turn.preparationDeadline } : {}),
+    ...(message.turn.queueTicket ? { queueTicket: message.turn.queueTicket } : {}),
     modelId: message.turn.modelId,
     reasoning: message.turn.reasoning,
     usagePurpose: message.turn.usagePurpose,
     ...(message.turn.modelFamily ? { modelFamily: message.turn.modelFamily } : {}),
     capabilities: message.turn.capabilities,
+    ...(message.turn.nativeToolDefinitions ? { nativeToolDefinitions: message.turn.nativeToolDefinitions } : {}),
     ...(message.turn.nativeConnector ? { nativeConnector: true } : {}),
     prepare: prepareSelected,
     ...(message.turn.resumeAvailable ? { prepareResume: prepareSelected } : {}),
@@ -248,7 +257,7 @@ async function run(message: RunMessage): Promise<void> {
     ...(progress ? {
       externalProgress: progress,
       completionFence: {
-        begin: () => new Promise<number | undefined>((resolve, reject) => {
+        begin: () => new Promise<CompletionFenceState>((resolve, reject) => {
           if (completionFenceBeginWaiters.has(message.id)) {
             reject(new Error("Browser helper completion fence already awaits a begin result"));
             return;
@@ -261,7 +270,7 @@ async function run(message: RunMessage): Promise<void> {
             reject(new Error("Browser helper could not begin the broker completion fence"));
           }
         }),
-        commit: revision => new Promise<boolean>((resolve, reject) => {
+        commit: (revision, browserReply) => new Promise<CompletionFenceCommit>((resolve, reject) => {
           if (completionFenceCommitWaiters.has(message.id)) {
             reject(new Error("Browser helper completion fence already awaits a commit result"));
             return;
@@ -269,7 +278,7 @@ async function run(message: RunMessage): Promise<void> {
           completionFenceRequestId += 1;
           const requestId = completionFenceRequestId;
           completionFenceCommitWaiters.set(message.id, { requestId, resolve, reject });
-          if (!writeProtocol({ type: "event", id: message.id, event: "completion_fence_commit", requestId, revision })) {
+          if (!writeProtocol({ type: "event", id: message.id, event: "completion_fence_commit", requestId, revision, browserReply })) {
             completionFenceCommitWaiters.delete(message.id);
             reject(new Error("Browser helper could not commit the broker completion fence"));
           }
@@ -391,7 +400,7 @@ async function maintain(message: InspectMessage | SmokeMessage | LimitsMessage):
     const value = message.type === "inspect"
       ? await worker.inspectSession(message.detectCapabilities)
       : message.type === "limits" ? await worker.inspectLimitsPlan()
-      : await worker.smokeTest(abortController.signal);
+      : await worker.smokeTest(abortController.signal, message.id);
     writeProtocol({ type: "result", id: message.id, value });
   } catch (error) {
     writeProtocol({
@@ -416,7 +425,8 @@ input.on("line", line => {
   }
   if (message.type === "prepared_selected_ack") {
     const prepared = message.prepared;
-    if (!prepared || typeof prepared.text !== "string" || !Array.isArray(prepared.images)) {
+    if (!prepared || typeof prepared.text !== "string" || !Array.isArray(prepared.images)
+      || (prepared.handoffBinding !== undefined && (typeof prepared.handoffBinding !== "string" || !/^[a-f0-9]{64}$/.test(prepared.handoffBinding)))) {
       writeProtocol({ type: "error", id: message.id, message: "Browser helper prompt selection is invalid" });
       abortControllers.get(message.id)?.abort();
       return;
@@ -448,7 +458,7 @@ input.on("line", line => {
     waiter.resolve();
   } else if (message.type === "completion_fence_begin_ack") {
     if (!Number.isSafeInteger(message.requestId) || message.requestId <= 0
-      || (message.revision !== null && (!Number.isSafeInteger(message.revision) || message.revision < 0))) {
+      || !isCompletionFenceState(message.result)) {
       writeProtocol({ type: "error", id: message.id, message: "Browser helper completion fence revision is invalid" });
       abortControllers.get(message.id)?.abort();
       return;
@@ -456,10 +466,10 @@ input.on("line", line => {
     const waiter = completionFenceBeginWaiters.get(message.id);
     if (!waiter || waiter.requestId !== message.requestId) return;
     completionFenceBeginWaiters.delete(message.id);
-    waiter.resolve(message.revision ?? undefined);
+    waiter.resolve(message.result);
   } else if (message.type === "completion_fence_commit_ack") {
     if (!Number.isSafeInteger(message.requestId) || message.requestId <= 0
-      || typeof message.committed !== "boolean") {
+      || !isCompletionFenceCommit(message.result)) {
       writeProtocol({ type: "error", id: message.id, message: "Browser helper completion fence result is invalid" });
       abortControllers.get(message.id)?.abort();
       return;
@@ -467,7 +477,7 @@ input.on("line", line => {
     const waiter = completionFenceCommitWaiters.get(message.id);
     if (!waiter || waiter.requestId !== message.requestId) return;
     completionFenceCommitWaiters.delete(message.id);
-    waiter.resolve(message.committed);
+    waiter.resolve(message.result);
   } else if (message.type === "progress") {
     // Progress is meaningful only for a turn this helper is currently running. Ignore every other
     // id so the mirror map remains owned by active turn lifecycles.
@@ -539,4 +549,4 @@ process.once("SIGTERM", () => {
 });
 
 // Advertise the optional frames this helper understands so the daemon can negotiate them explicitly.
-writeProtocol({ type: "ready", features: ["progress", "tool-boundary-ack", "completion-fence", "context-file", "skill-attachments", "input-files"] });
+writeProtocol({ type: "ready", features: ["progress", "tool-boundary-ack", "completion-fence", "browser-reply-fence", "mcp-delivery-observation", "preparation-deadline", "context-file", "skill-attachments", "input-files"] });

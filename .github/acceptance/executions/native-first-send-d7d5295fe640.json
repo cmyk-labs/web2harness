@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "id": "native-first-send-d7d5295fe640",
+  "source": {
+    "path": "sources/d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9.json",
+    "sha256": "7a50333a862379161c423ac000d804a89fcb439cd6c4b8d46b3baf1c36b78702"
+  },
+  "recordedAt": "2026-10-15T08:28:44.042Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Verified independent authenticated DEV; actual dev:codex workspace, one-slot scheduler, normal sandbox and auto-review approval policy.",
+  "observations": [
+    {
+      "checkId": "queue.native-agents",
+      "criteriaHash": "baa475e30588393272836c2c85cdf3c93fe921914e9d802ff849affbb679c796",
+      "outcome": "fail",
+      "at": "2026-10-15T08:01:26.777Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "loadedSourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+      "runtimeSha256": "86b1c72c63d4d63eab4308c0718ca4d63af48498e0a5cd84509bc5312f11e502",
+      "summary": "First send confirmation timed out; parent/three-child file flow did not execute. No blind retry or success claim.",
+      "evidence": [
+        {
+          "path": "evidence/native-first-send-d7d5295fe640.json",
+          "sha256": "f40c388751839e228fd39f77ada254f3b82e318e55a7b7b1554856305b545316"
+        }
+      ]
+    }
+  ]
+}

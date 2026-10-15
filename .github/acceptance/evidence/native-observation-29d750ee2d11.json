@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 2,
+  "kind": "unresolved-native-observation-evidence",
+  "recordedAt": "2026-10-15T10:00:42.044Z",
+  "observations": [
+    {
+      "run": "closure-native-file-01",
+      "sourceId": "e2eb287ac941a80b09fb77e059d5bdc82f4e4dc13a1841b25b41ecb318336d7e",
+      "outcome": "fail",
+      "trace": "433eb7b75c31",
+      "summary": "Five HTTP200 conversation responses and completed SSE with output preceded assistant-group rebinding rejection. No result file. Native client had fallback metadata."
+    },
+    {
+      "run": "closure-native-file-02",
+      "sourceId": "e2eb287ac941a80b09fb77e059d5bdc82f4e4dc13a1841b25b41ecb318336d7e",
+      "outcome": "fail",
+      "traces": [
+        "b3288eb30f5e",
+        "dd52886423d8"
+      ],
+      "summary": "First real native read completed. Second send timed out while structural observer had seen its user group. User→fallback→same-user transition and truncated large user bubble were observed."
+    },
+    {
+      "run": "closure-native-file-03",
+      "sourceId": "29d750ee2d112fe5b25ff7977a9b8c7d146358ea9494ab6c4da6ed7a0043128a",
+      "outcome": "fail",
+      "trace": "93472ebfc088",
+      "summary": "Input operation completed in2682ms; DOM observation and same-page rebind did not finish before the send deadline. Native metadata refresh had timed out. No file/tool success."
+    },
+    {
+      "run": "closure-main-three-native-01",
+      "sourceId": "29d750ee2d112fe5b25ff7977a9b8c7d146358ea9494ab6c4da6ed7a0043128a",
+      "outcome": "blocked",
+      "summary": "Disk cache preflight passed, but the actual Codex client again failed refresh and used fallback metadata. A read occurred, then the client reported missing native apply_patch. Zero outputs/children; driver rejected native exit0. Owned task cancellation/settlement recorded."
+    }
+  ],
+  "environment": "User reported a recent network interruption without exact time. Later browser authentication and connector binding passed; earlier failures are not attributed to that interruption. Actual Codex startup separately logged model refresh, remote plugin parsing and tools/list timeouts.",
+  "unresolved": "Metadata fallback correlates with larger prompts and missing declared native tools. It is not established as the sole cause of the independent page binding/observation failures. No timeout increase, text-prefix ownership relaxation, forged cache freshness or automatic resend was introduced.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-native-file-01-status.json",
+      "sha256": "4e15f278d2e10268e58faafc7469981a46941f1750170b66b5d3015c0f23aa66"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-native-file-01.stderr.private.log",
+      "sha256": "28cbd33081f7ff5a02bfbe0b78e7638d1303cf0c285b1f7d2a1bfe02d6882409"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/native-probes-events.private.json",
+      "sha256": "f4f8244c1ce547c2f0d7b929a910ec91f4045afc2ef9177fd7e3efb544fe198c"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/turn-groups-02.private.json",
+      "sha256": "ddf71a41ea5eeb027644a039b3f3ef1a7006d52dedd63ba95aa8f29224d187aa"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-native-file-03-status.json",
+      "sha256": "1ab1c745bde43f757b014736828b2a34db9078fdad813b08da250fe7a69a33db"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/native-file-03-events.private.json",
+      "sha256": "26b44761756f7b32c6deb1deac1986615cf60e4d01073e037bb8eab485694606"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-main-three-native-01-status.json",
+      "sha256": "29199031f148041802130f7e5c7ee12a32838af27b7293ff9b32af17b866f9f3"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-main-three-native-01-catalog-preflight.json",
+      "sha256": "dcbcd34586937130c62ce82de9355a2dfe7f56f8291be99f4b3460af8c72f3a5"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-main-three-native-01.stderr.private.log",
+      "sha256": "39d0513625a73839ea6cbd0d7b7ac18b9ad36e840a42eb00857d4ba61c95dcbd"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/native-main-invalid-metadata-cancel.private.json",
+      "sha256": "0ecdbc12043d4285dc3768992847203338f249ef62466aece493628e67b6868c"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/milestone-audit.private.json",
+      "sha256": "85684d27ab5535336952c0c73e8f235684f94687c4dc8b8c5880f84191eaad48"
+    }
+  ]
+}

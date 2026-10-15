@@ -1,0 +1,19 @@
+{
+  "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "cases": [
+    "Q09"
+  ],
+  "status": "pass",
+  "layer": "fixture",
+  "summary": "Current-candidate synthetic faults passed: explicit rate limits pause dispatch and persist until explicit recovery; unknown send outcomes do not replay; browser network, preparation, model-capacity and account-limit failures remain distinct. No real account limit was deliberately triggered.",
+  "tests": [
+    "launcher/tests/request-queue.test.cjs",
+    "tests/browser/standalone-request-queue.test.ts",
+    "tests/adapters/chatgpt-web/browser/page-readiness.test.ts",
+    "tests/adapters/chatgpt-web/chatgpt-web-harness.test.ts"
+  ],
+  "rawEvidence": {
+    "path": "output/2026-10-14-release-candidate/verify-final.log",
+    "sha256": "fbba6ee3e42d0f3c99b93f095e1124f1f348ad299d671123365085fbaf7b9b52"
+  }
+}

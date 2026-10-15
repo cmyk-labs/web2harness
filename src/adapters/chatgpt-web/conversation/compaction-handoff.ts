@@ -1,4 +1,5 @@
 import { parseDataUrl } from "../../image";
+import { createHash } from "node:crypto";
 import type {
   CodexContentPart,
   CodexParsedRequest,
@@ -289,11 +290,7 @@ export async function requestRetainedCompactionHandoff(
   if (!conversationKey) throw new Error("The completed ChatGPT source has no retained conversation identity");
   const operationTimeoutMs = boundedCompactionTimeout(timeoutMs);
   const deadline = new AbortController();
-  const deadlineTimer = setTimeout(
-    () => deadline.abort(new Error(`ChatGPT compaction handoff timed out after ${operationTimeoutMs}ms`)),
-    operationTimeoutMs,
-  );
-  deadlineTimer.unref?.();
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
   const operationSignal = signal
     ? AbortSignal.any([signal, deadline.signal])
     : deadline.signal;
@@ -304,16 +301,24 @@ export async function requestRetainedCompactionHandoff(
   if (operationSignal.aborted) abortBrowser();
   else operationSignal.addEventListener("abort", abortBrowser, { once: true });
   try {
-    const transactionPromise = broker.beginCompactionTransaction(traceId, operationTimeoutMs);
-    void transactionPromise.then(lateTransaction => {
-      if (operationSignal.aborted && transaction !== lateTransaction) {
-        broker.abortCompactionTransaction(lateTransaction.token);
-      }
-    }, () => {});
-    transaction = await withCompactionAbort(transactionPromise, operationSignal);
-    const instruction = structuredCompactionHandoffInstruction(transaction);
-    const prepare = async () => ({ text: instruction, images: [], release: () => {} });
+    let resolvePrepared!: (value: CompactionTransactionHandle) => void;
+    const transactionReady = new Promise<CompactionTransactionHandle>(resolve => { resolvePrepared = resolve; });
+    let preparing: Promise<{ text: string; images: []; release: () => void }> | undefined;
+    const prepare = () => preparing ??= (async () => {
+      deadlineTimer = setTimeout(() => deadline.abort(new Error(`ChatGPT compaction handoff timed out after ${operationTimeoutMs}ms`)), operationTimeoutMs);
+      deadlineTimer.unref?.();
+      transaction = await broker.beginCompactionTransaction(traceId, operationTimeoutMs);
+      if (operationSignal.aborted) { broker.abortCompactionTransaction(transaction.token); operationSignal.throwIfAborted(); }
+      resolvePrepared(transaction);
+      return { text: structuredCompactionHandoffInstruction(transaction), images: [] as [], release: () => {} };
+    })();
     browser = worker.run({
+      scheduling: {
+        id: createHash("sha256").update(`compaction:${traceId}`).digest("hex"),
+        groupId: source.nativeThreadId ?? source.ownerKey ?? conversationKey,
+        model: parsed.modelId, mode: "compaction", bytes: 4096,
+        ...(parsed.options.reasoning ? { effort: parsed.options.reasoning } : {}),
+      },
       traceId,
       modelId: parsed.modelId,
       modelFamily: parsed._chatgptModelFamily,
@@ -336,7 +341,7 @@ export async function requestRetainedCompactionHandoff(
     );
     const summary = await withCompactionAbort(
       Promise.race([
-        broker.waitForCompactionHandoff(transaction.token, operationSignal),
+        transactionReady.then(ready => broker.waitForCompactionHandoff(ready.token, operationSignal)),
         browserFailure,
       ]),
       operationSignal,

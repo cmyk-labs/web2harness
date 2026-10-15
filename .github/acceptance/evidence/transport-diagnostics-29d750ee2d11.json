@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 2,
+  "kind": "scoped-diagnostic-change-evidence",
+  "recordedAt": "2026-10-15T10:00:42.044Z",
+  "targetSourceId": "29d750ee2d112fe5b25ff7977a9b8c7d146358ea9494ab6c4da6ed7a0043128a",
+  "changes": [
+    {
+      "path": "docs/troubleshooting.md",
+      "before": "3011f34abbf00353cab0e25364b0bae49ec7371fb04d1b31260385fc0179fdd6",
+      "after": "5b7d1cfeeea646ef1d00a77888c31d9ac953a6108fdad9b858063df90b916ff4",
+      "reason": "Explains bounded conversation-priority transport diagnostics and their limits; no behavioral promise or acceptance criterion changes."
+    },
+    {
+      "path": "docs/troubleshooting.zh-CN.md",
+      "before": "56969220d424e419e2b9db2d95d816a6b1ea29ef65e549f2a8b246bf5bfe1086",
+      "after": "7f8108a5dd9a39a99484d77d231cd5330fc3d2944af738315094f08489547434",
+      "reason": "Chinese equivalent of the bounded transport diagnostic explanation; no behavioral promise or acceptance criterion changes."
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/browser-worker.ts",
+      "before": "783e612223ec71cf18de833c9d5056144180dcc9e2a02f2ec4d26613b11dae4d",
+      "after": "cc7d85e1ef2518574f75bdb216abefeffc0699cf5e12e028e138c6c53b73ed61",
+      "reason": "Only three diagnostic event sites and an input-duration timestamp were added relative to d7d529. The sequential activation, single Enter, acceptance observation, abort signal, 20-second budget, ownership and retry logic are unchanged. 147 scoped checks and actual licensed DEV file work support the bounded diagnostic-only impact."
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/turn-evidence.ts",
+      "before": "979c35233ded13bd0e0e544b43f10c6bd7993252bdf17cbdccc1395b5002dff8",
+      "after": "46986a940e9e28aaacf207fc735d1754279a41e1ab2767c0cb4fbd1dab773272",
+      "reason": "Bounded diagnostic recorder now evicts asset entries for recent conversation events and classifies late conversation callbacks after the request-handle budget or rebind. Retention limits, sticky request/send flags and all execution decisions are unchanged. Three regressions reproduced on the baseline; scoped tests and real HTTP200 evidence verify the recorder."
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/browser/turn-evidence.test.ts",
+      "before": null,
+      "after": "e69375c82e141807a98e7ecc0b185e6d4accbf43db5629337fcf51c2254d2b5f",
+      "reason": "Three new budget/priority/rebind regressions exercise real event listeners. Existing evidence oracles are unchanged; no fixture is relabeled as authenticated acceptance."
+    }
+  ],
+  "verification": {
+    "regressionsFailedBefore": 3,
+    "isolatedPassed": 14,
+    "scopedPassed": 147,
+    "scopedFailed": 0,
+    "assertions": 850,
+    "typecheck": true,
+    "diffCheck": true,
+    "noNewFullVerify": "No broad behavior change; preserved existing full-suite evidence and executed affected contracts. Do not count fixture assertions as live tool acceptance."
+  },
+  "authenticated": {
+    "sourceId": "29d750ee2d112fe5b25ff7977a9b8c7d146358ea9494ab6c4da6ed7a0043128a",
+    "model": "chatgpt-web/gpt-6-sol",
+    "effort": "medium",
+    "profile": "development",
+    "entry": "bun run dev:codex",
+    "license": "active, perpetual independent DEV license; no license changed during this batch",
+    "normalMetadataFileFlow": {
+      "code": 0,
+      "bytes": 37,
+      "identicalBytes": true,
+      "commands": 3,
+      "nativePatch": true,
+      "metadataFallback": false
+    },
+    "binding": {
+      "authStatus": 200,
+      "authenticated": true,
+      "status": 200,
+      "observations": [
+        {
+          "tunnelMatches": true,
+          "nameMatches": true,
+          "actionCount": 6
+        }
+      ]
+    },
+    "networkRecovery": {
+      "at": "2026-10-15T09:40:22.571Z",
+      "auth": {
+        "status": 200,
+        "authenticated": true,
+        "ms": 2286
+      },
+      "queue": {
+        "active": 0,
+        "waiting": 0,
+        "pauseReasons": []
+      }
+    }
+  },
+  "boundary": {
+    "productionHashesUnchanged": 4,
+    "baselineProcessesSame": 92,
+    "ownedDevExits": 8,
+    "ownedDevPidReused": 1,
+    "otherChromeExits": 2,
+    "otherExitsCause": "Not attributed; no task action targeted those Chrome processes.",
+    "finalActiveHttp": 0,
+    "finalActiveBrowser": 0,
+    "finalQueueActive": 0,
+    "finalQueueWaiting": 0
+  },
+  "limits": [
+    "Normal-metadata file flow is not proof of parallel reads, same-cell waiting or three children.",
+    "Repeated native metadata-refresh failures and long-prompt ownership/observation failures remain unresolved; historical MCP empty handoff remains open.",
+    "No installer/upgrade/uninstall; user deferred them. No commit, push, tag or publication.",
+    "Old Windows artifact is preserved for its original source, not inherited as the current artifact."
+  ],
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/transport-before.log",
+      "sha256": "e418b11735d3e0436682c557c2cca7345d8e43c75126d2cd07f89f7025147818"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/transport-after-isolated.log",
+      "sha256": "7815c069ee07f5acfa6c67e6f51602223000ffbb303990146db2d19c9a711da7"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/diagnostic-scoped-tests.log",
+      "sha256": "0cdead5e947f9c0b0788974d7165100745c60202c6b47f49a2665fddc7701d3f"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/timing-typecheck.log",
+      "sha256": "8670e722a80795c2de9002bdb4d7040f339e9bb333122e4a9f9fdc1f36baf689"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/native-file-04-audit.private.json",
+      "sha256": "4aca0fe6bc8e53e526e83e0b7d4424882b9c4fe8a6ed4b6d9a1ec2ddd1410035"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/profile-summary.json",
+      "sha256": "99021a30ec95b690ca775c94a34d415982f46b12a10c3d6dbe1561f3fac52854"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/owned-dev-after-cancel.private.json",
+      "sha256": "c037acfc20e1499032ed8ce438f74a1b7c275b2e56c0d4a67debed51d61603fb"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/license-and-settlement.json",
+      "sha256": "4c5204d26f3702f4bcf3c7e929eb57b0da6b62f4f9067603040916968e739d8b"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/network-recovery.json",
+      "sha256": "9ddfcc82a3ae23edb6018a92773cd690aecb690070a576f0c47fb8c99a6f1762"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/current-connector-binding.json",
+      "sha256": "28bf498578ec6689b4cd72985de06cba40bb318c1f478b6a4b1c49dcccd42742"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/boundary-comparison.private.json",
+      "sha256": "91b7cb1052486564bb3b8478dbb80f80765bc2530e98d1863aa7d2112ef02fb3"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/production-before.private.json",
+      "sha256": "2193a4f7493a4ebfceb5379ba00b4a3fa038b39bab360df6a8f0b1684231b99c"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/production-after.private.json",
+      "sha256": "92da0012d7991053ae7cadc37690c0176dd11270dc11478fd0547f9e392f6f35"
+    }
+  ]
+}

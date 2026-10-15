@@ -254,6 +254,7 @@ export function mcpCommand(config: AppConfig, platform = process.platform): stri
   const command = [
     ...config.runtimeCommand,
     "mcp",
+    "--protocol", "web2harness-handoff-v1",
     "--contract",
     contract,
     "--broker-socket",

@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "recordedAt": "2026-10-15T06:29:00.588Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Retrospective reconstruction of actual independent DEV execution from immutable attestations and original tool/file/runtime logs. No live task was executed during this review.",
+  "id": "reviewed-e844-main-three-02-independent-checks",
+  "source": {
+    "path": "sources/e84476463a7b8cc26f307b01cf404e44be62809870be89947639f06924314e56.json",
+    "sha256": "d149baba628baaff94f8f57e27c1228524fb01b232b15dd277734bb231d40164"
+  },
+  "observations": [
+    {
+      "checkId": "license.automatic-mcp",
+      "criteriaHash": "f53c2f19522d30c5ec4b19a6bfb67a4246f8de831ed056467e117d4ad0661519",
+      "outcome": "pass",
+      "at": "2026-10-14T15:29:46.824Z",
+      "layer": "authenticated-dev",
+      "mode": "automatic-mcp",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "summary": "Actual read/patch/readback under the matching DEV active-license instance; source and mandatory admission guards reviewed. Separate handoff reliability issue remains open.",
+      "evidence": [
+        {
+          "path": "evidence/history-20261015-licensed-queue-observations.json",
+          "sha256": "c6e2c39ee95591f30cff3d7a12f6bb4941fa81e43a1d0630091601a12da14fa9"
+        }
+      ],
+      "loadedSourceId": "e84476463a7b8cc26f307b01cf404e44be62809870be89947639f06924314e56",
+      "runtimeSha256": "ee2803193ca1676b7df3d95ef8c0afad07c13c57cf93df9568b4145db57153a2"
+    },
+    {
+      "checkId": "queue.admission",
+      "criteriaHash": "ff9388d8cb1591bd230f760e264012ede3165cb0827c978123a9b1f844d1382c",
+      "outcome": "pass",
+      "at": "2026-10-14T15:29:46.824Z",
+      "layer": "authenticated-dev",
+      "mode": "automatic-mcp",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "summary": "Four actual sessions, 24 rounds, 16 queued waits, peak one; all admitted work completed, no browser page/preparation started before admission and execution clocks began at dispatch.",
+      "evidence": [
+        {
+          "path": "evidence/history-20261015-licensed-queue-observations.json",
+          "sha256": "c6e2c39ee95591f30cff3d7a12f6bb4941fa81e43a1d0630091601a12da14fa9"
+        }
+      ],
+      "loadedSourceId": "e84476463a7b8cc26f307b01cf404e44be62809870be89947639f06924314e56",
+      "runtimeSha256": "ee2803193ca1676b7df3d95ef8c0afad07c13c57cf93df9568b4145db57153a2"
+    },
+    {
+      "checkId": "queue.send-spacing",
+      "criteriaHash": "fa9b97b47ac5934b893a9cf6cd78e096eb3d689159666d4a796a270aebbb9223",
+      "outcome": "pass",
+      "at": "2026-10-14T15:29:46.824Z",
+      "layer": "authenticated-dev",
+      "mode": "automatic-mcp",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "summary": "Historical revision 17 configured 3-second spacing/capacity one; 24 actual attempts had minimum 23.888-second separation. Queued work did not occupy execution slots.",
+      "evidence": [
+        {
+          "path": "evidence/history-20261015-licensed-queue-observations.json",
+          "sha256": "c6e2c39ee95591f30cff3d7a12f6bb4941fa81e43a1d0630091601a12da14fa9"
+        }
+      ],
+      "loadedSourceId": "e84476463a7b8cc26f307b01cf404e44be62809870be89947639f06924314e56",
+      "runtimeSha256": "ee2803193ca1676b7df3d95ef8c0afad07c13c57cf93df9568b4145db57153a2"
+    },
+    {
+      "checkId": "queue.mcp-agents",
+      "criteriaHash": "1fe6c1aa1434512f94e24c527e71d6728a5d1746901611a330f185adff67372f",
+      "outcome": "pass",
+      "at": "2026-10-14T15:29:46.824Z",
+      "layer": "authenticated-dev",
+      "mode": "automatic-mcp",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "summary": "This actual run completed all four native read/patch/readback sequences, overlapping children and parent waits. It does not resolve the earlier missing-handoff failure; current coverage remains failed.",
+      "evidence": [
+        {
+          "path": "evidence/history-20261015-licensed-queue-observations.json",
+          "sha256": "c6e2c39ee95591f30cff3d7a12f6bb4941fa81e43a1d0630091601a12da14fa9"
+        },
+        {
+          "path": "evidence/history-20261015-mcp-unresolved.json",
+          "sha256": "1c0c27f01f4d4f7ea7439a69e0af4d8139d29b8eeee5fd590161c5fcef737ec6"
+        }
+      ],
+      "loadedSourceId": "e84476463a7b8cc26f307b01cf404e44be62809870be89947639f06924314e56",
+      "runtimeSha256": "ee2803193ca1676b7df3d95ef8c0afad07c13c57cf93df9568b4145db57153a2"
+    }
+  ]
+}

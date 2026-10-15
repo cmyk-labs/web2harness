@@ -1,0 +1,609 @@
+{
+  "schemaVersion": 1,
+  "candidate": {
+    "version": "2.1.0",
+    "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+    "gitCommit": "4127ef0da2bd164c342c9943a26eb6b360c7cd08"
+  },
+  "results": [
+    {
+      "caseId": "CAP-001",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.172Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "CAP-002",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "CAP-003",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "CAP-004",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "CAP-005",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "CAP-006",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "CAP-008",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "CAP-009",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "CAP-010",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q01",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q02",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q03",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q04",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q05",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q06",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q07",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q08",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q09",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q10",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q11",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q12",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q13",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q14",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q15",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q16",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "Q17",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:45:12.174Z",
+      "evidence": [],
+      "notes": "New candidate after bounded task-page timeout settlement repair. Historical 4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e attempts, including the single-renderer stall, are preserved; no historical pass establishes this candidate."
+    },
+    {
+      "caseId": "CAP-001",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T04:05:19.916Z",
+      "evidence": [
+        {
+          "path": "evidence/cap001-5bb51e-native-11.json",
+          "sha256": "61a6d1971662543e3fcf5612c5ff0ac6a9e1e9ed0f42b91e321eca8ca1a1800b"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-002",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T04:05:19.920Z",
+      "evidence": [
+        {
+          "path": "evidence/cap002-5bb51e-native-11.json",
+          "sha256": "ad87396aaa519055367c7ffb61b64bb970a45d0f4716024409f675b38b4420d7"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-010",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T04:08:05.978Z",
+      "evidence": [
+        {
+          "path": "evidence/cap-010-5bb51e-fixtures.json",
+          "sha256": "de1c62216e8a986679d9735e52beda728d3c04f3fa2248523e65093ab2f41328"
+        }
+      ]
+    },
+    {
+      "caseId": "Q06",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T04:08:05.984Z",
+      "evidence": [
+        {
+          "path": "evidence/q06-5bb51e-fixtures.json",
+          "sha256": "2d2e5803b4f9a27c5ab9be22fcacbaf078d7f4f0a9c94b8239cd2fce735d553d"
+        }
+      ]
+    },
+    {
+      "caseId": "Q09",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T04:08:05.987Z",
+      "evidence": [
+        {
+          "path": "evidence/q09-5bb51e-fixtures.json",
+          "sha256": "2c2283a25c1ea967e657b9f8a02c26c7756b38fee5c44bd969653e8f602c1cbe"
+        }
+      ]
+    },
+    {
+      "caseId": "Q10",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T04:08:05.991Z",
+      "evidence": [
+        {
+          "path": "evidence/q10-5bb51e-fixtures.json",
+          "sha256": "183d49ee927d89c8963a543c699fdbc55883e0ae42d224298725f96f2d9008e2"
+        }
+      ]
+    },
+    {
+      "caseId": "Q11",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T04:08:05.996Z",
+      "evidence": [
+        {
+          "path": "evidence/q11-5bb51e-fixtures.json",
+          "sha256": "fccc8e96593c273ddfd19a0c073fda6ec1a8b861e613eeacf03e9427a93b186a"
+        }
+      ]
+    },
+    {
+      "caseId": "Q16",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T04:08:06.001Z",
+      "evidence": [
+        {
+          "path": "evidence/q16-5bb51e-fixtures.json",
+          "sha256": "ab0a16fd1a8ac0f54dfe17cfd276794a2b332deff2a901581a9b40b02befefdc"
+        }
+      ]
+    },
+    {
+      "caseId": "Q17",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T04:08:06.006Z",
+      "evidence": [
+        {
+          "path": "evidence/q17-5bb51e-fixtures.json",
+          "sha256": "2e4cff45535251430a59a04d3701ed2ffeee831cd914b029712badf29726e73f"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-003",
+      "attempt": 2,
+      "status": "fail",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T04:13:03.078Z",
+      "evidence": [
+        {
+          "path": "evidence/cap003-5bb51e-native-07-failed.json",
+          "sha256": "ec88e40a579e893bc120a174c7cf5376a200995a67a539d853acc724301aa38e"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-003",
+      "attempt": 3,
+      "status": "pass",
+      "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T04:24:26.432Z",
+      "evidence": [
+        {
+          "path": "evidence/cap003-5bb51e-native-08.json",
+          "sha256": "70c34d592f327d8a8b03c79339e6974437e2630b1f14cddc520384c48fedd07f"
+        }
+      ]
+    }
+  ]
+}

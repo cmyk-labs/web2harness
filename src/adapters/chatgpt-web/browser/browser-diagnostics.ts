@@ -180,11 +180,28 @@ export class ChatGptBrowserDiagnostics {
                 element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement
                   ? element.value : element.textContent ?? ""
               ).length),
-              editors: composers.map(element => ({
-                tag: element.tagName.toLowerCase(),
-                contentEditable: (element as HTMLElement).isContentEditable,
-                focused: element === document.activeElement,
-              })),
+              editors: composers.map(element => {
+                const textarea = element instanceof HTMLTextAreaElement ? element : undefined;
+                const selection = element.ownerDocument.defaultView?.getSelection();
+                return {
+                  tag: element.tagName.toLowerCase(),
+                  connected: element.isConnected,
+                  contentEditable: (element as HTMLElement).isContentEditable,
+                  readOnly: textarea ? textarea.readOnly : element.getAttribute("aria-readonly") === "true",
+                  disabled: textarea ? textarea.matches(":disabled") : element.getAttribute("aria-disabled") === "true",
+                  focused: element === document.activeElement,
+                  caret: textarea ? {
+                    available: textarea.selectionStart !== null && textarea.selectionEnd !== null,
+                    collapsed: textarea.selectionStart !== null && textarea.selectionStart === textarea.selectionEnd,
+                  } : {
+                    available: Boolean(selection),
+                    rangeCount: selection?.rangeCount ?? 0,
+                    collapsed: selection?.isCollapsed ?? false,
+                    anchorInside: Boolean(selection?.anchorNode && element.contains(selection.anchorNode)),
+                    focusInside: Boolean(selection?.focusNode && element.contains(selection.focusNode)),
+                  },
+                };
+              }),
               // When recognition fails, retain structure of the unmatched controls,
               // never their values, labels, HTML or other conversation contents.
               unrecognizedEditors: composers.length === 0

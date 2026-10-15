@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "id": "native-observation-e2eb-probes-01-02",
+  "source": {
+    "path": "sources/e2eb287ac941a80b09fb77e059d5bdc82f4e4dc13a1841b25b41ecb318336d7e.json",
+    "sha256": "38a92e3110e4372cb73b60fe4cff33ca9d2acd3491109ac699c39a4386c8deb3"
+  },
+  "recordedAt": "2026-10-15T10:00:42.044Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Verified independent authenticated DEV with actual Codex, selected GPT-6 Medium, workspace-write and normal approvals. No copied production credentials.",
+  "observations": [
+    {
+      "checkId": "native.read-patch",
+      "criteriaHash": "345a5264d2384477be07e71ebc29bea2abd670ba55a9b431caa47b2b56e0604b",
+      "outcome": "fail",
+      "at": "2026-10-15T09:20:07.024Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "loadedSourceId": "e2eb287ac941a80b09fb77e059d5bdc82f4e4dc13a1841b25b41ecb318336d7e",
+      "runtimeSha256": "86b1c72c63d4d63eab4308c0718ca4d63af48498e0a5cd84509bc5312f11e502",
+      "summary": "Minimum native read/patch/readback could not complete: rebinding rejection and later unknown-send deadline. Native fallback metadata and structural evidence preserved.",
+      "evidence": [
+        {
+          "path": "evidence/native-observation-29d750ee2d11.json",
+          "sha256": "52f74c82432016acc6aa1f49b9bedd0c3c48a4e5b8405788e0a6649758036703"
+        }
+      ]
+    }
+  ],
+  "metadataCorrection": {
+    "at": "2026-10-15T10:11:59.401Z",
+    "original": {
+      "path": "executions/native-observation-e2eb-probes-01-02.json",
+      "sha256": "2b222b7b55e7245cfd182ee5cf4d8d22222ac402fa4c8dfeccbb6f8a14ba00a8"
+    },
+    "reason": "Replace approximate terminal timestamp with the original driver finishedAt. Same failed execution, source, criteria and outcome; not a new run.",
+    "previousAt": "2026-10-15T09:20:04.000Z",
+    "status": {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-native-file-02-status.json",
+      "sha256": "b29dc7d1b0fadef82b1ebc7d272145518f8a53d3bcbbb363cbbc9b26ebe7a33c"
+    }
+  }
+}

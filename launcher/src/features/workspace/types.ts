@@ -16,7 +16,9 @@ export type WorkspacePage =
   | "diagnostics"
   | "about"
   | "license"
+  | "runtime-parameters"
   | "preferences";
+// Runtime parameters have an independent navigation entry; personal preferences stay separate.
 
 export type Translate = (zh: string, en: string) => string;
 

@@ -7,16 +7,18 @@ export function Button({
   disabled = false,
   primary = false,
   label,
+  type = "button",
 }: {
   children: ReactNode;
-  onClick: () => void;
+  onClick?: () => void;
+  type?: "button" | "submit";
   disabled?: boolean;
   primary?: boolean;
   label?: string;
 }) {
   return (
     <button
-      type="button"
+      type={type}
       className={`btn ${primary ? "primary" : ""}`}
       onClick={onClick}
       disabled={disabled}

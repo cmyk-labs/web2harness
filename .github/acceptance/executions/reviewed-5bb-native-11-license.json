@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "recordedAt": "2026-10-15T06:29:00.588Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Retrospective reconstruction of actual independent DEV execution from immutable attestations and original tool/file/runtime logs. No live task was executed during this review.",
+  "id": "reviewed-5bb-native-11-license",
+  "source": {
+    "path": "sources/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474.json",
+    "sha256": "6fe6cab7387319377a03b34b7b3d76749efe705cc24bc0ba33744e081f54f932"
+  },
+  "observations": [
+    {
+      "checkId": "license.native",
+      "criteriaHash": "17a120a43fc025681730b0961391478cf06f6dec7d0876d152d7a6fd9d8609b1",
+      "outcome": "pass",
+      "at": "2026-10-15T04:02:21.793Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "summary": "Existing actual native file task ran under its matching isolated DEV active-license instance; no new native task executed for this mapping.",
+      "evidence": [
+        {
+          "path": "evidence/history-20261015-licensed-queue-observations.json",
+          "sha256": "c6e2c39ee95591f30cff3d7a12f6bb4941fa81e43a1d0630091601a12da14fa9"
+        },
+        {
+          "path": "evidence/cap001-5bb51e-native-11.json",
+          "sha256": "61a6d1971662543e3fcf5612c5ff0ac6a9e1e9ed0f42b91e321eca8ca1a1800b"
+        }
+      ],
+      "loadedSourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "runtimeSha256": "58fc6d5b2c733c9cfae7610aeacb312431a98a073fe257e1ff5fb2fa42fabedb"
+    }
+  ]
+}

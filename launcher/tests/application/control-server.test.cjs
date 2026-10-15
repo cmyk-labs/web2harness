@@ -231,6 +231,14 @@ test("browser control server authenticates and owns turn visibility", async () =
     });
     assert.equal(ownerlessEnd.status, 400);
 
+    const invalidWaiting = await fetch(`${descriptor.endpoint}/v1/turn/end`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${descriptor.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ phase: "end", traceId: "abcdef123456", helperPid: process.pid,
+        status: "completed", awaitingToolResults: "yes" }),
+    });
+    assert.equal(invalidWaiting.status, 400);
+
     const end = await fetch(`${descriptor.endpoint}/v1/turn/end`, {
       method: "POST",
       headers: { authorization: `Bearer ${descriptor.token}`, "content-type": "application/json" },
@@ -241,6 +249,7 @@ test("browser control server authenticates and owns turn visibility", async () =
         status: "completed",
         retain: true,
         connectorBound: true,
+        awaitingToolResults: true,
       }),
     });
     assert.equal(end.status, 200);
@@ -259,7 +268,7 @@ test("browser control server authenticates and owns turn visibility", async () =
         true,
       ],
       ["heartbeat", "abcdef123456", process.pid, true],
-      ["end", "abcdef123456", process.pid, "completed", true, undefined, true, true],
+      ["end", "abcdef123456", process.pid, "completed", true, undefined, true, true, true],
     ]);
     assert.equal(logs.some(([, event]) => event === "browser.turn_started"), true);
     assert.equal(logs.some(([, event]) => event === "browser.turn_ended"), true);

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { rejects } from "node:assert/strict";
 import { ChatGptTextFeed, ChatGptTraceFeed, ChatGptTurnSessions } from "../../../../src/adapters/chatgpt-web/tools/turn-execution";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { createServer, type Socket } from "node:net";
@@ -141,7 +142,7 @@ test("session cache expiry never cancels a still-active long browser turn", asyn
   sessions.clear();
 });
 
-test("five active turns coexist and a sixth fails closed", () => {
+test("session admission does not impose a second five-turn browser limit", () => {
   const sessions = new ChatGptTurnSessions();
   let cancelled = 0;
   const runtime = () => ({
@@ -158,14 +159,15 @@ test("five active turns coexist and a sixth fails closed", () => {
   ));
   expect(sessions.activeCount()).toBe(5);
   expect(cancelled).toBe(0);
-  expect(() => sessions.getOrCreate("turn-6", runtime)).toThrow("at most 5 simultaneous browser turns");
+  expect(sessions.getOrCreate("turn-6", runtime)).toBeDefined();
+  expect(sessions.activeCount()).toBe(6);
 
   expect(sessions.getOrCreate("turn-3", () => {
     throw new Error("an in-flight turn must be reused");
   })).toBe(active[2]);
   expect(cancelled).toBe(0);
   sessions.clear();
-  expect(cancelled).toBe(5);
+  expect(cancelled).toBe(6);
 });
 
 test("settled replay sessions expire from their last use instead of their creation time", async () => {
@@ -197,13 +199,15 @@ test("turn broker creates its private runtime directory on a cold start", async 
   const socketPath = defaultBrokerEndpoint(root);
   const broker = TurnBroker.forSocket(socketPath);
   try {
-    await broker.register({
+    const token = await broker.register({
       cwd: root,
       roots: [root],
       writableRoots: [root],
       sandboxPolicy: { type: "dangerFullAccess" },
       tools: [],
     }, 10_000);
+    expect(token).toMatch(/^turn_[0-9a-f]{48}$/);
+    await rejects(callTurnBroker(socketPath, { method: "claim", token: token.toUpperCase() }), /invalid/);
     if (process.platform === "win32") {
       expect(isWindowsPipeEndpoint(socketPath)).toBe(true);
     } else {
@@ -241,8 +245,8 @@ test("turn broker tokens do not expire while their browser turn is still alive",
       tools: [],
     });
     await Bun.sleep(5);
-    await expect(callTurnBroker<{ bindingId: string }>(socketPath, { method: "claim", token }))
-      .resolves.toMatchObject({ bindingId: expect.any(String) });
+    expect(await callTurnBroker<{ bindingId: string }>(socketPath, { method: "claim", token }))
+      .toMatchObject({ bindingId: expect.any(String) });
   } finally {
     await broker.close();
     rmSync(root, { recursive: true, force: true });
@@ -264,10 +268,9 @@ test("turn broker revokes only channels owned by the closed browser trace", asyn
     const target = await broker.register(environment, 60_000, "trace_target");
     const other = await broker.register(environment, 60_000, "trace_other");
     expect(broker.revokeTrace("trace_target")).toBe(1);
-    await expect(callTurnBroker(socketPath, { method: "claim", token: target }))
-      .rejects.toThrow("already finished");
-    await expect(callTurnBroker<{ bindingId: string }>(socketPath, { method: "claim", token: other }))
-      .resolves.toMatchObject({ bindingId: expect.any(String) });
+    await rejects(callTurnBroker(socketPath, { method: "claim", token: target }), /already finished/);
+    expect(await callTurnBroker<{ bindingId: string }>(socketPath, { method: "claim", token: other }))
+      .toMatchObject({ bindingId: expect.any(String) });
   } finally {
     await broker.close();
     rmSync(root, { recursive: true, force: true });
@@ -278,11 +281,17 @@ function unansweredBrokerEndpoint(name: string, onConnection: (socket: Socket) =
   const root = mkdtempSync(join(tmpdir(), name));
   const socketPath = defaultBrokerEndpoint(root);
   if (!isWindowsPipeEndpoint(socketPath)) mkdirSync(dirname(socketPath), { recursive: true });
-  const server = createServer(onConnection);
+  const sockets = new Set<Socket>();
+  const server = createServer(socket => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+    onConnection(socket);
+  });
   return {
     socketPath,
     listen: () => new Promise<void>(ready => server.listen(socketPath, ready)),
     close: async () => {
+      for (const socket of sockets) socket.destroy();
       await new Promise<void>(done => server.close(() => done()));
       rmSync(root, { recursive: true, force: true });
     },
@@ -293,8 +302,7 @@ test("an unbounded broker call fails when the broker closes without answering", 
   const broker = unansweredBrokerEndpoint("cgw-broker-closed-", socket => socket.on("data", () => socket.end()));
   await broker.listen();
   try {
-    await expect(callTurnBroker(broker.socketPath, { method: "claim", token: "turn_closed" }, null))
-      .rejects.toThrow("closed the connection");
+    await rejects(callTurnBroker(broker.socketPath, { method: "claim", token: "turn_closed" }, null), /closed the connection/);
   } finally {
     await broker.close();
   }
@@ -329,8 +337,7 @@ test("turn broker names the finished turn that owns a replayed handle", async ()
       sandboxPolicy: { type: "dangerFullAccess" },
       tools: [],
     }, 60_000, "turn-alpha");
-    await expect(callTurnBroker(socketPath, { method: "claim", token: ` ${token}` }))
-      .rejects.toThrow("turn token is invalid, expired, or revoked");
+    await rejects(callTurnBroker(socketPath, { method: "claim", token: ` ${token}` }), /turn token is invalid, expired, or revoked/);
     const claimed = await callTurnBroker<{ bindingId: string }>(socketPath, { method: "claim", token });
     broker.revoke(token);
 

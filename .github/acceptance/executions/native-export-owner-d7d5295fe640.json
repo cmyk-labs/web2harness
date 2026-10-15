@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "id": "native-export-owner-d7d5295fe640",
+  "source": {
+    "path": "sources/d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9.json",
+    "sha256": "7a50333a862379161c423ac000d804a89fcb439cd6c4b8d46b3baf1c36b78702"
+  },
+  "recordedAt": "2026-10-15T08:49:35.412Z",
+  "actor": "Repository owner (native Save/Cancel); Codex (ZIP inspection)",
+  "platform": "Windows x64",
+  "environment": "Verified isolated source DEV opened through dev:launcher; owner operated the real Windows save dialog. The supplied archive was copied unchanged into ignored evidence storage.",
+  "observations": [
+    {
+      "checkId": "diagnostics.native-export",
+      "criteriaHash": "a65610ccb813b28dedbc533f3096826b54121c6f76757c7ed92ccecc5a512325",
+      "outcome": "blocked",
+      "at": "2026-10-15T08:47:29.536Z",
+      "layer": "authenticated-dev",
+      "mode": "desktop",
+      "model": "not-applicable",
+      "effort": "not-applicable",
+      "loadedSourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+      "runtimeSha256": "04158cbd2bd88b04f27689f290e484e08ff7bd73ec0e65333013cfc83fbec17e",
+      "summary": "Native 24-hour Save and Cancel confirmed by owner. Actual 19990-record ZIP passed CRC, manifest hashes, inclusive/exclusive time bounds, DEV snapshot, redaction and known-failure correlation. Aggregate outcome remains incomplete solely for unobserved all-retained/custom native ranges; do not repeat the completed 24-hour or Cancel steps.",
+      "evidence": [
+        {
+          "path": "evidence/native-export-owner-d7d5295fe640.json",
+          "sha256": "6e2b1654e81a6fb0aec4950ed4d58b6f050d607ef5ca50319910e22a8dfee10c"
+        }
+      ]
+    }
+  ]
+}

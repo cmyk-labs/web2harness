@@ -13,6 +13,8 @@ import { chatGptReadOnlyContextWarning, compileChatGptWebPrompt } from "../../..
 import { CODEX_TOOL_CALLS_FENCE } from "../../../../src/adapters/chatgpt-web/tools/native-tool-call-block";
 import { ChatGptBrowserWorker, type BrowserTurn } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { createChatGptWebAdapter } from "../../../../src/adapters/chatgpt-web/adapter";
+import { StandaloneRequestQueue } from "../../../../src/browser/standalone-request-queue";
+import { withQueuedRequest } from "../../../../src/browser/request-queue-client";
 import { toolIdentityKey, type AdapterEvent, type CodexParsedRequest, type CodexProviderConfig, type CodexTool } from "../../../../src/types";
 
 const tempRoot = join(tmpdir(), `web2harness-native-tools-${process.pid}-${Date.now()}`);
@@ -247,16 +249,21 @@ describe("native-tools adapter emission", () => {
     provider: CodexProviderConfig,
     replies: string[],
     turnId = `turn_native_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    queue?: StandaloneRequestQueue,
   ): Promise<{ events: AdapterEvent[]; prompts: string[] }> {
     const worker = ChatGptBrowserWorker.forProvider(provider);
     const originalRun = worker.run.bind(worker);
     const prompts: string[] = [];
     (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
-      const prepared = await turn.prepare();
-      prompts.push(prepared.text);
-      const answer = replies.shift() ?? "Done.";
-      turn.onTextDelta(answer);
-      return answer;
+      const execute = async () => {
+        const prepared = await turn.prepare();
+        prompts.push(prepared.text);
+        const answer = replies.shift() ?? "Done.";
+        turn.onTextDelta(answer);
+        return answer;
+      };
+      return queue ? withQueuedRequest({ descriptorPath: queue, job: turn.scheduling!,
+        traceId: turn.traceId, signal: turn.abortSignal, execute }) : execute();
     };
     const events: AdapterEvent[] = [];
     try {
@@ -328,6 +335,49 @@ describe("native-tools adapter emission", () => {
     expect(retry.prompts[0]).toContain("<previous_tool_call_block>");
     expect(retry.prompts[0]).toContain("unknown tool");
     expect(retry.events.some(event => event.type === "error")).toBe(true);
+  });
+
+  test("queue admits a corrective attempt but replays its successful reconnect without resending", async () => {
+    const profile = join(tempRoot, "corrective-queue.json");
+    writeFileSync(profile, "{}");
+    const queue = await StandaloneRequestQueue.open(profile);
+    const provider = nativeProvider();
+    const turnId = `queue_retry_${Date.now()}`;
+    const broken = "```" + CODEX_TOOL_CALLS_FENCE + '\n{"calls":[{"name":"missing","arguments":{}}]}\n```';
+    try {
+      const first = await withFakeWorker(provider, [broken], turnId, queue);
+      expect(first.events.find(e => e.type === "error")).toMatchObject({ code: "native_tool_call_invalid", retryable: true });
+      expect(first.events.some(e => e.type === "tool_call_start")).toBe(false);
+      const corrected = "```" + CODEX_TOOL_CALLS_FENCE + '\n{"calls":[{"name":"exec_command","arguments":{"cmd":"echo ok"}}]}\n```';
+      const retry = await withFakeWorker(provider, [corrected], turnId, queue);
+      expect(retry.prompts).toHaveLength(1);
+      expect(retry.prompts[0]).toContain("<codex_tool_call_correction>");
+      expect(retry.events.some(e => e.type === "error")).toBe(false);
+      const call = retry.events.find(e => e.type === "tool_call_start");
+      expect(call).toBeDefined();
+      const reconnect = await withFakeWorker(provider, ["must not send"], turnId, queue);
+      expect(reconnect.prompts).toHaveLength(0);
+      expect(reconnect.events.find(e => e.type === "tool_call_start")).toEqual(call);
+    } finally { await queue.close(); }
+  });
+
+  test("queued corrective attempts retain the bounded retry budget", async () => {
+    const profile = join(tempRoot, "exhausted-queue.json");
+    writeFileSync(profile, "{}");
+    const queue = await StandaloneRequestQueue.open(profile);
+    const provider = nativeProvider();
+    const turnId = `queue_exhausted_${Date.now()}`;
+    const broken = "```" + CODEX_TOOL_CALLS_FENCE + '\n{"calls":[{"name":"missing","arguments":{}}]}\n```';
+    try {
+      for (let i = 0; i < 4; i++) {
+        const attempt = await withFakeWorker(provider, [broken], turnId, queue);
+        expect(attempt.prompts).toHaveLength(1);
+        expect(attempt.events.find(e => e.type === "error")).toMatchObject({ code: "native_tool_call_invalid", retryable: i < 3 });
+      }
+      const exhausted = await withFakeWorker(provider, ["must not send"], turnId, queue);
+      expect(exhausted.prompts).toHaveLength(0);
+      expect(exhausted.events.find(e => e.type === "error")).toMatchObject({ code: "native_tool_call_invalid", retryable: false });
+    } finally { await queue.close(); }
   });
 
   test("a tool-result round starts a new browser turn instead of replaying round 1", async () => {

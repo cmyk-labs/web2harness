@@ -18,9 +18,19 @@ import { CHATGPT_WEB_ZERO_RISK_BACKEND_MODEL } from "../../../src/models/chatgpt
 import { defaultBrokerEndpoint } from "../../../src/config";
 import type { AdapterEvent, CodexParsedRequest, CodexProviderConfig } from "../../../src/types";
 
+async function finishHandoff(broker: TurnBroker, token: string, finalAnswer: string) {
+  const activityId = "activity_" + crypto.randomUUID().replaceAll("-", "");
+  const protocol = "web2harness-handoff-v1" as const;
+  const claim = await callTurnBroker<{ bindingId: string }>(broker.socketPath, { method: "claim", token, contract: "safe", protocol, activityId });
+  try { await callTurnBroker(broker.socketPath, { method: "handoff_finish", bindingId: claim.bindingId, protocol, activityId, finalAnswer }); }
+  finally { await callTurnBroker(broker.socketPath, { method: "activity_complete", token, activityId }); }
+}
+
 const testTempRoot = process.platform === "win32" ? tmpdir() : "/tmp";
 const root = mkdtempSync(join(testTempRoot, "cgw-zero-risk-adapter-"));
-afterAll(() => {
+const queueFixtures: Array<{ queue: any; server: any }> = [];
+afterAll(async () => {
+  for (const fixture of queueFixtures) { await fixture.queue.close(); await fixture.server.close(); }
   chatGptTurnSessions.clear();
   rmSync(root, { recursive: true, force: true });
 });
@@ -71,8 +81,8 @@ function binding(prompt: string): { request_id: string } {
   return JSON.parse(match[1]!) as { request_id: string };
 }
 
-function provider(name: string): CodexProviderConfig {
-  return {
+async function provider(name: string): Promise<CodexProviderConfig> {
+  const config: CodexProviderConfig = {
     adapter: "chatgpt-web",
     baseUrl: `manual://${name}-${Date.now()}`,
     chatgptWeb: {
@@ -87,6 +97,23 @@ function provider(name: string): CodexProviderConfig {
       experimentalContextFiles: false,
     },
   };
+  const require = createRequire(import.meta.url);
+  const { RequestQueue } = require("../../../launcher/electron/runtime/request-queue.cjs");
+  const { BrowserControlServer } = require("../../../launcher/electron/control-server.cjs");
+  const logger = { info() {}, warn() {}, error() {} };
+  const queue = await new RequestQueue({ directory: join(root, name), logger, hasResource: () => false, cancelResource: async () => {} }).start();
+  const server = await new BrowserControlServer({ logger, getBrowserHost: () => null, getRequestQueue: () => queue,
+    getPreferences: () => ({}), assertLicensed: async () => {} }).start();
+  queueFixtures.push({ queue, server });
+  writeFileSync(config.chatgptWeb!.browserHostDescriptorPath!, JSON.stringify({
+    version: 3, kind: LAUNCHER_BROWSER_HOST_KIND, profile: "development", pid: process.pid,
+    endpoint: server.descriptor().endpoint, control: server.descriptor(),
+    helper: { executable: process.execPath, script: import.meta.path }, partition: "persist:web2harness-dev-chatgpt",
+    idleUrl: LAUNCHER_BROWSER_IDLE_URL, surfaceId: "launcher_surface_id_0123456789AB", createdAt: new Date().toISOString(),
+    surfaceTargets: { launcher_surface_id_0123456789AB: "native-owned-target" },
+  }), { mode: 0o600 });
+  return config;
+
 }
 
 function noManualTerminal(): Promise<never> {
@@ -103,7 +130,7 @@ for (const scenario of [
   const require = createRequire(import.meta.url);
   const { BrowserHost } = require("../../../launcher/electron/browser/browser-host.cjs");
   const { BrowserControlServer } = require("../../../launcher/electron/control-server.cjs");
-  const config = provider(`compaction-owner-${scenario.format}-${scenario.finalWins}`);
+  const config = await provider(`compaction-owner-${scenario.format}-${scenario.finalWins}`);
   const socket = config.chatgptWeb!.brokerSocketPath!;
   const broker = TurnBroker.forSocket(socket);
   const logs: string[] = [];
@@ -130,7 +157,7 @@ for (const scenario of [
   });
   const server = await new BrowserControlServer({
     assertLicensed: async () => {}, // This fixture isolates protocol behavior; admission has separate tests.
-    logger, getBrowserHost: () => host, getPreferences: () => ({}),
+    logger, getBrowserHost: () => host, getRequestQueue: () => queueFixtures.at(-1)!.queue, getPreferences: () => ({}),
   }).start();
   writeFileSync(config.chatgptWeb!.browserHostDescriptorPath!, JSON.stringify({
     version: 3, kind: LAUNCHER_BROWSER_HOST_KIND, profile: "development", pid: process.pid,
@@ -143,15 +170,18 @@ for (const scenario of [
   const starts: string[] = [];
   const bindings = new Map<string, string>();
   let modelAction: Promise<void> | undefined;
+  const compactionTraces = new Set<string>();
   const control: ChatGptZeroRiskManualControl = {
+    async waitFinished() {},
     async start(_path, activity) {
       host.beginManualTurn(activity.traceId, activity.helperPid, activity.prompt,
         activity.conversationKey, activity.resumePrompt, activity.compaction);
       starts.push(activity.traceId);
+      if (activity.compaction) compactionTraces.add(activity.traceId);
       bindings.set(activity.traceId, binding(activity.prompt).request_id);
     },
     async waitSent(_path, owner) {
-      host.confirmManualSent(owner.traceId);
+      host.confirmManualSent([...host.turnTabs.values()].find((tab: any) => tab.traceId === owner.traceId).id);
       broker.startSafeTurn(bindings.get(owner.traceId)!);
     },
     waitTerminal: noManualTerminal,
@@ -159,23 +189,20 @@ for (const scenario of [
       host.markManualTurnStarted(owner.traceId, owner.helperPid);
       const token = bindings.get(owner.traceId)!;
       if (starts.length > 1) {
-        broker.completeSafeTurn(token, "Final answer after compaction");
+        await finishHandoff(broker, token, compactionTraces.has(owner.traceId) ? "Checkpoint: the command finished; continue the task."
+          : scenario.finalWins ? "Ordinary final answer before compaction" : "Final answer after compaction");
         return;
       }
       modelAction = (async () => {
-        const claim = await callTurnBroker<{ bindingId: string; activityId: string }>(socket, {
-          method: "claim", token, contract: "safe",
-        });
-        const result = await callTurnBroker<BrokerToolResult>(socket, {
-          method: "invoke", bindingId: claim.bindingId, wireName: toolIdentityKey(undefined, "exec_command"), freeform: false,
-          arguments: { cmd: "pwd" },
-        }, null);
-        if (!scenario.finalWins) expect(JSON.stringify(result)).toContain("codex_turn_complete");
-        await callTurnBroker(socket, { method: "activity_complete", token, activityId: claim.activityId });
-        broker.completeSafeTurn(token, scenario.finalWins
-          ? "Ordinary final answer before compaction"
-          : "Checkpoint: the command finished; continue the task.");
+        const protocol = "web2harness-handoff-v1" as const;
+        const activityId = "activity_" + crypto.randomUUID().replaceAll("-", "");
+        const claim = await callTurnBroker<{ bindingId: string }>(socket, { method: "claim", token, contract: "safe", protocol, activityId });
+        const receipt = await callTurnBroker<{ batch_id: string }>(socket, { method: "handoff_submit", bindingId: claim.bindingId, protocol, activityId,
+          submissionId: "command-1", calls: [{ name: "exec_command", arguments: { cmd: "pwd" } }] });
+        await callTurnBroker(socket, { method: "handoff_yield", bindingId: claim.bindingId, protocol, activityId, batchId: receipt.batch_id });
+        await callTurnBroker(socket, { method: "activity_complete", token, activityId });
       })();
+      await modelAction;
     },
     async end(_path, activity) {
       return host.endManualTurn(activity.traceId, activity.helperPid, activity.status, activity.retain);
@@ -191,6 +218,7 @@ for (const scenario of [
     const call = events.find(event => event.type === "tool_call_start");
     if (call?.type !== "tool_call_start") throw new Error("Source did not emit its native tool call");
     const compact = structuredClone(source);
+    compact.context.messages.push({ role: "assistant", content: [{ type: "toolCall", id: call.id, name: "exec_command", arguments: { cmd: "pwd" } }], timestamp: 3 });
     compact.context.messages.push({
       role: "toolResult", toolCallId: call.id, toolName: "exec_command", content: root, isError: false, timestamp: 3,
     });
@@ -218,13 +246,13 @@ for (const scenario of [
     });
     const final: AdapterEvent[] = [];
     await adapter.runTurn!(continuation, { headers: new Headers() }, event => final.push(event));
-    expect(starts).toHaveLength(2);
+    expect(starts).toHaveLength(3);
     expect(starts[1]).not.toBe(starts[0]);
     const expectedFinal = scenario.finalWins ? "Ordinary final answer before compaction" : "Final answer after compaction";
     expect(final.some(event => event.type === "text_delta" && event.text === expectedFinal)).toBeTrue();
     const replay: AdapterEvent[] = [];
     await adapter.runTurn!(continuation, { headers: new Headers() }, event => replay.push(event));
-    expect(starts).toHaveLength(2); // exact reconnect replays, it must not submit again
+    expect(starts).toHaveLength(3); // exact reconnect replays, it must not submit again
     expect(replay.at(-1)).toMatchObject({ type: "done", endTurn: true });
     expect(() => host.beginManualTurn(starts[0], process.pid, "old prompt")).toThrow("already completed");
   } finally {
@@ -236,7 +264,7 @@ for (const scenario of [
 });
 
 test("Zero Risk adapter never starts the automatic browser worker and completes only through Zero Risk MCP", async () => {
-  const config = provider("complete");
+  const config = await provider("complete");
   const broker = TurnBroker.forSocket(config.chatgptWeb!.brokerSocketPath!);
   const worker = ChatGptBrowserWorker.forProvider(config);
   const originalRun = worker.run.bind(worker);
@@ -247,6 +275,7 @@ test("Zero Risk adapter never starts the automatic browser worker and completes 
   let manualCompaction: true | undefined;
   const calls: string[] = [];
   const control: ChatGptZeroRiskManualControl = {
+    async waitFinished() {},
     async start(_path, activity) {
       calls.push("start");
       manualCompaction = activity.compaction;
@@ -259,7 +288,7 @@ test("Zero Risk adapter never starts the automatic browser worker and completes 
     waitTerminal: noManualTerminal,
     async markStarted() {
       calls.push("started");
-      broker.completeSafeTurn(exactBinding!.request_id, "Zero Risk final answer");
+      await finishHandoff(broker, exactBinding!.request_id, "Zero Risk final answer");
     },
     async end(_path, activity) { calls.push(`end:${activity.status}:${activity.retain === true}`); },
     async cancel() { calls.push("cancel"); },
@@ -290,17 +319,18 @@ test("Zero Risk adapter never starts the automatic browser worker and completes 
   }
 });
 
-test("a lost launcher completion acknowledgement cannot replace an authoritative Zero Risk answer", async () => {
-  const config = provider("completion-ack-lost");
+test("a lost launcher completion acknowledgement blocks delivery until physical release is verified", async () => {
+  const config = await provider("completion-ack-lost");
   const broker = TurnBroker.forSocket(config.chatgptWeb!.brokerSocketPath!);
   let exactBinding: ReturnType<typeof binding> | undefined;
   const endStatuses: string[] = [];
   const control: ChatGptZeroRiskManualControl = {
+    async waitFinished() {},
     async start(_path, activity) { exactBinding = binding(activity.prompt); },
     async waitSent() { broker.startSafeTurn(exactBinding!.request_id); },
     waitTerminal: noManualTerminal,
     async markStarted() {
-      broker.completeSafeTurn(exactBinding!.request_id, "Answer completed before the acknowledgement was lost");
+      await finishHandoff(broker, exactBinding!.request_id, "Answer completed before the acknowledgement was lost");
     },
     async end(_path, activity) {
       endStatuses.push(activity.status);
@@ -315,12 +345,9 @@ test("a lost launcher completion acknowledgement cannot replace an authoritative
       { headers: new Headers() },
       event => events.push(event),
     );
-    expect(endStatuses).toEqual(["completed"]);
-    expect(events.filter((event): event is Extract<AdapterEvent, { type: "text_delta" }> => (
-      event.type === "text_delta" && event.phase === "final_answer"
-    )).map(event => event.text).join(""))
-      .toBe("Answer completed before the acknowledgement was lost");
-    expect(events.at(-1)).toMatchObject({ type: "done", stopReason: "stop", endTurn: true });
+    expect(endStatuses).toEqual(["completed", "failed"]);
+    expect(events.some(event => event.type === "error" && event.code === "chatgpt_submitted_turn_failed")).toBeTrue();
+    expect(events.some(event => event.type === "text_delta" && event.phase === "final_answer")).toBeFalse();
   } finally {
     chatGptTurnSessions.clear();
     await broker.close();
@@ -328,7 +355,7 @@ test("a lost launcher completion acknowledgement cannot replace an authoritative
 });
 
 test("Zero Risk keeps image handoff manual and says so in the paste instruction", async () => {
-  const config = provider("image-boundary");
+  const config = await provider("image-boundary");
   const broker = TurnBroker.forSocket(config.chatgptWeb!.brokerSocketPath!);
   const input = request("turn_safe_image_boundary");
   input.context.messages[1] = {
@@ -342,13 +369,14 @@ test("Zero Risk keeps image handoff manual and says so in the paste instruction"
   let exactBinding: ReturnType<typeof binding> | undefined;
   let manualPrompt = "";
   const control: ChatGptZeroRiskManualControl = {
+    async waitFinished() {},
     async start(_path, activity) {
       manualPrompt = activity.prompt;
       exactBinding = binding(activity.prompt);
     },
     async waitSent() { broker.startSafeTurn(exactBinding!.request_id); },
     waitTerminal: noManualTerminal,
-    async markStarted() { broker.completeSafeTurn(exactBinding!.request_id, "Manual image handoff completed"); },
+    async markStarted() { await finishHandoff(broker, exactBinding!.request_id, "Manual image handoff completed"); },
     async end() {},
     async cancel() {},
   };
@@ -375,13 +403,14 @@ test("Zero Risk keeps image handoff manual and says so in the paste instruction"
 });
 
 test("a stopped Responses observer revokes its Zero Risk binding and releases the manual turn", async () => {
-  const config = provider("stopped-observer");
+  const config = await provider("stopped-observer");
   const broker = TurnBroker.forSocket(config.chatgptWeb!.brokerSocketPath!);
   let exactBinding: ReturnType<typeof binding> | undefined;
   let signalVisible!: () => void;
   const visible = new Promise<void>(resolve => { signalVisible = resolve; });
   const ended: string[] = [];
   const control: ChatGptZeroRiskManualControl = {
+    async waitFinished() {},
     async start(_path, activity) {
       exactBinding = binding(activity.prompt);
       signalVisible();
@@ -421,11 +450,12 @@ test("a stopped Responses observer revokes its Zero Risk binding and releases th
 });
 
 test("a Zero Risk launcher failure remains failed when its own capability cleanup retires the broker", async () => {
-  const config = provider("failed-cleanup");
+  const config = await provider("failed-cleanup");
   const broker = TurnBroker.forSocket(config.chatgptWeb!.brokerSocketPath!);
   let exactBinding: ReturnType<typeof binding> | undefined;
   const ended: string[] = [];
   const control: ChatGptZeroRiskManualControl = {
+    async waitFinished() {},
     async start(_path, activity) { exactBinding = binding(activity.prompt); },
     async waitSent() { throw new Error("synthetic launcher observation failure"); },
     waitTerminal: noManualTerminal,
@@ -449,7 +479,7 @@ test("a Zero Risk launcher failure remains failed when its own capability cleanu
 });
 
 test("Zero Risk offers only the new Codex suffix when the launcher reuses its retained ChatGPT chat", async () => {
-  const config = provider("incremental-resume");
+  const config = await provider("incremental-resume");
   const broker = TurnBroker.forSocket(config.chatgptWeb!.brokerSocketPath!);
   const input = request("turn_safe_incremental");
   input.context.messages.push(
@@ -480,6 +510,7 @@ test("Zero Risk offers only the new Codex suffix when the launcher reuses its re
   let fullPrompt = "";
   let resumePrompt = "";
   const control: ChatGptZeroRiskManualControl = {
+    async waitFinished() {},
     async start(_path, activity) {
       fullPrompt = activity.prompt;
       resumePrompt = activity.resumePrompt ?? "";
@@ -490,7 +521,7 @@ test("Zero Risk offers only the new Codex suffix when the launcher reuses its re
     },
     waitTerminal: noManualTerminal,
     async markStarted() {
-      broker.completeSafeTurn(exactBinding!.request_id, "Incremental answer");
+      await finishHandoff(broker, exactBinding!.request_id, "Incremental answer");
     },
     async end() {},
     async cancel() {},
@@ -512,11 +543,12 @@ test("Zero Risk offers only the new Codex suffix when the launcher reuses its re
 });
 
 test("Zero Risk compaction uses a fresh manual checkpoint without leaking guide text into the summary", async () => {
-  const config = provider("compaction");
+  const config = await provider("compaction");
   const broker = TurnBroker.forSocket(config.chatgptWeb!.brokerSocketPath!);
   let exactBinding: ReturnType<typeof binding> | undefined;
   let manualCompaction: true | undefined;
   const control: ChatGptZeroRiskManualControl = {
+    async waitFinished() {},
     async start(_path, activity) {
       manualCompaction = activity.compaction;
       exactBinding = binding(activity.prompt);
@@ -526,7 +558,7 @@ test("Zero Risk compaction uses a fresh manual checkpoint without leaking guide 
     },
     waitTerminal: noManualTerminal,
     async markStarted() {
-      broker.completeSafeTurn(
+      await finishHandoff(broker,
         exactBinding!.request_id,
         "Zero Risk checkpoint summary",
       );
@@ -558,12 +590,13 @@ test("Zero Risk compaction uses a fresh manual checkpoint without leaking guide 
 });
 
 test("closing the Zero Risk Launcher tab revokes the bound turn instead of waiting forever", async () => {
-  const config = provider("cancelled-tab");
+  const config = await provider("cancelled-tab");
   const broker = TurnBroker.forSocket(config.chatgptWeb!.brokerSocketPath!);
   let exactBinding: ReturnType<typeof binding> | undefined;
   let releaseTerminal!: () => void;
   const terminal = new Promise<void>(resolve => { releaseTerminal = resolve; });
   const control: ChatGptZeroRiskManualControl = {
+    async waitFinished() {},
     async start(_path, activity) { exactBinding = binding(activity.prompt); },
     async waitSent() {
       broker.startSafeTurn(exactBinding!.request_id);

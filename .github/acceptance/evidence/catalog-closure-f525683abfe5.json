@@ -1,0 +1,335 @@
+{
+  "schemaVersion": 2,
+  "kind": "catalog-repair-and-handoff-investigation",
+  "recordedAt": "2026-10-15T13:55:41.838Z",
+  "targetSourceId": "f525683abfe564cc272e1250c2f1a02a57c37c4534f0488c7dec47ad686a183d",
+  "loadedSourceId": "8af3ef5abaf244c97278ee526d186f1f670f6f60ebd133d60b26ceaf8df20cd8",
+  "changes": [
+    {
+      "path": "docs/development.md",
+      "before": "f6379dd6266b99d24d5b69a1b37756737adb891a634bd599a1811d7aedb98e84",
+      "after": "bc84070b41525c6a43d4609d0d72745a4f0a5aad929dd63058fa171471000232",
+      "reason": "Corrects stale80% upload wording to the already implemented/accepted32KiB complete-context threshold and processing-before-send rule; behavior and acceptance criteria unchanged."
+    },
+    {
+      "path": "docs/development.zh-CN.md",
+      "before": "900fe55060f1c4351f4890b22565006a3f49e33e4c3e6056321259fbe8285310",
+      "after": "17000e03cb6001aa881a37d13c560715e5f69519cd6a3602ef4f7f6f1319fb7f",
+      "reason": "Chinese counterpart of the corrected existing file-transport operating instructions."
+    },
+    {
+      "path": "docs/troubleshooting.md",
+      "before": "66ff9e4ba0cadf2c5428d1c800174a23061f4e232930beb1cf8a5592f38d4e25",
+      "after": "167008d814586b95679ad901af3336f41506454dfc45025d57202963e0c03c34",
+      "reason": "Documents bounded catalog GET reuse and cancellation diagnosis; retains no credential/model substitution, no blind task replay and no browser restart policy."
+    },
+    {
+      "path": "docs/troubleshooting.zh-CN.md",
+      "before": "78add32e1609f45f9b1b5b79500f140c4c5489fb5c2382e40c99aaa1d4436841",
+      "after": "8c5d348eaa7a0a2ac365f4d102381f6ccf1fe28442206b53990016acaffdc18c",
+      "reason": "Chinese counterpart of catalog recovery/diagnostic guidance."
+    },
+    {
+      "path": "src/codex/model-catalog-fetches.ts",
+      "before": null,
+      "after": "dea71382bebe89d7722aa19e7843ec814f711f99cc1dc73a3e83843dfdb96808",
+      "reason": "New per-server in-flight idempotent catalog GET sharing, keyed by query and all headers. Caller disconnect does not reset an identical cold upstream attempt. No cross-auth/account/query sharing; failures/delivered responses removed, abandoned pending30s/unclaimed success10s bounds, shutdown abort. Content-free diagnostics only. Final51 scoped regressions and actual native/MCP catalog/task observations support existing unrelated contracts."
+    },
+    {
+      "path": "src/server.ts",
+      "before": "289f90b8edb5e78b0714d305c6169cfcaaa6b91fcf6ed95dca8cad4063e3afee",
+      "after": "feeb5621e690a3a45e1b3fcf03e20903d82c82741fd8bb49a64f31800619058d",
+      "reason": "Uses the shared catalog fetch owner and original client signal, keeps per-response augmentation and existing upstream auth/model selection, distinguishes client disconnect from upstream failures, and closes owned catalog attempts on shutdown. This affects only catalog GET/cancellation health; turn bodies, tools, queue and licensing are unchanged. Server-model/lifecycle regressions and actual30-round native execution confirm integration."
+    },
+    {
+      "path": "tests/responses/server-model-retry.test.ts",
+      "before": null,
+      "after": "c21fbc83ffe5d01660738420d6ac19a6d06c7d80c9b8046da4229495606d1db9",
+      "reason": "Adds pre-abort/no-forward, actual Bun HTTP disconnect/retry sharing, concurrent per-config augmentation, header/query isolation, result expiry, failure disposal, abandonment and shutdown regressions. No existing acceptance oracle is weakened."
+    }
+  ],
+  "upstream": {
+    "commit": "f137c2f84da5df214c1e228d74f5ff43e7641c48",
+    "issue": "https://github.com/miuuyy/codex-chatgpt-web/issues/696",
+    "scope": "In-flight catalog GET reuse; no browser backoff/restart or task resend added."
+  },
+  "verification": {
+    "before": {
+      "pass": 0,
+      "fail": 2
+    },
+    "final": {
+      "pass": 51,
+      "fail": 0,
+      "assertions": 348
+    },
+    "typecheck": "Passed; subsequent product change only replaced diagnostic field name with existing operationId. Final live events confirm the safe key; latest source changes are documentation only.",
+    "actualCatalog": "Actual dev:codex debug models refreshed19 entries with correct GPT-6 Medium native/search metadata. Both real task runs refreshed successfully, without fallback."
+  },
+  "authenticated": [
+    {
+      "mode": "native-tools",
+      "sourceId": "8af3ef5abaf244c97278ee526d186f1f670f6f60ebd133d60b26ceaf8df20cd8",
+      "startedAt": "2026-10-15T13:10:16.525Z",
+      "finishedAt": "2026-10-15T13:21:43.695Z",
+      "findings": {
+        "cliComplete": true,
+        "fourFilesExact": true,
+        "fourAgentsComplete": true,
+        "contextsExact": true,
+        "fourReadPatchReadbackSequences": true,
+        "threeSpawns": true,
+        "noGrandchildren": true,
+        "spawnBeforeWait": true,
+        "overlap": true,
+        "exactFinalProgram": true,
+        "finalActualValues": true,
+        "finalMarker": true,
+        "queuePeakOne": true,
+        "queueReleased": true,
+        "parentWaitReleasesSlot": true,
+        "noMetadataFallback": true
+      },
+      "webRounds": 30,
+      "queuePeak": 1,
+      "queueActive": 0,
+      "actors": [
+        {
+          "actor": "main",
+          "start": "2026-10-15T13:10:18.168Z",
+          "end": "2026-10-15T13:21:38.485Z",
+          "bytes": 37,
+          "exact": true,
+          "commands": 3,
+          "patches": 1
+        },
+        {
+          "actor": "child-1",
+          "start": "2026-10-15T13:12:26.737Z",
+          "end": "2026-10-15T13:17:35.242Z",
+          "bytes": 37,
+          "exact": true,
+          "commands": 2,
+          "patches": 1
+        },
+        {
+          "actor": "child-2",
+          "start": "2026-10-15T13:12:47.612Z",
+          "end": "2026-10-15T13:20:57.319Z",
+          "bytes": 37,
+          "exact": true,
+          "commands": 4,
+          "patches": 2
+        },
+        {
+          "actor": "child-3",
+          "start": "2026-10-15T13:14:30.118Z",
+          "end": "2026-10-15T13:19:52.403Z",
+          "bytes": 37,
+          "exact": true,
+          "commands": 3,
+          "patches": 1
+        }
+      ]
+    },
+    {
+      "mode": "automatic-mcp",
+      "sourceId": "8af3ef5abaf244c97278ee526d186f1f670f6f60ebd133d60b26ceaf8df20cd8",
+      "startedAt": "2026-10-15T13:34:38.079Z",
+      "finishedAt": "2026-10-15T13:51:35.456Z",
+      "findings": {
+        "cliComplete": true,
+        "fourFilesExact": true,
+        "fourAgentsComplete": true,
+        "contextsExact": true,
+        "fourReadPatchReadbackSequences": true,
+        "threeSpawns": true,
+        "noGrandchildren": true,
+        "spawnBeforeWait": true,
+        "overlap": true,
+        "exactFinalProgram": true,
+        "finalActualValues": true,
+        "finalMarker": true,
+        "queuePeakOne": true,
+        "queueReleased": true,
+        "parentWaitReleasesSlot": true,
+        "noMetadataFallback": true
+      },
+      "webRounds": 25,
+      "queuePeak": 1,
+      "queueActive": 0,
+      "actors": [
+        {
+          "actor": "main",
+          "start": "2026-10-15T13:34:39.400Z",
+          "end": "2026-10-15T13:51:28.963Z",
+          "bytes": 37,
+          "exact": true,
+          "commands": 3,
+          "patches": 1
+        },
+        {
+          "actor": "child-1",
+          "start": "2026-10-15T13:38:22.189Z",
+          "end": "2026-10-15T13:47:37.786Z",
+          "bytes": 37,
+          "exact": true,
+          "commands": 2,
+          "patches": 1
+        },
+        {
+          "actor": "child-2",
+          "start": "2026-10-15T13:38:58.846Z",
+          "end": "2026-10-15T13:48:44.371Z",
+          "bytes": 37,
+          "exact": true,
+          "commands": 2,
+          "patches": 1
+        },
+        {
+          "actor": "child-3",
+          "start": "2026-10-15T13:41:06.464Z",
+          "end": "2026-10-15T13:49:43.373Z",
+          "bytes": 37,
+          "exact": true,
+          "commands": 2,
+          "patches": 1
+        }
+      ]
+    }
+  ],
+  "retainedAuditFindings": [
+    "Native child2/3 initially comparedLF output againstWindowsCRLF and reportedFalse; later commands established actualLF bytes. One native child issued an empty patch. Original events retained; final independent bytes and exact parent program confirm completion.",
+    "Initial audit script recognized only top-level tools; corrected to actual CommandExecution/FileChange/CollabAgentToolCall events and nested function receipts without rerunning tasks.",
+    "MCP mode IPC succeeded before a driver assertion used the wrong return-object level. Actual owned state was rechecked rather than switching twice. Mode change invalidated model cache; correct debug models refresh preceded the real MCP run.",
+    "Original historical MCP process diagnostic source was1a7a689f04eb, distinct from its e844 daemon. Current MCP transport is verified8af."
+  ],
+  "mcpHistorical": {
+    "status": "unresolved-external-delivery-boundary",
+    "targetAt": "2026-10-14T15:11:52.122Z",
+    "trace": "6dcc1c9df19d",
+    "browser": "SSE generated about720 characters of connector parameters and ended without a tool result or final text. Payload structure was not retained.",
+    "local": "Persistent DEV tunnel log has consecutive calls41 and42 with successful results before/after the failed round in the same process; no target delivery. Broker revision0,activities0,invocations0. This supports a failure before local tool handling, not a proven precise remote cause.",
+    "correction": "The earlier empty-payload conversation was at14:42 and is not the failed15:11 round. A guessed history query returned500 twice; the actual observed history endpoint returned200 but the target temporary conversation was absent. No unrelated conversation body was exported.",
+    "remaining": "Current successful MCP flow confirms functionality but cannot reconstruct the missing historical remote payload/error. Do not infer SDK rejection, local network interruption, or a repaired remote defect."
+  },
+  "pageReadiness": {
+    "current": "Authenticated preflight and actual native/MCP flows completed. Existing90s shared readiness/30s attempts and at most one proven-unsent recovery retained.",
+    "historical": "Known network-outage recovery is separate from the reproduced post-send regex/long-bubble defects. Original first-stall stack is unavailable; rendering fixes, exact ownership, file transport and repaired catalog remove the observed defective mechanisms without assigning every past error one cause.",
+    "newBackoffImplemented": false
+  },
+  "boundary": {
+    "unchangedProductionFiles": 4,
+    "processStates": {
+      "same": 50
+    },
+    "processExitAssessment": "See the worklog and raw boundary evidence; no production process was controlled or restored.",
+    "activeHttp": 0,
+    "activeBrowser": 0,
+    "queueActive": 0,
+    "queueWaiting": 0
+  },
+  "limits": [
+    "No full new release acceptance, installer/upgrade/uninstall, new artifact, commit, push, tag or publication.",
+    "Native parallel-read/file06 observations are reused with cumulative review; this main-three execution does not claim parallel same-cell reads.",
+    "Original MCP failure remains open; later pass does not override missing remote cause."
+  ],
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/candidate-catalog.json",
+      "sha256": "d41b5cfee678cb0393206f2fd533f1d8098097c361d73e092404760733fdfb6e"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/candidate-catalog-final.json",
+      "sha256": "ff3f7add421a0a273f9f7b4e765a065eb50fa5159f11cd5f3ef5d98f7e9ce744"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/catalog-before.log",
+      "sha256": "f8a1e7eb58c389098846061ac873338ccc9bd7925c37cc45b121256052c0149e"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/catalog-final-scoped.log",
+      "sha256": "363fa43ad7698b9a49be2f80d9c63405d82830217a6a0833756372de5be859f2"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/catalog-typecheck.log",
+      "sha256": "8670e722a80795c2de9002bdb4d7040f339e9bb333122e4a9f9fdc1f36baf689"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/catalog-live-01-summary.json",
+      "sha256": "bf47ba00e0510edfe0c0e4081000d4ffe4ca63e1dd60240ca992dced8264a9f3"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-main-three-native-02-status.json",
+      "sha256": "4e33f08b5be1b3066ffc009255614268abe665a4eb014846921a12267723cce3"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-main-three-native-02-confirmed.private.json",
+      "sha256": "2788300613ec8398f75a77f275d1ff6d5566550131106800dd7e1bf6e56b4b5e"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-main-three-native-02.private.log",
+      "sha256": "a0d8ee6f7ac9a70a3c020b0393b91d4b1eaae888d98dc1c8dc3103f6a5101eef"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-main-three-native-02.stderr.private.log",
+      "sha256": "0cc2fd9b0c804db3f8025c3c69bfb4c030e30a11ad2c084a3b45667b8c1843e9"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-main-three-automatic-02-status.json",
+      "sha256": "a43514f6bd9f5e5a99abf1e1f6cc0eb24e5d8895be4a9a5b5c2406ce91765f1f"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-main-three-automatic-02-confirmed.private.json",
+      "sha256": "b90f60395b8e1c555cd15a5d7b231201ba457d2a3e9585a5a5a03f5a899a92df"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-main-three-automatic-02.private.log",
+      "sha256": "161987878270842722f06f72003e1ca8d26d1503b9566ac571231b78c289b52d"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-main-three-automatic-02.stderr.private.log",
+      "sha256": "ce18e52b5434068d7d096dd373c5d3829a5d6c5921802461e7f45da28a08cc8f"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/catalog-connector-binding.json",
+      "sha256": "28bf498578ec6689b4cd72985de06cba40bb318c1f478b6a4b1c49dcccd42742"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/catalog-mcp-ready.private.json",
+      "sha256": "58afc2a290202878d728e3a040ea796bb59d60f6a4367bdbf28e849fd99f5598"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/mcp-original-contiguous-log.private.json",
+      "sha256": "65f4b6b532f0c0f916ba05890eb5a29afc50ffbf81e97bcdb691a7f1ab0c85f8"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/mcp-original-index-times.private.json",
+      "sha256": "4cf20d886b36cb8b92770a3a92f49f74aae370f23ce122124aa73ca215626665"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/mcp-catalog-stream.jsonl",
+      "sha256": "fa907444f6b04e8328a0a7ec514d5b715d49925fad6982d7d21023c6d1bbd184"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/mcp-catalog-transport.private.jsonl",
+      "sha256": "b15a38141c4bd409174fdd3c04b9a7d759ca5ebaa6f0e6a64641b3b38744b64f"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/owned-dev-catalog-settled.private.json",
+      "sha256": "e1a03dcca513bde401e422f69d669e0dbc6f56c6f7c889f39a2eb33ee947eb6a"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/boundary-comparison-catalog.private.json",
+      "sha256": "cbd0adfa3413dffe3a46f318c9919b403328330046800c979e5369ae6bc7e0ca"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/production-before-catalog.private.json",
+      "sha256": "0f465f61d1001f3776167e31502054b233c3af45af5ad9b7b335f091c5b517a9"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/production-after-catalog.private.json",
+      "sha256": "2531941bec2b7a2472d617f3816e3f2e514a4897fa597bb10378d3c0e33b25bd"
+    }
+  ]
+}

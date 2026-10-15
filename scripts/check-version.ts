@@ -49,8 +49,8 @@ for (const runner of ["macos-15", "macos-15-intel", "ubuntu-latest", "ubuntu-24.
     throw new Error(`release.yml must retain the native build target ${runner}`);
   }
 }
-if (releaseWorkflow.split(`bun-version: ${bunVersion}`).length - 1 !== 2) {
-  throw new Error(`release.yml must pin Bun ${bunVersion} in both jobs`);
+if (releaseWorkflow.split(`bun-version: ${bunVersion}`).length - 1 !== 3) {
+  throw new Error(`release.yml must pin Bun ${bunVersion} in build, candidate and publish jobs`);
 }
 const launcher = JSON.parse(readFileSync(resolve(root, "launcher/package.json"), "utf8")) as {
   version?: string;

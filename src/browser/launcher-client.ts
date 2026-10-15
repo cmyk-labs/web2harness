@@ -395,6 +395,7 @@ export type LauncherTurnActivity =
       message?: string;
       retain?: boolean;
       connectorBound?: boolean;
+      awaitingToolResults?: boolean;
     };
 
 // Startup must outlast the launcher's ten-second idle bootstrap. This is not a model-turn budget.
@@ -427,6 +428,7 @@ export interface LauncherManualTurnLease {
 export interface LauncherManualTurnEnd extends LauncherManualTurnOwner {
   status: "completed" | "failed" | "aborted";
   retain?: boolean;
+  awaitingToolResults?: boolean;
 }
 
 export interface LauncherManualTurnTerminal {
@@ -439,7 +441,7 @@ export const LAUNCHER_MANUAL_TURN_END_TIMEOUT_MS = 15_000;
 
 async function launcherManualRequest(
   descriptor: LauncherBrowserHostDescriptor,
-  action: "start" | "wait-sent" | "wait-terminal" | "started" | "end" | "cancel",
+  action: "start" | "wait-sent" | "wait-terminal" | "started" | "end" | "cancel" | "request-finish",
   body: LauncherManualTurnStart | LauncherManualTurnOwner | LauncherManualTurnEnd,
   timeoutMs: number,
   abortSignal?: AbortSignal,
@@ -763,5 +765,16 @@ export async function releaseLauncherRetainedConversation(
     throw new Error(`Launcher retained conversation release failed: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     clearTimeout(timer);
+  }
+}
+
+export async function waitForLauncherManualFinished(descriptorPath: string, owner: LauncherManualTurnOwner, signal?: AbortSignal): Promise<void> {
+  const descriptor = readLauncherBrowserHostDescriptor(descriptorPath);
+  for (;;) {
+    signal?.throwIfAborted();
+    const result = await launcherManualRequest(descriptor, "request-finish", owner, 10_000, signal);
+    if (!result.response.ok) throw new Error(String(result.body.error ?? "Manual finish confirmation failed"));
+    if (result.body.status === "finished") return;
+    await new Promise(resolve => setTimeout(resolve, 750));
   }
 }

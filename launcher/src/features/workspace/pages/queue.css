@@ -1,0 +1,44 @@
+.queue-settings { max-width: 860px; }
+.unsaved-dialog { width: min(460px, calc(100vw - 32px)); box-sizing: border-box; padding: 24px; border: 1px solid var(--color-border-heavy); border-radius: var(--radius-sm); background: var(--color-background-elevated); color: var(--color-text-primary); }
+.unsaved-dialog::backdrop { background: #0009; }
+.unsaved-dialog h2 { margin: 0 0 12px; font-size: 18px; }
+.unsaved-dialog p { margin: 0 0 24px; line-height: 1.6; }
+.workspace-ui :is(.queue-settings, .queue-filters, .queue-pagination) :is(input, select) {
+  height: var(--height-control);
+  padding: 0 10px;
+  border: 1px solid var(--color-border-heavy);
+  border-radius: var(--radius-sm);
+  background: var(--color-background-control);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+.workspace-ui :is(.queue-settings, .queue-filters, .queue-pagination) option { background: var(--color-background-elevated); }
+.workspace-ui :is(.queue-settings, .queue-filters, .queue-pagination) :is(input, select):disabled { color: var(--color-text-disabled); }
+.workspace-ui :is(.queue-settings, .queue-filters, .queue-pagination) :is(input, select):focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
+.queue-settings select { width: 190px; }
+.queue-number { display: flex; align-items: center; gap: 10px; width: 190px; }
+.queue-number input { min-width: 0; width: 132px; }
+.queue-settings-footer { padding: 18px 20px 4px; border-top: 1px solid var(--color-border); }
+.queue-settings-footer p { margin: 0 0 16px; }
+.queue-actions, .queue-toolbar, .queue-filters, .queue-pagination { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.workspace-ui .request-queue { padding: 20px 0; font-size: var(--text-sm); line-height: 1.6; color: var(--workspace-text-description); }
+.workspace-ui .request-queue :is(input, select) { color: var(--workspace-text-description); }
+.queue-feedback { padding-block: 10px; overflow-wrap: anywhere; }
+.queue-feedback:empty { padding: 0; }
+.queue-toolbar { justify-content: space-between; margin-bottom: 16px; }
+.queue-filters { align-items: end; margin-bottom: 16px; }
+.queue-filters label { display: grid; gap: 6px; }
+.queue-filters input { width: 220px; }
+.queue-filters select { max-width: 260px; }
+.queue-table-scroll { overflow-x: auto; }
+.queue-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.queue-table th { font-weight: 500; }
+.queue-table th, .queue-table td { padding: 12px 10px; border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.queue-table th:nth-child(1) { width: 13%; }
+.queue-table th:nth-child(2) { width: 28%; }
+.queue-table th:nth-child(3) { width: 22%; }
+.queue-table th:nth-child(4), .queue-table th:nth-child(5) { width: 11%; }
+.queue-table td small { display: block; margin-top: 6px; }
+.queue-pagination { justify-content: flex-end; margin-top: 16px; }
+.queue-overview { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 20px; margin-bottom: 20px; }
+@media (max-width: 900px) { .queue-table { min-width: 650px; } .queue-settings select, .queue-number { width: 160px; } }

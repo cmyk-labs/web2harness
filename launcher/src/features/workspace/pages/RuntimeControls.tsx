@@ -9,8 +9,10 @@ import { interactionName, modeName, translate } from "../labels";
 import { workspaceBusy, workspaceReady, workspaceTone } from "../status";
 import type { WorkspaceProps } from "../types";
 import { useFeedback } from "../useFeedback";
+import { RequestQueue } from "../RequestQueue";
 
-export function RuntimeControls({
+export function RuntimeControls(props: WorkspaceProps) {
+const {
   api,
   snapshot,
   status,
@@ -20,7 +22,7 @@ export function RuntimeControls({
   refresh,
   updateState,
   setError,
-}: WorkspaceProps) {
+} = props;
   const { active: licensed } = useLicense();
   const language = snapshot.state.language ?? "en";
   const t = translate(language);
@@ -164,6 +166,7 @@ export function RuntimeControls({
           </Row>
         )}
       </div>
+      <RequestQueue {...props} />
       {notice && (
         <Feedback key={notice.id} notice={notice} dismiss={dismissNotice} t={t} />
       )}

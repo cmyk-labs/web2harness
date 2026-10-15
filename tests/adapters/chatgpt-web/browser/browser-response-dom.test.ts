@@ -22,6 +22,19 @@ type Snapshot = {
   traceBlocks: { kind: "answer" | "commentary" | "status"; text: string }[];
 };
 
+test("tool-only handoff completion still requires fresh UI evidence, a bound idle response and no MCP activity", () => {
+  const tracker = new ChatGptCompletionTracker(10);
+  const empty = { responsePresent: true, running: false, currentText: "", currentHtml: "", completionActionVisible: false };
+  expect(tracker.update(empty, 0)).toBeFalse();
+  expect(tracker.update(empty, 100)).toBeFalse();
+  const complete = { ...empty, handoffCompletionVisible: true };
+  expect(tracker.update({ ...complete, running: true }, 110)).toBeFalse();
+  expect(tracker.update({ ...complete, responsePresent: false }, 120)).toBeFalse();
+  expect(tracker.update({ ...complete, externalToolCallsInFlight: true }, 130)).toBeFalse();
+  expect(tracker.update(complete, 140)).toBeFalse();
+  expect(tracker.update(complete, 150)).toBeTrue();
+});
+
 // Execute the production page callback, with only missing Domino browser APIs supplied.
 async function snapshot(html: string): Promise<Snapshot> {
   return (await snapshots(html, []))[0]!;

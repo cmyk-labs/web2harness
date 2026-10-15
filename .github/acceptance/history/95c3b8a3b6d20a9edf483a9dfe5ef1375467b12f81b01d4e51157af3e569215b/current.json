@@ -1,0 +1,671 @@
+{
+  "schemaVersion": 1,
+  "candidate": {
+    "version": "2.1.0",
+    "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+    "gitCommit": "4127ef0da2bd164c342c9943a26eb6b360c7cd08"
+  },
+  "results": [
+    {
+      "caseId": "CAP-001",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "CAP-002",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "CAP-003",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "CAP-004",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "CAP-005",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "CAP-006",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "CAP-008",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "CAP-009",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "CAP-010",
+      "attempt": 1,
+      "status": "pass",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [
+        {
+          "path": "evidence/http-body-budget.json",
+          "sha256": "70174826b6118f456e46998ad3d467646922bb80430082cff5fbc2e870e4463f"
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "caseId": "Q01",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q02",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q03",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q04",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q05",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q06",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q07",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q08",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q09",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q10",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q11",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q12",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q13",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q14",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q15",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q16",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q17",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:08:36.264Z",
+      "evidence": [],
+      "notes": "Complete applicable current-candidate evidence has not yet been reviewed. Partial runs and prior candidates do not establish a pass."
+    },
+    {
+      "caseId": "Q06",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:18:22.033Z",
+      "evidence": [
+        {
+          "path": "evidence/q06-fixtures.json",
+          "sha256": "b00168c8539c384727f73b1e23660f382a302bfb3424f114426533a24110e310"
+        }
+      ]
+    },
+    {
+      "caseId": "Q09",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:18:22.035Z",
+      "evidence": [
+        {
+          "path": "evidence/q09-fixtures.json",
+          "sha256": "b41be65cd3bd9bbb2bc611d1c213319c604a8426f53c29c57c1c16f7aa0d8baf"
+        }
+      ]
+    },
+    {
+      "caseId": "Q10",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:18:22.037Z",
+      "evidence": [
+        {
+          "path": "evidence/q10-fixtures.json",
+          "sha256": "c5d52a7ad82c49a5e20244fb2aa9d4b7161ced792c0067ca1fb9eca150a5a0f4"
+        }
+      ]
+    },
+    {
+      "caseId": "Q11",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:18:22.038Z",
+      "evidence": [
+        {
+          "path": "evidence/q11-fixtures.json",
+          "sha256": "914c08826702a34d66bea0bc04093136d7076dbe0d206abfa6fdf91b678282eb"
+        }
+      ]
+    },
+    {
+      "caseId": "Q16",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:18:22.039Z",
+      "evidence": [
+        {
+          "path": "evidence/q16-fixtures.json",
+          "sha256": "788162f0606a4dabc31b74e66bf45ad7429b270d611e253a832f3ba14d5e9778"
+        }
+      ]
+    },
+    {
+      "caseId": "Q17",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:18:22.040Z",
+      "evidence": [
+        {
+          "path": "evidence/q17-fixtures.json",
+          "sha256": "bf23674ca56e8d0429a0dcdb5de832b39bece8f8919be4b8649f095fb86d2053"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-001",
+      "attempt": 2,
+      "status": "fail",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "automatic-mcp",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:21:23.568Z",
+      "evidence": [
+        {
+          "path": "evidence/cap-001-automatic-01.json",
+          "sha256": "fed4d8d0bf8bd534035a633ac619031c93c76010fb0e805a5647e14894747673"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-002",
+      "attempt": 2,
+      "status": "fail",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "automatic-mcp",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:21:23.570Z",
+      "evidence": [
+        {
+          "path": "evidence/cap-002-automatic-01.json",
+          "sha256": "85450b3f38d6281196c9cddb05c3b38e01240624c9f864fc311ebeb8e9ca60d4"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-001",
+      "attempt": 3,
+      "status": "pass",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:21:23.570Z",
+      "evidence": [
+        {
+          "path": "evidence/cap-001-native-01.json",
+          "sha256": "38d9598ba0ce429d76946146c7cb577cf29dca68b6fd5a14befd0d3d5ed0ee82"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-002",
+      "attempt": 3,
+      "status": "fail",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:21:23.571Z",
+      "evidence": [
+        {
+          "path": "evidence/cap-002-native-01.json",
+          "sha256": "7d80f3bf1f624d9028ad7b74e44d2fc270cad11206eea305a07e17a6c0201970"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-001",
+      "attempt": 4,
+      "status": "pass",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:21:23.572Z",
+      "evidence": [
+        {
+          "path": "evidence/cap-001-native-02.json",
+          "sha256": "5bc2cf488815616d0af24ac2f25d722660db08b0075ef46d7d2293dd749dab3f"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-002",
+      "attempt": 4,
+      "status": "pass",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:21:23.573Z",
+      "evidence": [
+        {
+          "path": "evidence/cap-002-native-02.json",
+          "sha256": "09e42e71d5cf7ef39e82a797cc1cf7f98fee3a093efaef19945cf864ae8cbe04"
+        }
+      ]
+    },
+    {
+      "caseId": "Q15",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "not-invoked",
+      "effort": "not-invoked",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T16:32:07.653Z",
+      "evidence": [
+        {
+          "path": "evidence/q15-dev-settings.json",
+          "sha256": "6199aa03c9aa03e447947bc53376b06750efda5f0d6dfbc3f912da95fec34ad9"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-003",
+      "attempt": 2,
+      "status": "fail",
+      "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "mixed: parent medium / children high",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:01:38.286Z",
+      "evidence": [
+        {
+          "path": "evidence/cap003-native-01-failed.json",
+          "sha256": "22a5f3079d06a8f801f809ec2b65ed234cecde05e010b80949cfd90614116e03"
+        }
+      ]
+    }
+  ]
+}

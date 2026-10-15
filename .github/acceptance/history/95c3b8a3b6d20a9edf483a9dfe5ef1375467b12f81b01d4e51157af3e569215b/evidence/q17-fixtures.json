@@ -1,0 +1,18 @@
+{
+  "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "cases": [
+    "Q17"
+  ],
+  "status": "pass",
+  "layer": "fixture",
+  "summary": "Current-candidate diagnostic and export fixtures passed request/trace correlation, redaction of credentials and tool bodies, archive manifests and checksums, malformed or missing sources and partial collection. The 325-check renderer fixture also passed log filtering/paging/export controls. This receipt covers fixture exports; CAP-008 native save-dialog acceptance remains separate.",
+  "tests": [
+    "launcher/tests/common/diagnostic-bundle.test.cjs",
+    "tests/diagnostics.test.ts",
+    "launcher/scripts/smoke-workspace.mjs"
+  ],
+  "rawEvidence": {
+    "path": "output/2026-10-14-release-candidate/verify-final.log",
+    "sha256": "fbba6ee3e42d0f3c99b93f095e1124f1f348ad299d671123365085fbaf7b9b52"
+  }
+}

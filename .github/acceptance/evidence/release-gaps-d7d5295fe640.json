@@ -1,0 +1,272 @@
+{
+  "schemaVersion": 2,
+  "kind": "scoped-change-and-execution-evidence",
+  "recordedAt": "2026-10-15T08:28:44.042Z",
+  "targetSourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+  "scope": "One quit-cleanup repair plus remaining desktop, fixture and non-install artifact checks. No commit, push, tag, installation or publication.",
+  "reviewedChanges": [
+    {
+      "path": "launcher/electron/browser/browser-host.cjs",
+      "before": "b80c379dea7adb3704c4a6f07eb45c893ce62bee69f3c3219ef5144eff79a621",
+      "after": "b696b094cdfd05db0c1bec6f5e51b84f8e6780b2bed25850b723abe878f26106",
+      "reason": "Only teardown guards changed: capture released view.webContents before closing home/turn/auth views and before auth-home refresh. Missing/already destroyed content no longer interrupts cleanup. Live close, owner cancellation and waiter resolution remain unchanged; no admission, prompt, model, connector, budget or send path changed. Three reproduced regressions, 159 related checks, full verification and real DEV graceful close/restart support this review."
+    },
+    {
+      "path": "launcher/tests/browser/browser-host.test.cjs",
+      "before": "375e6423536c58324f0237762efdbbeb5467a4b3216be6a816f6f25adcaedd2f",
+      "after": "cfba4f48e8e101a52e5a1955156cbd0fb9dbe192b294abadd822859d7ce09d45",
+      "reason": "Three new targeted regressions reproduce absent WebContents, remaining live-view closure/waiter cleanup, auth-home release and cancelled turn removal. Existing assertions and evidence oracles remain intact."
+    }
+  ],
+  "verified": {
+    "quitRegression": {
+      "passed": 159,
+      "reproducedBeforeFix": 3,
+      "realDevGracefulExit": true,
+      "restart": true
+    },
+    "integrated": {
+      "corePassed": 1161,
+      "coreSkipped": 53,
+      "desktopPassed": 575,
+      "desktopSkipped": 4,
+      "typechecks": true,
+      "audits": true,
+      "build": true,
+      "runtimeSmoke": true
+    },
+    "queueDesktop": {
+      "layoutLanguageObservations": 12,
+      "scope": "Normal/maximized actual DEV; 900-wide renderer emulation; empty active sessions, matching history groups, no-match search; composite cancellation/arrival/mixed-model branches remain separate."
+    },
+    "settings": {
+      "passed": true,
+      "sourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+      "persisted": {
+        "maxConcurrent": 1,
+        "queueTimeoutMinutes": 10,
+        "minSendIntervalSeconds": 4
+      },
+      "revision": 20,
+      "restored": {
+        "maxConcurrent": 1,
+        "queueTimeoutMinutes": 15,
+        "minSendIntervalSeconds": 3
+      },
+      "firstAttempt": "Driver closed before the async save settled. The corrected flow asserted memory, scheduler and disk before closing; no product persistence failure."
+    },
+    "logs": {
+      "sourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+      "passed": true,
+      "observations": [
+        {
+          "check": "actual-queue-model-search-and-correlated-log-navigation",
+          "passed": true
+        },
+        {
+          "check": "logs-page-copy-pause-latest",
+          "passed": true,
+          "pageSize": 25
+        },
+        {
+          "check": "logs-page-size-persistence",
+          "passed": true
+        },
+        {
+          "check": "logs-English-narrow",
+          "passed": true,
+          "bounds": {
+            "width": 900,
+            "bodyWidth": 900,
+            "left": 272,
+            "right": 880
+          }
+        }
+      ],
+      "preservedDriverErrors": [
+        "traceId is not the queue job ID",
+        "wait for active-license UI and completed preference save",
+        "English tab is Logs; no product defect inferred from selector timeout"
+      ]
+    },
+    "performance": {
+      "records": 100000,
+      "inputMiB": 81.72,
+      "firstIndexMs": 8899.2,
+      "nextPageMs": 2.98,
+      "nextPageSourceBytes": 0,
+      "nextPageCacheBytes": 90800,
+      "firstSearchMs": 587.64,
+      "searchMatches": 20000,
+      "searchNextPageMs": 2.21,
+      "repeatedSearchMs": 22.36,
+      "additionalSearchScans": 0,
+      "pageRecords": 100,
+      "pageBytes": 90800,
+      "indexedRows": 100000,
+      "cachedMiB": 86.58,
+      "peakRssMiB": 289.54
+    },
+    "calendar": {
+      "passed": true,
+      "rows": [
+        {
+          "issuedAt": "2026-01-31T08:15:30.000Z",
+          "expiresAt": "2026-02-28T08:15:30.000Z",
+          "lastMillisecondValid": true,
+          "exactExpiryRejected": true
+        },
+        {
+          "issuedAt": "2028-01-31T08:15:30.000Z",
+          "expiresAt": "2028-02-29T08:15:30.000Z",
+          "lastMillisecondValid": true,
+          "exactExpiryRejected": true
+        },
+        {
+          "issuedAt": "2028-02-29T08:15:30.000Z",
+          "expiresAt": "2028-03-29T08:15:30.000Z",
+          "lastMillisecondValid": true,
+          "exactExpiryRejected": true
+        },
+        {
+          "issuedAt": "2026-12-31T08:15:30.000Z",
+          "expiresAt": "2027-01-31T08:15:30.000Z",
+          "lastMillisecondValid": true,
+          "exactExpiryRejected": true
+        }
+      ],
+      "scope": "Client verification of signed calendar boundaries. Calendar duration arithmetic belongs to the separate issuer; historical issuer tests remain separate evidence."
+    },
+    "artifact": {
+      "version": "2.1.0",
+      "sourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+      "platform": "win32",
+      "arch": "x64",
+      "file": "web2harness-2.1.0-win-x64.exe",
+      "bytes": 232987606,
+      "sha256": "2423ad903397e27af4e68778b29b21841b7a353016f1e90712afb8ebf5d85066",
+      "runtimeManifestSha256": "5620170d5742c5f0bd11c746a3eba0950afe32f46cbc5b5807561571ef316ceb",
+      "productionPublicKeys": true,
+      "embeddedBunFixtures": {
+        "pass": 67,
+        "fail": 0
+      },
+      "installationAcceptance": "installation/upgrade/uninstall deferred by user; not executed",
+      "published": false,
+      "committed": false,
+      "pushed": false,
+      "inventory": {
+        "passed": true,
+        "sourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+        "artifactSha256": "2423ad903397e27af4e68778b29b21841b7a353016f1e90712afb8ebf5d85066",
+        "asarEntries": 1244,
+        "verifiedRuntimeFiles": 3947,
+        "forbiddenFileCount": 0,
+        "extractedAppMatchesBuild": true,
+        "installationExecuted": false
+      },
+      "startup": {
+        "unactivated": true,
+        "protectedSetupRejected": true,
+        "cleanExit": true,
+        "profile": "isolated development",
+        "installed": false
+      },
+      "pinnedKeys": true,
+      "environmentTestKeyRejected": true
+    }
+  },
+  "boundaries": {
+    "productionConfigAuthHashesUnchanged": 4,
+    "baselineProcessesSame": 79,
+    "baselineProcessesExited": 23,
+    "ownedDevExits": 10,
+    "otherExits": 13,
+    "note": "Non-DEV exits include a pre-existing Codex process and helpers; no claim that every original process survived. Only the precisely identified failed DEV launcher was forcibly stopped. No action targeted other original processes; differences are retained rather than restored."
+  },
+  "limitations": [
+    "Installer/upgrade/uninstall explicitly deferred by user; not passing and not publication approval.",
+    "Windows x64 actual candidate only; other native targets are unavailable without their build environments.",
+    "Computer Use native pipe unavailable; native Save/Cancel remains unexecuted.",
+    "Historical MCP empty handoff and current native first-send timeout remain unresolved. Subsequent success cannot erase either failure.",
+    "Existing unrelated live observations remain historical, not a fresh all-mode external readiness claim."
+  ],
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-release-gap-completion/quit-regression-before.log",
+      "sha256": "149e7ccad2312a8ab6c03527109cceb65c68ef9c696c1cd882df4621b9056590"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/quit-regression-reproduced.log",
+      "sha256": "f30f88eadf8428c58d5bdcfff5a4a7aaeff61dfb961abc667d281f8d31120a28"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/quit-regression-after.log",
+      "sha256": "c8e919db195e4213c70146fc7e266bc5213b5edb7e4bdcca17fb6e34c31fd8cd"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/quit-fixed-result.json",
+      "sha256": "89f3b8d930a779c267b3143564f5199f197c9159a5541bede522cfc888126ee3"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/verify.log",
+      "sha256": "7db70e86ae91eb55a9370dacdf4870ab0dfc7f55b38db46931ddab3e22d0c5e6"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/desktop-observations.private.json",
+      "sha256": "8dc8c6176937a7ab47ff3edff36a51a6b884271c45f9b5ae0e87e479b50631c5"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/settings-probe.private.json",
+      "sha256": "1cd8385376310ae2e1b56d98288eab660330e8e4770c5cf7ff26172057daa4bf"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/settings-persistence.json",
+      "sha256": "a43d8797ea381613b73862de5550258400eb31cff0a7cdeebb93243975a78401"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/logs-desktop.json",
+      "sha256": "c9f2f5ba765b5fff78f9e63019afdcfac26bbfb665b2fab06d81b3ecb1ed1219"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/logs-desktop-partial.json",
+      "sha256": "8908b1a36aab7ec6ac72a8b521a7f85c4b38a3d72ff82a3838edb1b82a5a8c33"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/logs-supplement.json",
+      "sha256": "0efa3fc57f1029d7a7ada48d01395e789a23b774f7e34ba185c7a376cbb21a65"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/benchmark.json",
+      "sha256": "ad5a0ef59f148e7c8b30e48d29687730d58da050ab7e4944dce1c2005cce6c1d"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/calendar-check.json",
+      "sha256": "6b368a7eefc6fb3d13a7fa5ae10092eca4031750b5b993b8a44006655411f8c8"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/windows-package-resume.log",
+      "sha256": "c70e765b8238dab543962e66ed0c4a8a25c1dbd0cb13fb79a07bf5603760bae9"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/artifacts/candidate.json",
+      "sha256": "1701ef6ac4d8045f6ffa0bcabf3e0a1ff3d9ce33ecc8abeab9121ff8fd247984"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/artifact-inventory.json",
+      "sha256": "61fbe6a5150c3ba4439d650ac79ef1e282407c8767a7673d1c6441829a8b19ac"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/artifact-startup.json",
+      "sha256": "7ac8506d9eaed944cab188cc21fedf6e6d49b5635ac23c26bac2b76f0282446e"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/pinned-runtime-license.json",
+      "sha256": "3ddfe43a2173a26fc1e235866ca3b0c408226239bc22fc947009867796697993"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/boundary-process-audit.private.json",
+      "sha256": "8ebb1b7ce81478e7d4a1567492e1422cf94ff209947cf88ad64294140d466fc0"
+    }
+  ]
+}

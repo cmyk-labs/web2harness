@@ -18,6 +18,7 @@ This manual follows the application lifecycle: prepare an installation, connect 
 - [About the project](#about)
 - [Updates](#update)
 - [Disconnection and removal](#disconnect-and-uninstall)
+- [Manage the request queue](#manage-request-queue)
 
 <a id="requirements"></a>
 
@@ -337,3 +338,40 @@ For a Windows package, finish tasks, exit through the tray, and run the platform
 If ownership, route restoration, or file removal cannot be verified, the uninstaller reports failure and stops further removal. Resolve that condition and retry. For source or other platforms, first remove the Codex integration, then quit and remove the application using its normal installation procedure. Identify the active data paths in the [reference](reference.md) before considering any data deletion; deleting program files alone does not prove that routing or local data was removed.
 
 Local uninstall does not delete ChatGPT history or revoke remote connectors, tunnels, or API keys. Remove those separately in the appropriate account settings if they are no longer needed. At completion, verify that Codex uses the intended route and that the chosen local-data retention policy was honored.
+
+<a id="manage-request-queue"></a>
+
+## Manage the request queue
+
+**Runtime parameters** is an independent page. Edit concurrent Web turns, queue timeout and minimum send interval, then save explicitly; defaults are four, 15 minutes and three seconds. The UI reports saved/applied status. Unlicensed users can inspect values but cannot save or resume dispatch. See the [parameter rules](reference.md#request-scheduling).
+
+Leaving an edited form offers **Save and leave**, **Discard changes**, or **Keep editing** (also Escape). Invalid settings cannot be saved; save failures preserve the draft. Automatic browser tasks leave edited settings visible and offer **View task**. Drafts are retained locally in this application profile across renderer/window restarts where storage is available. A draft based on an older saved revision cannot overwrite newer settings; discard and reopen to edit the current values. If saving succeeds but live application fails, the page reports that distinction and stays open. Hiding or closing the window keeps the existing background-task behavior.
+
+Overview shows active and waiting counts. **Runtime controls → Request queue** provides state, session and keyword filters, with 25/50/100 rows per page. Session choices include only sessions with tasks matching the selected state and submitted search, across all pages. Finished-only sessions appear under Finished, and an empty result disables the session selector. Changing state or submitting a search resets the session selection. The first page updates automatically; later pages keep result membership stable until you refresh or return to the first page. Model labels preserve the requested family and Sol/Pro selection, with effort shown separately; older retained receipts keep their original labels. Pause new dispatches, cancel waiting requests or stop individual work. The log action opens that request's related logs. Unknown sends and rate limits do not retry automatically; investigate before confirming recovery.
+
+After upgrading MCP Bridge, refresh the current connector's definitions. A registered batch ends its Web response before Codex executes it; real results enter a subsequent Web request. Zero Risk requires paste, send and Sent confirmation for every round, followed by explicit confirmation that the Web response has ended before slot release and tool delivery. It does not inspect or operate the Web DOM.
+
+In Automatic mode, a normal completed reply ends the model round without an extra completion-tool call. Tool execution and a parent's wait for children do not occupy its Web slot. A further model request queues again and reuses its retained conversation when available. Waiting conversations are protected from ordinary idle eviction, with a separate 24-hour retention bound and a 32-page cache; the configurable Web concurrency limit stays unchanged. Cache exhaustion is reported explicitly. Zero Risk still submits replies through its connector and requires your completion confirmation.
+
+### Standalone managed Chrome
+
+Standalone CLI runtimes sharing the same canonical browser session path join one queue owner across processes. They share scheduling defaults, capacity and send spacing; Launcher has its own independent queue and controls.
+
+For an already configured `managed-chrome` profile, replace `PATH` with its Web2Harness home. Status reads saved receipts and does not verify that an owner is alive. Stop that profile's runtime normally before configuring all three values; they apply on its next start.
+
+```bash
+web2harness --home PATH browser queue status
+web2harness --home PATH browser queue configure --concurrency 4 --timeout-minutes 15 --send-interval-seconds 3
+```
+
+After a crash, lost owner, rate limit or uncertain send, inspect status and resolve the cause. Verify that the old runtime and its owned browsers have stopped before explicitly recovering:
+
+```bash
+web2harness --home PATH browser queue recover --confirm-browser-stopped
+```
+
+Recovery does not stop processes or resend requests. It marks unfinished receipts failed with an unknown outcome and clears the pause; there is no automatic takeover, recovery or replay. Retained request IDs remain protected against re-execution. Start new work after recovery. See the [standalone command contracts](reference.md#standalone-request-queue) for paths and limits.
+
+### HTTP body overload
+
+HTTP 503 `request_body_overloaded` means this request would exceed the service's separate 256 MiB body allocation estimate. Wait for pending requests to settle before retrying a rejected body; increasing Web slots does not raise this budget. HTTP 413 reports a per-request encoded/decoded size or nesting violation. The body estimate is not a hard process-memory cap, and it does not authorize retrying an uncertain browser send. See [HTTP body limits](reference.md#http-body-limits).

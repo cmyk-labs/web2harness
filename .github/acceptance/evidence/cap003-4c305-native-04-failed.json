@@ -1,0 +1,25 @@
+{
+  "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "loadedSourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "runtimeSha256": "1f64954d7ad32218fe73fb7a2b530e0cb5a506ded5d520d5aa70c9ab70ef4222",
+  "cases": [
+    "CAP-003"
+  ],
+  "status": "fail",
+  "layer": "authenticated-dev",
+  "summary": "The corrected driver established an actual read-only parent with on-request approvals and auto_review. The request was rejected before browser submission with Unsupported Codex tool type: web_search. No child or native tool execution occurred; all 551 candidate-copy file hashes remained unchanged. The hosted-search declaration is an unsupported route capability, not a multi-agent pass. Subsequent explicit configuration must be recorded separately.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-acceptance-resume/cap003-status.json",
+      "sha256": "48f6e0187bae3d7b05aa6b1e4229bcbaef7849e6ebd8c3f788041e58c5ebf4e3"
+    },
+    {
+      "path": "output/2026-10-15-acceptance-resume/cap003-audit.private.json",
+      "sha256": "228e80fe627954a72f1c5638e9477543a7e8657df9f72bb801de8ddcaf5cad89"
+    },
+    {
+      "path": "output/2026-10-15-acceptance-resume/cap003-native-01.private.log",
+      "sha256": "b5014755048459709ded178cb7cb3e7d65d13a6fd7efe1c8b6ee2c5fba167c3a"
+    }
+  ]
+}

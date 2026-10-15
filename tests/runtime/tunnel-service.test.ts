@@ -138,7 +138,7 @@ describe("tunnel launchd ownership", () => {
     expect(command).toBe(
       `"${runtime.replaceAll("\\", "\\\\")}" `
       + `"${join(root, "Program Files", "app", "cli.js").replaceAll("\\", "\\\\")}" `
-      + '"mcp" "--contract" "native" "--broker-socket" "\\\\\\\\.\\\\pipe\\\\web2harness-test"',
+      + '"mcp" "--protocol" "web2harness-handoff-v1" "--contract" "native" "--broker-socket" "\\\\\\\\.\\\\pipe\\\\web2harness-test"',
     );
     expect(command).not.toContain("cmd.exe");
     expect(existsSync(join(root, "bin", "mcp-launcher.cmd"))).toBe(false);
@@ -146,6 +146,8 @@ describe("tunnel launchd ownership", () => {
       runtime,
       join(root, "Program Files", "app", "cli.js"),
       "mcp",
+      "--protocol",
+      "web2harness-handoff-v1",
       "--contract",
       "native",
       "--broker-socket",

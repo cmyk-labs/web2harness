@@ -1,0 +1,452 @@
+{
+  "schemaVersion": 2,
+  "candidate": {
+    "version": "2.1.0",
+    "sourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+    "gitCommit": "4127ef0da2bd164c342c9943a26eb6b360c7cd08"
+  },
+  "catalogHash": "de6aeb1b3d50200fa192f2e7cf6ec1e6a2d48590ffac293af555d544f77b647b",
+  "archives": [
+    {
+      "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/current.json",
+      "sha256": "888d69d50b736f247cc98faf0a8a67b5248a78c0207e1e8126c5b683303bf9cc"
+    },
+    {
+      "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/current.json",
+      "sha256": "718a9b3d2a579d137c721428609e437da2545cdb995fa20bbbb7df922376c6b5"
+    },
+    {
+      "path": "history/ff736b918657e64c3fcf3f31c2fa01a0a3b94edf2938fb94823861415647d754/before-gap-completion.json",
+      "sha256": "cc846c9e08f5d2ea1bb68d8e8c9f8256a1c1adfe235a030f432973b7b53d94ad"
+    },
+    {
+      "path": "history/d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9/before-owner-native-export.json",
+      "sha256": "c616c97993e920830a900cd715b9ded8107320cfa447fee0b1cacf53e3b9c7ad"
+    }
+  ],
+  "executions": [
+    {
+      "path": "executions/legacy-5bb51e-cap12-native-11.json",
+      "sha256": "34997aa45c3f3cceb5f547b85ba2d07d01f6c06fed8b9ecdba68758488d22c61"
+    },
+    {
+      "path": "executions/legacy-5bb51e-cap3-07-failed.json",
+      "sha256": "302b593c05cfec3adccbc6dbe320835bc2323ef86ddac39a2156f7593cf77e97"
+    },
+    {
+      "path": "executions/legacy-5bb51e-cap3-08.json",
+      "sha256": "c7e1819f0bdb0de47656e11010d1013d83791430deac357fc57c56acb2f024d9"
+    },
+    {
+      "path": "executions/legacy-5bb51e-fixtures.json",
+      "sha256": "8230397e7e42d94cd94ab57fea0778e885a283e8206171fa8c357cc3af1014d3"
+    },
+    {
+      "path": "executions/legacy-4c305-cap004-complete.json",
+      "sha256": "ec526966fcade21a61817d446a74f909c196fc39015dbbdf138c707b4ad2eaea"
+    },
+    {
+      "path": "executions/reviewed-5bb51e-verify02-ui01-fixtures.json",
+      "sha256": "a4c12ff3c1ed7f2301e079c1fad65b5c2b9eee936c7f82fb8163ca15d872ea3e"
+    },
+    {
+      "path": "executions/reviewed-e844-main-three-02-independent-checks.json",
+      "sha256": "7fa6e249a7a3a918a70061aaa57bd7147873a5bdef38cde7ac8b6b9ad5262272"
+    },
+    {
+      "path": "executions/reviewed-e844-main-three-01-failed.json",
+      "sha256": "3cee805d652fe850b0eeba3aaea3016d4944df038f497d8182fd1f2c507e0f3c"
+    },
+    {
+      "path": "executions/reviewed-5bb-native-11-license.json",
+      "sha256": "f3495ccdd8154dacf76c42339691b091ff080c1c943bec18143ea8166be07565"
+    },
+    {
+      "path": "executions/release-gaps-d7d5295fe640.json",
+      "sha256": "546a18fcd1380db89c7184bd04634ba9f99e905119a8e27f5e7e9bd95a3727a6"
+    },
+    {
+      "path": "executions/native-first-send-d7d5295fe640.json",
+      "sha256": "5dd731819774973437c9289aa0110f906fd927bba730a853315b94ea33c4931c"
+    },
+    {
+      "path": "executions/native-export-owner-d7d5295fe640.json",
+      "sha256": "eaf53e9524b9eac2b79046c63c1e7b99206129f1cf3f5bd848625c34ead37e68"
+    }
+  ],
+  "reviews": [
+    {
+      "path": "reviews/03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a/legacy-5bb51e-cap12-native-11-to-03322c18808e.json",
+      "sha256": "fbf7e203e6e0227309f474b35148562548d346344c168d0cfe7fff26514fd22b"
+    },
+    {
+      "path": "reviews/03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a/legacy-5bb51e-cap3-08-to-03322c18808e.json",
+      "sha256": "54b5c0e8e0ee427f976de8cb4b5068a44a1b2a2e4df6530712530f5d2f1fd675"
+    },
+    {
+      "path": "reviews/03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a/legacy-5bb51e-fixtures-to-03322c18808e.json",
+      "sha256": "62abd96b83cd0dfc038d38073d6e2e6ef157356b4fcf923e74dee480046da547"
+    },
+    {
+      "path": "reviews/03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a/legacy-4c305-cap004-complete-to-03322c18808e.json",
+      "sha256": "2c7031c6caf65316f44ac98e0ee227cfdca652a7141311b3cfe42d4d438b8fba"
+    },
+    {
+      "path": "reviews/03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a/reviewed-5bb51e-verify02-ui01-fixtures-to-03322c18808e.json",
+      "sha256": "e548a48f192bf72b5a59a2245e0a5281007286c7f7dc76686a7d024848d44ce4"
+    },
+    {
+      "path": "reviews/03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a/reviewed-e844-main-three-02-independent-checks-to-03322c18808e.json",
+      "sha256": "a1a847fa07491acc01d93c4755cbb4fd9ace79fe25b4fe0b90591fff6512be38"
+    },
+    {
+      "path": "reviews/03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a/reviewed-5bb-native-11-license-to-03322c18808e.json",
+      "sha256": "545c04ad097397aa2e711a5516dc99640a607540e26a26a286b337b7504f1250"
+    },
+    {
+      "path": "reviews/ff736b918657e64c3fcf3f31c2fa01a0a3b94edf2938fb94823861415647d754/legacy-5bb51e-cap12-native-11-to-ff736b918657.json",
+      "sha256": "dd265fd293d585abce2319f59f59eef29cc2571c8fb2ad17b2aeb0c485ec8fd1"
+    },
+    {
+      "path": "reviews/ff736b918657e64c3fcf3f31c2fa01a0a3b94edf2938fb94823861415647d754/legacy-5bb51e-cap3-08-to-ff736b918657.json",
+      "sha256": "0a2e89df02687d4352ccad9c825eca771bddd1816951e13e7f6e2ac3737ece9b"
+    },
+    {
+      "path": "reviews/ff736b918657e64c3fcf3f31c2fa01a0a3b94edf2938fb94823861415647d754/legacy-4c305-cap004-complete-to-ff736b918657.json",
+      "sha256": "4e94f1830b4d5debff22c12973141971df370d43f0df647d17945a3bc21ea5bb"
+    },
+    {
+      "path": "reviews/ff736b918657e64c3fcf3f31c2fa01a0a3b94edf2938fb94823861415647d754/reviewed-5bb51e-verify02-ui01-fixtures-to-ff736b918657.json",
+      "sha256": "063e2811e7e4e3d16709bb4edc7ba4a06faf15a0a980b059cb289fb5d759a2ae"
+    },
+    {
+      "path": "reviews/ff736b918657e64c3fcf3f31c2fa01a0a3b94edf2938fb94823861415647d754/reviewed-5bb-native-11-license-to-ff736b918657.json",
+      "sha256": "7478d5b2f343424f201c03e1fd5a746ecab186e417cd51b41391163028b81e94"
+    },
+    {
+      "path": "reviews/ff736b918657e64c3fcf3f31c2fa01a0a3b94edf2938fb94823861415647d754/reviewed-e844-main-three-02-independent-checks-to-ff736b918657.json",
+      "sha256": "3b07fd496275e5681c5dbdb54eed1c64c33ef5140295886c5c1a408f032bd1f4"
+    },
+    {
+      "path": "reviews/ff736b918657e64c3fcf3f31c2fa01a0a3b94edf2938fb94823861415647d754/legacy-5bb51e-fixtures-to-ff736b918657.json",
+      "sha256": "e8ddbe2a0c013518e7fc7b20169b4b71a5d1cd22c1cfbb24431db06a8b6c92ff"
+    },
+    {
+      "path": "reviews/d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9/legacy-5bb51e-cap12-native-11-to-d7d5295fe640.json",
+      "sha256": "2878be1438acd96668302583fc6eaee71f2abc7e4ce9d721563f2955f291d3de"
+    },
+    {
+      "path": "reviews/d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9/legacy-5bb51e-cap3-08-to-d7d5295fe640.json",
+      "sha256": "3e85133557a7b77453118d6cbb48882026efcf884ab471635300afaff807876e"
+    },
+    {
+      "path": "reviews/d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9/legacy-4c305-cap004-complete-to-d7d5295fe640.json",
+      "sha256": "8878af0fd85ca9cb54820ddac15bf05efaae39b9f1014c173fa9e4d8b3e6facf"
+    },
+    {
+      "path": "reviews/d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9/reviewed-5bb51e-verify02-ui01-fixtures-to-d7d5295fe640.json",
+      "sha256": "4788e03904f05d630e9db5ac930fdf57d11e47a0122fd0db6f8577636f6a7ae1"
+    },
+    {
+      "path": "reviews/d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9/reviewed-5bb-native-11-license-to-d7d5295fe640.json",
+      "sha256": "62bc47c59edece9a3a93bb40aa4f8b3d4efcc785015aecb1b20a8f8a5c66a358"
+    },
+    {
+      "path": "reviews/d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9/reviewed-e844-main-three-02-independent-checks-to-d7d5295fe640.json",
+      "sha256": "b8349788aa9264064a32573828eda87b5882333406d92f93831b5f2619205bcc"
+    },
+    {
+      "path": "reviews/d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9/legacy-5bb51e-fixtures-to-d7d5295fe640.json",
+      "sha256": "905daebe54824f8b198cc3e3cf9adda331856cdb92cb82dad8220f1b462a7376"
+    }
+  ],
+  "issues": [
+    {
+      "id": "mcp-handoff-20261014-unclassified",
+      "at": "2026-10-14T15:12:05.079Z",
+      "status": "open",
+      "checkIds": [
+        "queue.mcp-agents",
+        "mcp.discovery",
+        "mcp.reply-reuse"
+      ],
+      "reason": "Original missing handoff/empty response is not explained by the later successful identical candidate; procedure error and transport observation are preserved separately. No confirmed product fix or external cause exists.",
+      "evidence": [
+        {
+          "path": "evidence/history-20261015-mcp-unresolved.json",
+          "sha256": "1c0c27f01f4d4f7ea7439a69e0af4d8139d29b8eeee5fd590161c5fcef737ec6"
+        }
+      ]
+    },
+    {
+      "id": "queue-model-family-label-20261015",
+      "at": "2026-10-15T06:24:06.804Z",
+      "status": "open",
+      "checkIds": [
+        "queue.desktop",
+        "queue.mixed-models"
+      ],
+      "reason": "Historical metadata defect retained for audit. Source fix and scoped admission/query/renderer fixtures now pass. Formal composite closure awaits the already-outstanding actual desktop/mixed-model observations; this does not require rerunning four model routes or parent-plus-three for the label fix.",
+      "evidence": [
+        {
+          "path": "evidence/history-20261015-queue-model-label-defect.json",
+          "sha256": "cf9d2147dce609eea7bd153088df0ec5c00bd0a2506594cafc5e7591f098bc8e"
+        },
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        },
+        {
+          "path": "evidence/release-gaps-d7d5295fe640.json",
+          "sha256": "49d7644ff061d59086e41f45ca0a33a910b3609a38002229ba754c2a2f3a7592"
+        }
+      ]
+    },
+    {
+      "id": "native-first-send-20261015",
+      "at": "2026-10-15T08:01:26.777Z",
+      "status": "open",
+      "checkIds": [
+        "queue.native-agents"
+      ],
+      "reason": "Actual first send outcome unknown; login/preparation/selection passed, upstream content unobserved and page evidence timed out. Not established as local network failure. No repeat until diagnosed.",
+      "evidence": [
+        {
+          "path": "evidence/native-first-send-d7d5295fe640.json",
+          "sha256": "f40c388751839e228fd39f77ada254f3b82e318e55a7b7b1554856305b545316"
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "checkId": "native.read-patch",
+      "status": "covered",
+      "runId": "legacy-5bb51e-cap12-native-11",
+      "reviewId": "legacy-5bb51e-cap12-native-11-to-d7d5295fe640"
+    },
+    {
+      "checkId": "native.same-cell",
+      "status": "covered",
+      "runId": "legacy-5bb51e-cap12-native-11",
+      "reviewId": "legacy-5bb51e-cap12-native-11-to-d7d5295fe640"
+    },
+    {
+      "checkId": "native.readonly-agents",
+      "status": "covered",
+      "runId": "legacy-5bb51e-cap3-08",
+      "reviewId": "legacy-5bb51e-cap3-08-to-d7d5295fe640"
+    },
+    {
+      "checkId": "models.routes",
+      "status": "covered",
+      "runId": "legacy-4c305-cap004-complete",
+      "reviewId": "legacy-4c305-cap004-complete-to-d7d5295fe640"
+    },
+    {
+      "checkId": "models.picker",
+      "status": "covered",
+      "runId": "legacy-4c305-cap004-complete",
+      "reviewId": "legacy-4c305-cap004-complete-to-d7d5295fe640"
+    },
+    {
+      "checkId": "models.contracts",
+      "status": "covered",
+      "runId": "legacy-4c305-cap004-complete",
+      "reviewId": "legacy-4c305-cap004-complete-to-d7d5295fe640"
+    },
+    {
+      "checkId": "accounting.sends",
+      "status": "covered",
+      "runId": "legacy-4c305-cap004-complete",
+      "reviewId": "legacy-4c305-cap004-complete-to-d7d5295fe640"
+    },
+    {
+      "checkId": "context.compaction",
+      "status": "needs-evidence",
+      "reason": "Actual compaction/continuation, purpose receipts, spacing and ownership still require one shared flow; catalog budgets and fixture recovery do not establish live compaction."
+    },
+    {
+      "checkId": "accounting.recovery",
+      "status": "covered",
+      "runId": "reviewed-5bb51e-verify02-ui01-fixtures",
+      "reviewId": "reviewed-5bb51e-verify02-ui01-fixtures-to-d7d5295fe640"
+    },
+    {
+      "checkId": "accounting.ui",
+      "status": "covered",
+      "runId": "reviewed-5bb51e-verify02-ui01-fixtures",
+      "reviewId": "reviewed-5bb51e-verify02-ui01-fixtures-to-d7d5295fe640"
+    },
+    {
+      "checkId": "license.desktop",
+      "status": "needs-review",
+      "reason": "Earlier isolated activation/read-only IPC evidence exists; review exact lifecycle/expiry-while-waiting coverage and cumulative changes before selecting a minimal desktop batch."
+    },
+    {
+      "checkId": "license.contracts",
+      "status": "covered",
+      "runId": "release-gaps-d7d5295fe640"
+    },
+    {
+      "checkId": "license.native",
+      "status": "covered",
+      "runId": "reviewed-5bb-native-11-license",
+      "reviewId": "reviewed-5bb-native-11-license-to-d7d5295fe640"
+    },
+    {
+      "checkId": "license.automatic-mcp",
+      "status": "covered",
+      "runId": "reviewed-e844-main-three-02-independent-checks",
+      "reviewId": "reviewed-e844-main-three-02-independent-checks-to-d7d5295fe640"
+    },
+    {
+      "checkId": "license.manual-mcp",
+      "status": "needs-evidence",
+      "reason": "Manual licensed tool/file task needs its own observed confirmation flow; automatic mode cannot substitute."
+    },
+    {
+      "checkId": "license.artifact",
+      "status": "covered",
+      "runId": "release-gaps-d7d5295fe640"
+    },
+    {
+      "checkId": "diagnostics.desktop",
+      "status": "covered",
+      "runId": "release-gaps-d7d5295fe640"
+    },
+    {
+      "checkId": "diagnostics.native-export",
+      "status": "needs-evidence",
+      "reason": "Owner completed real Windows Save and Cancel for the 24-hour range. The supplied actual ZIP (19990 records) passed CRC, manifest hashes, time bounds, redaction and fault correlation. Evidence: native-export-owner-d7d5295fe640. Only all-retained/custom native range observations remain unexecuted under the composite catalog; preserve existing range fixtures and do not repeat the passed 24-hour Save/Cancel."
+    },
+    {
+      "checkId": "diagnostics.contracts",
+      "status": "covered",
+      "runId": "legacy-5bb51e-fixtures",
+      "reviewId": "legacy-5bb51e-fixtures-to-d7d5295fe640"
+    },
+    {
+      "checkId": "diagnostics.performance",
+      "status": "covered",
+      "runId": "release-gaps-d7d5295fe640"
+    },
+    {
+      "checkId": "queue.desktop",
+      "status": "needs-evidence",
+      "reason": "Actual bilingual normal/maximized/narrow empty/matching session filters, actual GPT-6 medium metadata/search and correlated logs now observed. Current host/renderer fixtures cover cross-page facets and arrivals. Remaining composite live cancellation/paging/arrival observations require targeted supplement, not repeating these views or four model routes."
+    },
+    {
+      "checkId": "queue.settings",
+      "status": "needs-evidence",
+      "reason": "Actual default draft, save, hot application and restart persistence now proved. Only remaining running-capacity/deadline and relevant stale/error/navigation live observations need mapping/supplement; do not repeat the completed idle flow."
+    },
+    {
+      "checkId": "queue.contracts",
+      "status": "covered",
+      "runId": "reviewed-5bb51e-verify02-ui01-fixtures",
+      "reviewId": "reviewed-5bb51e-verify02-ui01-fixtures-to-d7d5295fe640"
+    },
+    {
+      "checkId": "queue.native-agents",
+      "status": "failed",
+      "reason": "Current native parent-plus-three attempt failed at first send confirmation before file/agent work; preserve send_unknown, cleanup and no-resend evidence. Diagnose before selecting another run."
+    },
+    {
+      "checkId": "queue.mcp-agents",
+      "status": "failed",
+      "reason": "Original complete four-agent run is preserved, but the earlier discovery-to-handoff empty-reply failure remains unclassified. A later pass does not close it; investigate the bounded original failure before another long run."
+    },
+    {
+      "checkId": "queue.admission",
+      "status": "covered",
+      "runId": "reviewed-e844-main-three-02-independent-checks",
+      "reviewId": "reviewed-e844-main-three-02-independent-checks-to-d7d5295fe640"
+    },
+    {
+      "checkId": "queue.mixed-models",
+      "status": "needs-evidence",
+      "reason": "Four sequential CAP-004 routes do not establish shared-capacity mixed-model waiting. Combine a small mixed batch with other required live queue observations."
+    },
+    {
+      "checkId": "queue.client-wait",
+      "status": "needs-evidence",
+      "reason": "Record both streaming/non-streaming real client waits and deadline behavior. Inspect existing traces first and execute only uncovered branches."
+    },
+    {
+      "checkId": "queue.send-spacing",
+      "status": "covered",
+      "runId": "reviewed-e844-main-three-02-independent-checks",
+      "reviewId": "reviewed-e844-main-three-02-independent-checks-to-d7d5295fe640"
+    },
+    {
+      "checkId": "mcp.contracts",
+      "status": "covered",
+      "runId": "reviewed-5bb51e-verify02-ui01-fixtures",
+      "reviewId": "reviewed-5bb51e-verify02-ui01-fixtures-to-d7d5295fe640"
+    },
+    {
+      "checkId": "mcp.discovery",
+      "status": "needs-evidence",
+      "reason": "Actual outer tool_search and subsequent calls are proven, but this is not yet the complete two-round connector-inventory/schema scenario. Combine remaining discovery observations with a representative MCP continuation flow after the open handoff issue is assessed."
+    },
+    {
+      "checkId": "mcp.reply-reuse",
+      "status": "needs-evidence",
+      "reason": "Four plain final replies and retained page reuse are proven. The historical run did not exercise an actual reconnect/no-resend and the complete before/after-tool normal-reply sequence; only those gaps require execution."
+    },
+    {
+      "checkId": "mcp.retention",
+      "status": "covered",
+      "runId": "reviewed-5bb51e-verify02-ui01-fixtures",
+      "reviewId": "reviewed-5bb51e-verify02-ui01-fixtures-to-d7d5295fe640"
+    },
+    {
+      "checkId": "mcp.manual",
+      "status": "needs-evidence",
+      "reason": "A manual task can cover CAP-006/CAP-009/Q13 together, but automatic sends cannot prove per-round user send/completion confirmation."
+    },
+    {
+      "checkId": "queue.standalone",
+      "status": "covered",
+      "runId": "reviewed-5bb51e-verify02-ui01-fixtures",
+      "reviewId": "reviewed-5bb51e-verify02-ui01-fixtures-to-d7d5295fe640"
+    },
+    {
+      "checkId": "queue.cancellation",
+      "status": "covered",
+      "runId": "legacy-5bb51e-fixtures",
+      "reviewId": "legacy-5bb51e-fixtures-to-d7d5295fe640"
+    },
+    {
+      "checkId": "queue.network",
+      "status": "covered",
+      "runId": "legacy-5bb51e-fixtures",
+      "reviewId": "legacy-5bb51e-fixtures-to-d7d5295fe640"
+    },
+    {
+      "checkId": "queue.owner-loss",
+      "status": "covered",
+      "runId": "legacy-5bb51e-fixtures",
+      "reviewId": "legacy-5bb51e-fixtures-to-d7d5295fe640"
+    },
+    {
+      "checkId": "queue.pressure",
+      "status": "covered",
+      "runId": "legacy-5bb51e-fixtures",
+      "reviewId": "legacy-5bb51e-fixtures-to-d7d5295fe640"
+    },
+    {
+      "checkId": "queue.lifecycle",
+      "status": "covered",
+      "runId": "legacy-5bb51e-fixtures",
+      "reviewId": "legacy-5bb51e-fixtures-to-d7d5295fe640"
+    },
+    {
+      "checkId": "http.body-budget",
+      "status": "covered",
+      "runId": "legacy-5bb51e-fixtures",
+      "reviewId": "legacy-5bb51e-fixtures-to-d7d5295fe640"
+    }
+  ]
+}

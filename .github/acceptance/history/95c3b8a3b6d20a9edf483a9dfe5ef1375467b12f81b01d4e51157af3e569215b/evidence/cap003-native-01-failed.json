@@ -1,0 +1,16 @@
+{
+  "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "loadedSourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "runtimeSha256": "4c18bb1b5055c56a31d71552f3f0b6f8432773d9c3f43ba0c34fec46c34543fd",
+  "cases": [
+    "CAP-003"
+  ],
+  "status": "fail",
+  "layer": "authenticated-dev",
+  "summary": "Three real read-only GPT-6 Sol children overlapped. GitHub/license and optimization children completed; the implemented-features child failed during automatic compaction. Runtime evidence identifies oversized inline compaction input followed by a misleading queue terminal error on reconnect. Parent accurately reported two successes and one failure; exit zero does not pass this case. All 551 fixture files remained unchanged. Parent medium / children high. All children were closed.",
+  "rawEvidence": {
+    "path": "output/2026-10-14-release-candidate/cap003-audit-final.private.json",
+    "sha256": "2dde63debffdacabea2116754dac305b292138a62af0c6eb53416b98fab15d50"
+  },
+  "runtimeInventory": "output/2026-10-14-release-candidate/candidate-final.json"
+}

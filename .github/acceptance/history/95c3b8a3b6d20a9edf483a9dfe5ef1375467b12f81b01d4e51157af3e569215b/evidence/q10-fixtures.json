@@ -1,0 +1,18 @@
+{
+  "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "cases": [
+    "Q10"
+  ],
+  "status": "pass",
+  "layer": "fixture",
+  "summary": "Current-candidate isolated lease and crash fixtures passed: lost owners retain physical occupancy, startup does not create a second pool, persisted uncertain sends pause dispatch without replay, and recovery requires verified physical settlement.",
+  "tests": [
+    "launcher/tests/request-queue.test.cjs",
+    "tests/browser/standalone-request-queue.test.ts",
+    "launcher/tests/runtime/runtime-supervisor.test.cjs"
+  ],
+  "rawEvidence": {
+    "path": "output/2026-10-14-release-candidate/verify-final.log",
+    "sha256": "fbba6ee3e42d0f3c99b93f095e1124f1f348ad299d671123365085fbaf7b9b52"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "id": "native-license-29d750-file-04",
+  "source": {
+    "path": "sources/29d750ee2d112fe5b25ff7977a9b8c7d146358ea9494ab6c4da6ed7a0043128a.json",
+    "sha256": "6a6fb28d2555c071ceb039b53955a7a29f03fda29a56562dd9628db631cdc006"
+  },
+  "recordedAt": "2026-10-15T10:00:42.044Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Verified independent authenticated DEV with actual Codex, selected GPT-6 Medium, workspace-write and normal approvals. No copied production credentials.",
+  "observations": [
+    {
+      "checkId": "license.native",
+      "criteriaHash": "17a120a43fc025681730b0961391478cf06f6dec7d0876d152d7a6fd9d8609b1",
+      "outcome": "pass",
+      "at": "2026-10-15T09:40:25.905Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "loadedSourceId": "29d750ee2d112fe5b25ff7977a9b8c7d146358ea9494ab6c4da6ed7a0043128a",
+      "runtimeSha256": "86b1c72c63d4d63eab4308c0718ca4d63af48498e0a5cd84509bc5312f11e502",
+      "summary": "Real licensed native command reads, apply_patch, command byte comparison and independent matching37-byte file audit completed under normal metadata. No parallel-read/agent/expiry claim.",
+      "evidence": [
+        {
+          "path": "evidence/transport-diagnostics-29d750ee2d11.json",
+          "sha256": "8ea07f3ca68b6ab10e87643738a3c8356f6d7278a6ca2a8c324310b258f338c8"
+        }
+      ]
+    }
+  ]
+}

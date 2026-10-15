@@ -2,7 +2,7 @@
 
 [English](release.md) | [简体中文](release.zh-CN.md) · [Documentation](../README.md#documentation)
 
-Follow this manual to prepare, build, validate, publish, and recover a release candidate, and to report and handle security issues. Each candidate requires reproducible native artifacts, runtime and installer checks, authenticated account acceptance, and accurate publication metadata. CI, fixture results, and historical releases do not replace candidate-specific acceptance. This manual states requirements, not completed test results; routine source work is covered by the [development manual](development.md).
+Follow this manual to prepare, build, validate, publish, and recover a release candidate, and to report and handle security issues. Each candidate requires reproducible native artifacts, valid runtime/installer/account evidence, and accurate publication metadata. Use the [acceptance protocol](acceptance-protocol.md) for cumulative impact, shared flows and reviewed evidence inheritance. Fixtures cannot replace live boundaries; historical passes require a validity review. This manual states requirements, not completed results; routine source work is covered by the [development manual](development.md).
 
 **Contents**
 
@@ -35,7 +35,7 @@ Use the [standard isolated test procedure](development.md#standard-isolated-test
 
 For each candidate, record version, source commit/tag, artifact SHA-256, OS version/architecture, clean/upgrade path, previous installed version, Codex version, ChatGPT plan, enabled mode, and each result. Keep passed, failed, and not-executed checks separate. Include redacted failure logs and reproduction steps; never publish cookies, tunnel IDs, API keys, bearer tokens, credentials, or prompt contents. Keep raw evidence and production baselines in ignored local storage.
 
-Any required failed or unexecuted gate blocks a stable release. A public preview must name its incomplete/failed gates, user-visible limitation, and recovery path. Dependency audit failures remain visible independently of functional checks. Historical results never substitute for a candidate's own evidence.
+Unresolved blocking failures or required checks without valid evidence block a stable release. A public preview must name any permitted incomplete/failed non-baseline gates, user-visible limitation and recovery path; preview status does not waive capability coverage. Dependency audit failures remain visible independently of functional checks. Distinguish new executions from inherited evidence with a cumulative impact review. Actual release artifacts still require their applicable integrity, startup and platform checks; an older artifact's pass is insufficient.
 
 <a id="source-preparation"></a>
 
@@ -58,6 +58,8 @@ bun run app:package
 ```
 
 `build` writes `dist/runtime`. `app:package` rebuilds the launcher and its embedded runtime, prepares platform helpers, then creates distributables in `launcher/artifacts`. It does not publish them; the wrapper passes `--publish never` to electron-builder. The package manifest's nominal `release` output directory is overridden by the wrapper's temporary staging directory.
+
+Before requesting publication approval, run the Release workflow manually on the candidate branch or commit. This uses the same five native build jobs and production public-key manifest as a tag build, then uploads `candidate-assets` (seven packages and `checksums.txt`) and `candidate-source` (source identity). Manual runs cannot enter the publish job, including when the selected ref is a tag. Download and validate these artifacts for acceptance; a successful build does not mean acceptance has passed. Only a later `v*` tag push can publish, and the current-candidate acceptance gate still applies. Compare the source identity and artifact checksums again if a subsequent run rebuilds them.
 
 <a id="native-target-matrix"></a>
 
@@ -102,7 +104,7 @@ The smoke checks version identity, manifest, absence of ephemeral build paths, t
 Windows `app:package` includes `launcher`'s `build:runtime`, which runs `scripts/build-windows-helpers.ts`. That script builds the independent setup/uninstall helpers and runs the shared installation, runtime-deployment and uninstall suites with the exact Bun binary embedded in the package:
 
 ```powershell
-& .\launcher\build\runtime\runtime\bun.exe test ./launcher/tests/installation/windows-install.test.cjs ./launcher/tests/installation/runtime-install.test.cjs ./launcher/tests/installation/windows-uninstall.test.cjs
+& .\launcher\build\runtime\runtime\bun.exe test --timeout 30000 ./launcher/tests/installation/windows-install.test.cjs ./launcher/tests/installation/runtime-install.test.cjs ./launcher/tests/installation/windows-uninstall.test.cjs ./launcher/tests/installation/windows-shortcuts.test.cjs ./launcher/tests/installation/update-windows.test.cjs
 ```
 
 This gate is mandatory and stops package creation on failure. `bun run verify` runs launcher tests under Node; that result does not replace the embedded-Bun gate. Verify fresh deployment, same-version replacement/repair, copy and receipt failures, repeated cancellation, and retry after a setup process exits without rollback. Do not replace these tests with helper load-only probes. Fixtures still do not satisfy actual NSIS acceptance.
@@ -148,7 +150,7 @@ Shell entry points must be committed with Git mode `100755`. Linux workflows che
 
 Use isolated DEV for shared-runtime acceptance; repeat installed-app flows on the disposable test OS where required. Use independently obtained credentials. Verify account-visible capabilities rather than inferring support from a model label or a native Codex catalog row.
 
-Before every release, including previews, run the applicable mandatory [capability acceptance cases CAP-001–CAP-005](acceptance-tests.md#release-requirements) on the current candidate and record all passes before pushing a publication-triggering tag or publishing. Preview status does not waive these cases. Add or update cases for new or changed target capabilities. Prompts, evidence criteria, and the candidate result template live in that document; `verify` and release CI do not automatically execute or enforce this manual gate.
+Before every release, including previews, establish valid coverage of applicable [capability requirements CAP-001–006 and CAP-008–010](acceptance-tests.md#release-requirements) and Q01–Q17 using the [acceptance protocol](acceptance-protocol.md). Execute changed or otherwise invalidated checks, reuse reviewed still-valid evidence, and obtain the actual artifact and critical-path evidence. Add or update checks for changed requirements. Full expensive capability reruns follow the protocol's triggers, not every small release. The flows below define required behavior and evidence, not independent jobs to repeat when one execution already covers them. Execution remains isolated and operator-reviewed. Release CI still requires the [evidence manifest](acceptance-evidence.md); schema 2 validates shared check coverage and reviewed inheritance, while missing evidence and unresolved failures still block publication. `verify` does not execute authenticated acceptance.
 
 ### Native Tools
 

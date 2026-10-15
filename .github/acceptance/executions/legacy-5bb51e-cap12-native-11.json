@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 2,
+  "kind": "legacy-mapping",
+  "id": "legacy-5bb51e-cap12-native-11",
+  "source": {
+    "path": "sources/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474.json",
+    "sha256": "6fe6cab7387319377a03b34b7b3d76749efe705cc24bc0ba33744e081f54f932"
+  },
+  "recordedAt": "2026-10-15T06:00:52.560Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Original independently authenticated DEV runtime/profile/workspace; no new task executed during migration",
+  "mappingRationale": "Reviewed mapping of unchanged original observations to check IDs. The archived whole-case rows and receipts remain authoritative provenance; timestamps and original source/runtime identities are preserved.",
+  "observations": [
+    {
+      "checkId": "native.read-patch",
+      "criteriaHash": "345a5264d2384477be07e71ebc29bea2abd670ba55a9b431caa47b2b56e0604b",
+      "outcome": "pass",
+      "at": "2026-10-15T04:05:19.916Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "summary": "Native Tools / Automatic, GPT-6 Sol medium: actual Code Mode exec dispatched two independent native command reads using Promise.all and received ALPHA and BETA with zero exit codes. The same script subsequently invoked native apply_patch to add result.txt; the actual file-change event and native command readback matched ALPHA-BETA. All four resulting fixture files and changed-path scope were inspected. Actual turn_context retained workspace-write, on-request and auto_review. No MCP-mode coverage is asserted.",
+      "evidence": [
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/cap001-5bb51e-native-11.json",
+          "sha256": "61a6d1971662543e3fcf5612c5ff0ac6a9e1e9ed0f42b91e321eca8ca1a1800b"
+        }
+      ],
+      "loadedSourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "runtimeSha256": "58fc6d5b2c733c9cfae7610aeacb312431a98a073fe257e1ff5fb2fa42fabedb",
+      "legacy": {
+        "manifest": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/current.json",
+          "sha256": "888d69d50b736f247cc98faf0a8a67b5248a78c0207e1e8126c5b683303bf9cc"
+        },
+        "caseId": "CAP-001",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/cap001-5bb51e-native-11.json",
+          "sha256": "61a6d1971662543e3fcf5612c5ff0ac6a9e1e9ed0f42b91e321eca8ca1a1800b"
+        }
+      }
+    },
+    {
+      "checkId": "native.same-cell",
+      "criteriaHash": "481fd1f1923e6209f93d7a8499ddb86c12cd0cdbe88d4c7bfe380a545f978092",
+      "outcome": "pass",
+      "at": "2026-10-15T04:05:19.920Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "summary": "Native Tools / Automatic, GPT-6 Sol medium: the same Codex thread and fixture resumed CAP-001. One exec script used a 15000ms timer and 1000ms yield, returned running cell 1, and one wait resumed that exact cell and returned WAIT-110-OK. A subsequent actual apply_patch added wait-result.txt, followed by native command readback with zero exit status and matching bytes. Actual turn_context retained workspace-write, on-request and auto_review. This completed on the same isolated runtime after the separately audited single-page fault, without a service restart. No MCP-mode coverage is asserted.",
+      "evidence": [
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/cap002-5bb51e-native-11.json",
+          "sha256": "ad87396aaa519055367c7ffb61b64bb970a45d0f4716024409f675b38b4420d7"
+        }
+      ],
+      "loadedSourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "runtimeSha256": "58fc6d5b2c733c9cfae7610aeacb312431a98a073fe257e1ff5fb2fa42fabedb",
+      "legacy": {
+        "manifest": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/current.json",
+          "sha256": "888d69d50b736f247cc98faf0a8a67b5248a78c0207e1e8126c5b683303bf9cc"
+        },
+        "caseId": "CAP-002",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/cap002-5bb51e-native-11.json",
+          "sha256": "ad87396aaa519055367c7ffb61b64bb970a45d0f4716024409f675b38b4420d7"
+        }
+      }
+    }
+  ]
+}

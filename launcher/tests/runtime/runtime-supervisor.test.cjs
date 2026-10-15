@@ -1555,10 +1555,16 @@ test("launcher marks compensation ready only after both owned runtime processes 
   assert.equal(await supervisor.ownedRuntimeReady({ mode: "mcp-bridge" }), true);
 });
 
-test("failed initial health checks stop their child without scheduling crash recovery", async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web2harness-startup-cleanup-"));
+test("failed initial health checks stop their child without scheduling crash recovery", async (t) => {
+  const fixtureParent = path.resolve(os.tmpdir());
+  const root = fs.mkdtempSync(path.join(fixtureParent, "web2harness-startup-cleanup-"));
   const childPath = path.join(root, "child.cjs");
-  fs.writeFileSync(childPath, "setInterval(() => {}, 1000);\n");
+  // Bound the fixture even if the OS refuses process-tree termination. This exit is not a pass.
+  const watchdogExitCode = 99;
+  fs.writeFileSync(childPath, `
+setTimeout(() => process.exit(${watchdogExitCode}), 5_000);
+process.stdout.write("ready\\n");
+`);
   const supervisor = new RuntimeSupervisor({
     app: { getVersion: () => "0.2.0", isPackaged: false },
     logger: { info() {}, warn() {}, error() {} },
@@ -1572,18 +1578,45 @@ test("failed initial health checks stop their child without scheduling crash rec
     }),
   });
   let recoveries = 0;
+  let childClosed;
   supervisor.waitForProxy = async () => {
+    const child = supervisor.daemon;
+    childClosed = new Promise((resolve) => child.once("close", (code) => resolve(code)));
+    await new Promise((resolve, reject) => {
+      let output = "";
+      const finish = (error) => {
+        child.off("error", onError);
+        child.off("close", onClose);
+        child.stdout.off("data", onData);
+        if (error) reject(error);
+        else resolve();
+      };
+      const onError = (error) => finish(error);
+      const onClose = () => finish(new Error("fixture child exited before readiness"));
+      const onData = (data) => {
+        output += data.toString();
+        if (output.includes("\n")) finish(output === "ready\n"
+          ? undefined : new Error(`unexpected fixture child output: ${output}`));
+      };
+      child.once("error", onError);
+      child.once("close", onClose);
+      child.stdout.on("data", onData);
+    });
     throw new Error("synthetic health failure");
   };
   supervisor.scheduleRecovery = () => {
     recoveries += 1;
   };
   try {
-    await assert.rejects(supervisor.startDaemon({}), /synthetic health failure/);
+    await assert.rejects(supervisor.startDaemon({}), { message: "synthetic health failure" });
+    assert.notEqual(await childClosed, watchdogExitCode, "the supervisor must stop its child before the watchdog");
     assert.equal(supervisor.daemon, null);
     assert.equal(recoveries, 0);
   } finally {
-    await supervisor.stopChild("daemon").catch(() => {});
+    await supervisor.stopChild("daemon").catch((error) => t.diagnostic(error.message));
+    // Windows keeps a live child's cwd locked. Do not mask the assertion with rm's EPERM.
+    await childClosed;
+    assert.equal(path.dirname(path.resolve(root)), fixtureParent);
     fs.rmSync(root, { recursive: true, force: true });
   }
 });

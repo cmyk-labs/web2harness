@@ -1,0 +1,911 @@
+{
+  "schemaVersion": 2,
+  "kind": "historical-fixture-review",
+  "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+  "reviewer": "Codex",
+  "recordedAt": "2026-10-15T06:05:32.521Z",
+  "attestedAt": "2026-10-15T04:08:05.984Z",
+  "timestampBasis": "The original immutable Q06 fixture receipt attests the completed 5bb51e full verify and workspace-UI batch at this time. This is that existing batch attestation, not a new execution time or a newly run test.",
+  "originalAttestation": {
+    "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q06-5bb51e-fixtures.json",
+    "sha256": "2d2e5803b4f9a27c5ab9be22fcacbaf078d7f4f0a9c94b8239cd2fce735d553d"
+  },
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-stage-settlement/verify-02.log",
+      "sha256": "061a638fb046593be6350817b88767a6ecbce08cad66f5893f3cdefb8c9912a8"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/workspace-ui-01/results.json",
+      "sha256": "a05c971cf5a511cc03ed1ac263a0d39be6e960eafd492a64e28dbc8f6aa2c661"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/queue-pressure.json",
+      "sha256": "d99740a42dae6ccecf32f1cad3a512a6de762501a9ab8b9ce5bb88d14bce2b07"
+    }
+  ],
+  "sourceReview": "All mapped fixture source hashes equal the original inventory. The product and pre-existing test implementations are unchanged from 5bb51e; only acceptance tooling/docs and a new checker test were added.",
+  "mappings": [
+    {
+      "checkId": "accounting.recovery",
+      "summary": "Receipt-only delivery/restart/ACK loss, accepted versus pending state, preserved corrupt records and v1/v2 migrations all passed; no second Web submission is represented by retry fixtures.",
+      "files": [
+        {
+          "path": "tests/adapters/chatgpt-web/browser/usage-delivery.test.ts",
+          "sha256": "eefdc3e9e654902478c63298cc123df7317cd2214e69cd95cb7e02ee248b4131"
+        },
+        {
+          "path": "launcher/tests/limits/usage-delivery.test.cjs",
+          "sha256": "671dc38b8b510fdbfd1314c203b2a7ecc8f333d04ddbdd0fba45e61b599068bb"
+        },
+        {
+          "path": "launcher/tests/limits/limits-store.test.cjs",
+          "sha256": "38735b7704691e122bed9333a0708501fd1f12871bd5aaf10a43e23521846249"
+        },
+        {
+          "path": "launcher/tests/limits/limits-controller.test.cjs",
+          "sha256": "fb73d8dd497df9847a43b7f541374e396ec826cb4c914374bf39ddf69d60dbc1"
+        }
+      ],
+      "passedTests": [
+        {
+          "title": "receipt-only retry retains one ID and accepts duplicate ACK without a second submission",
+          "lines": [
+            2163
+          ]
+        },
+        {
+          "title": "failed delivery keeps accepted evidence for restart replay and never fabricates identity",
+          "lines": [
+            2169
+          ]
+        },
+        {
+          "title": "accepted outbox survives restart, deduplicates a lost ACK, and records details without another Web send",
+          "lines": [
+            3744
+          ]
+        },
+        {
+          "title": "unconfirmed activation is visible after restart and never counted without acceptance evidence",
+          "lines": [
+            3745
+          ]
+        },
+        {
+          "title": "unavailable account persists a gap and does not charge a previously active account",
+          "lines": [
+            3746
+          ]
+        },
+        {
+          "title": "delayed old account receipt does not switch the newer active account; old account history is recovered",
+          "lines": [
+            3747
+          ]
+        },
+        {
+          "title": "manual mode pauses replay; returning to automatic recovers confirmed sends",
+          "lines": [
+            3748
+          ]
+        },
+        {
+          "title": "malformed journal files are preserved and reported, path traversal is rejected",
+          "lines": [
+            3749
+          ]
+        },
+        {
+          "title": "v2 migration preserves gap and receipt IDs, missing dimensions stay unknown",
+          "lines": [
+            3750
+          ]
+        },
+        {
+          "title": "each policy record has traceable sources, valid dates and disjoint reference views",
+          "lines": [
+            3751
+          ]
+        },
+        {
+          "title": "first accepted send counts automatically for every plan and account, with independent rolling model totals",
+          "lines": [
+            3733
+          ]
+        },
+        {
+          "title": "version 1 migrates without losing receipts, account isolation, or deduplication",
+          "lines": [
+            3734
+          ]
+        },
+        {
+          "title": "always-on, private atomic persistence, restart dedup, and receipt-only storage",
+          "lines": [
+            3735
+          ]
+        },
+        {
+          "title": "local rolling windows stay separate from published caps and unknown models stay unassigned",
+          "lines": [
+            3736
+          ]
+        },
+        {
+          "title": "rolling boundaries expire independently and prune receipts without losing retained dedup",
+          "lines": [
+            3737
+          ]
+        },
+        {
+          "title": "account isolation, unsupported plans, and invalid configuration cannot pollute usage",
+          "lines": [
+            3738
+          ]
+        },
+        {
+          "title": "clock skew rejects new receipts without clamping or discarding existing history",
+          "lines": [
+            3739
+          ]
+        },
+        {
+          "title": "corrupt and unsupported persisted data throws specific errors and remains untouched",
+          "lines": [
+            3740
+          ]
+        },
+        {
+          "title": "failed atomic persistence does not advance in-memory counts or dedup state",
+          "lines": [
+            3741
+          ]
+        },
+        {
+          "title": "capacity fails explicitly without evicting recent receipts or account history",
+          "lines": [
+            3742
+          ]
+        },
+        {
+          "title": "ordinary GPT-6 receipts persist separately and do not consume Pro counters",
+          "lines": [
+            3743
+          ]
+        },
+        {
+          "title": "default-on receipts create accounts without setup, while missing sends stay flagged across restart and recheck",
+          "lines": [
+            3727
+          ]
+        },
+        {
+          "title": "lazy corrupt store is explicitly unavailable without crashing or replacing its file",
+          "lines": [
+            3728
+          ]
+        },
+        {
+          "title": "account checks retain default tracking, restore persisted counts, and preserves counters and sticky errors on failure",
+          "lines": [
+            3729
+          ]
+        },
+        {
+          "title": "Zero Risk gates setup and receipt writes, including a mode change during detection",
+          "lines": [
+            3730
+          ]
+        },
+        {
+          "title": "account mismatch and missing identity report persistent gaps without charging another account",
+          "lines": [
+            3731
+          ]
+        },
+        {
+          "title": "optional receipt failures never throw or erase counters and only a recheck clears their error",
+          "lines": [
+            3732
+          ]
+        }
+      ]
+    },
+    {
+      "checkId": "accounting.ui",
+      "summary": "Existing mock-renderer results cover bilingual/narrow aggregation, unknown caps, stable counts and reference selectors. These are renderer fixtures, not native desktop acceptance.",
+      "files": [
+        {
+          "path": "launcher/scripts/smoke-workspace.mjs",
+          "sha256": "f74df0b190be4d6783c61b8f8ef5b16feda4fea0a09287b2829f5d42da97b089"
+        }
+      ],
+      "passedUiChecks": [
+        "Empty total and all four models remain visible without effort details",
+        "Browsing policy does not pretend to identify a plan",
+        "Ordinary models do not inherit Pro counts",
+        "Earlier policy is visible without changing sends",
+        "Unknown Pro 500 counts use dashes",
+        "Total equals model counts without adding pending sends or the Pro subtotal",
+        "All efforts and purposes remain grouped into one model row",
+        "Pro total includes both families and unidentified Pro without Sol",
+        "English usage with extra model rows keeps equal panels and aligned columns",
+        "Chinese usage distinguishes local sends and references",
+        "Chinese reference preserves the period and compact footer",
+        "Chinese usage fits narrow windows with each note immediately below its card"
+      ]
+    },
+    {
+      "checkId": "queue.contracts",
+      "summary": "Shared capacity, group fairness, unchanged choices, first deadlines, retry/cancel/physical settlement, dynamic settings and parent/child ownership are deterministic fixture observations.",
+      "files": [
+        {
+          "path": "launcher/tests/request-scheduler.test.cjs",
+          "sha256": "d1eafa5afb0af9fcfb36c2e4d4e7780f4196fbda64c6857d478d8aa40b61defa"
+        },
+        {
+          "path": "launcher/tests/request-queue.test.cjs",
+          "sha256": "2913a2eed494a72afad3b7af62c8678f75d56f973a247b9201c2d03935bc0c82"
+        },
+        {
+          "path": "launcher/tests/queue-settings.test.cjs",
+          "sha256": "1bbf2ab23a53f8510ed13e3f3af5dcbbe53529f50dc54d6a3b27fe2bbf7e1d0f"
+        }
+      ],
+      "passedTests": [
+        {
+          "title": "fifty mixed model/session requests share the same four slots",
+          "lines": [
+            3797
+          ]
+        },
+        {
+          "title": "invalid effort cannot enter the queue and break metadata search",
+          "lines": [
+            3798
+          ]
+        },
+        {
+          "title": "group round-robin serves another conversation before a burst of siblings",
+          "lines": [
+            3799
+          ]
+        },
+        {
+          "title": "replay retains one ticket and its first deadline; changed identity fails",
+          "lines": [
+            3800
+          ]
+        },
+        {
+          "title": "queue timeout applies while paused and is independent of system-clock changes",
+          "lines": [
+            3801
+          ]
+        },
+        {
+          "title": "lowering concurrency drains active work and changes timeout for new tickets only",
+          "lines": [
+            3802
+          ]
+        },
+        {
+          "title": "queued cancellation never dispatches and replay remains cancelled",
+          "lines": [
+            3803
+          ]
+        },
+        {
+          "title": "running cancellation holds its slot until physical settlement and rejects new sends",
+          "lines": [
+            3804
+          ]
+        },
+        {
+          "title": "send permits serialize slow sends and observe changed spacing at the actual boundary",
+          "lines": [
+            3805
+          ]
+        },
+        {
+          "title": "unknown send pauses dispatch and cannot be cleared by an ordinary user resume",
+          "lines": [
+            3806
+          ]
+        },
+        {
+          "title": "user pause stops new admissions but lets already admitted turns finish sending",
+          "lines": [
+            3807
+          ]
+        },
+        {
+          "title": "recovering one pause cause cannot clear another unresolved failure",
+          "lines": [
+            3808
+          ]
+        },
+        {
+          "title": "number and byte budgets reject overload without charging exact replay twice",
+          "lines": [
+            3809
+          ]
+        },
+        {
+          "title": "bounded receipts cannot be evicted early to revive a cancelled request",
+          "lines": [
+            3810
+          ]
+        },
+        {
+          "title": "close cancels queued tickets but still waits for active physical cleanup",
+          "lines": [
+            3811
+          ]
+        },
+        {
+          "title": "queries page metadata without disclosing leases or carrying request bodies",
+          "lines": [
+            3812
+          ]
+        },
+        {
+          "title": "settings validate the complete object and do not silently clamp invalid input",
+          "lines": [
+            3813
+          ]
+        },
+        {
+          "title": "host admits once, persists metadata before ACK, and refuses replay after restart",
+          "lines": [
+            3789
+          ]
+        },
+        {
+          "title": "cancelling an active owner retains its slot until physical resources are released",
+          "lines": [
+            3790
+          ]
+        },
+        {
+          "title": "resource cleanup can call back into queue without locking itself out",
+          "lines": [
+            3791
+          ]
+        },
+        {
+          "title": "queue snapshots keep membership stable; settings retain existing deadlines",
+          "lines": [
+            3792
+          ]
+        },
+        {
+          "title": "send permits authenticate the owner and unknown sends stop dispatch",
+          "lines": [
+            3793
+          ]
+        },
+        {
+          "title": "rate-limit pauses persist across restart and require explicit recovery",
+          "lines": [
+            3794
+          ]
+        },
+        {
+          "title": "recovery cannot release a still-active physical owner",
+          "lines": [
+            3795
+          ]
+        },
+        {
+          "title": "restart during an unacknowledged send pauses dispatch without replaying the request",
+          "lines": [
+            3796
+          ]
+        },
+        {
+          "title": "settings persistence and runtime application report distinct outcomes",
+          "lines": [
+            3752
+          ]
+        },
+        {
+          "title": "concurrent stale drafts cannot overwrite a saved revision",
+          "lines": [
+            3753
+          ]
+        },
+        {
+          "title": "invalid settings and expired license preserve the persisted state",
+          "lines": [
+            3754
+          ]
+        }
+      ],
+      "boundaryFiles": [
+        {
+          "path": "tests/adapters/chatgpt-web/tools/queue-mcp-boundary.test.ts",
+          "sha256": "d85ef8610a9d6b30bebd3d20657a4dbc0cda63da74fd31c833341226228753fe"
+        }
+      ],
+      "boundaryPasses": [
+        {
+          "title": "MCP automatic: delivered child wait cannot yield through existing compaction",
+          "lines": [
+            2943
+          ]
+        },
+        {
+          "title": "MCP manual: delivered child wait cannot yield through existing compaction",
+          "lines": [
+            2954
+          ]
+        }
+      ]
+    },
+    {
+      "checkId": "queue.standalone",
+      "summary": "Separate CLI processes/profile ownership, authenticated host controls, owner loss, offline configuration/recovery, persisted spacing and no replay were all exercised in the original process fixtures.",
+      "files": [
+        {
+          "path": "tests/browser/standalone-request-queue.test.ts",
+          "sha256": "f51a6ac797a772aa58660651048ded49d872c5ea0622e5328fb358b1b817b3fa"
+        }
+      ],
+      "passedTests": [
+        {
+          "title": "canonical profile host is shared and another process cannot create a second pool",
+          "lines": [
+            213
+          ]
+        },
+        {
+          "title": "separate CLI processes join one profile owner and share capacity and actual-send pacing",
+          "lines": [
+            214
+          ]
+        },
+        {
+          "title": "lost remote owner retains its physical lease and fences new dispatch",
+          "lines": [
+            215
+          ]
+        },
+        {
+          "title": "queue transport rejects unauthenticated, wrong-generation, cross-profile and oversized controls",
+          "lines": [
+            216
+          ]
+        },
+        {
+          "title": "queued deadline expires without preparing or sending",
+          "lines": [
+            217
+          ]
+        },
+        {
+          "title": "receipt write failure never returns a send permit and retains uncertainty",
+          "lines": [
+            218
+          ]
+        },
+        {
+          "title": "50 standalone clients share four slots; physical release precedes replacement",
+          "lines": [
+            219
+          ]
+        },
+        {
+          "title": "cancelled waiters never run; running cancellation cannot release a live page",
+          "lines": [
+            220
+          ]
+        },
+        {
+          "title": "cancellation waits for cleanup before another queued request starts",
+          "lines": [
+            221
+          ]
+        },
+        {
+          "title": "actual sends serialize across clients, persist before permit return and retain interval after restart",
+          "lines": [
+            222
+          ]
+        },
+        {
+          "title": "crashed owner requires explicit physical recovery, keeps receipts and never replays",
+          "lines": [
+            223
+          ]
+        },
+        {
+          "title": "unknown send and rate limits pause dispatch until offline recovery; settings validate and persist",
+          "lines": [
+            224
+          ]
+        },
+        {
+          "title": "distinct managed workers use one host, preserve model/tool choices and delay preparation",
+          "lines": [
+            225
+          ]
+        }
+      ]
+    },
+    {
+      "checkId": "mcp.retention",
+      "summary": "Original host fixtures preserve waiting parents beyond five, separate cache bounds and expiry/cancel; completion-fence fixtures reject empty, pending, late-revision and required-tool prose substitutes.",
+      "files": [
+        {
+          "path": "tests/adapters/chatgpt-web/tools/browser-reply-fence.test.ts",
+          "sha256": "da16f290ec375f0cacd688131a574c399d0aeab34b7375e2724f4ebd865b5a9d"
+        }
+      ],
+      "passedTests": [
+        {
+          "title": "ordinary completed replies cross the owner transport without MCP finish and replay unchanged",
+          "lines": [
+            2600
+          ]
+        },
+        {
+          "title": "a late inventory activity invalidates the observed reply revision",
+          "lines": [
+            2613
+          ]
+        },
+        {
+          "title": "empty browser replies do not commit a successful model round",
+          "lines": [
+            2651
+          ]
+        },
+        {
+          "title": "browser replies cannot bypass a required tool choice",
+          "lines": [
+            2661
+          ]
+        },
+        {
+          "title": "previewing completed Markdown does not commit a tail when the fence must be retried",
+          "lines": [
+            2662
+          ]
+        }
+      ],
+      "hostFile": [
+        {
+          "path": "launcher/tests/browser/browser-host.test.cjs",
+          "sha256": "375e6423536c58324f0237762efdbbeb5467a4b3216be6a816f6f25adcaedd2f"
+        }
+      ],
+      "retentionPasses": [
+        {
+          "title": "waiting parents preserve their pages while a sixth conversation can execute",
+          "lines": [
+            3530
+          ]
+        },
+        {
+          "title": "conversation cache has a separate bound and never discards waiting parents to pass it",
+          "lines": [
+            3531
+          ]
+        },
+        {
+          "title": "automatic waiting pages survive ordinary idle expiry with a separate retention bound",
+          "lines": [
+            3532
+          ]
+        },
+        {
+          "title": "manual waiting pages survive ordinary idle expiry with a separate retention bound",
+          "lines": [
+            3533
+          ]
+        },
+        {
+          "title": "a retained browser tab expires at thirty minutes",
+          "lines": [
+            3537
+          ]
+        },
+        {
+          "title": "failed and aborted browser turns release their tab slots",
+          "lines": [
+            3539
+          ]
+        },
+        {
+          "title": "plain text cannot replace a pending tool batch",
+          "lines": [
+            2625
+          ]
+        },
+        {
+          "title": "plain text cannot replace a sealed tool batch",
+          "lines": [
+            2641
+          ]
+        }
+      ]
+    },
+    {
+      "checkId": "mcp.contracts",
+      "summary": "Original deterministic tests cover inventory lookup, policy/namespace/schema, atomic handoff and durable delivery, retries/cancel, stable identity and freeform bytes. This provides no live connector discovery or authenticated agent claim.",
+      "files": [
+        {
+          "path": "tests/adapters/chatgpt-web/tools/tool-inventory-search.test.ts",
+          "sha256": "18650d0be4bf9df6c353e606e94b01d2ac1b6d0e9a1181f222357dbc57f0dc15"
+        },
+        {
+          "path": "tests/adapters/chatgpt-web/tools/mcp-tool-policy.test.ts",
+          "sha256": "369aae886108156fa046d3485bf4abad5273dc8697016578c6a9e755b34565b7"
+        },
+        {
+          "path": "tests/adapters/chatgpt-web/tools/tool-batch-handoff.test.ts",
+          "sha256": "e338ae6b6c33de3fd7f72af20ad1f4bf3e0190a04f58232d246c76ed499e6248"
+        },
+        {
+          "path": "tests/adapters/chatgpt-web/tools/handoff-round-state.test.ts",
+          "sha256": "e2188ac1b462bdef110eec75508bb2a7c4383bab752b0f945cce37047e85d7eb"
+        },
+        {
+          "path": "tests/adapters/chatgpt-web/tools/mcp-gateway.test.ts",
+          "sha256": "443965acbb07119cb397dfb84511fe3583aac39283abb802b7301a0d122af5af"
+        },
+        {
+          "path": "tests/adapters/chatgpt-web/tools/turn-replay-identity.test.ts",
+          "sha256": "f2034927e502e6ae5bc2d748d84155c183084a4430ad39a8741c3f475692892c"
+        },
+        {
+          "path": "tests/adapters/chatgpt-web/tools/browser-reply-fence.test.ts",
+          "sha256": "da16f290ec375f0cacd688131a574c399d0aeab34b7375e2724f4ebd865b5a9d"
+        }
+      ],
+      "passedTests": [
+        {
+          "title": "combined operation lookup finds loaded tools before incidental discovery descriptions",
+          "lines": [
+            3098
+          ]
+        },
+        {
+          "title": "empty lookup preserves order and keyword matching is normalized without mutating the registry",
+          "lines": [
+            3099
+          ]
+        },
+        {
+          "title": "manual visibility excludes app-prefixed bridge methods and their namespace without hiding unrelated tools",
+          "lines": [
+            2853
+          ]
+        },
+        {
+          "title": "a receipt, yield, and physical settlement are distinct; failed persistence blocks delivery",
+          "lines": [
+            2960
+          ]
+        },
+        {
+          "title": "identical retries preserve IDs, changed requests and extra batches are rejected",
+          "lines": [
+            2961
+          ]
+        },
+        {
+          "title": "tool identity, input shape, declared schema, tool_choice and parallel policy stay enforced",
+          "lines": [
+            2962
+          ]
+        },
+        {
+          "title": "raw exec is handed off byte-for-byte and cancellation cannot resurrect it",
+          "lines": [
+            2963
+          ]
+        },
+        {
+          "title": "journal persists only delivery intent; partial or conflicting receipts fail closed",
+          "lines": [
+            2964
+          ]
+        },
+        {
+          "title": "new stdio endpoint negotiates handoff explicitly and seals a final-only round",
+          "lines": [
+            3085
+          ]
+        },
+        {
+          "title": "cancellation rejects pending intent waiters and old connector contracts cannot claim a handoff round",
+          "lines": [
+            3095
+          ]
+        },
+        {
+          "title": "owner transport distinguishes missing intent from sealed but unsettled activity",
+          "lines": [
+            2801
+          ]
+        },
+        {
+          "title": "completion waiting cannot extend its deadline by changing reasons",
+          "lines": [
+            2802
+          ]
+        },
+        {
+          "title": "round snapshots distinguish open, accepted but unsealed, sealed and final without trusting old receipts",
+          "lines": [
+            2803
+          ]
+        },
+        {
+          "title": "policy validation failures leave the handoff open",
+          "lines": [
+            2804
+          ]
+        },
+        {
+          "title": "MCP rejection diagnostics distinguish identity and format mistakes without repairing or leaking calls",
+          "lines": [
+            2817
+          ]
+        },
+        {
+          "title": "legacy synchronous claims and manual starts retain their original response fields",
+          "lines": [
+            2828
+          ]
+        },
+        {
+          "title": "safe_start also rejects a committed legacy round before its initial start",
+          "lines": [
+            2834
+          ]
+        },
+        {
+          "title": "mixed results retain error metadata, annotated text, resources, images and audio exactly once",
+          "lines": [
+            2839
+          ]
+        },
+        {
+          "title": "URL media keeps native output channels and sibling metadata without printing media data as text",
+          "lines": [
+            2840
+          ]
+        },
+        {
+          "title": "ordinary text and object results keep their output without empty metadata fragments",
+          "lines": [
+            2841
+          ]
+        },
+        {
+          "title": "structured arguments normalize nested object order while preserving values and array order",
+          "lines": [
+            2842
+          ]
+        },
+        {
+          "title": "nested handoff retries with reordered arguments reuse the receipt; changed values remain rejected",
+          "lines": [
+            2843
+          ]
+        },
+        {
+          "title": "freeform input reaches the nested tool byte-for-byte, including line endings and whitespace",
+          "lines": [
+            2844
+          ]
+        },
+        {
+          "title": "recursive object field reordering replays the existing session and call IDs",
+          "lines": [
+            3169
+          ]
+        },
+        {
+          "title": "array order and raw program bytes are not normalized",
+          "lines": [
+            3170
+          ]
+        },
+        {
+          "title": "identical separately parsed retries dedupe both active and completed sessions",
+          "lines": [
+            3238
+          ]
+        },
+        {
+          "title": "transport changes do not create another model request",
+          "lines": [
+            3239
+          ]
+        },
+        {
+          "title": "current parsed tool registry and options remain part of authority",
+          "lines": [
+            3240
+          ]
+        },
+        {
+          "title": "raw requests without a source snapshot still retain instructions and call controls",
+          "lines": [
+            3241
+          ]
+        },
+        {
+          "title": "model, effort, input and compaction purpose still distinguish rounds",
+          "lines": [
+            3242
+          ]
+        },
+        {
+          "title": "compaction output format and trusted model family distinguish rounds",
+          "lines": [
+            3243
+          ]
+        },
+        {
+          "title": "changed authority still waits for physical settlement and permits caller abort",
+          "lines": [
+            3246
+          ]
+        },
+        {
+          "title": "native cancellation retires every request variant owned by the same turn",
+          "lines": [
+            3251
+          ]
+        },
+        {
+          "title": "missing native identity or complete input is still rejected",
+          "lines": [
+            3252
+          ]
+        },
+        {
+          "title": "ordinary completed replies cross the owner transport without MCP finish and replay unchanged",
+          "lines": [
+            2600
+          ]
+        },
+        {
+          "title": "a late inventory activity invalidates the observed reply revision",
+          "lines": [
+            2613
+          ]
+        },
+        {
+          "title": "empty browser replies do not commit a successful model round",
+          "lines": [
+            2651
+          ]
+        },
+        {
+          "title": "browser replies cannot bypass a required tool choice",
+          "lines": [
+            2661
+          ]
+        },
+        {
+          "title": "previewing completed Markdown does not commit a tail when the fence must be retried",
+          "lines": [
+            2662
+          ]
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "No authenticated model task, native save dialog, current readiness or actual installer execution is claimed.",
+    "License fixture review found exact-expiry/signature/device/clock/IPC coverage but did not establish the full calendar-month/leap-year matrix; license.contracts remains a gap.",
+    "Diagnostic paging/cache fixtures pass, but the prior large-history timing/memory benchmark requires a separate cumulative validity review; diagnostics.performance remains a gap."
+  ]
+}

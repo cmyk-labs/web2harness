@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 2,
+  "kind": "mcp-terminal-guard-repair",
+  "recordedAt": "2026-10-15T14:41:49.054Z",
+  "targetSourceId": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+  "fixed": "Confirmed local defect: a current-binding browser tool call with no local MCP activity could be accepted as an ordinary final response. Positive binding observation now uses the existing bounded fence; late real receipt may settle, otherwise mcp_handoff_not_received fails without automatic replay.",
+  "scope": "Only Automatic MCP, current binding positively observed, broker revision0. Reserved compaction control keeps its own lifecycle. Calls after earlier activity and absent/unsupported observations are outside this guard. Remote delivery root cause remains unresolved.",
+  "validation": {
+    "before": "unreceived-handoff-before-bound.json reproduces an actual isolated broker committing prose despite no tool result.",
+    "finalScoped": {
+      "tests": 47,
+      "assertions": 258,
+      "failures": 0
+    },
+    "relatedEarlier": {
+      "tests": 185,
+      "assertions": 1078,
+      "failures": 0,
+      "note": "Includes46 earlier scoped tests and139 browser contracts. Do not add to final47 as one execution."
+    },
+    "typecheck": true,
+    "live": {
+      "startedAt": "2026-10-15T14:32:29.123Z",
+      "finishedAt": "2026-10-15T14:36:11.687Z",
+      "rounds": 4,
+      "bytes": 37,
+      "findings": {
+        "cliCompleted": true,
+        "contexts": true,
+        "readPatchReadback": true,
+        "filesExact": true,
+        "finalMarker": true,
+        "finalValue": true,
+        "queuePeakOne": true,
+        "queueSettled": true,
+        "observedBindings": true,
+        "helperSource": true,
+        "mcpSource": true,
+        "noFallback": true
+      },
+      "observations": [
+        {
+          "at": "2026-10-15T14:33:26.272Z",
+          "trace": "6e8cfce83994",
+          "source": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+          "mcp": {
+            "active": true,
+            "boundCalls": 2,
+            "matchedResults": 2,
+            "foreignBindings": 0,
+            "invalidPayloads": 0,
+            "truncated": false
+          }
+        },
+        {
+          "at": "2026-10-15T14:34:04.448Z",
+          "trace": "58923fee8f1d",
+          "source": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+          "mcp": {
+            "active": true,
+            "boundCalls": 2,
+            "matchedResults": 2,
+            "foreignBindings": 0,
+            "invalidPayloads": 0,
+            "truncated": false
+          }
+        },
+        {
+          "at": "2026-10-15T14:35:22.750Z",
+          "trace": "658bcec7d7e6",
+          "source": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+          "mcp": {
+            "active": true,
+            "boundCalls": 3,
+            "matchedResults": 3,
+            "foreignBindings": 0,
+            "invalidPayloads": 0,
+            "truncated": false
+          }
+        },
+        {
+          "at": "2026-10-15T14:36:02.422Z",
+          "trace": "0985639a38bd",
+          "source": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+          "mcp": {
+            "active": true,
+            "boundCalls": 0,
+            "matchedResults": 0,
+            "foreignBindings": 0,
+            "invalidPayloads": 0,
+            "truncated": false
+          }
+        }
+      ],
+      "mcp": [
+        {
+          "at": "2026-10-15T14:33:11.410Z",
+          "event": "tool.inventory_queried",
+          "source": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+          "pid": 1952
+        },
+        {
+          "at": "2026-10-15T14:33:18.954Z",
+          "event": "tool.handoff_response_prepared",
+          "source": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+          "pid": 1952
+        },
+        {
+          "at": "2026-10-15T14:33:50.896Z",
+          "event": "tool.inventory_queried",
+          "source": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+          "pid": 1952
+        },
+        {
+          "at": "2026-10-15T14:33:57.970Z",
+          "event": "tool.handoff_response_prepared",
+          "source": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+          "pid": 1952
+        },
+        {
+          "at": "2026-10-15T14:34:45.444Z",
+          "event": "tool.inventory_queried",
+          "source": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+          "pid": 1952
+        },
+        {
+          "at": "2026-10-15T14:35:12.495Z",
+          "event": "tool.handoff_response_prepared",
+          "source": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+          "pid": 1952
+        }
+      ]
+    }
+  },
+  "boundary": {
+    "productionFilesUnchanged": 4,
+    "baselineProcesses": 63,
+    "same": 50,
+    "exited": 13,
+    "explanation": "Eight exited processes were the verified old DEV launcher subtree;22860/9320 were its launcher command tree, and9024 the previously verified DEV MCP process. Node19712 and its Codex child22688 also exited; ownership/cause is unconfirmed. They were not stopped or otherwise controlled by this task. Preserve this difference.",
+    "finalActivity": 0
+  },
+  "remaining": "Original recurring pre-local-delivery handoff issue stays open. A successful4-round flow is compatibility evidence, not a failure-rate or remote root-cause claim. No new parent-plus-three, manual MCP, compaction, installer or release artifact acceptance.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/unreceived-handoff-before-bound.json",
+      "sha256": "443be438af04dbed02a5dbd30d94fdb5be5cd0e8e59f939fde3ede3b97d01fe8"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/unreceived-handoff-before.log",
+      "sha256": "ff2cff402560dda3459b73ed37448d66693af7a78dbe584f5a86d08b6c53b257"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/mcp-repair-scoped-01.log",
+      "sha256": "431ef518a1348c79fee6b34a0f7dcc44ff00d3a5b798b9a19f7373d8c27016e2"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/mcp-repair-scoped-03.log",
+      "sha256": "060fb011082c1279ea20101f492d5968edeb16d0b8592b2ae20c495857ddbe0b"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/mcp-repair-scoped-final.log",
+      "sha256": "a0e87da4901d5124ec0d28c0bc7e7bcb7ccddd1ae2caa46f1a782afea28c6992"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/mcp-repair-typecheck-final.log",
+      "sha256": "8670e722a80795c2de9002bdb4d7040f339e9bb333122e4a9f9fdc1f36baf689"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-mcp-delivery-repair-01-status.json",
+      "sha256": "820852de8e3e2881de938c95e6d8075e5bd1de77fe4a350e7911f108c60d7690"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-mcp-delivery-repair-01-confirmed.private.json",
+      "sha256": "58e4b4f76b8c30c60d7a2c422986a2b22dc111d838758280675baad3b3ae3457"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-mcp-delivery-repair-01.private.log",
+      "sha256": "dd5457f0de9da45b523b643c08481cbb10113b4ff659ee85d46b392142d02116"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/closure-mcp-delivery-repair-01.stderr.private.log",
+      "sha256": "e6f17752845139befdd5304944380efc0f285596bd3308e935d7b2f4202c66df"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/mcp-repair-connector-binding.json",
+      "sha256": "28bf498578ec6689b4cd72985de06cba40bb318c1f478b6a4b1c49dcccd42742"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/owned-dev-mcp-repair-settled.private.json",
+      "sha256": "c9c440a141f854e89b0f8e21806780669762c9e5739ef84b5fd59fe125939e3d"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/production-before-mcp-repair.private.json",
+      "sha256": "fb10cc9f18ec25f6c56c85a6113db54e6c6e883622cf9017acd9c1fab9ff24bc"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/production-after-mcp-repair.private.json",
+      "sha256": "2dd66ccd2d8ee8e75e1a653bc50ab6ca251a721ee8bba3e394a7547f35e050eb"
+    },
+    {
+      "path": "output/2026-10-15-remaining-gaps-closure/boundary-comparison-mcp-repair.private.json",
+      "sha256": "6ffff5eaee4eab45619a382e2805e334839d521ee089aaac25d7366c69b1eb4a"
+    }
+  ]
+}

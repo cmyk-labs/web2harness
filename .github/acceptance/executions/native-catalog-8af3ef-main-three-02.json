@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "id": "native-catalog-8af3ef-main-three-02",
+  "source": {
+    "path": "sources/8af3ef5abaf244c97278ee526d186f1f670f6f60ebd133d60b26ceaf8df20cd8.json",
+    "sha256": "00623b6e7101b432796e188a389022a10d27510c188f54b9e0a7ec725e6ee983"
+  },
+  "recordedAt": "2026-10-15T13:55:41.838Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Verified independent DEV, actual dev:codex, GPT-6 Medium, workspace-write/on-request/auto_review. For MCP the previously authorized DEV tunnel and actual connector binding were revalidated; current transport source8af.",
+  "observations": [
+    {
+      "checkId": "queue.native-agents",
+      "criteriaHash": "baa475e30588393272836c2c85cdf3c93fe921914e9d802ff849affbb679c796",
+      "outcome": "pass",
+      "at": "2026-10-15T13:21:43.695Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "loadedSourceId": "8af3ef5abaf244c97278ee526d186f1f670f6f60ebd133d60b26ceaf8df20cd8",
+      "runtimeSha256": "86b1c72c63d4d63eab4308c0718ca4d63af48498e0a5cd84509bc5312f11e502",
+      "summary": "Four real agents read, native-patch and command-readback their own inputs; exact final parent program and148 output bytes verified. Three overlapping children, wait releases/re-admits, queue peak1 and settled0; no metadata fallback.",
+      "evidence": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "checkId": "license.native",
+      "criteriaHash": "17a120a43fc025681730b0961391478cf06f6dec7d0876d152d7a6fd9d8609b1",
+      "outcome": "pass",
+      "at": "2026-10-15T13:21:43.695Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "loadedSourceId": "8af3ef5abaf244c97278ee526d186f1f670f6f60ebd133d60b26ceaf8df20cd8",
+      "runtimeSha256": "86b1c72c63d4d63eab4308c0718ca4d63af48498e0a5cd84509bc5312f11e502",
+      "summary": "Actual independent DEV license permitted the observed tool/file flow.",
+      "evidence": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    }
+  ]
+}

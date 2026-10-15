@@ -20,6 +20,18 @@ Locate the first failed layer before changing configuration. A browser check, an
 
 Record the application and Codex versions, installation method, regular or DEV profile, active mode and interaction, selected model, failure time, and final detailed error. “Reconnecting” is an intermediate state and does not identify a cause.
 
+Response failures retain specific codes: `chatgpt_empty_response` means the Web round ended without a usable reply or accepted tool call; `chatgpt_assistant_turn_missing` means the sent message was accepted but no assistant turn became observable; `chatgpt_dom_unresponsive` means same-page observation recovery was exhausted; `chatgpt_response_timeout` means the configured response deadline expired. These observations alone do not establish a network fault or a Codex execution failure. Accepted requests are not automatically resent for these errors, because the original result may be uncertain. Inspect the owned conversation and correlated diagnostics before continuing.
+
+In automatic MCP mode, `mcp_handoff_not_received` means the browser issued a connector call carrying the current round's binding, but the local broker still had no MCP activity after the existing completion grace period. Explanatory text cannot complete that round successfully. A late real receipt may settle within that same budget; the application does not resend the prompt or execute arguments extracted from the page. Diagnostics retain only call/result counts and binding-match facts, not arguments or binding values. This detects an unreceived handoff; it does not establish a remote safety refusal or repair the remote delivery cause. Calls after earlier local activity and unavailable/unsupported browser evidence are not classified by this specific zero-activity check. Restart the runtime and browser helper together after upgrading this behavior.
+
+Transport diagnostics retain at most 64 events and prioritize recent conversation requests, response status codes and completion/failure categories over page assets. Counters survive a full request-handle budget or a same-page observation rebind. HTTP completion alone does not prove visible output or SSE completion; dropped events remain counted. These records contain no request URLs, headers or bodies.
+
+Large-context rendering and input insertion are separate stages. The context JSON uses reversible Unicode escapes for backticks to avoid pathological Markdown link parsing after submission; decoded code, whitespace and historical identifiers remain unchanged. When a submitted user bubble is collapsed, reply rebinding can expand it and verify the complete supported text structure, then recheck for competing turns. A shared prefix or truncated bubble is never sufficient proof. Splitting input insertion alone does not prevent the final complete message from triggering a rendering fault.
+
+For `tool_identity_mismatch`, diagnostics compare the submitted identity with the current visible Codex registry. Matching declared tool names and booleans identify a missing namespace, a namespace joined into the name, or an input-kind mismatch; unknown supplied names, arguments and response contents are not logged. A rejected submission is not an executed tool. Keep Codex's tool names, permissions and call controls unchanged.
+
+The browser smoke test also uses the global Web request queue and send interval. Its launcher-owned helper is identified by both operation ID and process ID, so the test can run while its maintenance lock continues to exclude unrelated browser work. If it immediately reports “busy with browser smoke test”, retain the diagnostic log; that is a local ownership failure, not evidence of an account or network limit.
+
 Run **Usage & Diagnostics → Health checks → Run doctor** and retain every failed check. If startup prevents access to the workspace, use **View details** and **Export diagnostic log** on the startup page. For automatic interaction, inspect browser sign-in, applied configuration, and catalog readiness in that order. For manual interaction, personally verify the browser and remote connector binding.
 
 | Symptom | Start here |
@@ -84,6 +96,8 @@ If the launcher reports that it restored the previous Codex route after runtime 
 4. Inspect the launcher's catalog status and select a **(Web)** model. If verification still fails, run diagnostics and export a fresh safe log.
 
 **Verify:** Codex reads the Web catalog and the launcher marks it verified. Diagnose subsequent turn failures separately. For development, restart only the verified DEV client.
+
+A short client timeout can interrupt the first upstream connection before it finishes. Identical catalog GETs now share an in-flight attempt, including across client disconnect/retry, only when the complete request headers and query match. An attempt without waiters is cancelled after 30 seconds; an unclaimed successful response is kept for at most 10 seconds and discarded after delivery. HTTP/transport failures are not retained. This does not substitute cached or fabricated model metadata, retry task execution, or restart the browser. A client disconnect does not overwrite the last completed catalog health result; safe transport error codes and `http.model_catalog_fetch` operation IDs distinguish actual upstream failures from retries. Persistent network/authentication failures still require their specific remedy.
 
 ### `openai_base_url changed after setup` or model “not supported”
 
@@ -222,6 +236,20 @@ For development, use `bun run dev:launcher` in that session. For an installed pa
 
 ## Tasks and context
 
+### Page preparation fails before the message is sent
+
+`chatgpt_composer_unavailable`, `chatgpt_page_structure_unsupported` and `chatgpt_preparation_timeout` describe browser preparation, not model capacity. Sign-in, expired-session and browser-verification prompts keep their own errors. Generic service unavailability or HTTP 503 alone does not establish model overload.
+
+`chatgpt_browser_unresponsive` means an exclusive task page did not settle after its preparation or input deadline and a five-second cleanup grace. The application closes that task page and reports failure only after closure is confirmed; it does not resend the message. Other task pages and the sign-in homepage are retained. If closure cannot be confirmed, diagnostics report a cleanup failure instead. Retry the task after checking its tool results; a renderer stall alone does not establish a network fault.
+
+Before typing a connector query or preparing a prompt without a connector, the bridge clears its owned draft through native editor deletion and verifies that no text or selected connector remains. It checks the current editor again if the page replaces it. An already verified connector with an empty draft can be reused. `prompt_attachment_integrity` means clearing or text verification failed; the bridge stops before sending that prompt. Cancellation still gets an independent, bounded cleanup. This does not add request retries or replace a retained conversation.
+
+Automatic new conversations allow at most one preparation recovery, within one 90-second budget starting at initial Web dispatch. Navigation, observation, recovery and any subsequent queue wait share that deadline. The failed page is released before recovery re-enters the global queue. The native-round identity retains the budget across HTTP reconnects; generic retryable errors do not grant another preparation recovery. Existing conversations are not replaced by new chats for this recovery.
+
+Recovery requires independent evidence that submission has not started: no Send activation, conversation request, user/assistant turn, Stop state or MCP activity. A `prepared` label alone is insufficient. Accepted or uncertain submissions keep their replay protection. Model, effort and connector selection are checked again before sending.
+
+If preparation still fails, inspect the exact error and the owned ChatGPT page. Diagnostics include bounded page/transport categories and, when CDP streaming is available, response-event counts and visible-text lengths. They do not store response bodies, tool arguments or hidden reasoning. Unavailable or truncated stream evidence remains inconclusive; a model's claim that a safety check blocked a tool does not prove a platform rejection. Browser-controlled network polling is separate from this preparation budget.
+
 ### `Reconnecting`, `stream disconnected`, `ChatGPT failed`, or HTTP 502
 
 **Check:** inspect the final detailed error after reconnect attempts. These messages can result from account limits, website errors, changed controls, a closed browser page, route conflicts, or an expired MCP tool deadline. A generic 502 does not identify a tunnel fault.
@@ -229,6 +257,12 @@ For development, use `bun run dev:launcher` in that session. For an installed pa
 **Action:** if no account limit or other stopping condition applies, try once in a new Codex task. Record whether tools executed, whether ChatGPT showed a final answer, and whether the new task succeeded. Run diagnostics and export a safe log immediately. For `codex_tool_timeout`, inspect the actual tool and its turn-bound deadline before retrying.
 
 **Verify:** a complete answer and expected tool results return to Codex. Identify any partial file changes from a failed attempt before requesting the same operation again.
+
+### Web compaction reports `context_length_exceeded`
+
+**Check:** the complete compaction input exceeds the inline browser transport budget. Web2Harness preserves the original context and reports a non-retryable error; reconnecting the same request replays that error without another browser submission.
+
+**Action:** explicitly enable **Context as File** for a supported model, or reduce context through Codex, then retry. Web2Harness does not enable file transport automatically or trim history to fit. Confirm that compaction completes and the task continues before treating the issue as resolved.
 
 ### Native compaction returns `404 Not Found`
 

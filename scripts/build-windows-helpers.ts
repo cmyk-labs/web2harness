@@ -17,7 +17,9 @@ if (process.platform === "win32") {
   // Run the shared setup, deployment and uninstall tests with the runtime shipped in NSIS.
   // Node-only tests do not cover Bun filesystem compatibility (e.g. cpSync).
   const regression = Bun.spawnSync([
-    resolve(import.meta.dir, "../launcher/build/runtime/runtime/bun.exe"), "test",
+    // The real shortcut fixture starts multiple PowerShell/COM processes; Bun's
+    // default 5-second limit can kill it during cold startup on Windows runners.
+    resolve(import.meta.dir, "../launcher/build/runtime/runtime/bun.exe"), "test", "--timeout", "30000",
     "./launcher/tests/installation/windows-install.test.cjs", "./launcher/tests/installation/runtime-install.test.cjs",
     "./launcher/tests/installation/windows-uninstall.test.cjs",
     "./launcher/tests/installation/windows-shortcuts.test.cjs", "./launcher/tests/installation/update-windows.test.cjs",

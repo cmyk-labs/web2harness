@@ -1086,6 +1086,7 @@ class RuntimeSupervisor {
     const contract = config.browserInteractionMode === "manual" ? "safe" : "native";
     const invocation = this.runtimeCommand([
       "mcp",
+      "--protocol", "web2harness-handoff-v1",
       "--contract",
       contract,
       "--broker-socket",

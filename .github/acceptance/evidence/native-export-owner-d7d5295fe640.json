@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 2,
+  "kind": "partial-native-export-evidence",
+  "recordedAt": "2026-10-15T08:49:35.412Z",
+  "sourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+  "scope": "User-operated native Save and Cancel on the current isolated source DEV desktop; independently inspected the supplied 24-hour ZIP.",
+  "userReport": {
+    "save": "pass",
+    "cancel": "pass",
+    "selectedRange": "24h",
+    "confirmedInConversation": true,
+    "earlierMistakenAnswerWithdrawn": true,
+    "laterExplicitHandoff": true
+  },
+  "archiveInspection": {
+    "passed": true,
+    "inspectedAt": "2026-10-15T08:47:29.536Z",
+    "sourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+    "archive": {
+      "sha256": "5cf02b1157cd8877e471c54132a383dbc32a166c5bd15e155070b13f75dda36d",
+      "bytes": 1744287,
+      "entries": [
+        "summary.txt",
+        "timeline.jsonl",
+        "snapshot.json",
+        "manifest.json"
+      ],
+      "crc": "all four entries passed",
+      "manifestHashes": 3
+    },
+    "export": {
+      "generatedAt": "2026-10-15T08:42:13.479Z",
+      "range": {
+        "mode": "24h",
+        "start": 1791967333479,
+        "end": 1792053733479,
+        "timeZone": "Asia/Shanghai"
+      },
+      "count": 19990,
+      "partial": false,
+      "sources": {
+        "collected": 139,
+        "absent": 3
+      },
+      "allTimestampsInRange": true,
+      "sortedTimeline": true,
+      "profile": "development",
+      "exportTimeSnapshot": true
+    },
+    "redaction": {
+      "patterns": [
+        "signedLicense",
+        "runtimeKey",
+        "bearerCredential",
+        "privateKey",
+        "jwt",
+        "localUserHome",
+        "rawConversation"
+      ],
+      "protectedFields": 0,
+      "knownDevCredentialsChecked": 4,
+      "detectedLeaks": 0,
+      "limitation": "Pattern, field and known-DEV-credential inspection; not a claim of exhaustive detection of every possible sensitive string. Existing sentinel fixtures remain separate evidence."
+    },
+    "faultCorrelation": {
+      "traceId": "32c83d6be07b",
+      "records": 94,
+      "failures": [
+        {
+          "at": "2026-10-15T08:01:09.807Z",
+          "event": "browser.stage_failed",
+          "level": "error"
+        },
+        {
+          "at": "2026-10-15T08:01:09.835Z",
+          "event": "browser.turn_failed",
+          "level": "error"
+        },
+        {
+          "at": "2026-10-15T08:01:09.836Z",
+          "event": "browser.failure_evidence",
+          "level": "info"
+        },
+        {
+          "at": "2026-10-15T08:01:15.137Z",
+          "event": "queue.failed",
+          "level": "info"
+        }
+      ],
+      "note": "The archive preserves the known first-send failure; this does not resolve that failure."
+    },
+    "userAttestation": {
+      "save": "passed",
+      "cancel": "passed",
+      "range": "24h",
+      "source": "User explicitly confirmed successful packaging/cancellation, supplied the resulting ZIP path, and clarified the selected range in this conversation."
+    },
+    "remaining": [
+      "All-retained/custom native exports were not reported by the user; do not infer those UI executions from this 24-hour archive."
+    ]
+  },
+  "runtime": {
+    "profile": "development",
+    "sourceLauncher": true,
+    "pid": 35616,
+    "standardEntry": "bun run dev:launcher",
+    "loadedSourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+    "sourceEntrySha256": "04158cbd2bd88b04f27689f290e484e08ff7bd73ec0e65333013cfc83fbec17e"
+  },
+  "boundary": {
+    "productionFilesUnchanged": 4,
+    "baselineProcessesSame": 107,
+    "baselineProcessesExited": 1,
+    "note": "One baseline Chrome process exited without any task action targeting it; cause not attributed. DEV launcher remains open for the owner."
+  },
+  "limits": [
+    "Native 24-hour Save and Cancel passed. All-retained/custom native exports are not inferred; the composite catalog row remains needs-evidence for only these range observations. Existing deterministic range/boundary fixtures remain separately covered.",
+    "No product source changes, Git commit, push, tag or publication."
+  ],
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-native-export-owner/owner-export.zip",
+      "sha256": "5cf02b1157cd8877e471c54132a383dbc32a166c5bd15e155070b13f75dda36d"
+    },
+    {
+      "path": "output/2026-10-15-native-export-owner/archive-inspection.json",
+      "sha256": "bf6bb159558460c1ed894ba75937155b1671e711be9c0bf8e72ca6f056958a4c"
+    },
+    {
+      "path": "output/2026-10-15-native-export-owner/owned-dev-ready.private.json",
+      "sha256": "bfa05ebbff37bd49a49fff7bef6c933407ae471ba4e92f0a9c32fcd38630d231"
+    },
+    {
+      "path": "output/2026-10-15-native-export-owner/production-before.private.json",
+      "sha256": "209dfb300bcaaf408d12ea2cb1182f601ae4b9fb1b27c1a76fd7de7593258dcc"
+    },
+    {
+      "path": "output/2026-10-15-native-export-owner/production-after.private.json",
+      "sha256": "9ebda13f581ef5a358154d516cefc17d18e685c0c04745185a4185971e50ac52"
+    }
+  ]
+}

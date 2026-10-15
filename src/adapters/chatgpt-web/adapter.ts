@@ -1,9 +1,13 @@
 import { diagnosticEvent } from "../../diagnostics";
+import { chatGptWebQueueModel } from "../../models/chatgpt-web-queue-model";
+import { CompletionFenceWait } from "./tools/completion-fence";
+import { withQueuedRequest, queueRequest, type QueueTicket } from "../../browser/request-queue-client";
+import { setTimeout as waitDelay } from "node:timers/promises";
 import { validateToolCallBatch } from "./tools/tool-call-policy";
 import { requireLicense } from "../../licensing/service";
 import { LicenseError } from "../../licensing/schema";
 import { createHash, randomBytes } from "node:crypto";
-import { resolve } from "node:path";
+import { resolve, dirname, join } from "node:path";
 import { isChatGptWebZeroRiskBackendModel } from "../../models/chatgpt-web-models";
 import { defaultBrokerEndpoint, expandUserPath, resolveBrokerEndpoint } from "../../config";
 import {
@@ -16,6 +20,7 @@ import {
   releaseLauncherRetainedConversation,
   startLauncherManualTurn,
   waitForLauncherManualSent,
+  waitForLauncherManualFinished,
   waitForLauncherManualTerminal,
   type LauncherManualTurnEnd,
   type LauncherManualTurnOwner,
@@ -128,6 +133,7 @@ function cancellableBrowserTurn(
 }
 
 export interface ChatGptZeroRiskManualControl {
+  waitFinished(descriptorPath: string, owner: LauncherManualTurnOwner, signal?: AbortSignal): Promise<void>;
   start(descriptorPath: string, activity: LauncherManualTurnStart): Promise<unknown>;
   waitSent(
     descriptorPath: string,
@@ -145,6 +151,7 @@ export interface ChatGptZeroRiskManualControl {
 }
 
 const launcherZeroRiskManualControl: ChatGptZeroRiskManualControl = {
+  waitFinished: waitForLauncherManualFinished,
   start: startLauncherManualTurn,
   waitSent: waitForLauncherManualSent,
   waitTerminal: waitForLauncherManualTerminal,
@@ -209,12 +216,15 @@ export function chatGptWebExecutionNamespace(provider: CodexProviderConfig): str
 
 export function chatGptWebTraceId(provider: CodexProviderConfig, parsed: CodexParsedRequest): string {
   const namespace = chatGptWebExecutionNamespace(provider);
+  // Round-specific ownership must not skip canonical native-turn/revision validation.
+  // The HTTP boundary relies on its conflict error to reject stopped or forged continuations.
+  chatGptTurnExecutionKey(parsed);
   // The logical response key survives compaction so a final answer that won the handoff race
   // can still be replayed. A new physical browser owner must instead belong to the new context
   // epoch; otherwise Zero Risk correctly rejects it against the previous owner's completion.
   const conversation = parsed._compactionRequest ? undefined : chatGptConversationKey(parsed, namespace);
   return createHash("sha256")
-    .update(`${namespace}:${chatGptTurnExecutionKey(parsed)}`)
+    .update(`${namespace}:${chatGptTurnRoundKey(parsed)}`)
     .update(conversation ? `:${conversation}` : "")
     .digest("hex")
     .slice(0, 12);
@@ -445,6 +455,7 @@ export function createChatGptWebAdapter(
     && provider.chatgptWeb.browserHostDescriptorPath
       ? resolve(expandUserPath(provider.chatgptWeb.browserHostDescriptorPath))
       : undefined;
+  if (structuredBroker && retainedLauncherDescriptor) structuredBroker.configureHandoffJournal(join(dirname(retainedLauncherDescriptor), "handoff-deliveries"));
   if (manualInteraction) {
     if (!configuredCapabilities.localToolsEnabled) {
       throw new Error("ChatGPT Zero Risk requires MCP Bridge");
@@ -464,7 +475,7 @@ export function createChatGptWebAdapter(
     environment: ReturnType<typeof extractChatGptTurnEnvironment> | undefined,
     traceId: string,
     turnCapabilities: ChatGptWebCapabilities,
-    hooks: { onCompactionProgress?: () => void; nativeToolCallCorrection?: string } = {},
+    hooks: { onQueueDispatched?: () => void; onCompactionProgress?: () => void; nativeToolCallCorrection?: string } = {},
   ): ChatGptTurnRuntime => {
     const manualRequest = isChatGptWebZeroRiskBackendModel(parsed.modelId);
     if (manualRequest !== manualInteraction) {
@@ -490,6 +501,25 @@ export function createChatGptWebAdapter(
       ? retainedConversationResumeRequest(parsed, conversationKey)
       : undefined;
     const retainConversation = conversationKey !== undefined;
+    const queueAttempt = chatGptWebTurnRetryPolicy.attempt(`${executionNamespace}:${chatGptTurnRetryKey(parsed)}`);
+    const preparationIdentity = {
+      preparationKey: createHash("sha256").update(`${executionNamespace}:${chatGptTurnRoundKey(parsed)}`).digest("hex"),
+      // A model/error retry must not receive another initialization recovery budget.
+      allowPreparationRecovery: queueAttempt === 0 && !parsed._compactionRequest,
+    };
+    // Reconnects retain their receipt. A bounded, explicitly retryable rejection (for example an
+    // invalid native block that emitted no tools) needs a new admission after the old page settles.
+    // The process-local counter starts at zero after restart, so it cannot bypass durable receipts.
+    const queueExecutionKey = `${executionNamespace}:${chatGptTurnRoundKey(parsed)}`
+      + (queueAttempt > 0 ? `:retry:${queueAttempt}` : "");
+    const scheduling = {
+      id: createHash("sha256").update(queueExecutionKey).digest("hex"),
+      groupId: extractChatGptTurnIdentity(parsed).threadId ?? chatGptThreadOwnershipKey(parsed),
+      model: chatGptWebQueueModel(parsed.modelId, parsed._chatgptModelFamily, parsed.options.reasoning),
+      mode: manualRequest ? "manual" : mode.localTools ? "mcp-bridge" : mode.nativeTools ? "native-tools" : "browser-only",
+      ...(parsed.options.reasoning ? { effort: parsed.options.reasoning } : {}),
+      bytes: Buffer.byteLength(JSON.stringify(parsed)),
+    };
     const releaseRetainedConversation = conversationKey && retainedLauncherDescriptor
       ? async () => {
         await releaseLauncherRetainedConversation(retainedLauncherDescriptor, conversationKey);
@@ -498,6 +528,7 @@ export function createChatGptWebAdapter(
     const compileOptionsFor = () => {
       if (manualRequest) return {};
       return {
+        ...(mode.localTools ? { toolBatchHandoff: true } : {}),
         experimentalSkillAttachments,
         ...(hooks.nativeToolCallCorrection !== undefined
           ? { nativeToolCallCorrection: hooks.nativeToolCallCorrection }
@@ -527,6 +558,7 @@ export function createChatGptWebAdapter(
     });
     const trace = new ChatGptTraceFeed();
     const text = new ChatGptTextFeed();
+    const handoff: NonNullable<ChatGptTurnRuntime["handoff"]> = {};
     const observedCapabilityTokens = new Set<string>();
     const observeCapabilityRetirement = (
       turnToken: string,
@@ -572,31 +604,35 @@ export function createChatGptWebAdapter(
       let activeToken: string | undefined;
       let launcherStarted = false;
       let launcherEnded = false;
+      let awaitingToolResults = false;
       const finishLauncher = async (status: LauncherManualTurnEnd["status"]): Promise<void> => {
         if (!launcherStarted || launcherEnded) return;
         await zeroRiskManualControl.end(retainedLauncherDescriptor, {
           ...owner,
           status,
           ...(status === "completed" && retainConversation ? { retain: true } : {}),
+          ...(status === "completed" && retainConversation && awaitingToolResults ? { awaitingToolResults: true } : {}),
         });
         launcherEnded = true;
       };
-      const runManual = async (): Promise<string> => {
+      const runManual = async (queueTicket?: QueueTicket): Promise<string> => {
+        hooks.onQueueDispatched?.();
         try {
-          activeToken = await broker.registerSafe(environment, surfaceNonce, undefined, traceId);
+          activeToken = await broker.registerHandoff(environment, { surfaceNonce, traceId,
+            policy: { toolChoice: parsed.options.toolChoice, parallelToolCalls: parsed.options.parallelToolCalls } });
           observeCapabilityRetirement(activeToken, externalProgress);
           const compiled = compileChatGptWebPrompt(
             parsed,
             turnCapabilities,
             activeToken,
-            { manualControl: true },
+            { manualControl: true, toolBatchHandoff: true },
           );
           const resumeCompiled = resumeInput
             ? compileChatGptWebPrompt(
               resumeInput,
               turnCapabilities,
               activeToken,
-              { manualControl: true },
+              { manualControl: true, toolBatchHandoff: true },
             )
             : undefined;
           for (const candidate of [compiled, resumeCompiled]) {
@@ -626,6 +662,7 @@ export function createChatGptWebAdapter(
             ...(parsed._compactionRequest ? { compaction: true as const } : {}),
           });
           launcherStarted = true;
+          if (queueTicket) await queueRequest(retainedLauncherDescriptor, "phase", { ...queueTicket, phase: "waiting-user" });
           await zeroRiskManualControl.waitSent(retainedLauncherDescriptor, owner, {
             abortSignal: browserAbort.signal,
           });
@@ -653,29 +690,35 @@ export function createChatGptWebAdapter(
               terminalFailure,
             ]);
             await zeroRiskManualControl.markStarted(retainedLauncherDescriptor, owner);
+            if (queueTicket) await queueRequest(retainedLauncherDescriptor, "phase", { ...queueTicket, phase: "running" });
             if (!parsed._compactionRequest) trace.push({
               kind: "commentary",
               text: "> **Zero Risk connected**\n>\n> `Codex Zero Risk` is connected. ChatGPT is now working through the native Codex harness; progress remains visible in the launcher.",
             });
-            answer = await Promise.race([
-              broker.waitForSafeCompletion(activeToken, browserAbort.signal),
+            const intent = await Promise.race([
+              broker.waitForHandoffIntent(activeToken, browserAbort.signal),
               terminalFailure,
             ]);
+            awaitingToolResults = intent.kind === "tools";
+            if (queueTicket) await queueRequest(retainedLauncherDescriptor, "phase", { ...queueTicket, phase: "waiting-user" });
+            await zeroRiskManualControl.waitFinished(retainedLauncherDescriptor, owner, browserAbort.signal);
+            const completionWait = new CompletionFenceWait();
+            for (;;) {
+              const fence = await broker.beginCompletionFence(activeToken);
+              completionWait.observe(fence, Date.now(), 10_000);
+              if ((fence.state === "ready" || fence.state === "already_committed")
+                && (await broker.commitCompletionFence(activeToken, fence.revision)).state === "committed") break;
+              await waitDelay(100, undefined, { signal: browserAbort.signal });
+            }
+            await finishLauncher("completed");
+            handoff.result = await broker.deliverHandoff(activeToken);
+            answer = intent.kind === "final" ? intent.answer : "";
           } finally {
             terminalAbort.abort();
             browserAbort.signal.removeEventListener("abort", abortTerminal);
           }
           text.push(answer);
-          try {
-            await finishLauncher("completed");
-          } catch (controlError) {
-            // The broker result is already authoritative. A launcher acknowledgement failure may
-            // leave UI cleanup pending, but it must not replace a completed Codex answer with an
-            // error or trigger a contradictory failed terminal mutation.
-            console.error(
-              `[chatgpt-web] completed Zero Risk turn but could not confirm launcher cleanup: ${controlError instanceof Error ? controlError.message : String(controlError)}`,
-            );
-          }
+          await finishLauncher("completed");
           return answer;
         } catch (error) {
           const normalized = safeManualAdapterError(error);
@@ -694,7 +737,16 @@ export function createChatGptWebAdapter(
           throw normalized;
         }
       };
-      const browserTurn = cancellableBrowserTurn(trackBrowserOwner(finalizeBrowserReply(runManual())), browserAbort);
+      const queuedManual = scheduling ? withQueuedRequest({ descriptorPath: retainedLauncherDescriptor, job: scheduling,
+        traceId, signal: browserAbort.signal,
+        execute: async (ticket, signal) => {
+          const stop = () => browserAbort.abort(signal.reason);
+          signal.addEventListener("abort", stop, { once: true });
+          try { signal.throwIfAborted(); return await runManual(ticket); }
+          finally { signal.removeEventListener("abort", stop); }
+        },
+      }) : runManual();
+      const browserTurn = cancellableBrowserTurn(trackBrowserOwner(finalizeBrowserReply(queuedManual)), browserAbort);
       void browserTurn.browser.catch(error => {
         if (tokenSettled) return;
         tokenSettled = true;
@@ -702,6 +754,7 @@ export function createChatGptWebAdapter(
       });
       return {
         mode: "tools",
+        handoff,
         token: token.promise,
         externalProgress,
         browser: browserTurn.browser,
@@ -732,7 +785,11 @@ export function createChatGptWebAdapter(
         release: () => {},
       });
       const browserTurn = cancellableBrowserTurn(finalizeBrowserReply(worker.run({
+        ...(mode.nativeTools ? { nativeToolDefinitions: parsed.context.tools ?? [] } : {}),
         traceId,
+        scheduling,
+        ...preparationIdentity,
+        onQueueDispatched: hooks.onQueueDispatched,
         modelId: parsed.modelId,
         reasoning: parsed.options.reasoning,
         usagePurpose: parsed._compactionRequest ? "compaction" : parsed.context.messages.at(-1)?.role === "toolResult" ? "tool-result" : "task",
@@ -768,11 +825,11 @@ export function createChatGptWebAdapter(
     let tokenSettled = false;
     let activeToken: string | undefined;
     const prepareWith = async (input: CodexParsedRequest) => {
-      const turnToken = activeToken ?? await broker.register(
-        environment,
-        timeoutMs === undefined ? undefined : timeoutMs + 60_000,
-        traceId,
-      );
+      const turnToken = activeToken ?? await broker.registerHandoff(environment, {
+        allowBrowserReply: true,
+        ttlMs: timeoutMs === undefined ? undefined : timeoutMs + 60_000, traceId,
+        policy: { toolChoice: parsed.options.toolChoice, parallelToolCalls: parsed.options.parallelToolCalls },
+      });
       activeToken = turnToken;
       try {
         const compiled = compileChatGptWebPrompt(
@@ -797,6 +854,9 @@ export function createChatGptWebAdapter(
     };
     const browserTurn = cancellableBrowserTurn(trackBrowserOwner(finalizeBrowserReply(worker.run({
       traceId,
+      scheduling,
+      ...preparationIdentity,
+      onQueueDispatched: hooks.onQueueDispatched,
       modelId: parsed.modelId,
       reasoning: parsed.options.reasoning,
         usagePurpose: parsed._compactionRequest ? "compaction" : parsed.context.messages.at(-1)?.role === "toolResult" ? "tool-result" : "task",
@@ -815,8 +875,12 @@ export function createChatGptWebAdapter(
       externalProgress,
       completionFence: {
         begin: async () => broker.beginCompletionFence(await token.promise),
-        commit: async revision => broker.commitCompletionFence(await token.promise, revision),
+        commit: async (revision, browserReply) => broker.commitCompletionFence(await token.promise, revision, browserReply),
       },
+    }).then(async answer => {
+      // worker.run resolves after owned browser cleanup (including the queue receipt).
+      handoff.result = await broker.deliverHandoff(await token.promise);
+      return answer;
     }))), browserAbort);
     void browserTurn.browser.catch(error => {
       if (!tokenSettled) {
@@ -826,6 +890,7 @@ export function createChatGptWebAdapter(
     });
     return {
       mode: "tools",
+      handoff,
       token: token.promise,
       externalProgress,
       browser: browserTurn.browser,
@@ -989,13 +1054,13 @@ export function createChatGptWebAdapter(
                     // Fresh compaction is a bounded phase. The accepted compact prompt
                     // re-arms the five-minute liveness budget;
                     // transport time cannot consume the model-generation window.
-                    armHandoffDeadline();
+                    if (handoffTimer) clearTimeout(handoffTimer);
                     const fallbackRuntime = startRuntime(
                       parsed,
                       manualRequest ? environment : undefined,
                       freshCompactionTraceId,
                       turnCapabilities,
-                      { onCompactionProgress: armHandoffDeadline },
+                      { onQueueDispatched: armHandoffDeadline, onCompactionProgress: armHandoffDeadline },
                     );
                     retainOwnershipUntil(fallbackRuntime.physicalSettlement);
                     try {
@@ -1042,6 +1107,16 @@ export function createChatGptWebAdapter(
                     if (!source || !retainedKey) {
                       return await runFreshCompaction("source_unavailable_before_handoff");
                     }
+                    if (source.runtime.handoff) {
+                      // A staged MCP round cannot receive a synchronous tool-result instruction.
+                      // Settle and retire its physical owner before a separately queued checkpoint.
+                      await withAbort(source.physicalSettlement, operationSignal);
+                      preserveFinalResponse = source.runtime.handoff.result?.terminal.kind === "final";
+                      await withAbort(preserveFinalResponse
+                        ? chatGptTurnSessions.retireConversationPreservingFinalResponse(retainedKey, source, compactedSourceExecutionKey)
+                        : chatGptTurnSessions.retireConversationAndWait(retainedKey), operationSignal);
+                      return await runFreshCompaction("mcp_round_checkpoint");
+                    }
                     let rawSummary: string;
                     if (manualRequest && source.isActive() && source.runtime.mode === "tools") {
                       const zeroRiskSummary = await settleActiveZeroRiskCompactionSource(
@@ -1072,6 +1147,7 @@ export function createChatGptWebAdapter(
                         operationSignal,
                       );
                       preserveFinalResponse = !settlement.compactionInstructionDelivered;
+                      if (handoffTimer) clearTimeout(handoffTimer);
                       rawSummary = await requestRetainedCompactionHandoff(
                         worker,
                         parsed,
@@ -1089,6 +1165,7 @@ export function createChatGptWebAdapter(
                         await withAbort(source.physicalSettlement, operationSignal);
                         preserveFinalResponse = true;
                       }
+                      if (handoffTimer) clearTimeout(handoffTimer);
                       rawSummary = await requestRetainedCompactionHandoff(
                         worker,
                         parsed,
@@ -1182,7 +1259,7 @@ export function createChatGptWebAdapter(
           const responseExecutionKey = `${executionNamespace}:${chatGptCompactionSourceExecutionKey(parsed)}`;
           await chatGptTurnSessions.retireAndWait(responseExecutionKey, incoming.abortSignal);
         }
-        const nativeRoundKey = nativeToolsTurn ? chatGptTurnRoundKey(parsed) : undefined;
+        const nativeRoundKey = nativeToolsTurn || mode.localTools ? chatGptTurnRoundKey(parsed) : undefined;
         // Native-tools rounds are per request: Codex resends the full history every round
         // (store:false), so each roundKey (input hash) owns its own response journal. Keying the
         // session by thread+turn alone would replay round 1's settled reply to round 2 — the
@@ -1204,7 +1281,9 @@ export function createChatGptWebAdapter(
         const nativeToolCallCorrection = nativeToolsTurn
           ? peekNativeToolCallCorrection(retryKey)
           : undefined;
-        const session = await chatGptTurnSessions.getOrCreateAfterOwnerRetirement(
+        const preservedFinal = chatGptTurnSessions.find(`${executionNamespace}:${chatGptTurnExecutionKey(parsed)}`);
+        const session = (preservedFinal?.runtime.handoff?.result?.terminal.kind === "final" ? preservedFinal : undefined)
+          ?? await chatGptTurnSessions.getOrCreateAfterOwnerRetirement(
           executionKey,
           ownerKey,
           () => startRuntime(parsed, environment, traceId, turnCapabilities, {
@@ -1232,6 +1311,24 @@ export function createChatGptWebAdapter(
           emitRoundEvents(events);
         };
         const emitRoundEvent = (event: AdapterEvent): void => emitRoundEvents([event]);
+        const emitHandoffReply = (reasoning: string[]): void => {
+          const delivery = session.runtime.handoff?.result;
+          if (!delivery) throw new Error("MCP Web round has not completed its physical handoff");
+          if (delivery.terminal.kind === "tools") {
+            validateToolCallBatch(parsed, delivery.requests);
+            emitRoundBatch(buffer => emitToolBatch(delivery.requests,
+              estimateChatGptWebUsage(parsed, { reasoning, toolRequests: delivery.requests }, turnCapabilities, experimentalContextFiles, experimentalSkillAttachments), buffer));
+          } else {
+            validateToolCallBatch(parsed, []);
+            const answer = delivery.terminal.answer;
+            structuredOutputValidator?.(answer);
+            emitRoundBatch(buffer => emitTextDeltas([answer], buffer));
+            emitRoundBatch(buffer => emitBrowserCompletion({ type: "final", answer },
+              estimateChatGptWebUsage(parsed, { answer, reasoning }, turnCapabilities, experimentalContextFiles, experimentalSkillAttachments), buffer));
+          }
+          session.completeRound(roundKey);
+          chatGptWebTurnRetryPolicy.clear(retryKey);
+        };
         /**
          * Terminal emission for a native-tools reply. Runs only after the browser outcome fully
          * settled, so the raw stream never leaked block text: the reply is parsed against the tools
@@ -1295,6 +1392,14 @@ export function createChatGptWebAdapter(
             const settled = session.settledOutcome();
             if (settled) {
               if (settled.type === "error") throw settled.error;
+              if (session.runtime.handoff) {
+                session.runtime.text.drain();
+                const trace = session.runtime.trace.drain();
+                session.appendRoundReasoning(roundKey, trace.map(event => event.text));
+                emitRoundBatch(buffer => emitTraceEvents(trace, buffer));
+                emitHandoffReply(session.roundReasoning(roundKey));
+                return;
+              }
               if (nativeToolsTurn) {
                 const trace = session.runtime.trace.drain();
                 session.runtime.text.drain();
@@ -1348,7 +1453,7 @@ export function createChatGptWebAdapter(
             }
 
             let turnToken: string | undefined;
-            if (session.runtime.mode === "tools") {
+            if (session.runtime.mode === "tools" && !session.runtime.handoff) {
               turnToken = await withAbort(session.runtime.token, incoming.abortSignal);
               if (!environment) throw new Error("Tool-capable ChatGPT web runtime lost its trusted environment");
               await broker.updateEnvironment(turnToken, environment);
@@ -1391,7 +1496,7 @@ export function createChatGptWebAdapter(
               const emitNewText = (deltas: string[]) => {
                 // Native-tools turns buffer every raw delta: block bodies must never stream to
                 // Codex, so the visible text is emitted once from the parsed settled answer.
-                if (!bufferStructuredOutput && !nativeToolsTurn) emitRoundBatch(buffer => emitTextDeltas(deltas, buffer));
+                if (!bufferStructuredOutput && !nativeToolsTurn && !session.runtime.handoff) emitRoundBatch(buffer => emitTextDeltas(deltas, buffer));
               };
               if (replay.length === 0 && !parsed._compactionRequest) {
                 emitRoundBatch(buffer => emitReadOnlyContextWarning(parsed, turnCapabilities, buffer));
@@ -1435,6 +1540,12 @@ export function createChatGptWebAdapter(
                 emitNewTrace(session.runtime.trace.drain());
                 emitNewText(session.runtime.text.drain());
                 session.setFinalReasoning(roundReasoning);
+                if (session.runtime.handoff) {
+                  if (completedOutcome.type === "error") throw completedOutcome.error;
+                  emitHandoffReply(roundReasoning);
+                  session.setFinalEvents(session.roundEvents(roundKey));
+                  return;
+                }
                 if (nativeToolsTurn) {
                   if (turnToken) await broker.revoke(turnToken);
                   if (completedOutcome.type === "error") throw completedOutcome.error;

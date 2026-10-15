@@ -10,6 +10,7 @@ import {
 import type { WorkspaceProps } from "../types";
 import { WorkspaceIcon } from "../WorkspaceIcon";
 import { useLicense } from "../../licensing/LicenseContext";
+import { QueueOverview } from "../RequestQueue";
 import { licenseLabel } from "../../licensing/LicensePanel";
 
 export function Overview(p: WorkspaceProps) {
@@ -62,6 +63,7 @@ export function Overview(p: WorkspaceProps) {
         </div>
         <Button onClick={() => navigate("license")}>{license.active ? t("管理授权", "Manage license") : t("前往激活", "Activate")}</Button>
       </section>
+      <QueueOverview {...p} />
       <Section title={t("连接状态", "Connection status")} />
       <div className="overview-status cards">
         {[

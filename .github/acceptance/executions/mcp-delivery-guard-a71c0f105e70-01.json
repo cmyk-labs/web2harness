@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "id": "mcp-delivery-guard-a71c0f105e70-01",
+  "source": {
+    "path": "sources/a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2.json",
+    "sha256": "501b4c39e09b47102d7207fcdcbf18e551bfe0ead1ddc9afcdaad02138dd415f"
+  },
+  "recordedAt": "2026-10-15T14:41:49.054Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Independently licensed DEV, verified actual previously authorized tunnel, GPT-6 Medium/workspace-write/on-request/auto_review; current runtime/helper/MCP source proved. Production hashes unchanged; two external process exits remain unclassified.",
+  "observations": [
+    {
+      "checkId": "license.automatic-mcp",
+      "criteriaHash": "f53c2f19522d30c5ec4b19a6bfb67a4246f8de831ed056467e117d4ad0661519",
+      "outcome": "pass",
+      "at": "2026-10-15T14:36:11.687Z",
+      "layer": "authenticated-dev",
+      "mode": "automatic-mcp",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "loadedSourceId": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+      "runtimeSha256": "86b1c72c63d4d63eab4308c0718ca4d63af48498e0a5cd84509bc5312f11e502",
+      "summary": "Valid independent DEV license allowed actual command read, native apply_patch, command byte readback and ordinary final response;37 exact output bytes,4 rounds and7 bound connector calls/results.",
+      "evidence": [
+        {
+          "path": "evidence/mcp-delivery-guard-a71c0f105e70.json",
+          "sha256": "36fe8d636bde7cc0c8302e9e22cfd0cf2538f4b7991f3471438754e2493bacd5"
+        }
+      ]
+    }
+  ]
+}

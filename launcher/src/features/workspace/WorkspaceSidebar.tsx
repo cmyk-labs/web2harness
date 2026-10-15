@@ -77,7 +77,7 @@ export function WorkspaceSidebar({
             },
             {
               label: t("设置", "Settings"),
-              pages: ["connection", "preferences"],
+              pages: ["connection", "runtime-parameters", "preferences"],
             },
             { label: t("应用", "Application"), pages: ["license", "diagnostics", "about"] },
           ] as { label: string; pages: WorkspacePage[] }[]

@@ -1,0 +1,25 @@
+{
+  "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "loadedSourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "runtimeSha256": "711c85ee5a72caaa282ca810385c4a5d5cc597f8ba3d74cb38c58826d36240c2",
+  "cases": [
+    "CAP-003"
+  ],
+  "status": "fail",
+  "layer": "authenticated-dev",
+  "summary": "The parent returned broad tool declarations (reported 44002 tokens before truncation), then browser prompt preparation failed and composer cleanup could not complete. No child was created; native CLI exited 1 and all 551 candidate-copy files remained unchanged. This is a failed attempt, not a completed three-agent case. Original preparation failure and later queue_cancelled retry errors are preserved. It did not exercise the repaired oversized compaction path.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-release-candidate/cap003-status.json",
+      "sha256": "2c71da1b2aec2996809ece64fc3d3c48a42e95c22ff28962a79360a87e5d87ed"
+    },
+    {
+      "path": "output/2026-10-15-release-candidate/cap003-failure-events.private.json",
+      "sha256": "c5ed17e7a10c889e2ce50a450256df425b5cf3ec9dd4c61b7f261f0816cb206e"
+    },
+    {
+      "path": "output/2026-10-15-release-candidate/cap003-native-01.private.log",
+      "sha256": "e3d60b46d0db747e8f080768ea4d72cd7a2a172ec96a762e527eae83ca13fe9b"
+    }
+  ]
+}

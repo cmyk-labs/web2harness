@@ -30,7 +30,7 @@ type HelperMessage =
   | { type: "event"; id: string; event: "heartbeat" | "send_activated" | "submitted" | "reasoning" | "commentary" | "text"; text?: string; continuation?: boolean }
   | { type: "event"; id: string; event: "tool_batch_observed"; revision: number }
   | { type: "event"; id: string; event: "completion_fence_begin"; requestId: number }
-  | { type: "event"; id: string; event: "completion_fence_commit"; requestId: number; revision: number }
+  | { type: "event"; id: string; event: "completion_fence_commit"; requestId: number; revision: number; browserReply?: string }
   | { type: "event"; id: string; event: "prepared_selected"; reused: boolean }
   | { type: "event"; id: string; event: "luna_checkpoint"; checkpoint: ChatGptLunaCheckpoint; answerHash: string }
   | { type: "result"; id: string; text: string }
@@ -77,6 +77,9 @@ function parseHelperMessage(line: string): HelperMessage {
       return { type: "event", id: message.id, event, requestId: message.requestId as number };
     }
     if (event === "completion_fence_commit") {
+      if (message.browserReply !== undefined && (typeof message.browserReply !== "string" || message.browserReply.length > 5_000_000)) {
+        throw new Error("Launcher browser helper observed reply is invalid");
+      }
       if (!Number.isSafeInteger(message.requestId) || (message.requestId as number) <= 0
         || !Number.isSafeInteger(message.revision) || (message.revision as number) < 0) {
         throw new Error("Launcher browser helper completion fence revision is invalid");
@@ -87,6 +90,7 @@ function parseHelperMessage(line: string): HelperMessage {
         event,
         requestId: message.requestId as number,
         revision: message.revision as number,
+        ...(message.browserReply !== undefined ? { browserReply: message.browserReply as string } : {}),
       };
     }
     if (event === "luna_checkpoint") {
@@ -207,12 +211,15 @@ export class LauncherBrowserHelperClient {
     if (turn.abortSignal?.aborted) throw new DOMException("ChatGPT web turn aborted", "AbortError");
     await this.ensureChild();
     if (turn.abortSignal?.aborted) throw new DOMException("ChatGPT web turn aborted", "AbortError");
+    if (turn.preparationDeadline !== undefined && !this.helperFeatures.has("preparation-deadline")) {
+      throw new Error("Launcher browser helper does not support the shared preparation deadline; update or restart the launcher");
+    }
     if (turn.externalProgress && !this.helperFeatures.has("tool-boundary-ack")) {
       throw new Error(
         "Launcher browser helper does not support causal Codex tool-boundary acknowledgement; update or restart the launcher",
       );
     }
-    if (turn.externalProgress && !this.helperFeatures.has("completion-fence")) {
+    if ((turn.externalProgress || turn.nativeToolDefinitions) && !this.helperFeatures.has("browser-reply-fence")) {
       throw new Error(
         "Launcher browser helper does not support the MCP completion fence; update or restart the launcher",
       );
@@ -271,11 +278,14 @@ export class LauncherBrowserHelperClient {
           },
           turn: {
             traceId: turn.traceId,
+            ...(turn.preparationDeadline !== undefined ? { preparationDeadline: turn.preparationDeadline } : {}),
+            ...(turn.queueTicket ? { queueTicket: turn.queueTicket } : {}),
             modelId: turn.modelId,
             reasoning: turn.reasoning,
             usagePurpose: turn.usagePurpose,
             ...(turn.modelFamily ? { modelFamily: turn.modelFamily } : {}),
             capabilities: turn.capabilities,
+            ...(turn.nativeToolDefinitions ? { nativeToolDefinitions: turn.nativeToolDefinitions } : {}),
             ...(turn.nativeConnector ? { nativeConnector: true } : {}),
             ...(turn.prepareResume ? { resumeAvailable: true } : {}),
             ...(turn.retainConversation ? { retainConversation: true } : {}),
@@ -434,13 +444,13 @@ export class LauncherBrowserHelperClient {
           );
           return;
         }
-        void fence.begin().then(revision => {
+        void fence.begin().then(result => {
           if (this.pending.get(message.id) !== pending || pending.localFailure || pending.turn.abortSignal?.aborted) return;
           return this.send({
             type: "completion_fence_begin_ack",
             id: message.id,
             requestId: message.requestId,
-            revision: revision ?? null,
+            result,
           });
         }).catch(error => this.abortWithLocalFailure(
           message.id,
@@ -458,13 +468,13 @@ export class LauncherBrowserHelperClient {
           );
           return;
         }
-        void fence.commit(message.revision).then(committed => {
+        void fence.commit(message.revision, message.browserReply).then(result => {
           if (this.pending.get(message.id) !== pending || pending.localFailure || pending.turn.abortSignal?.aborted) return;
           return this.send({
             type: "completion_fence_commit_ack",
             id: message.id,
             requestId: message.requestId,
-            committed,
+            result,
           });
         }).catch(error => this.abortWithLocalFailure(
           message.id,
@@ -492,6 +502,9 @@ export class LauncherBrowserHelperClient {
             return;
           }
           pending.prepared = prepared;
+          if (prepared.handoffBinding && !this.helperFeatures.has("mcp-delivery-observation")) {
+            throw new Error("Restart the runtime and browser helper together to enable MCP delivery observation");
+          }
           validateContextFile(prepared.contextFile);
           validateInputFiles(prepared.files);
           if (prepared.files?.length && !this.helperFeatures.has("input-files")) {
@@ -510,6 +523,7 @@ export class LauncherBrowserHelperClient {
               id: message.id,
               prepared: {
                 text: prepared.text,
+                ...(prepared.handoffBinding ? { handoffBinding: prepared.handoffBinding } : {}),
                 images: prepared.images,
                 ...(prepared.files ? { files: prepared.files } : {}),
                 ...(prepared.skillFiles ? { skillFiles: prepared.skillFiles } : {}),

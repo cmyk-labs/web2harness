@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLicense } from "../../licensing/LicenseContext";
 import { Button } from "../../../components/Buttons";
 import { Icon } from "../../../components/icons";
@@ -10,6 +10,7 @@ import type { LimitsTracker } from "../../limits/useLimits";
 import { PageIntro, Section } from "../controls";
 import { Feedback } from "../Feedback";
 import { translate } from "../labels";
+import { pendingRequestLogs, clearRequestLogs } from "../diagnostic-navigation";
 import { Logs } from "./Logs";
 import { Report } from "../Report";
 import { workspaceBusy } from "../status";
@@ -31,7 +32,9 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
   const language = snapshot.state.language ?? "en",
     t = translate(language),
     copy = copyFor(language);
-  const [tab, setTab] = useState("usage"),
+  const [initialLogSearch] = useState(pendingRequestLogs);
+  useEffect(() => { clearRequestLogs(); }, []);
+  const [tab, setTab] = useState(initialLogSearch ? "logs" : "usage"),
     [report, setReport] = useState<DoctorReport | null>(null),
     [working, setWorking] = useState(false),
     [notice, setNotice, dismissNotice] = useFeedback();
@@ -148,7 +151,7 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
             )}
           </>
         )}
-        {tab === "logs" && <Logs api={api} language={language} recent={logs} savedPageSize={snapshot.state.logPageSize} updateState={p.updateState} />}
+        {tab === "logs" && <Logs initialSearch={initialLogSearch} api={api} language={language} recent={logs} savedPageSize={snapshot.state.logPageSize} updateState={p.updateState} />}
       </div>
       {notice && (
         <Feedback

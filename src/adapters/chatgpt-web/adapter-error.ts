@@ -22,6 +22,27 @@ export class ChatGptWebAdapterError extends Error {
   }
 }
 
+// Fixed, payload-free causes survive the broker/helper boundaries. An accepted Web request is
+// never safe to resend merely because its response could not be observed or validated.
+const responseFailureMessages = {
+  chatgpt_empty_response: "ChatGPT ended this Web round without a usable reply or an accepted tool call.",
+  chatgpt_response_too_large: "The ChatGPT reply exceeds the supported response size.",
+  chatgpt_assistant_turn_missing: "ChatGPT accepted the message but did not expose its assistant turn in the DOM.",
+  chatgpt_dom_unresponsive: "ChatGPT accepted the message, but its DOM remained unresponsive after the allowed same-page rebinds.",
+  chatgpt_response_timeout: "The ChatGPT Web round exceeded its configured response deadline.",
+} as const;
+export type ChatGptResponseFailureCode = keyof typeof responseFailureMessages;
+
+export function isChatGptResponseFailureCode(code: unknown): code is ChatGptResponseFailureCode {
+  return typeof code === "string" && Object.hasOwn(responseFailureMessages, code);
+}
+
+export function chatGptResponseFailure(code: ChatGptResponseFailureCode, cause?: unknown): ChatGptWebAdapterError {
+  return new ChatGptWebAdapterError(responseFailureMessages[code], {
+    status: 502, errorType: "server_error", code, retryable: false, ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 // Only the compaction owner may signal this after the broker accepts its one-shot handoff.
 // It cancels browser observation, while the accepted summary remains the native result.
 export class ChatGptCompactionHandoffAccepted extends DOMException {

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "kind": "owner-scope-decision",
+  "recordedAt": "2026-10-15T14:48:51.626Z",
+  "targetSourceId": "a71c0f105e7073a4016bc8f79214437ec1a931a9425c99b4fbe8149fbf2c99f2",
+  "issueId": "mcp-handoff-20261014-unclassified",
+  "decision": "defer-remote-nondelivery-investigation-and-repair",
+  "ownerInstruction": "远端为什么偶尔没有把调用交到本地，仍未查明。无法查明 且原项目也无修复 则先不用修复",
+  "assessment": "Remote nondelivery remains unexplained by available evidence; the upstream discussions checked in this batch did not provide a verified repair. This is a bounded evidence assessment, not a claim that all upstream work was exhaustively searched.",
+  "retained": "Keep the verified local terminal-misclassification guard. Its 47 targeted checks and actual 4-round DEV flow remain recorded in mcp-delivery-guard-a71c0f105e70.json.",
+  "effect": "Stop additional remote-cause investigation and repeated reproduction for this issue. Keep its historical failure and unresolved status; do not convert the deferral to a passed check or a root-cause repair.",
+  "releaseAuthorization": "No commit, push, tag, publication or release authorization was given.",
+  "resumeCondition": "A later explicit user instruction or new actionable evidence can support reassessing scope."
+}

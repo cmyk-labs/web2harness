@@ -137,7 +137,7 @@ bun run check-version
 
 欢迎与准备界面使用居中内容列，短窗口允许滚动。工作区及产品授权内容左对齐，页面标题24px、正文14px、控件36px、左右边距32px（窄窗口20px）。概览使用步骤流程图保持展开；关于和已激活的授权管理先显示简要信息，补充说明及授权更新表单按需打开。未授权时各栏目保留只读浏览，受保护操作同时由后台校验。
 
-界面变更须检查中英文、宽窄窗口、长内容、错误和禁用状态，以及键盘焦点、隐藏导航和系统减少动效设置。运行 `node launcher/scripts/smoke-workspace.mjs` 可通过独立浏览器和模拟 IPC 验证界面；用 `WORKSPACE_SMOKE_OUTPUT` 指定本次证据目录。截图须在页面切换和侧栏动画结束后采集。这类检查不代表真实 ChatGPT、原生嵌入浏览器或安装器验收。
+界面变更须检查中英文、宽窄窗口、长内容、错误和禁用状态，以及键盘焦点、隐藏导航和系统减少动效设置。运行 `node launcher/scripts/smoke-workspace.mjs` 可通过独立浏览器和模拟 IPC 验证界面；用 `WORKSPACE_SMOKE_OUTPUT` 指定本次证据目录。仅队列显示/筛选变更可设置 `WORKSPACE_SMOKE_SCOPE=queue`，由共享界面连接隔离的真实队列宿主，在一次流程中覆盖双语、空列表/历史/活动任务、模型搜索、分页、错误和窄窗口。截图须在页面切换和侧栏动画结束后采集。这类检查不代表真实 ChatGPT、原生嵌入浏览器或安装器验收。
 
 <a id="automated-checks"></a>
 
@@ -175,9 +175,11 @@ node --test launcher/tests/installation/runtime-install.test.cjs
 
 ### 按变更类型验证
 
+每项完整变更按[验收协议](acceptance-protocol.zh-CN.md)处理。先分析相关证据基线以来的累计差异，识别受影响检查点，复用经评审有效的证据，再合并兼容流程。下表用于选择证据层级，不要求重跑无关用例。在适当的集成/冻结阶段集中运行一次成本可接受的全量自动化，不仅因新增回执或文档变化重复运行。
+
 | 变更类型 | 所需证据 |
 | --- | --- |
-| 应用行为 | 相关回归测试及 `bun run verify`，解释每项失败或未执行检查。 |
+| 应用行为 | 修复确认及受影响回归；在集成/冻结或广泛影响需要时执行 `bun run verify`，说明失败或缺失的必需证据。 |
 | 工具执行、续接或取消 | 在共享实现上进行已认证 DEV 任务验收，包含相关命令／文件结果和生命周期状态。 |
 | 浏览器集成 | 实际观察到的 DOM 或协议证据，以及可复现夹具；不得猜测性扩大选择器。 |
 | 桌面界面 | 类型／构建检查、受影响测试，以及隔离配置下的渲染检查。 |
@@ -185,13 +187,13 @@ node --test launcher/tests/installation/runtime-install.test.cjs
 | 仅文档 | 链接／锚点检查、等价的双语示例、变更陈述的源码核对及受影响图示的视觉检查，并运行受影响的文档依赖检查。 |
 | 依赖 | 两份锁文件和依赖审计，以及受影响的集成与打包检查。 |
 
-模拟器、夹具、安装包静态检查和真实操作系统验收属于不同证据类别，须明确实际执行的类别。此前审计或版本发布成功不能证明本次变更通过。各类证据的适用范围见[发布证据表](release.zh-CN.md#validation-evidence)。
+模拟器、夹具、安装包静态检查和真实操作系统验收属于不同证据类别。须区分本次执行与经影响评审仍有效的证据，不能仅凭以前通过推定当前有效。各类证据的适用范围见[发布证据表](release.zh-CN.md#validation-evidence)。
 
 ### 运行时验证重点
 
 根据改动层次选择验证。启动检查应区分窗口可见、运行时就绪和 ChatGPT 就绪时间。热启动回执是完整性检查优化，不是签名或完整依赖扫描。Windows 生产启动应报告重新运行安装器的修复要求，不得自行部署运行时。
 
-对话变更需要真实工具结果往返、后续用户消息、重放保护、取消和压缩覆盖。对话复用与 Save to history 相互独立；切换模型/档位或进入新压缩周期可能需要新浏览器页面。模型变更必须确认真实账户/浏览器支持，并保留原生 Codex 模型条目。验收标准见[发布清单](release.zh-CN.md)，诊断步骤见[故障排查](troubleshooting.zh-CN.md)。
+对话变更须评估真实工具结果往返、后续用户消息、重放保护、取消和压缩的影响，执行受影响路径，其他路径保留经评审有效的覆盖。对话复用与 Save to history 相互独立；切换模型/档位或进入新压缩周期可能需要新浏览器页面。模型变更必须确认真实账户/浏览器支持，并保留原生 Codex 模型条目。验收标准见[发布清单](release.zh-CN.md)，诊断步骤见[故障排查](troubleshooting.zh-CN.md)。
 
 <a id="dev-profile"></a>
 
@@ -316,7 +318,7 @@ bun run src/cli.ts dev list
 | `/reset yes` | 重置命名模拟会话。 |
 | `/help`、`/exit` | 显示命令或退出。 |
 
-在 DEV 偏好设置中配置 Context as File、Skills as files、复用/历史偏好和交互模式，其行为与常规运行相同。Context as File 默认关闭，预算默认 Standard，Triple 必须明确选择。上传阈值始终为普通单条消息 token 或字符预算的 80%，附件内容仍计入 token。此功能需要 Automatic，且不支持 Luna。完整约定见[配置参考](reference.zh-CN.md)。
+在 DEV 偏好设置中配置 Context as File、Skills as files、复用/历史偏好和交互模式，其行为与常规运行相同。Context as File 默认关闭，预算默认 Standard，Triple 必须明确选择。启用后，完整序列化上下文的 UTF-8 大小超过 32 KiB 时使用 TXT 附件，较小的上下文保持内联。所有附件必须完成处理后才发送，文件内容仍计入原有 token 预算。此功能需要 Automatic，且不支持 Luna。完整约定见[配置参考](reference.zh-CN.md)。
 
 DEV setup 支持 `--context-files` / `--no-context-files` 和 `--context-triple-budget` / `--standard-context-budget`。仅修改隔离配置，并重启其 Codex 客户端以刷新目录。浏览器实验仍消耗真实账户额度。
 
@@ -394,7 +396,7 @@ DEV setup 支持 `--context-files` / `--no-context-files` 和 `--context-triple-
 
 `docs/` 直接存放使用、排障、参考、架构、开发和发布六份主手册。一项规则在负责该主题的手册中完整说明，其他位置使用链接。README 直接链接本手册的贡献要求和发布手册的漏洞报告流程；技术信任边界归架构手册，AGENTS 规定自动化工作边界。不另建重复正文或仅供跳转的独立文档。`dev-notes/` 保存带日期的开发证据，不替代当前操作说明。
 
-配套的[能力验收用例](acceptance-tests.zh-CN.md)同样直接放在 `docs/`，集中维护可复用提示词、通过条件和结果模板；发布要求链接该文档，不复制用例正文。目标能力变化时同步扩展两个语言版本，带日期的执行结果仍保存在候选版本证据中。
+配套的[验收协议](acceptance-protocol.zh-CN.md)、[能力目录](acceptance-tests.zh-CN.md)和[证据手册](acceptance-evidence.zh-CN.md)同样直接放在 `docs/`，分别维护范围/复用规则、可复用提示词/通过条件，以及证据/检查器格式。其他手册链接而不重复规则；要求变化时同步扩展双语版本，带日期的执行及有效性评审保存在候选证据中。
 
 资源按用途归入根目录 `assets/brand/`、`assets/readme/`、`assets/demos/` 和 `assets/diagrams/`，图示 JSON 与 SVG 一起维护。生成工具放在 `scripts/`，平台安装与启动脚本放在 `launcher/packaging/`。不要在各模块复制一份素材。桌面渲染器通过构建引用需要的图标和视频；Electron 打包配置明确映射应用图标、托盘图标与 Linux 启动脚本，保持包内 `assets/` 路径，不携带 README 演示、图示源文件或文档素材。
 

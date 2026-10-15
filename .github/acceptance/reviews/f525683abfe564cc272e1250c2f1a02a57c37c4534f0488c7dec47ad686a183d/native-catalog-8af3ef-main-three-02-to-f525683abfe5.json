@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 2,
+  "id": "native-catalog-8af3ef-main-three-02-to-f525683abfe5",
+  "runId": "native-catalog-8af3ef-main-three-02",
+  "targetSourceId": "f525683abfe564cc272e1250c2f1a02a57c37c4534f0488c7dec47ad686a183d",
+  "reviewer": "Codex",
+  "at": "2026-10-15T13:55:41.838Z",
+  "checkIds": [
+    "license.native",
+    "queue.native-agents"
+  ],
+  "changes": [
+    {
+      "path": "docs/development.md",
+      "before": "f6379dd6266b99d24d5b69a1b37756737adb891a634bd599a1811d7aedb98e84",
+      "after": "bc84070b41525c6a43d4609d0d72745a4f0a5aad929dd63058fa171471000232",
+      "impact": "reviewed-unaffected",
+      "reason": "Corrects stale80% upload wording to the already implemented/accepted32KiB complete-context threshold and processing-before-send rule; behavior and acceptance criteria unchanged.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "docs/development.zh-CN.md",
+      "before": "900fe55060f1c4351f4890b22565006a3f49e33e4c3e6056321259fbe8285310",
+      "after": "17000e03cb6001aa881a37d13c560715e5f69519cd6a3602ef4f7f6f1319fb7f",
+      "impact": "reviewed-unaffected",
+      "reason": "Chinese counterpart of the corrected existing file-transport operating instructions.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    }
+  ],
+  "resolvedFailures": [
+    {
+      "runId": "native-first-send-d7d5295fe640",
+      "checkId": "queue.native-agents",
+      "reason": "Reproduced rendering/expanded ownership and catalog cancellation defects repaired; actual current native parent-plus-three is the later complete confirmation, with send-once and permission boundaries intact."
+    }
+  ],
+  "environment": {
+    "status": "revalidated",
+    "reason": "Same independent DEV profile/browser and verified actual connector binding. Actual native and Automatic MCP catalog/tool/agent flows completed; current51 catalog/lifecycle regressions support the GET-only change. Retain only original properties; no new manual/compaction/artifact or historical remote-cause claim.",
+    "evidence": [
+      {
+        "path": "evidence/catalog-closure-f525683abfe5.json",
+        "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+      }
+    ]
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 2,
+  "id": "context-file-contracts-a5ace55-to-f525683abfe5",
+  "runId": "context-file-contracts-a5ace55",
+  "targetSourceId": "f525683abfe564cc272e1250c2f1a02a57c37c4534f0488c7dec47ad686a183d",
+  "reviewer": "Codex",
+  "at": "2026-10-15T13:55:41.838Z",
+  "checkIds": [
+    "context.file-contracts"
+  ],
+  "changes": [
+    {
+      "path": "docs/development.md",
+      "before": "f6379dd6266b99d24d5b69a1b37756737adb891a634bd599a1811d7aedb98e84",
+      "after": "bc84070b41525c6a43d4609d0d72745a4f0a5aad929dd63058fa171471000232",
+      "impact": "reviewed-unaffected",
+      "reason": "Corrects stale80% upload wording to the already implemented/accepted32KiB complete-context threshold and processing-before-send rule; behavior and acceptance criteria unchanged.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "docs/development.zh-CN.md",
+      "before": "900fe55060f1c4351f4890b22565006a3f49e33e4c3e6056321259fbe8285310",
+      "after": "17000e03cb6001aa881a37d13c560715e5f69519cd6a3602ef4f7f6f1319fb7f",
+      "impact": "reviewed-unaffected",
+      "reason": "Chinese counterpart of the corrected existing file-transport operating instructions.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "docs/troubleshooting.md",
+      "before": "66ff9e4ba0cadf2c5428d1c800174a23061f4e232930beb1cf8a5592f38d4e25",
+      "after": "167008d814586b95679ad901af3336f41506454dfc45025d57202963e0c03c34",
+      "impact": "reviewed-unaffected",
+      "reason": "Documents bounded catalog GET reuse and cancellation diagnosis; retains no credential/model substitution, no blind task replay and no browser restart policy.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "docs/troubleshooting.zh-CN.md",
+      "before": "78add32e1609f45f9b1b5b79500f140c4c5489fb5c2382e40c99aaa1d4436841",
+      "after": "8c5d348eaa7a0a2ac365f4d102381f6ccf1fe28442206b53990016acaffdc18c",
+      "impact": "reviewed-unaffected",
+      "reason": "Chinese counterpart of catalog recovery/diagnostic guidance.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "src/codex/model-catalog-fetches.ts",
+      "before": null,
+      "after": "dea71382bebe89d7722aa19e7843ec814f711f99cc1dc73a3e83843dfdb96808",
+      "impact": "reviewed-unaffected",
+      "reason": "New per-server in-flight idempotent catalog GET sharing, keyed by query and all headers. Caller disconnect does not reset an identical cold upstream attempt. No cross-auth/account/query sharing; failures/delivered responses removed, abandoned pending30s/unclaimed success10s bounds, shutdown abort. Content-free diagnostics only. Final51 scoped regressions and actual native/MCP catalog/task observations support existing unrelated contracts.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "src/server.ts",
+      "before": "289f90b8edb5e78b0714d305c6169cfcaaa6b91fcf6ed95dca8cad4063e3afee",
+      "after": "feeb5621e690a3a45e1b3fcf03e20903d82c82741fd8bb49a64f31800619058d",
+      "impact": "reviewed-unaffected",
+      "reason": "Uses the shared catalog fetch owner and original client signal, keeps per-response augmentation and existing upstream auth/model selection, distinguishes client disconnect from upstream failures, and closes owned catalog attempts on shutdown. This affects only catalog GET/cancellation health; turn bodies, tools, queue and licensing are unchanged. Server-model/lifecycle regressions and actual30-round native execution confirm integration.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    },
+    {
+      "path": "tests/responses/server-model-retry.test.ts",
+      "before": null,
+      "after": "c21fbc83ffe5d01660738420d6ac19a6d06c7d80c9b8046da4229495606d1db9",
+      "impact": "reviewed-unaffected",
+      "reason": "Adds pre-abort/no-forward, actual Bun HTTP disconnect/retry sharing, concurrent per-config augmentation, header/query isolation, result expiry, failure disposal, abandonment and shutdown regressions. No existing acceptance oracle is weakened.",
+      "support": [
+        {
+          "path": "evidence/catalog-closure-f525683abfe5.json",
+          "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+        }
+      ]
+    }
+  ],
+  "resolvedFailures": [],
+  "environment": {
+    "status": "revalidated",
+    "reason": "Same independent DEV profile/browser and verified actual connector binding. Actual native and Automatic MCP catalog/tool/agent flows completed; current51 catalog/lifecycle regressions support the GET-only change. Retain only original properties; no new manual/compaction/artifact or historical remote-cause claim.",
+    "evidence": [
+      {
+        "path": "evidence/catalog-closure-f525683abfe5.json",
+        "sha256": "73979f4f736d02e4f8d209a43184ba69bc484c6431581371d565faa7ebe64087"
+      }
+    ]
+  }
+}

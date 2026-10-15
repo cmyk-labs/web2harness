@@ -1,6 +1,14 @@
 import type { ChatGptWebAccountCapabilities } from "../../src/models/chatgpt-web-models";
 import languages from "../electron/languages.json";
 import type { LimitsSnapshot } from "./features/limits/limits-types";
+import type { RequestSchedulingSettings, QueueSnapshot, QueueQuery, QueuePage } from "../shared/request-scheduler.cjs";
+export type { RequestSchedulingSettings, QueueSnapshot, QueueQuery, QueuePage, QueueRecord } from "../shared/request-scheduler.cjs";
+export interface RequestQueueStatus {
+  status: "ready" | "stopped";
+  settings: RequestSchedulingSettings;
+  savedRevision: number;
+  scheduler: (QueueSnapshot & { groups: string[] }) | null;
+}
 
 export type Language = keyof typeof languages;
 export type LauncherProfile = "production" | "development";
@@ -9,6 +17,8 @@ export type Surface = "browser" | "setup" | "mcp" | "activity" | "limits" | "set
 
 export interface LauncherState {
   version: 1;
+  requestScheduling: RequestSchedulingSettings;
+  requestSchedulingRevision: number;
   language: Language | null;
   onboardingComplete: boolean;
   githubOpened: boolean;
@@ -62,7 +72,7 @@ export interface BrowserTabState {
   active: boolean;
   closable: boolean;
   interactionMode?: BrowserInteractionMode;
-  manualState?: "awaiting-user" | "sent" | "running" | "completed" | "timed-out" | "cancelled" | "failed";
+  manualState?: "awaiting-finish" | "awaiting-user" | "sent" | "running" | "completed" | "timed-out" | "cancelled" | "failed";
   manualDeadlineAt?: string;
   canCopyPrompt?: boolean;
   canConfirmSent?: boolean;
@@ -190,6 +200,13 @@ export interface WorkspaceStatus {
 }
 
 export interface LauncherApi {
+  queueStatus(): Promise<RequestQueueStatus>;
+  queryQueue(query?: QueueQuery & { snapshotId?: string }): Promise<QueuePage & { snapshotId: string }>;
+  saveQueueSettings(settings: RequestSchedulingSettings, expectedRevision: number): Promise<{
+    state: LauncherState; persistedRevision: number; appliedRevision: number | null;
+    applyState: "applied" | "pending-start" | "apply-failed";
+  }>;
+  controlQueue(action: "pause" | "resume" | "recover" | "cancel" | "cancel-waiting" | "cancel-all", id?: string): Promise<QueueSnapshot>;
   licenseStatus(): Promise<import("../../src/licensing/schema").LicenseStatus>;
   importLicense(code: string): Promise<import("../../src/licensing/schema").LicenseStatus>;
   retryStartup(): Promise<void>;

@@ -137,7 +137,7 @@ Maintain colors, typography, dimensions and motion durations in `launcher/src/to
 
 Welcome and preparation screens share a centered content column with scrolling in short windows. Workspace pages, including Product license, use left-aligned content, 24px page headings, 14px body text, 36px controls and 32px horizontal padding (20px in narrow windows). Keep the Overview usage flow expanded. About and activated license management show concise summaries; additional explanations and renewal inputs open on request. Unlicensed pages remain readable; backend checks also protect actions.
 
-Review both languages, wide and narrow windows, long content, errors and disabled states, as well as keyboard focus, hidden navigation and the system reduced-motion preference. Run `node launcher/scripts/smoke-workspace.mjs` to exercise the UI with an independent browser and mocked IPC; set `WORKSPACE_SMOKE_OUTPUT` to the task's evidence directory. Capture screenshots after page and sidebar transitions have settled. These checks do not establish authenticated ChatGPT, native embedded-browser or installer acceptance.
+Review both languages, wide and narrow windows, long content, errors and disabled states, as well as keyboard focus, hidden navigation and the system reduced-motion preference. Run `node launcher/scripts/smoke-workspace.mjs` to exercise the UI with an independent browser and mocked IPC; set `WORKSPACE_SMOKE_OUTPUT` to the task's evidence directory. For queue-only display/filter changes, set `WORKSPACE_SMOKE_SCOPE=queue` to run the shared renderer against an isolated real queue host, covering both languages, empty/history/active results, model searches, paging, errors and narrow layout in one flow. Capture screenshots after page and sidebar transitions have settled. These checks do not establish authenticated ChatGPT, native embedded-browser or installer acceptance.
 
 <a id="automated-checks"></a>
 
@@ -175,9 +175,11 @@ Avoid bare test-name filters that could discover source copies under ignored dir
 
 ### Verification by change type
 
+Apply the [acceptance protocol](acceptance-protocol.md) to a coherent change batch. Analyze cumulative differences from relevant evidence baselines, identify affected checks, reuse reviewed valid evidence and combine compatible flows before execution. The table selects evidence layers, not a requirement to rerun unrelated cases. Use affordable full automation once at an appropriate integration/freeze point; do not repeat it solely for a new receipt or documentation change.
+
 | Change | Required evidence |
 | --- | --- |
-| Application behavior | Relevant regression tests and `bun run verify`; explain every failed or unexecuted check. |
+| Application behavior | Fix confirmation and affected regressions; use `bun run verify` at integration/freeze or when broad impact warrants it. Explain failed or missing required evidence. |
 | Tool execution, continuation, or cancellation | Authenticated DEV task evidence using the shared implementation, including relevant command/file results and lifecycle state. |
 | Browser integration | Observed DOM or protocol evidence and a reproducible fixture; do not broaden selectors on speculation. |
 | Desktop UI | Type/build checks, affected tests, and a rendered review in an isolated profile. |
@@ -185,13 +187,13 @@ Avoid bare test-name filters that could discover source copies under ignored dir
 | Documentation only | Link/anchor checks, equivalent bilingual examples, source verification of changed claims, and visual review of affected diagrams. Run affected documentation-dependent checks. |
 | Dependencies | Both lockfiles and dependency audits, plus affected integration and packaging checks. |
 
-Simulators, fixtures, static package inspection, and real operating-system acceptance establish different kinds of evidence. State which were performed; an earlier successful audit or release does not establish that the current change passes. See the [release evidence table](release.md#validation-evidence) for the limits of each category.
+Simulators, fixtures, static package inspection, and real operating-system acceptance establish different kinds of evidence. State what was newly executed and what remains valid through impact review; an earlier pass alone does not establish current validity. See the [release evidence table](release.md#validation-evidence) for the limits of each category.
 
 ### Runtime validation priorities
 
 Test the layer affected by the change. Startup checks must distinguish visible-window time, runtime readiness, and ChatGPT readiness. A warm-start receipt is an integrity optimization, not a signature or a full dependency scan. Windows production startup must report installer repair requirements rather than deploy a runtime itself.
 
-Conversation changes need real tool-result rounds, later user turns, replay protection, cancellation, and compaction coverage. Reuse and Save to history are independent settings; model/effort changes and a new compaction epoch may require a new browser page. Model changes must verify actual account/browser support and preserve native Codex catalog rows. Use the detailed [release checklist](release.md) for acceptance criteria and the [troubleshooting guide](troubleshooting.md) for diagnosis.
+For conversation changes, assess impact on real tool-result rounds, later user turns, replay protection, cancellation and compaction; execute affected paths and retain reviewed valid coverage elsewhere. Reuse and Save to history are independent settings; model/effort changes and a new compaction epoch may require a new browser page. Model changes must verify actual account/browser support and preserve native Codex catalog rows. Use the detailed [release checklist](release.md) for acceptance criteria and the [troubleshooting guide](troubleshooting.md) for diagnosis.
 
 <a id="dev-profile"></a>
 
@@ -316,7 +318,7 @@ Only `--simulate` uses `DevChatDriver` and simulated tool receipts. Every simula
 | `/reset yes` | Reset the named simulator chat. |
 | `/help`, `/exit` | Show commands or leave the simulator. |
 
-Configure Context as File, Skills as files, reuse/history preferences, and interaction mode in DEV preferences using the same settings as regular operation. Context as File defaults off; Standard is the default budget, and Triple requires explicit selection. Its upload threshold remains 80% of the ordinary single-message token or character budget. File contents remain part of token accounting. Automatic interaction is required and Luna is unsupported. See the [configuration reference](reference.md) for the complete contract.
+Configure Context as File, Skills as files, reuse/history preferences, and interaction mode in DEV preferences using the same settings as regular operation. Context as File defaults off; Standard is the default budget, and Triple requires explicit selection. When enabled, a complete serialized context larger than 32 KiB in UTF-8 uses a TXT attachment; smaller contexts stay inline. Every attachment must finish processing before Send. File contents remain part of the existing token budget. Automatic interaction is required and Luna is unsupported. See the [configuration reference](reference.md) for the complete contract.
 
 DEV setup supports `--context-files` / `--no-context-files` and `--context-triple-budget` / `--standard-context-budget`. Change only the isolated profile and restart its Codex client to refresh the catalog. Browser experiments still consume real account quota.
 
@@ -394,7 +396,7 @@ Architecture diagrams should identify the participating process/service, transpo
 
 Keep the six primary manuals—usage, troubleshooting, reference, architecture, development, and release—directly under `docs/`. Maintain each detailed rule in the manual that owns its subject and link to it elsewhere. README provides direct links to contribution requirements in this manual and vulnerability reporting in the release manual. Technical trust boundaries belong in the architecture manual; AGENTS governs automated work. Do not add separate documents that duplicate these sections or only redirect readers. Dated evidence in `dev-notes/` does not replace current instructions.
 
-The companion [capability acceptance cases](acceptance-tests.md) also live directly under `docs/` and own reusable prompts, pass criteria, and the result template. Release requirements link to them instead of copying the cases. Extend both language editions when target capabilities change; keep dated execution results in the candidate's evidence record.
+The companion [acceptance protocol](acceptance-protocol.md), [capability catalog](acceptance-tests.md) and [evidence manual](acceptance-evidence.md) also live directly under `docs/`. They own scope/reuse rules, reusable prompts/pass criteria, and evidence/checker formats respectively. Other manuals link to them instead of duplicating those rules. Extend both language editions when requirements change; keep dated executions and validity reviews in the candidate's evidence record.
 
 Keep assets by purpose in root `assets/brand/`, `assets/readme/`, `assets/demos/` and `assets/diagrams/`; maintain diagram JSON with its SVG. Generators belong in `scripts/`, and platform installation and launch scripts belong in `launcher/packaging/`. Do not duplicate assets in individual modules. Renderer imports select the required icons and videos. Explicit Electron packaging mappings retain the installed `assets/` paths for application/tray icons and the Linux runner, without bundling README demonstrations, diagram sources or documentation assets.
 

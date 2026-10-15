@@ -25,6 +25,60 @@ const {
   navigationOriginForLog,
 } = require("../../electron/browser/browser-host.cjs");
 
+test("destroy tolerates released view contents and still closes remaining tabs and waiters", () => {
+  const closed = [];
+  const resolutions = [];
+  const liveView = name => {
+    const view = {};
+    view.webContents = { isDestroyed: () => false, close() {
+      closed.push(name);
+      view.webContents = undefined;
+    } };
+    return view;
+  };
+  const manual = { id: "released", interactionMode: "manual", view: {}, prompt: "private",
+    promptDigest: "digest", manualWaiters: new Set([value => resolutions.push(value)]),
+    manualTerminalWaiters: new Set([value => resolutions.push(value)]) };
+  const host = Object.assign(Object.create(BrowserHost.prototype), {
+    window: Object.assign(new EventEmitter(), { contentView: { removeChildView() {} } }),
+    shellZoomShortcutBindings: new Map(), windowVisibilityListener() {}, authView: null, view: liveView("home"),
+    turnTabs: new Map([[manual.id, manual], ["live", { view: liveView("turn") }]]),
+  });
+  host.destroy();
+  host.destroy();
+  assert.deepEqual(closed, ["turn", "home"]);
+  assert.equal(host.turnTabs.size, 0);
+  assert.equal(manual.prompt, null);
+  assert.equal(manual.promptDigest, null);
+  assert.equal(manual.manualWaiters.size + manual.manualTerminalWaiters.size, 0);
+  assert.deepEqual(resolutions, [{ status: "cancelled" }, { status: "cancelled" }]);
+});
+
+test("closing a released authentication view clears its ownership without refreshing a released home", () => {
+  const authView = {};
+  const host = Object.assign(Object.create(BrowserHost.prototype), {
+    authView, view: {}, manualOperation: "ChatGPT login",
+    window: { contentView: { removeChildView() {} } },
+    syncViewVisibility() {}, logger: { info() {} },
+  });
+  host.closeAuthView(authView, true);
+  assert.equal(host.authView, null);
+});
+
+test("removing a released turn view completes cancellation and selects home", () => {
+  const tab = { id: "released", traceId: "trace", helperPid: 12, status: "running", view: {} };
+  const host = Object.assign(Object.create(BrowserHost.prototype), {
+    turnTabs: new Map([[tab.id, tab]]), selectedTabId: tab.id, closedTurnOwners: new Map(),
+    window: { contentView: { removeChildView() {} } }, view: {},
+    syncPowerSaveBlocker() {}, syncViewVisibility() {}, snapshot() {}, writeDescriptor() {},
+  });
+  host.removeTurnTab(tab, true);
+  assert.equal(host.turnTabs.size, 0);
+  assert.equal(host.selectedTabId, "home");
+  assert.equal(host.closedTurnOwners.get(tab.traceId), tab.helperPid);
+  assert.equal(tab.status, "aborted");
+});
+
 test("manual prompt handoff keeps ordinary turns at one minute and compaction at two minutes", () => {
   assert.equal(MANUAL_SUBMIT_TIMEOUT_MS, 60_000);
   assert.equal(MANUAL_COMPACTION_SUBMIT_TIMEOUT_MS, 120_000);
@@ -1561,6 +1615,40 @@ test("launcher delegates every ChatGPT model and turn operation to the shared br
   assert.equal(helperCall.appName, "Codex Native2");
 });
 
+for (const failure of [false, true]) test(`smoke admits only its registered helper and clears ownership after settlement (failure=${failure})`, async () => {
+  let created = 0;
+  const fixture = Object.assign(Object.create(BrowserHost.prototype), {
+    manualOperation: null, turnTabs: new Map(), userCancelledTurnOwners: new Map(),
+    ready: async () => {}, activateHomeSurface() {}, show() {}, waitForSurfaceReady: async () => {},
+    setState() {}, writeDescriptor() {}, syncViewVisibility() {}, snapshot: () => ({ tabs: [] }),
+    logger: { info() {} }, getConnectorName: () => "Codex Native2 DEV",
+    createTurnTab: (traceId, helperPid) => {
+      assert.equal(traceId, fixture.smokeTurnOwner.traceId);
+      assert.equal(helperPid, fixture.smokeTurnOwner.helperPid);
+      created += 1; return { id: "owned-smoke", surfaceId: "owned-surface" };
+    },
+    runBrowserHelperOperation: async options => {
+      const id = "smoke-" + "a".repeat(24), pid = process.pid;
+      await assert.rejects(fixture.beginTurn(id, false, pid), /busy with browser smoke test/);
+      options.onStarted({ id, pid });
+      await assert.rejects(fixture.beginTurn(id + "x", false, pid), /busy with browser smoke test/);
+      await assert.rejects(fixture.beginTurn(id, false, pid + 1), /busy with browser smoke test/);
+      fixture.manualOperation = "session inspection";
+      await assert.rejects(fixture.beginTurn(id, false, pid), /busy with session inspection/);
+      fixture.manualOperation = "browser smoke test";
+      assert.equal((await fixture.beginTurn(id, false, pid)).surfaceId, "owned-surface");
+      assert.equal(fixture.manualOperation, "browser smoke test");
+      if (failure) throw new Error("synthetic smoke failure");
+      return { value: { effort: "High", response: "WEB2HARNESS READY" } };
+    },
+  });
+  if (failure) await assert.rejects(fixture.smokeTest(), /synthetic smoke failure/);
+  else assert.equal((await fixture.smokeTest()).ok, true);
+  assert.equal(created, 1);
+  assert.equal(fixture.smokeTurnOwner, null);
+  assert.equal(fixture.manualOperation, null);
+});
+
 test("browser helper operations fail closed when the configured connector name is invalid", async () => {
   let helperCalls = 0;
   const fixture = Object.assign(Object.create(BrowserHost.prototype), {
@@ -2583,7 +2671,7 @@ test("a required retained conversation fails before creating a browser tab", asy
   assert.equal(created, false);
 });
 
-test("five browser tabs are a hard account-safety limit", async () => {
+test("five executing browser tabs are a hard account-safety limit", async () => {
   const turnTabs = new Map(Array.from({ length: 5 }, (_unused, index) => [
     `tab-${index + 1}`,
     { ordinal: index + 1 },
@@ -2593,6 +2681,37 @@ test("five browser tabs are a hard account-safety limit", async () => {
     BrowserHost.prototype.createTurnTab.call({ turnTabs }, "trace_six", 444),
     /already has 5 browser tabs.*avoid excessive parallel traffic/,
   );
+});
+
+test("waiting parents preserve their pages while a sixth conversation can execute", () => {
+  const tabs = Array.from({ length: 5 }, (_, index) => ({ id: `parent-${index}`, ordinal: index + 1,
+    status: "ready", awaitingToolResults: true, lastHeartbeatAt: 10 }));
+  const host = { turnTabs: new Map(tabs.map(tab => [tab.id, tab])), removeTurnTab: () => assert.fail("waiting parent evicted") };
+  assert.equal(BrowserHost.prototype.allocateTurnTabOrdinal.call(host), 6);
+  assert.equal(host.turnTabs.size, 5);
+  for (let index = 6; index <= 10; index++) host.turnTabs.set(`active-${index}`, { id: `active-${index}`, ordinal: index, status: "running" });
+  assert.throws(() => BrowserHost.prototype.allocateTurnTabOrdinal.call(host), /already has 5 browser tabs/);
+});
+
+test("conversation cache has a separate bound and never discards waiting parents to pass it", () => {
+  const tabs = Array.from({ length: 32 }, (_, index) => ({ id: `parent-${index}`, ordinal: index + 1,
+    status: "ready", awaitingToolResults: true }));
+  const host = { turnTabs: new Map(tabs.map(tab => [tab.id, tab])), removeTurnTab: () => assert.fail("waiting parent evicted") };
+  assert.throws(() => BrowserHost.prototype.allocateTurnTabOrdinal.call(host), /conversation cache is full/);
+  assert.equal(host.turnTabs.size, 32);
+});
+
+for (const interactionMode of ["automatic", "manual"]) test(`${interactionMode} waiting pages survive ordinary idle expiry with a separate retention bound`, () => {
+  const tab = { id: "waiting", traceId: "waiting_trace", status: "ready", interactionMode,
+    awaitingToolResults: true, lastHeartbeatAt: 100 };
+  const removed = [];
+  const host = { turnTabs: new Map([[tab.id, tab]]), logger: { info() {} },
+    removeTurnTab(candidate, abort) { removed.push([candidate.id, abort]); this.turnTabs.delete(candidate.id); } };
+  BrowserHost.prototype.reapExpiredTurnTabs.call(host, 100 + 31 * 60_000);
+  assert.equal(host.turnTabs.has(tab.id), true);
+  host.lastTurnSweepAt = undefined;
+  BrowserHost.prototype.reapExpiredTurnTabs.call(host, 100 + 24 * 60 * 60_000);
+  assert.deepEqual(removed, [[tab.id, false]]);
 });
 
 test("a full browser host evicts only its oldest ready tab", () => {

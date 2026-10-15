@@ -67,6 +67,35 @@ test("Zero Risk prompt fails closed without MCP Bridge or an exact manual bindin
   })).toThrow("does not support context-file browser transport");
 });
 
+test("queued MCP keeps the current binding and one consistent routing contract", () => {
+  for (const manualControl of [false, true]) {
+    const parsed = request();
+    parsed.options.parallelToolCalls = false;
+    if (!manualControl) parsed.modelId = "gpt-5.6-sol";
+    const text = compileChatGptWebPrompt(parsed, { ...capabilities, solAvailable: true }, requestId, {
+      ...(manualControl ? { manualControl: true } : {}), toolBatchHandoff: true,
+    }).text;
+    const resume = text.slice(text.lastIndexOf("<codex_transport_resume>"));
+    expect(resume).toContain(JSON.stringify(manualControl ? { request_id: requestId } : { turn_token: requestId }));
+    expect(text).toContain("codex_tool_inventory");
+    expect(text).toContain("atomically validates, registers and seals");
+    expect(text).toContain("discovery_tools");
+    expect(text).toContain("codex_finish_turn");
+    expect(text).toContain("not executed, cause unconfirmed");
+    expect(text).toContain("A namespace does NOT make it an exec-gateway tool");
+    expect(text).toContain("function_call_output, custom_tool_call_output and tool_search_output");
+    expect(text).not.toContain("For nested tools, discover and call them through the fixed gateway");
+    expect(resume).toContain('"parallel_tool_calls":false');
+    expect(resume).toContain("codex_submit_tool_call with one call object");
+    expect(text).toContain("A Web round returns either a reply or a tool batch");
+    expect(text).toContain("previous round only");
+    expect(text).toContain("Accepted calls end only this round, not the user's task");
+    expect(text).toContain(manualControl ? "the launcher does not read the page" : "No finish or yield tool is required");
+    expect(text).not.toContain("A plain-text answer alone is not a protocol result");
+    if (manualControl) expect(text).not.toContain("turn_token");
+  }
+});
+
 test("active Zero Risk compaction returns its checkpoint through the bound completion control", () => {
   const automatic = activeCompactionToolResultInstruction();
   const safe = zeroRiskActiveCompactionToolResultInstruction(true);

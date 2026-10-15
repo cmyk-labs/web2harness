@@ -1,0 +1,233 @@
+{
+  "schemaVersion": 2,
+  "kind": "historical-observation-review",
+  "reviewer": "Codex",
+  "recordedAt": "2026-10-15T06:29:00.588Z",
+  "sources": {
+    "mcp": "e84476463a7b8cc26f307b01cf404e44be62809870be89947639f06924314e56",
+    "native": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+    "target": "03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a"
+  },
+  "mcp": {
+    "startedAt": "2026-10-14T15:17:42.651Z",
+    "endedAt": "2026-10-14T15:29:46.824Z",
+    "mode": "automatic-mcp",
+    "model": "chatgpt-web/gpt-6-sol",
+    "effort": "medium",
+    "realTask": {
+      "sourceId": "e84476463a7b8cc26f307b01cf404e44be62809870be89947639f06924314e56",
+      "allFourFilesExact": true,
+      "fourCompletedAgents": true,
+      "allContextsExact": true,
+      "fourNativeReadPatchVerifySequences": true,
+      "mainReadPatchVerifyBeforeSpawn": true,
+      "exactlyThreeSpawns": true,
+      "noGrandchildren": true,
+      "spawnsBeforeWait": true,
+      "overlappingChildren": true,
+      "exactFinalProgram": true,
+      "finalCommandExitZero": true,
+      "fourActualValuesInFinalCheck": true,
+      "parentWaitReleasedWebSlot": true,
+      "queuePeakOne": true,
+      "queueReleased": true,
+      "retainedParentPage": true,
+      "cliCompleted": true,
+      "finalSuccessMarker": true,
+      "finalAnswerHasFourActualValues": true
+    },
+    "files": [
+      {
+        "name": "main",
+        "exact": true,
+        "normalizedExact": true,
+        "newline": true,
+        "inputSha256": "028560744c31e5ceb0e747cadc1ba944fccefeace45bf8b56bf57324793bd10f",
+        "outputSha256": "028560744c31e5ceb0e747cadc1ba944fccefeace45bf8b56bf57324793bd10f"
+      },
+      {
+        "name": "child-1",
+        "exact": true,
+        "normalizedExact": true,
+        "newline": true,
+        "inputSha256": "f303d7c534c774b332c6b1a4d7f7a85a2f79a5df2dc49904d615d5e16df1f28e",
+        "outputSha256": "f303d7c534c774b332c6b1a4d7f7a85a2f79a5df2dc49904d615d5e16df1f28e"
+      },
+      {
+        "name": "child-2",
+        "exact": true,
+        "normalizedExact": true,
+        "newline": true,
+        "inputSha256": "3fb1db080ed9f6522a9ee12fc5277dd9e05834b380eca424595112fd22d8dfca",
+        "outputSha256": "3fb1db080ed9f6522a9ee12fc5277dd9e05834b380eca424595112fd22d8dfca"
+      },
+      {
+        "name": "child-3",
+        "exact": true,
+        "normalizedExact": true,
+        "newline": true,
+        "inputSha256": "e69ad1a882ebbc2e06ca8d340bc34df45153e7cc28e5e013fffaf0c006dc1a81",
+        "outputSha256": "e69ad1a882ebbc2e06ca8d340bc34df45153e7cc28e5e013fffaf0c006dc1a81"
+      }
+    ],
+    "sourceCheckoutRuntimeSnapshotSha256": "ee2803193ca1676b7df3d95ef8c0afad07c13c57cf93df9568b4145db57153a2",
+    "queue": {
+      "dispatches": 24,
+      "completed": 24,
+      "groups": 4,
+      "waiting": 16,
+      "maxWaitMs": 87287.75529999845,
+      "maxRunAtDispatchMs": 0.5641000010073185,
+      "preparationBeforeAdmission": 0,
+      "sendAttempts": 24,
+      "minSendIntervalMs": 23888,
+      "maxSimultaneous": 1,
+      "configRevision": 17,
+      "configuredConcurrency": 1,
+      "configuredQueueTimeoutMinutes": 15,
+      "configuredSendIntervalSeconds": 3,
+      "scope": "Observed small four-session workload, all 24 rounds completed, 16 waited, no preparation/page before admission and sub-millisecond run clock at dispatch. This is not 50-user live load or mixed-model proof."
+    }
+  },
+  "licensing": {
+    "observations": [
+      {
+        "at": "2026-10-14T12:18:51.710Z",
+        "status": "active",
+        "operation": "verify",
+        "launcherPid": 19956
+      },
+      {
+        "at": "2026-10-15T03:48:38.738Z",
+        "status": "active",
+        "operation": "verify",
+        "launcherPid": 33316
+      }
+    ],
+    "ownership": "Both events belong to the separately recorded DEV launcher instances and their independent profile directories. Actual source-loaded Responses requests and MCP registration have mandatory requireLicense checks; the successful tool/file paths corroborate active validity at admission.",
+    "inference": "Validity at each request is inferred from the unchanged mandatory runtime guard plus observed successful dispatch, alongside the explicit active-state records. No new license status call, key read, activation or credential copy occurred during this review.",
+    "licenseRawValues": "No device code, certificate, signature, private/public key material or authentication is included.",
+    "unchangedGuardPaths": [
+      "src/server.ts",
+      "src/config.ts",
+      "src/licensing/service.ts",
+      "src/licensing/verify.ts",
+      "src/dev/codex.ts",
+      "src/dev/profile.ts",
+      "src/adapters/chatgpt-web/tools/turn-broker.ts",
+      "launcher/electron/license-controller.cjs",
+      "launcher/electron/runtime/runtime-supervisor.cjs",
+      "launcher/shared/request-scheduler.cjs",
+      "launcher/electron/runtime/request-queue.cjs"
+    ]
+  },
+  "boundaries": {
+    "mcpProductionHashChanges": 0,
+    "mcpProcessReview": "78 unchanged identities; the two exits were previously verified DEV Electron renderer children. Earlier unresolved historical process differences remain in their original records.",
+    "nativeProductionHashUnchanged": true
+  },
+  "limitations": [
+    "Earlier missing handoff/empty reply remains unresolved; the subsequent complete run does not close it.",
+    "The run does not establish live reconnect/no-resend, the complete two-round connector-inventory discovery scenario, native write-capable parent-plus-three, manual mode, compaction or mixed-model waiting.",
+    "All runtime/profile/binding observations are historical; a new live batch and release still need current readiness/binding checks.",
+    "runtimeSha256 here identifies the source-checkout runtime inventory bytes, not a packaged executable. Actual artifacts remain unaccepted."
+  ],
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/main-three-02-summary.json",
+      "sha256": "a81f17d2823118ee9a506bb215f80f0395a9067ae7119989c33b17f8bddef401"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/main-three-02-validation.json",
+      "sha256": "6b58c2dbabf4419553a0dcf90da16024ba9226d5c34c3fa3aef1720c2ca5931d"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/main-three-02-validation-literal.json",
+      "sha256": "fe1f45b36c1a0183dd397882a48002c3411c5e46c2b012aad66b3d8917fc27ad"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/probe-proof.json",
+      "sha256": "20f3c6320a4bd802bf788e4a1e23918ad7681c6947d849f3d3fa26e7cf573567"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/contract-comparison.json",
+      "sha256": "0b29f1340e9f6c09bf92062340056ee6307bbb8794b37c807aa7a00c46d52b52"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/boundary-live-summary.json",
+      "sha256": "91d65be19e715785f298b00573189c24e642a68562605dcdd3a2081e127c6588"
+    },
+    {
+      "path": "output/2026-10-13-queue-dev/codex-home/sessions/2026/10/14/rollout-2026-10-14T23-17-42-01a13afd-9f03-77b3-bf9c-479690be218a.jsonl",
+      "sha256": "cf4890e2e616749df534f47aed5c1ae61b8da7e3265003029ad49e1026fa234d"
+    },
+    {
+      "path": "output/2026-10-13-queue-dev/codex-home/sessions/2026/10/14/rollout-2026-10-14T23-20-12-01a13aff-e852-7e50-8118-ae8646f5567f.jsonl",
+      "sha256": "c5fccdc8ec67a9b571304a11fc4fe86ad1ac85b256f84667cc0e70943ad82518"
+    },
+    {
+      "path": "output/2026-10-13-queue-dev/codex-home/sessions/2026/10/14/rollout-2026-10-14T23-20-37-01a13b00-493d-79e1-9176-d7fd0f4ef465.jsonl",
+      "sha256": "a7427a6e6708d7bfa75720ee881e41293614a5213abc52105f0cd776584ef22a"
+    },
+    {
+      "path": "output/2026-10-13-queue-dev/codex-home/sessions/2026/10/14/rollout-2026-10-14T23-21-59-01a13b01-8b11-76e2-a7a3-0b680e4c0d1c.jsonl",
+      "sha256": "71b3354ee90152122b041bc2ebf47b8c48e1bf7ba1f6aeb5fb32d2d223a259b3"
+    },
+    {
+      "path": "output/2026-10-13-queue-dev/launcher/logs/launcher.1791995474533-f8ef4679-d785-42bb-9fda-ce07fd38faca.jsonl",
+      "sha256": "96b601c7768f4a06a823eeacd5ab4727f4d98ac8e3543f5c3061fb19920055ab"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/acceptance-summary.json",
+      "sha256": "296d4b6788ed6090a3d03488faeed48582369d1757714a7445eb494b99bed2f7"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/preflight-resume.json",
+      "sha256": "59242d987216820d9edc4ab2631f676df0ef26db0c1da7b99eff36e26320b956"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/owned-dev.private.json",
+      "sha256": "98651983d3f7fe147aeed37e419878a71f5efd2ad2c947862c2b779df6cc31fe"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/runtime-resume-ownership.private.json",
+      "sha256": "132d349846ffe46a7007e7e5ce00cbf4dfb6bde70d42695765d99df9d4e156c3"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/current-connector-binding.json",
+      "sha256": "28bf498578ec6689b4cd72985de06cba40bb318c1f478b6a4b1c49dcccd42742"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/run-live-02.cjs",
+      "sha256": "dee584fd4b33e0d6d8258e025a9b6d627acd51eb7f4f34e1a9f92f869bea17cd"
+    },
+    {
+      "path": "output/2026-10-14-web-readiness-repair/user-resume.private.json",
+      "sha256": "29e16633477b4a9bbc11c65ca8658fadeab4e893aca197ab2ad87cb8bde4b1ff"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/owned-dev.private.json",
+      "sha256": "efba5658e8fe42a39ef9b8cf1f024522b72146de24cabfdf45315aec8445e9fe"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap12-native-11-status.json",
+      "sha256": "dceaa26e0605dfcec6ff5f558a417824d5d8b67c7080e359c673e5fd9b08181b"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap12-native-11-audit.private.json",
+      "sha256": "2e209465f34df90d8740c1a9127ef2281ac8537aab1362cd0f7c508e7f385fcd"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/run-cap12.cjs",
+      "sha256": "b707afac011de77a0bf4771656d93bd2ae8fac274f63aee8f2178ec4dcd7944a"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/final-boundary-review.private.json",
+      "sha256": "873d97ccb38603ca5f5dea11914b8d30c21f81abbf1d70c933b5ea137b7b30f4"
+    },
+    {
+      "path": "output/2026-10-15-acceptance-history-review/license-state-history.json",
+      "sha256": "bcd1851c259e8439b01c5704300134f387d0c2cbe1537af668ee479cdc9f25f1"
+    }
+  ]
+}

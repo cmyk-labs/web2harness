@@ -1,0 +1,23 @@
+{
+  "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+  "cases": [
+    "Q11"
+  ],
+  "status": "pass",
+  "layer": "fixture",
+  "summary": "Synthetic 50-request/200MiB pressure, count and 256MiB waiting-byte protection, metadata-only 25-row pages and 1000 timed queries passed. Sampled RSS is recorded separately and is not a guaranteed memory limit. UI paging fixtures passed. Current-candidate full verification: 1136 core and 570 launcher tests, audits, type checks, builds, relocated runtime smoke; 325 UI checks. No authenticated acceptance is asserted.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-stage-settlement/verify-02.log",
+      "sha256": "061a638fb046593be6350817b88767a6ecbce08cad66f5893f3cdefb8c9912a8"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/workspace-ui-01/results.json",
+      "sha256": "a05c971cf5a511cc03ed1ac263a0d39be6e960eafd492a64e28dbc8f6aa2c661"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/queue-pressure.json",
+      "sha256": "d99740a42dae6ccecf32f1cad3a512a6de762501a9ab8b9ce5bb88d14bce2b07"
+    }
+  ]
+}

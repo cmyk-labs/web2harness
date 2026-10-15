@@ -4,6 +4,7 @@ import { closeChatGptBrowserWorkers } from "./adapters/chatgpt-web/browser/brows
 import { closeTurnBrokers, TurnBroker } from "./adapters/chatgpt-web/tools/turn-broker";
 import { timingSafeEqual } from "node:crypto";
 import { chatGptTurnSessions } from "./adapters/chatgpt-web/tools/turn-execution";
+import { LOADED_SOURCE_ID } from "./build-identity";
 import {
   cancelAllStructuredCompactions,
   cancelStructuredCompactionNativeTurn,
@@ -27,7 +28,8 @@ import { providerConfig } from "./config";
 import { assertDevRuntimeIsolation } from "./dev/isolation";
 import { readLauncherBrowserHostDescriptor } from "./browser/launcher-client";
 import { AsyncEventQueue } from "./event-queue";
-import { readJsonRequestBody } from "./http-body";
+import { readReservedJsonRequestBody, type ReservedJsonBody } from "./http-body";
+import { HttpBodyBudget, HttpBodyError, type HttpBodyReservation } from "./http-body-budget";
 import { httpStatusFromTerminalError } from "./lib/errors";
 import { createHash } from "node:crypto";
 import { augmentNativeModelCatalog } from "./models/model-catalog";
@@ -44,6 +46,7 @@ import {
 } from "./models/chatgpt-web-models";
 import { forwardNativeCodexRequest, type NativeFetch, type NativeImageEndpoint } from "./codex/native-passthrough";
 import { fetchNativeCodex } from "./codex/native-network";
+import { ModelCatalogFetches } from "./codex/model-catalog-fetches";
 import {
   buildCompactV1Output,
   COMPACT_PROMPT,
@@ -379,6 +382,8 @@ export class HttpTurnCounter {
 type ChatGptWebAdapterFactory = (provider: CodexProviderConfig) => ProviderAdapter;
 
 export interface ResponseRequestOptions {
+  /** One resource pool shared by Responses and compact for this service. */
+  bodyBudget?: HttpBodyBudget;
   /** DEV and other in-process harnesses can keep continuation state in their own canonical store. */
   rememberState?: boolean;
   /** Observe the exact production adapter stream when invoking the handler in-process. */
@@ -406,8 +411,15 @@ interface ModelCatalogFailure {
 }
 
 function modelCatalogFailure(stage: ModelCatalogFailure["stage"], error: unknown): ModelCatalogFailure {
-  const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
-  return { stage, ...(typeof code === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(code) ? { code } : {}) };
+  if (!error || typeof error !== "object") return { stage };
+  for (const source of [error, "cause" in error ? error.cause : undefined]) {
+    const code = source && typeof source === "object" && "code" in source ? source.code : undefined;
+    if (typeof code === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(code)) return { stage, code };
+  }
+  const name = "name" in error ? error.name : undefined;
+  if (name === "AbortError") return { stage, code: "ABORT_ERR" };
+  if (name === "TimeoutError") return { stage, code: "ETIMEDOUT" };
+  return { stage };
 }
 
 export async function modelsRequest(
@@ -416,18 +428,31 @@ export async function modelsRequest(
   fetchUpstream?: NativeFetch,
   contextOverride?: () => CodexModelContextOverride | undefined,
   onFailure?: (failure: ModelCatalogFailure) => void,
+  clientSignal: AbortSignal = req.signal,
+  shared?: ModelCatalogFetches,
 ): Promise<Response> {
+  const cancelled = () => new Response(null, { status: 499 });
+  if (clientSignal.aborted) return cancelled();
   let upstream: Response;
   let sent = false;
+  const forward = (request: Request, markSent: () => void) => forwardNativeCodexRequest(request, "models", input => {
+    markSent();
+    return (fetchUpstream ?? fetchNativeCodex)(input);
+  });
   try {
-    upstream = await forwardNativeCodexRequest(req, "models", input => {
-      sent = true;
-      return (fetchUpstream ?? fetchNativeCodex)(input);
-    });
+    if (shared) {
+      const result = await shared.fetch(req, forward);
+      if (!result.ok) { sent = result.sent; throw result.error; }
+      upstream = new Response([101, 204, 205, 304].includes(result.status) ? null : result.body.slice(0), {
+        status: result.status, statusText: result.statusText, headers: new Headers(result.headers),
+      });
+    } else upstream = await forward(req, () => { sent = true; });
   } catch (error) {
+    if (clientSignal.aborted) return cancelled();
     onFailure?.(modelCatalogFailure(sent ? "transport" : "request", error));
     return formatErrorResponse(502, "upstream_error", error instanceof Error ? error.message : String(error));
   }
+  if (clientSignal.aborted) return cancelled();
   if (!upstream.ok) {
     onFailure?.({ stage: "upstream" });
     return upstream;
@@ -436,9 +461,11 @@ export async function modelsRequest(
   try {
     catalog = augmentNativeModelCatalog(await upstream.json(), config, contextOverride?.());
   } catch (error) {
+    if (clientSignal.aborted) return cancelled();
     onFailure?.(modelCatalogFailure("catalog", error));
     return formatErrorResponse(502, "invalid_response_error", error instanceof Error ? error.message : String(error));
   }
+  if (clientSignal.aborted) return cancelled();
   const body = JSON.stringify(catalog);
   const headers = new Headers(upstream.headers);
   headers.delete("content-encoding");
@@ -491,23 +518,72 @@ function toolBridgeMaps(parsed: CodexParsedRequest): {
   return { toolNsMap, freeformToolNames, toolSearchToolNames };
 }
 
-export async function responseRequest(
+const inProcessBodyBudgets = new WeakMap<AppConfig, HttpBodyBudget>();
+
+function bodyBudgetFor(config: AppConfig): HttpBodyBudget {
+  let budget = inProcessBodyBudgets.get(config);
+  if (!budget) { budget = new HttpBodyBudget(); inProcessBodyBudgets.set(config, budget); }
+  return budget;
+}
+
+function bodyErrorResponse(error: unknown): Response {
+  const status = error instanceof HttpBodyError ? error.status : 400;
+  return Response.json({ error: {
+    type: status === 503 ? "server_error" : status === 499 ? "client_closed_request" : "invalid_request_error",
+    code: status === 503 ? "request_body_overloaded" : status === 413 ? "request_body_too_large" : status === 499 ? "client_cancelled" : "invalid_request_body",
+    message: error instanceof Error ? error.message : "Request body must be valid JSON",
+    retryable: status === 503,
+  } }, { status, ...(status === 503 ? { headers: { "retry-after": "1" } } : {}) });
+}
+
+/** The native TransformStream preserves backpressure and avoids async pull() on Windows.
+ * Keep the body lease until delivery ends, including native passthrough, while runTurn owns
+ * an independent reference until actual cleanup finishes after a disconnect. */
+function retainBodyForResponse(response: Response, reservation: HttpBodyReservation, signal: AbortSignal): Response {
+  if (!response.body) return response;
+  const release = reservation.retain();
+  const transport = new TransformStream<Uint8Array, Uint8Array>();
+  void response.body.pipeTo(transport.writable, { signal }).catch(() => {}).finally(release);
+  return new Response(transport.readable, { status: response.status, statusText: response.statusText, headers: response.headers });
+}
+
+async function withRequestBody(
+  req: Request,
+  config: AppConfig,
+  options: Pick<ResponseRequestOptions, "bodyBudget">,
+  run: (body: ReservedJsonBody) => Promise<Response>,
+): Promise<Response> {
+  let body: ReservedJsonBody;
+  try {
+    body = await readReservedJsonRequestBody(req, { budget: options.bodyBudget ?? bodyBudgetFor(config), retainEncoded: true });
+  } catch (error) { return bodyErrorResponse(error); }
+  try {
+    const response = await run(body);
+    return retainBodyForResponse(response, body.reservation, req.signal);
+  } catch (error) {
+    if (error instanceof HttpBodyError) return bodyErrorResponse(error);
+    throw error;
+  } finally { body.reservation.release(); }
+}
+
+export function responseRequest(
   req: Request,
   config: AppConfig,
   adapterFactory: ChatGptWebAdapterFactory = createChatGptWebAdapter,
   options: ResponseRequestOptions = {},
 ): Promise<Response> {
-  const nativeRequest = req.clone();
-  let raw: unknown;
-  try {
-    raw = await readJsonRequestBody(req);
-  } catch (error) {
-    return formatErrorResponse(
-      400,
-      "invalid_request_error",
-      error instanceof Error ? error.message : "Request body must be valid JSON",
-    );
-  }
+  return withRequestBody(req, config, options, body => responseRequestFromBody(req, config, adapterFactory, options, body, body.value));
+}
+
+async function responseRequestFromBody(
+  req: Request,
+  config: AppConfig,
+  adapterFactory: ChatGptWebAdapterFactory,
+  options: ResponseRequestOptions,
+  body: ReservedJsonBody,
+  raw: unknown,
+): Promise<Response> {
+  if (req.signal.aborted) throw new HttpBodyError("Request cancelled", 499);
   const requestedModel = raw && typeof raw === "object" && !Array.isArray(raw)
     ? (raw as { model?: unknown }).model
     : undefined;
@@ -521,11 +597,12 @@ export async function responseRequest(
   }
   if (typeof requestedModel === "string" && !isChatGptWebModelSlug(requestedModel)) {
     try {
-      return await forwardNativeCodexRequest(nativeRequest, "responses", undefined, raw);
+      return await forwardNativeCodexRequest(body.replay(req), "responses", undefined, raw);
     } catch (error) {
       return formatErrorResponse(502, "upstream_error", error instanceof Error ? error.message : String(error));
     }
   }
+  body.discardEncoded();
   try { await requireLicense(); }
   catch (error) {
     const state = error instanceof LicenseError ? error.state : "invalid";
@@ -646,10 +723,13 @@ export async function responseRequest(
   const adapter = adapterFactory(provider);
   const queue = new AsyncEventQueue<AdapterEvent>();
   const abort = new AbortController();
-  if (req.signal.aborted) abort.abort();
-  else req.signal.addEventListener("abort", () => abort.abort(), { once: true });
+  const abortTurn = () => abort.abort(req.signal.reason);
+  if (req.signal.aborted) abortTurn();
+  else req.signal.addEventListener("abort", abortTurn, { once: true });
   const run = async () => {
+    const release = body.reservation.retain();
     try {
+      if (abort.signal.aborted) throw new HttpBodyError("Request cancelled", 499);
       await adapter.runTurn!(parsed, { headers: req.headers, abortSignal: abort.signal }, event => {
         options.onAdapterEvent?.(event);
         queue.push(event);
@@ -660,6 +740,8 @@ export async function responseRequest(
       queue.push(event);
     } finally {
       queue.close();
+      req.signal.removeEventListener("abort", abortTurn);
+      release();
     }
   };
   const maps = toolBridgeMaps(parsed);
@@ -707,16 +789,25 @@ export async function responseRequest(
   return Response.json(json);
 }
 
-export async function compactRequest(
+export function compactRequest(
   req: Request,
   config: AppConfig,
   adapterFactory: ChatGptWebAdapterFactory = createChatGptWebAdapter,
-  options: Pick<ResponseRequestOptions, "onTurnIdentity"> = {},
+  options: Pick<ResponseRequestOptions, "onTurnIdentity" | "bodyBudget"> = {},
 ): Promise<Response> {
-  const nativeRequest = req.clone();
+  return withRequestBody(req, config, options, body => compactRequestFromBody(req, config, adapterFactory, options, body));
+}
+
+async function compactRequestFromBody(
+  req: Request,
+  config: AppConfig,
+  adapterFactory: ChatGptWebAdapterFactory,
+  options: Pick<ResponseRequestOptions, "onTurnIdentity" | "bodyBudget">,
+  reservedBody: ReservedJsonBody,
+): Promise<Response> {
   let raw: Record<string, unknown>;
   try {
-    const parsed = await readJsonRequestBody(req);
+    const parsed = reservedBody.value;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
     raw = parsed as Record<string, unknown>;
   } catch (error) {
@@ -755,11 +846,12 @@ export async function compactRequest(
   }
   if (!isChatGptWebModelSlug(raw.model)) {
     try {
-      return await forwardNativeCodexRequest(nativeRequest, "responses/compact", undefined, raw);
+      return await forwardNativeCodexRequest(reservedBody.replay(req), "responses/compact", undefined, raw);
     } catch (error) {
       return formatErrorResponse(502, "upstream_error", error instanceof Error ? error.message : String(error));
     }
   }
+  reservedBody.discardEncoded();
   let route: ChatGptWebModelRoute;
   try {
     route = requireChatGptWebModelRoute(raw.model, config);
@@ -768,15 +860,10 @@ export async function compactRequest(
   }
 
   const input = Array.isArray(raw.input) ? raw.input : [];
-  const headers = new Headers(req.headers);
-  headers.set("content-type", "application/json");
-  const internal = new Request("http://127.0.0.1/v1/responses", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ ...raw, stream: false, input: [...input, { type: "compaction_trigger" }] }),
-    signal: req.signal,
-  });
-  const response = await responseRequest(internal, config, adapterFactory, options);
+  // Delegate the already decoded object with the same lease. Re-serializing/re-parsing here
+  // doubled memory and incorrectly carried the original zstd/content-length headers.
+  const response = await responseRequestFromBody(req, config, adapterFactory, options, reservedBody,
+    { ...raw, stream: false, input: [...input, { type: "compaction_trigger" }] });
   if (!response.ok) return response;
   let body: {
     output?: unknown[];
@@ -820,7 +907,8 @@ export async function compactRequest(
 
 export function startServer(
   config: AppConfig,
-  dependencies: { fetchUpstream?: NativeFetch; adapterFactory?: ChatGptWebAdapterFactory } = {},
+  dependencies: { fetchUpstream?: NativeFetch; adapterFactory?: ChatGptWebAdapterFactory; bodyBudget?: HttpBodyBudget;
+    modelCatalogFetches?: ModelCatalogFetches } = {},
 ): ReturnType<typeof Bun.serve> {
   if (config.purpose === "dev-harness") {
     assertDevRuntimeIsolation(config);
@@ -846,6 +934,8 @@ export function startServer(
     request: number; at: string; status: number; failure?: ModelCatalogFailure;
   } | null = null;
   const httpTurns = new HttpTurnCounter();
+  const modelCatalogFetches = dependencies.modelCatalogFetches ?? new ModelCatalogFetches();
+  const bodyBudget = dependencies.bodyBudget ?? new HttpBodyBudget();
   const activity = () => ({
     active_http_turns: httpTurns.count(),
     active_browser_turns: chatGptTurnSessions.activeCount() + (turnBroker?.externalOwnerActiveCount() ?? 0),
@@ -867,6 +957,7 @@ export function startServer(
           status: "ok",
           service: "web2harness",
           version: VERSION,
+          sourceId: LOADED_SOURCE_ID,
           mode: config.mode,
           pid: process.pid,
           port: config.port,
@@ -1033,6 +1124,8 @@ export function startServer(
           const request = ++modelCatalogRequests;
           const started = Date.now();
           const recordResult = (response: Response, failure?: ModelCatalogFailure): Response => {
+            // A client abandoning its request is not evidence of an upstream catalog failure.
+            if (req.signal.aborted) return response;
             const result = { request, at: new Date().toISOString(), status: response.status, ...(failure ? { failure } : {}) };
             // An older, slower request must not replace a newer completed result.
             if (!lastModelCatalogResult || request > lastModelCatalogResult.request) lastModelCatalogResult = result;
@@ -1063,8 +1156,10 @@ export function startServer(
             dependencies.fetchUpstream,
             readCodexModelContextOverride,
             value => { failure = value; },
+            req.signal,
+            modelCatalogFetches,
           );
-          if (response.ok) {
+          if (response.ok && !req.signal.aborted) {
             successfulModelCatalogRequests += 1;
             lastSuccessfulModelCatalogRequestAt = new Date().toISOString();
           }
@@ -1084,7 +1179,7 @@ export function startServer(
             new Request(req, { signal }),
             config,
             dependencies.adapterFactory,
-            { onTurnIdentity: bindIdentity },
+            { onTurnIdentity: bindIdentity, bodyBudget },
           ),
           req.signal,
           process.platform,
@@ -1098,7 +1193,7 @@ export function startServer(
             new Request(req, { signal }),
             config,
             dependencies.adapterFactory,
-            { onTurnIdentity: bindIdentity },
+            { onTurnIdentity: bindIdentity, bodyBudget },
           ),
           req.signal,
           process.platform,
@@ -1133,6 +1228,7 @@ export function startServer(
   function shutdown(): void {
     if (shutdownPromise) return;
     draining = true;
+    modelCatalogFetches.close();
     chatGptTurnSessions.clear();
     flushResponseState();
     shutdownPromise = (async () => {

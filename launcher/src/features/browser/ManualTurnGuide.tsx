@@ -29,8 +29,9 @@ export function ManualTurnGuide({
   const seconds = Number.isFinite(deadline)
     ? Math.max(0, Math.ceil((deadline - now) / 1_000))
     : 0;
+  const finishing = tab.manualState === "awaiting-finish";
   const waiting = tab.manualState === "awaiting-user";
-  const status = waiting
+  const status = finishing ? copy.manualRoundFinished : waiting
     ? `${seconds} ${copy.manualPromptSeconds}`
     : tab.manualState === "sent"
       ? copy.manualPromptSent
@@ -43,9 +44,9 @@ export function ManualTurnGuide({
     <div className={`manual-turn-guide${waiting ? " is-waiting" : ""}`}>
       <div>
         <strong>
-          {waiting ? copy.manualPromptTitle : copy.manualPromptWaiting}
+          {finishing ? copy.manualRoundFinished : waiting ? copy.manualPromptTitle : copy.manualPromptWaiting}
         </strong>
-        {waiting ? <p>{copy.manualPromptInstruction}</p> : null}
+        {finishing ? <p>{copy.manualRoundFinishHelp}</p> : waiting ? <p>{copy.manualPromptInstruction}</p> : null}
       </div>
       <span className="manual-turn-status">{status}</span>
       <div className="manual-turn-actions">
@@ -56,7 +57,7 @@ export function ManualTurnGuide({
           {copy.manualPromptCopy}
         </SecondaryButton>
         <PrimaryButton disabled={!tab.canConfirmSent} onClick={onSent}>
-          {copy.manualPromptSent}
+          {finishing ? copy.manualRoundFinished : copy.manualPromptSent}
         </PrimaryButton>
       </div>
     </div>

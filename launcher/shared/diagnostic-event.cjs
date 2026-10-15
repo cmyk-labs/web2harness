@@ -5,6 +5,13 @@ const processInstanceId = randomUUID();
 let sequence = 0;
 const SECRET = /authorization|cookie|password|secret|token|credential|runtimekey|license(code)?|privatekey|apikey|storageState/i;
 const CONTENT = /^(prompt|response|content|html|dom|input|output|arguments|result|text|messages|command|patch|script|stdout|stderr|conversationTitles?|chatTitles?|sidebarRows|visibleRows)$/i;
+const QUEUE_ENUMS = {
+  resourceKind: new Set(["document", "script", "stylesheet", "conversation", "other"]),
+  networkFailure: new Set(["aborted", "network_changed", "connection", "timeout", "other"]),
+  handoffScope: new Set(["top_level", "exec", "catalog", "invalid"]),
+  state: new Set(["queued", "preparing", "running", "waiting-user", "waiting-tools", "stopping", "succeeded", "failed", "cancelled", "timed-out", "ready", "already_committed", "awaiting_intent", "activity_in_flight", "open", "submitted", "finished"]),
+  pausedReason: new Set(["user", "account_rate_limited", "browser_unavailable", "send_outcome_unknown"]),
+};
 const TEXT = new Set(("message error reason code errorCode errorName errorDescription category status phase stage operation line stack cause detail signal model effort mode interactionMode browserInteractionMode checkpoint traceId requestId sessionId launcherSessionId processInstanceId operationId parentOperationId toolEventId toolName cellId event source component id eventId at capturedAt tag role ariaExpanded ariaChecked dataState dataHighlighted origin type channel connector timeBasis version currentVersion platform arch osRelease profile language electron node chrome outcome cancelSource deliveryState requestedModel verifiedModel requestedEffort verifiedEffort modelFamily budgetPolicy targetRole networkPhase systemCode endpoint reader transport severity tabId method purpose submission receiptId receiptStatus configRevision sandboxMode approvalMode observedDecision evidence verification changedKey previous next lastProgressAt").split(" "));
 function cleanText(input) {
   return String(input).slice(0, 16384)
@@ -30,7 +37,10 @@ function safeDetail(value, depth = 0) {
   if (!value || typeof value !== "object") return "[removed]";
   return Object.fromEntries(Object.entries(value).slice(0, 200).filter(([, item]) => item !== undefined).map(([key, item]) => [
     key, SECRET.test(key) || CONTENT.test(key) ? "[removed]"
-      : typeof item === "string" ? (TEXT.has(key) ? cleanText(item) : "[text removed]")
+      : typeof item === "string" ? (Object.hasOwn(QUEUE_ENUMS, key) ? (QUEUE_ENUMS[key].has(item) ? item : "[text removed]")
+        : key === "groupId" || key === "roundRef" ? (/^diag-[a-f0-9]{24}$/.test(item) ? item : "[text removed]")
+        : key === "sourceId" ? (/^[a-f0-9]{64}$/.test(item) ? item : "[text removed]")
+        : TEXT.has(key) ? cleanText(item) : "[text removed]")
       : safeDetail(item, depth + 1),
   ]));
 }

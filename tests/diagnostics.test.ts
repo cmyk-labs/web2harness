@@ -1,7 +1,31 @@
 import { expect, test } from "bun:test";
 import { diagnosticContext, diagnosticEvent } from "../src/diagnostics";
-import { parseDiagnosticLine, type DiagnosticRecord } from "../launcher/shared/diagnostic-event.cjs";
+import { parseDiagnosticLine, safeDetail, type DiagnosticRecord } from "../launcher/shared/diagnostic-event.cjs";
 import { ChatGptBrowserWorker } from "../src/adapters/chatgpt-web/browser/browser-worker";
+import { handoffRejectionDiagnostics } from "../src/adapters/chatgpt-web/tools/handoff-validation";
+
+test("completion diagnostics retain only validated content-independent references", () => {
+  expect(safeDetail({ sourceId: "a".repeat(64), roundRef: `diag-${"b".repeat(24)}`, state: "activity_in_flight", sealed: true }))
+    .toEqual({ sourceId: "a".repeat(64), roundRef: `diag-${"b".repeat(24)}`, state: "activity_in_flight", sealed: true });
+  const redacted = safeDetail({ sourceId: "PRIVATE_SOURCE", roundRef: "PRIVATE_ROUND", state: "PRIVATE_STATE" });
+  expect(JSON.stringify(redacted)).not.toContain("PRIVATE");
+});
+
+test("handoff comparison logs only declared identities, including for identifier-shaped private input", () => {
+  const tools = [{ name: "apply_patch", namespace: "functions", description: "Patch", parameters: {}, freeform: true }];
+  const diagnostic = safeDetail(handoffRejectionDiagnostics(tools, [
+    { name: "PRIVATE_IDENTIFIER_SECRET", namespace: "PRIVATE_NAMESPACE", input: "PRIVATE_PATCH", arguments: { cmd: "PRIVATE_COMMAND" } },
+    { name: "apply_patch", namespace: "PRIVATE_NAMESPACE", input: "PRIVATE_PATCH", scope: { toString: "PRIVATE_SCOPE" } },
+    { name: "functions.apply_patch", input: "PRIVATE_PATCH" },
+  ]));
+  expect(JSON.stringify(diagnostic)).not.toContain("PRIVATE");
+  expect(diagnostic).toMatchObject({ declaredToolCount: 1, omittedCallCount: 0, diagnosticCalls: [
+    { exactIdentityMatch: false, candidateCount: 0, namespaceSupplied: true, hasInput: true, hasArguments: true },
+    { handoffScope: "invalid", candidates: [{ toolName: "functions.apply_patch", nameMatched: true, namespaceMatched: false }] },
+    { handoffScope: "top_level", candidates: [{ toolName: "functions.apply_patch", nameMatched: false, qualifiedNameMatched: true }] },
+  ] });
+  expect(safeDetail({ handoffScope: "PRIVATE_SCOPE" })).toEqual({ handoffScope: "[text removed]" });
+});
 
 async function capture(run: () => Promise<void>) {
   const records: DiagnosticRecord[] = [];

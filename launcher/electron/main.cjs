@@ -20,6 +20,9 @@ const {
 } = require("electron");
 const { BrowserHost, navigationErrorForLog } = require("./browser/browser-host.cjs");
 const { BrowserControlServer } = require("./control-server.cjs");
+const { RequestQueue } = require("./runtime/request-queue.cjs");
+const { createQueueSettingsSaver } = require("./runtime/queue-settings.cjs");
+let requestQueue = null;
 const { LimitsController } = require("./limits/limits-controller.cjs");
 const { SOURCE_URL: LIMITS_SOURCE_URL } = require("./limits/limits-store.cjs");
 const { sources: LIMITS_SOURCES } = require("./limits/limits-policy.json");
@@ -554,6 +557,26 @@ function registerIpc({ logger, stateStore }) {
     });
   });
 
+  handle("launcher:queue-status", () => ({
+    status: requestQueue ? "ready" : "stopped",
+    settings: stateStore.read().requestScheduling,
+    savedRevision: stateStore.read().requestSchedulingRevision,
+    scheduler: requestQueue?.snapshot() ?? null,
+  }));
+  handle("launcher:queue-query", (_event, query) => {
+    if (!requestQueue) throw new Error("Request scheduler is not running");
+    return requestQueue.query(query);
+  });
+  const saveQueueSettings = createQueueSettingsSaver({ stateStore, getQueue: () => requestQueue,
+    publish: state => send("launcher:state-changed", state), assertActive: () => licenseController.assertActive() });
+  handle("launcher:queue-settings", (_event, value, expectedRevision) => saveQueueSettings(value, expectedRevision));
+  handle("launcher:queue-control", async (_event, action, id) => {
+    // Stopping remains available after license expiry. Resume requires a fresh check.
+    if (action === "resume" || action === "recover") await licenseController.assertActive();
+    if (!requestQueue) throw new Error("Request scheduler is not running");
+    return requestQueue.control(action, id);
+  });
+
   handle("launcher:set-language", (_event, language) => {
     const state = stateStore.update({ language: validateLanguage(language) });
     updateTrayMenu(state.language);
@@ -731,7 +754,7 @@ function registerIpc({ logger, stateStore }) {
   });
   handle("launcher:cancel-turns", () => {
     // Both profiles cancel only their own supervisor-owned turns.
-    return runtimeHost.cancelActiveTurns();
+    return Promise.resolve(requestQueue?.control("cancel-all")).then(() => runtimeHost.cancelActiveTurns());
   });
   handle("launcher:uninstall-integration", async () => {
     if (IS_DEV_PROFILE) throw new Error("Integration removal is unavailable in the DEV UI");
@@ -1078,7 +1101,10 @@ async function requestQuit() {
     // The startup continuation checks quitting before constructing browser/runtime hosts.
     quitting = true;
     await runtimePreparation?.catch(() => {});
+    await requestQueue?.control("cancel-all");
     await runtimeSupervisor?.shutdown({ cancelActiveTurns: true, force: true });
+    await requestQueue?.close();
+    requestQueue = null;
     stopCatalogVerificationMonitor();
     quitting = true;
     await browserHost?.persistSession();
@@ -1216,6 +1242,7 @@ async function start() {
     logger,
     assertLicensed: () => licenseController.assertActive(),
     getBrowserHost: () => browserHost,
+    getRequestQueue: () => requestQueue,
     getPreferences: () => syncFreshConversationPreference(stateStore, runtimeHost.runtimeConfigSnapshot().config),
     resolveProxy: url => session.fromPartition(LAUNCHER_PROFILE.browserPartition).resolveProxy(url),
     limits: limitsController,
@@ -1290,6 +1317,17 @@ async function start() {
     logger,
   });
   await browserHost.ready();
+  requestQueue = await new RequestQueue({
+    directory: path.join(CORE_HOME, "runtime"),
+    settings: stateStore.read().requestScheduling,
+    revision: stateStore.read().requestSchedulingRevision,
+    logger,
+    hasResource: traceId => [...browserHost.turnTabs.values()].some(tab => tab.traceId === traceId &&
+      (tab.status === "running" || ["awaiting-user", "sent", "running", "awaiting-finish"].includes(tab.manualState))),
+    cancelResource: async traceId => {
+      await runtimeSupervisor.cancelBrowserTurn(traceId);
+    },
+  }).start();
   if (quitting || !mainWindow || mainWindow.isDestroyed()) return;
   startup.ready();
   logger.info("launcher.workspace_initialized", { elapsedMs: Date.now() - startupStartedAt });
@@ -1498,6 +1536,8 @@ void start().catch(async (error) => {
     // Browser bootstrap can fail before the renderer is loaded. Keep the error reachable
     // through the existing instance, and release browser resources before a user retry.
     const cleanupErrors = [];
+    try { await requestQueue?.close(); } catch (caught) { cleanupErrors.push(String(caught)); }
+    requestQueue = null;
     try { browserHost?.destroy(); } catch (caught) { cleanupErrors.push(String(caught)); }
     try { await browserControl?.close(); } catch (caught) { cleanupErrors.push(String(caught)); }
     if (process.argv.includes("--launcher-smoke-test")) return;

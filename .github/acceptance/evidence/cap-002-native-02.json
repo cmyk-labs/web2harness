@@ -1,0 +1,16 @@
+{
+  "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "loadedSourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "runtimeSha256": "4c18bb1b5055c56a31d71552f3f0b6f8432773d9c3f43ba0c34fec46c34543fd",
+  "cases": [
+    "CAP-002"
+  ],
+  "status": "pass",
+  "layer": "authenticated-dev",
+  "summary": "With an explicit fixture cwd on both initial and resumed commands, the same real Codex conversation passed CAP-001 and CAP-002. Native exec dispatched two reading tools through Promise.all, returned both actual values, applied a native patch and read back ALPHA-BETA. Exactly one 15-second timer yielded a running cell; wait resumed that same cell and returned WAIT-110-OK, then a real patch and command verified the file. Both actual contexts retained GPT-6 Sol/medium, workspace-write, on-request and auto_review. All observed file-change events remained inside the owned fixture.",
+  "rawEvidence": {
+    "path": "output/2026-10-14-release-candidate/cap12-native-02-audit.private.json",
+    "sha256": "f25199aaf4a1a75aae6738a97e766f74499f235f35933b4e235aea9a84bb01c4"
+  },
+  "runtimeInventory": "output/2026-10-14-release-candidate/candidate-final.json"
+}

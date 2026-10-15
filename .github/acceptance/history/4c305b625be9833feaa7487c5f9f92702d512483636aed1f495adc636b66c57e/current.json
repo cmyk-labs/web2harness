@@ -1,0 +1,647 @@
+{
+  "schemaVersion": 1,
+  "candidate": {
+    "version": "2.1.0",
+    "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+    "gitCommit": "4127ef0da2bd164c342c9943a26eb6b360c7cd08"
+  },
+  "results": [
+    {
+      "caseId": "CAP-001",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.850Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "CAP-002",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "CAP-003",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "CAP-004",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "CAP-005",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "CAP-006",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "CAP-008",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "CAP-009",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "CAP-010",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q01",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q02",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q03",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q04",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q05",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q06",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q07",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q08",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q09",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q10",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q11",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q12",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q13",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q14",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q15",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q16",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "Q17",
+      "attempt": 1,
+      "status": "not-run",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "mixed",
+      "model": "pending",
+      "effort": "pending",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:02:14.851Z",
+      "evidence": [],
+      "notes": "New candidate after compaction error classification repair. Previous candidate attempts, including CAP-003 failure, are preserved under history/95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b/current.json; historical passes are not current evidence."
+    },
+    {
+      "caseId": "CAP-010",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:10:43.431Z",
+      "evidence": [
+        {
+          "path": "evidence/cap-010-4c305-fixtures.json",
+          "sha256": "999c1575ed2b6ac596674f62e5b1f2c971b451f18f54764d6810b7a0b7d213b8"
+        }
+      ]
+    },
+    {
+      "caseId": "Q06",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:10:43.436Z",
+      "evidence": [
+        {
+          "path": "evidence/q06-4c305-fixtures.json",
+          "sha256": "f9d109d35473374f3b720caa40f75a0436483a35303cac930c24f85c0b70e416"
+        }
+      ]
+    },
+    {
+      "caseId": "Q09",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:10:43.439Z",
+      "evidence": [
+        {
+          "path": "evidence/q09-4c305-fixtures.json",
+          "sha256": "d03a0b883dff3a6c913e8d111c7d6b489f7c96748203bc5cd63643652955d7ee"
+        }
+      ]
+    },
+    {
+      "caseId": "Q10",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:10:43.442Z",
+      "evidence": [
+        {
+          "path": "evidence/q10-4c305-fixtures.json",
+          "sha256": "774f50ddac59590da777ebed3b20a6c57d36ef20979949b936fe110745437892"
+        }
+      ]
+    },
+    {
+      "caseId": "Q11",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:10:43.444Z",
+      "evidence": [
+        {
+          "path": "evidence/q11-4c305-fixtures.json",
+          "sha256": "aa9e21fe22e836a311e0090c1162154805044f08ee53ecbbac5cb4c073771ceb"
+        }
+      ]
+    },
+    {
+      "caseId": "Q16",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:10:43.447Z",
+      "evidence": [
+        {
+          "path": "evidence/q16-4c305-fixtures.json",
+          "sha256": "1575ad02269c6e36d031f07553c772463dc6827c701fdfd36db70c89bbb5b6b1"
+        }
+      ]
+    },
+    {
+      "caseId": "Q17",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:10:43.450Z",
+      "evidence": [
+        {
+          "path": "evidence/q17-4c305-fixtures.json",
+          "sha256": "4bfb73f11c3400bb57af1a76eb0793be832fc7d9722dbb5d06c1102fee14d280"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-003",
+      "attempt": 2,
+      "status": "fail",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:13:53.572Z",
+      "evidence": [
+        {
+          "path": "evidence/cap003-4c305-native-02-failed.json",
+          "sha256": "ac9bad62ab74970013313a09f3e6efc6722afeb3ce6292c7c0c38c0627910c82"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-003",
+      "attempt": 3,
+      "status": "fail",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-14T17:23:09.416Z",
+      "evidence": [
+        {
+          "path": "evidence/cap003-4c305-native-03-failed.json",
+          "sha256": "6516476e94e5a6ab1dfc077fc2ef87cbd554e25fa18d8af483e6e87b10205f40"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-003",
+      "attempt": 4,
+      "status": "fail",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T02:48:12.686Z",
+      "evidence": [
+        {
+          "path": "evidence/cap003-4c305-native-04-failed.json",
+          "sha256": "e400b7c197ef0b45e8142696e7d402c7c1ec39676d8f645ea686966ac3e34596"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-004",
+      "attempt": 2,
+      "status": "pass",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-5.6-sol,chatgpt-web/gpt-5.6-pro,chatgpt-web/gpt-6-sol,chatgpt-web/gpt-6-pro",
+      "effort": "medium,max",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T02:48:12.754Z",
+      "evidence": [
+        {
+          "path": "evidence/cap004-4c305-complete.json",
+          "sha256": "e18656221706f57017b0cb90e0dc85eddb29fe77ec505aee5b6054ba8c6947d3"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-003",
+      "attempt": 5,
+      "status": "fail",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T02:53:20.659Z",
+      "evidence": [
+        {
+          "path": "evidence/cap003-4c305-native-05-failed.json",
+          "sha256": "16fe5fa7f288798e4437d54a3ffd2b4973a4c65e002b543bd194700cf471e995"
+        }
+      ]
+    },
+    {
+      "caseId": "CAP-003",
+      "attempt": 6,
+      "status": "fail",
+      "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "platform": "Windows x64",
+      "actor": "Codex",
+      "at": "2026-10-15T03:35:39.314Z",
+      "evidence": [
+        {
+          "path": "evidence/cap003-4c305-native-06-failed.json",
+          "sha256": "138c71bce6fcdd8ddc652bb3ed1f1b15b6e0cd99bd928a8109ccea9fe87cc38f"
+        }
+      ]
+    }
+  ]
+}

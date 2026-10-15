@@ -16,7 +16,7 @@ export function workspaceBusy(
     !!browser?.tabs.some(
       (tab) =>
         tab.status === "running" ||
-        ["awaiting-user", "sent"].includes(tab.manualState ?? ""),
+        ["awaiting-user", "sent", "awaiting-finish"].includes(tab.manualState ?? ""),
     )
   );
 }

@@ -1,0 +1,16 @@
+{
+  "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "loadedSourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "runtimeSha256": "4c18bb1b5055c56a31d71552f3f0b6f8432773d9c3f43ba0c34fec46c34543fd",
+  "cases": [
+    "CAP-002"
+  ],
+  "status": "fail",
+  "layer": "authenticated-dev",
+  "summary": "Native Tools CAP-001 passed real Code Mode parallel reads and patch/readback. CAP-002 obtained the marker from one 15-second timer and same-cell wait, but the driver omitted the resumed cwd; one patch landed in another DEV directory. CAP-002 fails scope despite later correction; prior files and logs are preserved.",
+  "rawEvidence": {
+    "path": "output/2026-10-14-release-candidate/cap12-native-01-audit.private.json",
+    "sha256": "64d061cce0931b185b0bf96a2a687b20131eb9a4d7ea9dd0386b2fd0776123c5"
+  },
+  "runtimeInventory": "output/2026-10-14-release-candidate/candidate-final.json"
+}

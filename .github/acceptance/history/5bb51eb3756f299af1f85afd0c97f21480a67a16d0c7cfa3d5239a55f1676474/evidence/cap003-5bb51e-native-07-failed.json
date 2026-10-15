@@ -1,0 +1,33 @@
+{
+  "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+  "loadedSourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+  "runtimeSha256": "58fc6d5b2c733c9cfae7610aeacb312431a98a073fe257e1ff5fb2fa42fabedb",
+  "cases": [
+    "CAP-003"
+  ],
+  "status": "fail",
+  "layer": "authenticated-dev",
+  "summary": "Three actual overlapping GPT-6 Sol/medium children and their parent retained read-only/on-request/auto_review. All three returned terminal results, the parent aggregated their actual IDs and conclusions and closed all children. All 553 source-copy files remained unchanged. The GitHub child discarded the tools structuredContent payload and retained only Action completed acknowledgments, so repository and license verification was not established; it honestly reported that limitation. A second local-source script also failed with an octal-escape SyntaxError, while earlier actual source reads succeeded. The operator subsequently confirmed that the GitHub file payload is in structuredContent, but that separate probe does not retroactively pass the child. The full case remains failed; retry uses corrected result-shape guidance without product/model/permission changes.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-stage-settlement/cap3-07/cap003-owner.json",
+      "sha256": "e3f9979579ec8b4e6eb70d4e73842b349554b9c3d3411c2cbeb215fa12854065"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap3-07/cap003-status.json",
+      "sha256": "07a2d4e1e5255fa69d5c49d73f64f435a73037e05ab11660e90e68cd69bc77d2"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap3-07/cap003-audit.private.json",
+      "sha256": "72b0bc7ee2b093903c3f278c6f9aa40e11ac493332a5986920ac27f8b05e4482"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap3-07/cap003-before.json",
+      "sha256": "7c91e1d56ab81220aef0065a0b581bfded98f4ebd1680009fb91a20a2688709a"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap3-07/cap003-after.json",
+      "sha256": "7c91e1d56ab81220aef0065a0b581bfded98f4ebd1680009fb91a20a2688709a"
+    }
+  ]
+}

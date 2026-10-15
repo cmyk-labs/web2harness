@@ -7,6 +7,7 @@ import { Diagnostics } from "./pages/Diagnostics";
 import { Overview } from "./pages/Overview";
 import { Preferences } from "./pages/Preferences";
 import { RuntimeControls } from "./pages/RuntimeControls";
+import { RuntimeParameters } from "./pages/RuntimeParameters";
 import type { WorkspaceProps } from "./types";
 import "./workspace.css";
 import { useLicense } from "../licensing/LicenseContext";
@@ -39,6 +40,7 @@ export function WorkspaceContent(props: WorkspaceProps) {
         {page === "overview" && <Overview {...props} />}
         {page === "connection" && <Connection {...props} />}
         {page === "preferences" && <Preferences {...props} />}
+        {page === "runtime-parameters" && <RuntimeParameters {...props} />}
         {page === "diagnostics" && <Diagnostics {...props} tracker={tracker} />}
         {page === "about" && <About {...props} />}
         {page === "license" && <License {...props} />}

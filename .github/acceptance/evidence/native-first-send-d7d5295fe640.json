@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 2,
+  "recordedAt": "2026-10-15T08:28:44.042Z",
+  "sourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+  "outcome": "fail",
+  "summary": "The real one-slot native parent/three-child flow failed in the first 20-second send stage, before file operations or child creation. Login endpoint returned 200/authenticated; browser preparation and explicit GPT-6 medium selection completed. Submission started, conversation requests/responses were observed, zero network failures and zero SSE frames were recorded. Failure-time page state collection also timed out. Cause is unresolved, not classified as local network failure.",
+  "request": {
+    "traceId": "32c83d6be07b",
+    "inputChars": 322077,
+    "estimatedInputTokens": 78484,
+    "results": 0,
+    "children": 0
+  },
+  "cleanup": "send_unknown paused the scheduler. The owned helper settled before capacity release. Five Codex reconnects bound the same trace and did not create another browser send.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-release-gap-completion/gap-main-three-native-01-status.json",
+      "sha256": "d001f23c31d6b859533ff8df29a99ba799d72a9c18ca290bb08b459be2dad3b6"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/main-three-launcher-projection.json",
+      "sha256": "8900884d86a2e16b5acdc17b639f873be69c9a104aa8181953efc5dce589032d"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/gap-main-three-native-01.private.log",
+      "sha256": "931d3a710d20a2c828503cbda0673bc0fb018829f1c09735a472e06a072b54fa"
+    },
+    {
+      "path": "output/2026-10-15-release-gap-completion/gap-main-three-native-01.stderr.private.log",
+      "sha256": "c1067ae999344162becbc8e2d456e88cd7dd10dfb7fb41b3f1ce98a0c07dc1df"
+    }
+  ]
+}

@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 2,
+  "kind": "legacy-mapping",
+  "id": "legacy-4c305-cap004-complete",
+  "source": {
+    "path": "sources/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e.json",
+    "sha256": "711c85ee5a72caaa282ca810385c4a5d5cc597f8ba3d74cb38c58826d36240c2"
+  },
+  "recordedAt": "2026-10-15T06:00:52.560Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Original independently authenticated DEV runtime/profile/workspace; no new task executed during migration",
+  "mappingRationale": "Reviewed mapping of unchanged original observations to check IDs. The archived whole-case rows and receipts remain authoritative provenance; timestamps and original source/runtime identities are preserved.",
+  "observations": [
+    {
+      "checkId": "models.routes",
+      "criteriaHash": "ea1d8caf582275883eba119b7b1df047d3e84877db8840e97cf4c1ac4c4d0746",
+      "outcome": "pass",
+      "at": "2026-10-15T02:48:12.754Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-5.6-sol,chatgpt-web/gpt-5.6-pro,chatgpt-web/gpt-6-sol,chatgpt-web/gpt-6-pro",
+      "effort": "medium,max",
+      "summary": "Current unchanged 4c305 candidate: both model families and all five effort-menu positions were exercised through the shared adapter (10 combinations). Four real Native Tools routes (5.6 Sol/medium, 5.6 Pro/max, 6 Sol/medium, 6 Pro/max) completed native read, apply_patch and byte-for-byte command verification, with actual model/effort/permissions/workspace and accepted-send ledger checks. Initial newline mismatches were detected by commands and corrected by the models; original failures are retained. Standard/triple catalog budgets and unchanged effort groups/transport limits passed. Existing candidate DOM/history/text extraction regressions passed in full verify. The previously omitted isolated Electron viewport test is now explicitly enabled and passed 90 assertions at 100%/125% zoom, zero native size, tab completion, hide/show and resize/maximize. Its first restricted-environment timeout is retained. Fixtures are distinguished from authenticated model paths; no installer acceptance is claimed.",
+      "evidence": [
+        {
+          "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/evidence/cap004-4c305-complete.json",
+          "sha256": "e18656221706f57017b0cb90e0dc85eddb29fe77ec505aee5b6054ba8c6947d3"
+        }
+      ],
+      "loadedSourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "runtimeSha256": "1f64954d7ad32218fe73fb7a2b530e0cb5a506ded5d520d5aa70c9ab70ef4222",
+      "legacy": {
+        "manifest": {
+          "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/current.json",
+          "sha256": "718a9b3d2a579d137c721428609e437da2545cdb995fa20bbbb7df922376c6b5"
+        },
+        "caseId": "CAP-004",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/evidence/cap004-4c305-complete.json",
+          "sha256": "e18656221706f57017b0cb90e0dc85eddb29fe77ec505aee5b6054ba8c6947d3"
+        }
+      }
+    },
+    {
+      "checkId": "models.picker",
+      "criteriaHash": "a442b121026feb2359545d8b407433d69894b056f27af2f9afd4ca7a2c015c11",
+      "outcome": "pass",
+      "at": "2026-10-15T02:48:12.754Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-5.6-sol,chatgpt-web/gpt-5.6-pro,chatgpt-web/gpt-6-sol,chatgpt-web/gpt-6-pro",
+      "effort": "medium,max",
+      "summary": "Current unchanged 4c305 candidate: both model families and all five effort-menu positions were exercised through the shared adapter (10 combinations). Four real Native Tools routes (5.6 Sol/medium, 5.6 Pro/max, 6 Sol/medium, 6 Pro/max) completed native read, apply_patch and byte-for-byte command verification, with actual model/effort/permissions/workspace and accepted-send ledger checks. Initial newline mismatches were detected by commands and corrected by the models; original failures are retained. Standard/triple catalog budgets and unchanged effort groups/transport limits passed. Existing candidate DOM/history/text extraction regressions passed in full verify. The previously omitted isolated Electron viewport test is now explicitly enabled and passed 90 assertions at 100%/125% zoom, zero native size, tab completion, hide/show and resize/maximize. Its first restricted-environment timeout is retained. Fixtures are distinguished from authenticated model paths; no installer acceptance is claimed.",
+      "evidence": [
+        {
+          "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/evidence/cap004-4c305-complete.json",
+          "sha256": "e18656221706f57017b0cb90e0dc85eddb29fe77ec505aee5b6054ba8c6947d3"
+        }
+      ],
+      "loadedSourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "runtimeSha256": "1f64954d7ad32218fe73fb7a2b530e0cb5a506ded5d520d5aa70c9ab70ef4222",
+      "legacy": {
+        "manifest": {
+          "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/current.json",
+          "sha256": "718a9b3d2a579d137c721428609e437da2545cdb995fa20bbbb7df922376c6b5"
+        },
+        "caseId": "CAP-004",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/evidence/cap004-4c305-complete.json",
+          "sha256": "e18656221706f57017b0cb90e0dc85eddb29fe77ec505aee5b6054ba8c6947d3"
+        }
+      }
+    },
+    {
+      "checkId": "accounting.sends",
+      "criteriaHash": "fb54f8f86813097e725d8fe96dfa14cbc3dd55130c554ee4bcd031e9bdbd47ad",
+      "outcome": "pass",
+      "at": "2026-10-15T02:48:12.754Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-5.6-sol,chatgpt-web/gpt-5.6-pro,chatgpt-web/gpt-6-sol,chatgpt-web/gpt-6-pro",
+      "effort": "medium,max",
+      "summary": "Current unchanged 4c305 candidate: both model families and all five effort-menu positions were exercised through the shared adapter (10 combinations). Four real Native Tools routes (5.6 Sol/medium, 5.6 Pro/max, 6 Sol/medium, 6 Pro/max) completed native read, apply_patch and byte-for-byte command verification, with actual model/effort/permissions/workspace and accepted-send ledger checks. Initial newline mismatches were detected by commands and corrected by the models; original failures are retained. Standard/triple catalog budgets and unchanged effort groups/transport limits passed. Existing candidate DOM/history/text extraction regressions passed in full verify. The previously omitted isolated Electron viewport test is now explicitly enabled and passed 90 assertions at 100%/125% zoom, zero native size, tab completion, hide/show and resize/maximize. Its first restricted-environment timeout is retained. Fixtures are distinguished from authenticated model paths; no installer acceptance is claimed.",
+      "evidence": [
+        {
+          "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/evidence/cap004-4c305-complete.json",
+          "sha256": "e18656221706f57017b0cb90e0dc85eddb29fe77ec505aee5b6054ba8c6947d3"
+        }
+      ],
+      "loadedSourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+      "runtimeSha256": "1f64954d7ad32218fe73fb7a2b530e0cb5a506ded5d520d5aa70c9ab70ef4222",
+      "legacy": {
+        "manifest": {
+          "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/current.json",
+          "sha256": "718a9b3d2a579d137c721428609e437da2545cdb995fa20bbbb7df922376c6b5"
+        },
+        "caseId": "CAP-004",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/evidence/cap004-4c305-complete.json",
+          "sha256": "e18656221706f57017b0cb90e0dc85eddb29fe77ec505aee5b6054ba8c6947d3"
+        }
+      }
+    },
+    {
+      "checkId": "models.contracts",
+      "criteriaHash": "f46ae4530907ce54334fa509e9d6aa6df1455ca6b86c797c5b47b551b76e67cc",
+      "outcome": "pass",
+      "at": "2026-10-15T02:48:12.754Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "chatgpt-web/gpt-5.6-sol,chatgpt-web/gpt-5.6-pro,chatgpt-web/gpt-6-sol,chatgpt-web/gpt-6-pro",
+      "effort": "medium,max",
+      "summary": "Only the original CAP-004 receipt's separately executed standard/triple catalog, DOM/history/text and 90-assertion Electron viewport fixtures are mapped here; authenticated routes remain separate observations.",
+      "evidence": [
+        {
+          "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/evidence/cap004-4c305-complete.json",
+          "sha256": "e18656221706f57017b0cb90e0dc85eddb29fe77ec505aee5b6054ba8c6947d3"
+        }
+      ],
+      "legacy": {
+        "manifest": {
+          "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/current.json",
+          "sha256": "718a9b3d2a579d137c721428609e437da2545cdb995fa20bbbb7df922376c6b5"
+        },
+        "caseId": "CAP-004",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e/evidence/cap004-4c305-complete.json",
+          "sha256": "e18656221706f57017b0cb90e0dc85eddb29fe77ec505aee5b6054ba8c6947d3"
+        },
+        "fixtureSubset": true,
+        "fixtureRationale": "Original complete receipt explicitly distinguishes the catalog/DOM/history and isolated Electron 90 assertions from its authenticated model tasks. All referenced original raw hashes were verified."
+      }
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "sourceId": "03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a",
+  "recordedAt": "2026-10-15T06:29:00.588Z",
+  "kind": "offline-source-reproduction",
+  "executedAt": "2026-10-15T06:24:06.804Z",
+  "observations": [
+    {
+      "requested": "chatgpt-web/gpt-5.6-sol",
+      "family": "5.6",
+      "adapterModel": "gpt-5.6-sol",
+      "adapterFamily": "5.6",
+      "effort": "medium"
+    },
+    {
+      "requested": "chatgpt-web/gpt-6-sol",
+      "family": "6",
+      "adapterModel": "gpt-5.6-sol",
+      "adapterFamily": "6",
+      "effort": "medium"
+    }
+  ],
+  "finding": "Both source routes use the same backend alias with separate family metadata. Queue admission stores only parsed.modelId, and RequestQueue displays that stored value directly. Thus GPT-6 is labelled GPT-5.6 in the queue while the browser still receives family 6.",
+  "noLiveExecution": true,
+  "actualOldRun": {
+    "requestedModel": "chatgpt-web/gpt-6-sol",
+    "browserFamily": "6",
+    "acceptedReceiptModel": "gpt-6-sol",
+    "queueModel": "gpt-5.6-sol",
+    "occurrences": 24
+  },
+  "confirmedScope": "Queue display and model metadata/filtering. Actual family/effort selection and send accounting are not shown to downgrade by this evidence.",
+  "sourcePaths": [
+    "src/server.ts",
+    "src/adapters/chatgpt-web/adapter.ts",
+    "src/adapters/chatgpt-web/browser/browser-worker.ts",
+    "launcher/shared/request-scheduler.cjs",
+    "launcher/src/features/workspace/RequestQueue.tsx"
+  ],
+  "nextChange": "Preserve a user-facing selected model identity in queue metadata while retaining canonical backend identity for routing/replay; add route-to-queue regressions for both families and efforts, then check affected queue rendering/filtering. Do not repeat four authenticated model routes for a metadata-only correction.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-acceptance-history-review/model-label-reproduction.json",
+      "sha256": "f47af466fb176f4d2ab2379b0a75549a573cd45dac0cb4706381521adc955411"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import { chmodSync, mkdirSync, rmSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { candidateIdentity } from "../launcher/shared/candidate-identity.cjs";
 
 const root = resolve(import.meta.dir, "..");
 const output = resolve(process.argv[2] ?? join(root, ".launcher-runtime", "browser-helper.cjs"));
@@ -9,6 +10,7 @@ rmSync(output, { force: true });
 const build = await Bun.build({
   entrypoints: [join(root, "src", "adapters", "chatgpt-web", "browser", "browser-helper-main.ts")],
   target: "node",
+  define: { __WEB2HARNESS_SOURCE_ID__: JSON.stringify(candidateIdentity(root).sourceId) },
   format: "cjs",
   minify: true,
   packages: "external",

@@ -2,8 +2,6 @@ import { expect, test } from "bun:test";
 import { createContextFile, validateContextFile } from "../../../../src/adapters/chatgpt-web/prompt/context-attachments";
 import { compileChatGptWebPrompt } from "../../../../src/adapters/chatgpt-web/prompt/compile";
 import { chatGptPromptFilePayloads } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
-import { estimateTokens } from "../../../../src/lib/token-estimate";
-import { resolveChatGptWebMessageTokenBudget, resolveChatGptWebTransportLimits } from "../../../../src/models/chatgpt-web-models";
 import type { CodexParsedRequest } from "../../../../src/types";
 
 const capabilities = { localToolsEnabled: false, nativeToolsEnabled: true, solAvailable: true, extraHighAvailable: true, proAvailable: false };
@@ -24,12 +22,11 @@ test("small contexts remain inline and disabling file transfer never changes the
   expect(compile(large).contextFile).toBeDefined();
 });
 
-test("the 80 percent composer threshold triggers independently of token density", () => {
+test("the UTF-8 context envelope stays inline at 32 KiB and becomes a file above it", () => {
   const parsed = request("");
   const initial = compile(parsed);
-  const limit = resolveChatGptWebTransportLimits("gpt-5.6-sol", "low", capabilities).browserComposerCharLimit!;
-  const boundary = Math.floor(limit * 0.8);
-  parsed.context.messages[0]!.content = " ".repeat(boundary - initial.text.length - 1);
+  const envelope = initial.text.split("<codex_context_json>\n")[1]!.split("\n</codex_context_json>")[0]!;
+  parsed.context.messages[0]!.content = " ".repeat(32 * 1024 - Buffer.byteLength(envelope, "utf8"));
   expect(compile(parsed).contextFile).toBeUndefined();
   parsed.context.messages[0]!.content += " ";
   expect(compile(parsed).contextFile).toBeDefined();
@@ -63,16 +60,13 @@ test("invalid context attachments and excessive attachment count fail explicitly
   expect(() => chatGptPromptFilePayloads({ text: "Read the file", contextFile, images: Array.from({ length: 10 }, (_, i) => ({ ref: `image-${i}`, imageUrl: "data:image/png;base64,iVBORw==" })) })).toThrow("10 attachments");
 });
 
-test("token pressure uses 80 percent of the normal single-message budget independently of triple context", () => {
-  const empty = compile(request(""));
-  const threshold = Math.floor(resolveChatGptWebMessageTokenBudget("gpt-5.6-sol", "low", capabilities) * 0.8);
-  const words = threshold - estimateTokens(empty.text, "gpt-5.6-sol");
-  const below = request("word ".repeat(words - 30));
-  const above = request("word ".repeat(words + 30));
-  const inline = compileChatGptWebPrompt(above, capabilities);
-  expect(estimateTokens(compileChatGptWebPrompt(below, capabilities).text, "gpt-5.6-sol")).toBeLessThan(threshold);
-  expect(estimateTokens(inline.text, "gpt-5.6-sol")).toBeGreaterThanOrEqual(threshold);
-  expect(compile(below).contextFile).toBeUndefined();
-  expect(compile(above).contextFile).toBeDefined();
-  expect(compileChatGptWebPrompt(above, { ...capabilities, experimentalContextFiles: true, experimentalContextTripleBudget: true }, undefined, options)).toEqual(compile(above));
+test("Unicode and JSON escaping count toward the same threshold without changing context budgets", () => {
+  for (const content of ["中".repeat(11_000), "`".repeat(6_000), "\\".repeat(17_000)]) {
+    const parsed = request(content);
+    expect(content.length).toBeLessThan(32 * 1024);
+    const file = compile(parsed);
+    expect(file.contextFile).toBeDefined();
+    expect(JSON.parse(file.contextFile!.text).messages[0].content).toBe(content);
+    expect(compileChatGptWebPrompt(parsed, { ...capabilities, experimentalContextFiles: true, experimentalContextTripleBudget: true }, undefined, options)).toEqual(file);
+  }
 });

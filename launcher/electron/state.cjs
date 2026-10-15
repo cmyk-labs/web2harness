@@ -1,4 +1,5 @@
 const languages = require("./languages.json");
+const { DEFAULT_REQUEST_SCHEDULING, validateRequestScheduling } = require("../shared/request-scheduler.cjs");
 const { defaultPageSize, pageSizes } = require("../shared/log-pagination.json");
 const fs = require("node:fs");
 const { writePrivateFileAtomic } = require("./common/atomic-file.cjs");
@@ -8,6 +9,8 @@ const SESSION_REFRESH_REMINDER_INTERVAL_MS = 48 * 60 * 60 * 1000;
 
 const DEFAULT_STATE = Object.freeze({
   version: 1,
+  requestScheduling: DEFAULT_REQUEST_SCHEDULING,
+  requestSchedulingRevision: 1,
   language: null,
   onboardingComplete: false,
   githubOpened: false,
@@ -40,6 +43,9 @@ function readState(filePath) {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
     if (!parsed || parsed.version !== 1) return { ...DEFAULT_STATE };
     const state = { ...DEFAULT_STATE, ...parsed };
+    try { state.requestScheduling = validateRequestScheduling(state.requestScheduling); }
+    catch { state.requestScheduling = { ...DEFAULT_REQUEST_SCHEDULING }; }
+    if (!Number.isSafeInteger(state.requestSchedulingRevision) || state.requestSchedulingRevision < 1) state.requestSchedulingRevision = 1;
     delete state.bridgeEnabled;
     delete state.xOpened;
     state.experimentalContextFiles = parsed.experimentalContextFiles === undefined

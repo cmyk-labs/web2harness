@@ -380,7 +380,7 @@ test("completed retained compaction never treats ordinary assistant text as a ha
     abortCompactionTransaction() {},
   } as unknown as TurnBroker;
   const worker = {
-    run: async () => '{"checkpoint":"must never be parsed"}',
+    run: async (turn: BrowserTurn) => { await turn.prepare(); return '{"checkpoint":"must never be parsed"}'; },
   };
 
   await expect(requestRetainedCompactionHandoff(
@@ -415,7 +415,7 @@ test("retained compaction deadline bounds browser settlement after the control h
     abortCompactionTransaction: () => { transactionAborted = true; },
   } as unknown as TurnBroker;
   const worker = {
-    run: async () => new Promise<string>(() => {}),
+    run: async (turn: BrowserTurn) => { await turn.prepare(); return new Promise<string>(() => {}); },
   };
 
   await expect(requestRetainedCompactionHandoff(
@@ -1056,6 +1056,7 @@ test("adapter compact returns one same-agent handoff and preserves a pre-existin
   await chatGptTurnSessions.find(sourceKey)!.browserOutcome;
 
   (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
+    turn.onQueueDispatched?.();
     const prepared = await turn.prepareResume!();
     const binding = controlBinding(prepared.text);
     expect(turn.nativeConnector).toBeTrue();
@@ -1156,6 +1157,7 @@ test("a compact HTTP observer can reconnect without sending a second retained-ch
   let finishMessage!: () => void;
   const finish = new Promise<void>(resolve => { finishMessage = resolve; });
   (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
+    turn.onQueueDispatched?.();
     browserMessages += 1;
     const prepared = await turn.prepareResume!();
     const binding = controlBinding(prepared.text);
@@ -1230,6 +1232,7 @@ test.each([false, true])("structured compact rebuilds canonical context when its
   const originalRun = worker.run.bind(worker);
   let browserStarts = 0;
   (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
+    turn.onQueueDispatched?.();
     browserStarts += 1;
     expect(turn.requireRetainedConversation).toBeUndefined();
     expect(turn.conversationKey).toBeUndefined();
@@ -1338,6 +1341,7 @@ test.each([false, true])("fresh compaction preserves phase budgets with fresh mo
   const worker = ChatGptBrowserWorker.forProvider(provider);
   const originalRun = worker.run.bind(worker);
   (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
+    turn.onQueueDispatched?.();
     expect(turn.traceId.endsWith(freshConversation ? "_fresh" : "_fallback")).toBeTrue();
     expect(turn.onSubmitted).toBeDefined();
     mock.timers.tick(25);
@@ -1388,6 +1392,7 @@ test("cancel-all waits for physical settlement of a fresh compaction fallback", 
   const physicalSettlement = new Promise<void>(resolve => { releasePhysical = resolve; });
   let cancelObserved = false;
   (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
+    turn.onQueueDispatched?.();
     expect(turn.requireRetainedConversation).toBeUndefined();
     fallbackStarted();
     turn.abortSignal?.addEventListener("abort", () => { cancelObserved = true; }, { once: true });
@@ -1444,6 +1449,7 @@ test("a timed-out fresh compaction retains its owner until helper cleanup comple
   let cancelled = false;
   let fallbackTrace = "";
   (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
+    turn.onQueueDispatched?.();
     browserStarts += 1;
     fallbackTrace = turn.traceId;
     started();
@@ -1525,6 +1531,7 @@ test.each([false, true])("structured compact rebuild after retained browser loss
 
   let browserStarts = 0;
   (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
+    turn.onQueueDispatched?.();
     browserStarts += 1;
     if (turn.requireRetainedConversation) throw chatGptRetainedConversationUnavailableError();
     const prepared = await turn.prepare();
@@ -1598,6 +1605,7 @@ test("a disappeared retained source cannot leave its fresh compaction rebuild pa
   let releaseBrowser: (() => void) | undefined;
   let fallbackTrace = "";
   (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
+    turn.onQueueDispatched?.();
     browserStarts += 1;
     if (turn.requireRetainedConversation) throw chatGptRetainedConversationUnavailableError();
     fallbackTrace = turn.traceId;

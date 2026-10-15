@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "id": "native-inline-ccd3f97-file-05",
+  "source": {
+    "path": "sources/ccd3f97aae748e98d5cd813b45e3b15432b02a950d97fe2895c2956dbfb30f41.json",
+    "sha256": "fb7af8e807cafa8a4cacc9ab705eeb998d9ccf456f2ba78947e2e14814605a44"
+  },
+  "recordedAt": "2026-10-15T10:54:06.737Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Independent authenticated DEV via dev:codex; GPT-6 Medium, normal approvals and workspace-write.",
+  "observations": [
+    {
+      "checkId": "native.read-patch",
+      "criteriaHash": "345a5264d2384477be07e71ebc29bea2abd670ba55a9b431caa47b2b56e0604b",
+      "outcome": "pass",
+      "at": "2026-10-15T10:28:02.419Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "loadedSourceId": "ccd3f97aae748e98d5cd813b45e3b15432b02a950d97fe2895c2956dbfb30f41",
+      "runtimeSha256": "86b1c72c63d4d63eab4308c0718ca4d63af48498e0a5cd84509bc5312f11e502",
+      "summary": "Actual parallel reads, native patch, command readback and74 verified bytes after exact inline rendering/ownership fixes; no startup fallback. Does not resolve historical cold-catalog failures.",
+      "evidence": [
+        {
+          "path": "evidence/context-files-a5ace55e9905.json",
+          "sha256": "feae7377d93e336783bf36b0b0863a6eed1ef3f1517a7fd02c51312d8f463f21"
+        }
+      ]
+    }
+  ]
+}

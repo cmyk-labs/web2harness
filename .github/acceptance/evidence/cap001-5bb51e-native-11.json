@@ -1,0 +1,29 @@
+{
+  "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+  "loadedSourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+  "runtimeSha256": "58fc6d5b2c733c9cfae7610aeacb312431a98a073fe257e1ff5fb2fa42fabedb",
+  "cases": [
+    "CAP-001"
+  ],
+  "status": "pass",
+  "layer": "authenticated-dev",
+  "summary": "Native Tools / Automatic, GPT-6 Sol medium: actual Code Mode exec dispatched two independent native command reads using Promise.all and received ALPHA and BETA with zero exit codes. The same script subsequently invoked native apply_patch to add result.txt; the actual file-change event and native command readback matched ALPHA-BETA. All four resulting fixture files and changed-path scope were inspected. Actual turn_context retained workspace-write, on-request and auto_review. No MCP-mode coverage is asserted.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-stage-settlement/cap12-native-11-status.json",
+      "sha256": "dceaa26e0605dfcec6ff5f558a417824d5d8b67c7080e359c673e5fd9b08181b"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap12-native-11-audit.private.json",
+      "sha256": "2e209465f34df90d8740c1a9127ef2281ac8537aab1362cd0f7c508e7f385fcd"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap12-native-11-1.private.log",
+      "sha256": "d0c16a016d800a9d1d1ffd15594bde9800f7573d632cd4bf77cf3a8dbafc172b"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap12-native-11-2.private.log",
+      "sha256": "b54f4de39d02bfc951364e4a998e0865d9a21df64c4efc832033582de5c92ed0"
+    }
+  ]
+}

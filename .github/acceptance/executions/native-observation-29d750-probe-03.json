@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "id": "native-observation-29d750-probe-03",
+  "source": {
+    "path": "sources/29d750ee2d112fe5b25ff7977a9b8c7d146358ea9494ab6c4da6ed7a0043128a.json",
+    "sha256": "6a6fb28d2555c071ceb039b53955a7a29f03fda29a56562dd9628db631cdc006"
+  },
+  "recordedAt": "2026-10-15T10:00:42.044Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Verified independent authenticated DEV with actual Codex, selected GPT-6 Medium, workspace-write and normal approvals. No copied production credentials.",
+  "observations": [
+    {
+      "checkId": "native.read-patch",
+      "criteriaHash": "345a5264d2384477be07e71ebc29bea2abd670ba55a9b431caa47b2b56e0604b",
+      "outcome": "fail",
+      "at": "2026-10-15T09:27:14.000Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "loadedSourceId": "29d750ee2d112fe5b25ff7977a9b8c7d146358ea9494ab6c4da6ed7a0043128a",
+      "runtimeSha256": "86b1c72c63d4d63eab4308c0718ca4d63af48498e0a5cd84509bc5312f11e502",
+      "summary": "Minimum native file flow failed after input delivery while page observation/recovery stalled; no result file. Do not infer network root cause.",
+      "evidence": [
+        {
+          "path": "evidence/native-observation-29d750ee2d11.json",
+          "sha256": "52f74c82432016acc6aa1f49b9bedd0c3c48a4e5b8405788e0a6649758036703"
+        }
+      ]
+    }
+  ]
+}

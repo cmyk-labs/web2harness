@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "kind": "legacy-mapping",
+  "id": "legacy-5bb51e-cap3-07-failed",
+  "source": {
+    "path": "sources/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474.json",
+    "sha256": "6fe6cab7387319377a03b34b7b3d76749efe705cc24bc0ba33744e081f54f932"
+  },
+  "recordedAt": "2026-10-15T06:00:52.560Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Original independently authenticated DEV runtime/profile/workspace; no new task executed during migration",
+  "mappingRationale": "Reviewed mapping of unchanged original observations to check IDs. The archived whole-case rows and receipts remain authoritative provenance; timestamps and original source/runtime identities are preserved.",
+  "observations": [
+    {
+      "checkId": "native.readonly-agents",
+      "criteriaHash": "b13335867996fff3f927da0fa5f66dfe8b96d15e32e185e4ae2fccab480ecdc8",
+      "outcome": "fail",
+      "at": "2026-10-15T04:13:03.078Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "summary": "Three actual overlapping GPT-6 Sol/medium children and their parent retained read-only/on-request/auto_review. All three returned terminal results, the parent aggregated their actual IDs and conclusions and closed all children. All 553 source-copy files remained unchanged. The GitHub child discarded the tools structuredContent payload and retained only Action completed acknowledgments, so repository and license verification was not established; it honestly reported that limitation. A second local-source script also failed with an octal-escape SyntaxError, while earlier actual source reads succeeded. The operator subsequently confirmed that the GitHub file payload is in structuredContent, but that separate probe does not retroactively pass the child. The full case remains failed; retry uses corrected result-shape guidance without product/model/permission changes.",
+      "evidence": [
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/cap003-5bb51e-native-07-failed.json",
+          "sha256": "ec88e40a579e893bc120a174c7cf5376a200995a67a539d853acc724301aa38e"
+        }
+      ],
+      "loadedSourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "runtimeSha256": "58fc6d5b2c733c9cfae7610aeacb312431a98a073fe257e1ff5fb2fa42fabedb",
+      "legacy": {
+        "manifest": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/current.json",
+          "sha256": "888d69d50b736f247cc98faf0a8a67b5248a78c0207e1e8126c5b683303bf9cc"
+        },
+        "caseId": "CAP-003",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/cap003-5bb51e-native-07-failed.json",
+          "sha256": "ec88e40a579e893bc120a174c7cf5376a200995a67a539d853acc724301aa38e"
+        }
+      }
+    }
+  ]
+}

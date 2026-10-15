@@ -10,8 +10,9 @@ test("initial shell snapshot is available without runtime or browser constructio
   let snapshot;
   const state = { language: "en", onboardingComplete: true };
   vm.runInNewContext(main.slice(main.indexOf('handle("launcher:snapshot",'), main.indexOf('handle("launcher:set-language",')), {
-    handle: (_channel, handler) => { snapshot = handler; },
-    startup: new StartupState(), startupFailed: false, runtimeHost: null, browserHost: null,
+    createQueueSettingsSaver: require("../../electron/runtime/queue-settings.cjs").createQueueSettingsSaver,
+    handle: (channel, handler) => { if (channel === "launcher:snapshot") snapshot = handler; },
+    startup: new StartupState(), startupFailed: false, runtimeHost: null, browserHost: null, requestQueue: null,
     LAUNCHER_PROFILE: { kind: "development", codexHome: "/fixture/codex" }, CORE_HOME: "/fixture/core",
     launcherUserData: "/fixture/launcher", stateStore: { read: () => state }, logger: { recent: () => [] },
     GITHUB_URL: "", projectLinks: require("../../electron/project-links.cjs").projectLinks,
@@ -31,7 +32,7 @@ test("quit waits for the installation transaction and prevents startup continuat
   const sandbox = {
       shutdownInProgress: false, exitCommitted: false, quitting: false, diagnosticHistory: null,
     updateController: { stop: () => calls.push("updates stopped") },
-    runtimePreparation: new Promise(resolve => { finish = resolve; }), runtimeHost: null, browserHost: null, browserControl: null,
+    runtimePreparation: new Promise(resolve => { finish = resolve; }), runtimeHost: null, browserHost: null, requestQueue: null, browserControl: null,
     runtimeSupervisor: { shutdown: async () => calls.push("shutdown") },
     stopCatalogVerificationMonitor() {}, app: { quit: () => calls.push("quit") },
     showMainWindow() {}, publishOperation: () => assert.fail("Quit should succeed"),
@@ -51,7 +52,7 @@ for (const shutdownFails of [false, true]) test(`package smoke follows normal sh
   let browserDestroyed = false;
   let windowDestroyed = false;
   const sandbox = {
-      Error, shutdownInProgress: false, exitCommitted: false, quitting: false, runtimePreparation: Promise.resolve(), diagnosticHistory: null,
+      requestQueue: null, Error, shutdownInProgress: false, exitCommitted: false, quitting: false, runtimePreparation: Promise.resolve(), diagnosticHistory: null,
     updateController: { stop: () => calls.push("updates stopped") },
     runtimeRootProvider: () => "/fixture/runtime", runtimeHost: { currentOperation: () => null },
     runtimeSupervisor: { runtimeCommand: () => ({ executable: "/fixture/bun", args: ["--version"], cwd: "/fixture" }),

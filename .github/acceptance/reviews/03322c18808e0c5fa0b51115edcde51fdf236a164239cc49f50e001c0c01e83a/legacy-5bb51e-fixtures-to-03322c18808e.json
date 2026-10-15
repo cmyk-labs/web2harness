@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 2,
+  "id": "legacy-5bb51e-fixtures-to-03322c18808e",
+  "runId": "legacy-5bb51e-fixtures",
+  "targetSourceId": "03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a",
+  "reviewer": "Codex",
+  "at": "2026-10-15T06:00:52.560Z",
+  "checkIds": [
+    "http.body-budget",
+    "queue.cancellation",
+    "queue.network",
+    "queue.owner-loss",
+    "queue.pressure",
+    "queue.lifecycle",
+    "diagnostics.contracts"
+  ],
+  "changes": [
+    {
+      "path": "AGENTS.md",
+      "before": "078eda3e9cd6cdfc6b0b98c7734c06a98a483644d2b0ad18d6d17865d985d9d7",
+      "after": "59c47fb847a608494249f706d51030aa836d01ac65981b5fcedabd677637aa34",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "AGENTS.zh-CN.md",
+      "before": "a6479d063dc38ce68d9d382345cf093e7dfc504673bb16ee1ecb41bd3c0a1409",
+      "after": "744e6d249be771d6700bca3a067e59f594a455e8fdb1cf720c1f172c1a10689c",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "README.md",
+      "before": "ea18e989f3a8c090ba3af8f6dd4588941e5bbbe1c72bde9abeaad48e2bc74707",
+      "after": "ac40f60674a20e6844326d104d6a78b091f3c19f331611ab1bfdf5c80ef4acad",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "README.zh-CN.md",
+      "before": "0faa8d13f7c0d3151388eaafdd50ecbbee6e45cd29ec05021ae4873af3435429",
+      "after": "916a15592089c59688b6a6ecc328fd2331447246dab28abce9c6b67d37616379",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-evidence.md",
+      "before": "48955fdf9210fd2ce79a6835d3a09e1b613c20c7e330ef3c75c2d6d720cc6659",
+      "after": "e8a7135c026afba90cdcdbf893a91c9b2ab97ebfd6a287a7737cff04d764bc6f",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-evidence.zh-CN.md",
+      "before": "1253f6a8fb02e4d1a0f937e5cf52bef5d76a6dcb0c064cd9dc0a37ecab631c79",
+      "after": "efdaac8dd6586b8cdef85723b0f54c5e9b5b77d755055f1a6446f04d8b32b079",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-protocol.md",
+      "before": null,
+      "after": "8afadbf50997605fb51def353220026acce3198d6d85b616a979972403f2b51c",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-protocol.zh-CN.md",
+      "before": null,
+      "after": "b72f0a2025c321555bbd52403c288214a5e556b2fdc38b9a172174f83b719e84",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-tests.md",
+      "before": "2de679524aa227eb48cda8aaf156a053981fb20510403822364f450ea0db56f8",
+      "after": "e96db0756ee46c2dc1ca9c6099bc852a0227e9276ce14130d70cc5db6b95da67",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-tests.zh-CN.md",
+      "before": "697417cda17f7285bc98e5285ea152a4253a2c5552322041f7a4d379bb2d899a",
+      "after": "62ddbd2aba0b10e9318d8905640e49d87d3e48a37ed1d5eb19939fb4c3ec81d4",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/development.md",
+      "before": "2477e6d41c2c1d14656f6d6879831020fe8ff04fe09e7d60b60407462e106ea7",
+      "after": "43497fd7b0bc3b0ed6b2cbb71beaa9b82b2d99d2a84a6c8d121a98e8f51192f7",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/development.zh-CN.md",
+      "before": "fc388b608c8d6b42b1a3bf92d1421ff3798886da542cf3b5507015bcb38c874a",
+      "after": "802da6f35a705958e7318c74987abfa5387b78c92dfd96768770db2adf1c3214",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/release.md",
+      "before": "af9ef5d3469b9ece20303cdc523406e9d4db792eea1078583180358749562106",
+      "after": "5672b43d4d4a529dd5c2264ec9895898cf1d75ecbb07ba4ab9fd8f0cf4fa2ca4",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/release.zh-CN.md",
+      "before": "9ae7f810ea8083fc578ee2d02b94cdfac2baca0f329eb1e0a13c4a4a00a46da8",
+      "after": "0915999798947b444edfae8d65bb052262090115cf114be0513f88e1e44e6b6f",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "scripts/acceptance-evidence.ts",
+      "before": "e5cf37abc429c5e8c2264e85c9558ae0c26dd7d271ac7638a6542c8435157c9a",
+      "after": "6ab7585417bf4641d5af34b7aeff1b9485e1721dad0bf24a7ac3a617727f0cfc",
+      "impact": "unrelated",
+      "reason": "Acceptance evidence/catalog tooling only; not loaded by product execution. Mapping was checked against the documented original behavior and required evidence level."
+    },
+    {
+      "path": "scripts/acceptance/catalog.ts",
+      "before": null,
+      "after": "ce796a6656dc318acd47732ebb41a0719d1424959ef7241edd3cd1ee3c5c048a",
+      "impact": "unrelated",
+      "reason": "Acceptance evidence/catalog tooling only; not loaded by product execution. Mapping was checked against the documented original behavior and required evidence level."
+    },
+    {
+      "path": "scripts/acceptance/checker.ts",
+      "before": null,
+      "after": "98c4d1b6a0a3afde3bd01af198d1847d8cbbb4cfa92276c1549c21b98cd36e09",
+      "impact": "unrelated",
+      "reason": "Acceptance evidence/catalog tooling only; not loaded by product execution. Mapping was checked against the documented original behavior and required evidence level."
+    },
+    {
+      "path": "tests/acceptance-evidence-v2.test.ts",
+      "before": null,
+      "after": "26447bd9bcbc0acad48ae41490d733ff5b33e86d7751cd4b8df9309efbb0abe1",
+      "impact": "reviewed-unaffected",
+      "reason": "New synthetic evidence-checker tests only; existing product fixtures and their pass criteria are unchanged.",
+      "support": [
+        {
+          "path": "reviews/03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a/scope-review.json",
+          "sha256": "f8498354e43ad759028cf8746f4e91788ae22b38eb8fc220984930bcc711db3f"
+        }
+      ]
+    }
+  ],
+  "environment": {
+    "status": "unchanged",
+    "reason": "Historical functional claims retain their recorded Windows DEV/fixture platform, profile and runtime identities. This migration changes only source evidence tooling/docs and does not operate DEV, credentials, network or production. No fresh login/connector/readiness success is claimed; the next live batch and publication still require preflight and release smoke."
+  },
+  "resolvedFailures": []
+}

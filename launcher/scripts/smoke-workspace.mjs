@@ -1,6 +1,7 @@
 import { chromium } from '../../node_modules/playwright-core/index.mjs';
 import { createServer } from '../node_modules/vite/dist/node/index.js';
 import assert from 'node:assert/strict';
+import { runQueueSmoke } from './smoke-queue.mjs';
 import { resolve } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer as createHttpServer } from 'node:http';
@@ -48,7 +49,12 @@ await context.addInitScript(()=>{
  Object.assign(window.__fixture,{patch,emitOperation:operation=>listeners.onOperation?.(operation)});
  const success=()=>{if(window.__fixture.failApply)throw new Error('Fixture setup failed')};
  const license=window.__fixture.license={state:'active',deviceCode:'W2D1-WIN-'+'a'.repeat(64),licenseId:'fixture',expiresAt:null};
+ state.requestScheduling={maxConcurrent:4,queueTimeoutMinutes:15,minSendIntervalSeconds:3};state.requestSchedulingRevision=1;
  window.codexWebLauncher=new Proxy({
+ queueStatus:async()=>({status:'ready',savedRevision:state.requestSchedulingRevision,settings:state.requestScheduling,scheduler:{settings:state.requestScheduling,configRevision:state.requestSchedulingRevision,active:0,waiting:0,groups:[],pauseReasons:[],pausedReason:null}}),
+ queryQueue:async(query)=>({items:[],groups:[],total:0,offset:query.offset??0,limit:query.limit??50,snapshotId:'fixture-queue'}),
+ saveQueueSettings:async(value,revision)=>{window.__fixture.calls.push(['saveQueueSettings',value,revision]);if(window.__fixture.holdQueueSave)await new Promise(resolve=>window.__fixture.releaseQueueSave=resolve);if(window.__fixture.failQueueSave)throw new Error('Fixture queue save failed');if(revision!==state.requestSchedulingRevision)throw new Error('Queue settings changed');const saved=patch({requestScheduling:value,requestSchedulingRevision:revision+1});return {state:saved,persistedRevision:revision+1,appliedRevision:window.__fixture.failQueueApply?revision:revision+1,applyState:window.__fixture.failQueueApply?'apply-failed':'applied'}},
+ controlQueue:async action=>{window.__fixture.calls.push(['controlQueue',action]);return {}},
  licenseStatus:async()=>({...license}),
  importLicense:async code=>{if(window.__fixture.failLicenseImport)throw new Error('Fixture import unavailable');return code==='fixture-valid'?{...license}:{...license,state:'invalid'}},
  checkUpdate:async()=>{window.__fixture.calls.push(['checkUpdate']);const update={status:'up-to-date',lastCheckedAt:'2026-10-05T01:00:00Z'};window.__fixture.emitUpdate(update);return update},
@@ -95,6 +101,12 @@ await context.addInitScript(()=>{
  showBrowser:async()=>browser,setBrowserSurfaceActive:async()=>browser,
  },{get:(target,key)=>key in target?target[key]:String(key).startsWith('on')?fn=>{listeners[key]=fn;return()=>delete listeners[key]}:async(...args)=>{window.__fixture.calls.push([key,...args]);return {}}});
 });
+if(process.env.WORKSPACE_SMOKE_SCOPE==='queue'){
+ await runQueueSmoke({context,origin,out,check,errors});
+ check('Queue renderer has no JavaScript errors',errors.length===0);
+ await writeFile(out+'/results.json',JSON.stringify({scope:'queue',passed:checks.length,checks,errors},null,2));
+ console.log(JSON.stringify({scope:'queue',passed:checks.length,errors}));
+}else{
 const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(origin);await page.getByRole('region',{name:'概览',exact:true}).waitFor();await page.waitForTimeout(600);
 await page.screenshot({path:out+'/overview-zh.png'});
 check('No unsolicited recommendation modal',await page.locator('.bigger-context-recommendation-backdrop').count()===0);
@@ -102,7 +114,7 @@ const metrics=await page.evaluate(()=>({sidebar:document.querySelector('.app-sid
 check('Workspace uses the shared sidebar and readable page spacing',metrics.sidebar===252&&metrics.padding==='24px 32px 40px');
 check('No page breadcrumb or workspace kicker',await page.locator('.topbar,.eyebrow').count()===0);
 check('Sidebar uses the approved H logo without repeated overview branding',await page.locator('.sidebar-brand-identity .brand-mark svg path').getAttribute('d')===brandMark.path&&await page.locator('.overview-intro .brand-mark,.overview-intro .overview-brand').count()===0);
-check('Ready overview keeps connection management and adds a license link without setup warnings',await page.locator('.content button').count()===2&&await page.getByRole('button',{name:'管理连接',exact:true}).count()===1&&await page.locator('.overview-license').getByRole('button',{name:'管理授权',exact:true}).count()===1&&await page.locator('.overview-notice').count()===0);
+check('Ready overview keeps connection management and adds a license link without setup warnings',await page.locator('.content button').count()===3&&await page.getByRole('button',{name:'管理连接',exact:true}).count()===1&&await page.locator('.overview-license').getByRole('button',{name:'管理授权',exact:true}).count()===1&&await page.locator('.overview-notice').count()===0);
 check('Healthy overview status values share the success tone',await page.locator('.card .value').evaluateAll(nodes=>new Set(nodes.map(node=>getComputedStyle(node).color)).size===1));
 check('Sidebar restores three Chinese groups',JSON.stringify(await page.locator('.sidebar-group h2').allTextContents())===JSON.stringify(['工作区','设置','应用']));
 check('Healthy sidebar has a success indicator',await page.locator('.side-status .status-dot.status-success').count()===1);
@@ -113,7 +125,7 @@ check('Overview summarizes connections and the active configuration',await page.
 check('Ready overview keeps all usage instructions expanded',await page.locator('.usage-flow li').count()===3&&await page.locator('.usage-flow').isVisible());
 check('Flow retains all original Chinese descriptions',JSON.stringify(await page.locator('.usage-flow p').allTextContents())===JSON.stringify(['使用你熟悉的客户端或命令行。','模型名称以 (Web) 标识。','在这里查看连接和运行状态。']));
 check('Flow uses three numbered nodes and two connectors',await page.locator('.usage-flow .flow-number').count()===3&&await page.locator('.usage-flow .flow-connector').count()===2);
-check('Preferences follows Connection under Settings',JSON.stringify(await page.getByRole('region',{name:'设置',exact:true}).getByRole('button').allTextContents())===JSON.stringify(['连接与模型','偏好设置'])&&await page.locator('.sidebar-footer .language-toggle').count()===1);
+check('Runtime parameters has an independent Settings entry',JSON.stringify(await page.getByRole('region',{name:'设置',exact:true}).getByRole('button').allTextContents())===JSON.stringify(['连接与模型','运行参数','偏好设置'])&&await page.locator('.sidebar-footer .language-toggle').count()===1);
 check('Sidebar has the installed version beside the product name and no repository button',await page.locator('.sidebar-brand-identity .brand-version').textContent()==='v1.0.0'&&await page.getByRole('button',{name:'在 GitHub 打开项目仓库',exact:true}).count()===0);
 check('Usage steps retain three outlined flow boxes',await page.locator('.usage-flow li').evaluateAll(nodes=>nodes.length===3&&nodes.every(node=>getComputedStyle(node).borderBottomWidth==='1px'&&getComputedStyle(node).borderTopWidth==='1px')));
 check('Open sidebar shows only its DEV badge',await page.locator('.titlebar-dev-profile').count()===0&&await page.locator('.sidebar-brand-identity .dev-profile-badge').count()===1);
@@ -138,7 +150,7 @@ const waitLayout=()=>page.waitForFunction(()=>{
   return window.matchMedia('(max-width:1000px)').matches===shell.classList.contains('is-compact')&&Math.abs(sidebar.getBoundingClientRect().width-target)<.5&&(!surface||Number(getComputedStyle(surface).opacity)>.99);
 });
 const nav=async name=>{await waitLayout();if(await page.locator('.app-shell.is-compact:not(.is-sidebar-open)').count())await page.locator('.app-titlebar .icon-button').first().click();await page.getByRole('navigation').getByRole('button',{name,exact:true}).click();if(['Overview','概览'].includes(name))await page.getByRole('region',{name,exact:true}).waitFor();else if(!['Browser','浏览器'].includes(name))await page.getByRole('region',{name,exact:true}).waitFor();await waitLayout()};
-const pref=async name=>{await waitLayout();if(await page.locator('.app-shell.is-compact:not(.is-sidebar-open)').count())await page.locator('.app-titlebar .icon-button').first().click();await page.getByRole('button',{name,exact:true}).click();await page.getByRole('region',{name,exact:true}).waitFor()};
+const pref=async name=>{await waitLayout();if(await page.locator('.app-shell.is-compact:not(.is-sidebar-open)').count())await page.locator('.app-titlebar .icon-button').first().click();await page.locator('#workspace-sidebar').getByRole('button',{name,exact:true}).click();await page.getByRole('region',{name,exact:true}).waitFor()};
 await nav('连接与模型');
 check('Completed simple steps align actions beside text',await page.locator('.connection-step.is-complete').first().evaluate(el=>{const copy=el.querySelector('.step-heading').getBoundingClientRect(),action=el.querySelector('.step-action').getBoundingClientRect();return action.left>=copy.right&&action.top<el.getBoundingClientRect().bottom}));
 check('Native Tools fixes automatic interaction without a manual selector',await page.getByRole('radio',{name:'手动',exact:true}).count()===0&&await page.locator('.interaction-setting > strong').textContent()==='自动');
@@ -232,6 +244,56 @@ await page.waitForFunction(()=>document.querySelector('.mode').disabled);
 check('An active browser turn also locks configuration',await page.getByRole('radio',{name:/MCP 桥接/}).isDisabled()&&await page.getByRole('button',{name:'应用配置',exact:true}).isDisabled());
 await page.evaluate(()=>window.__fixture.emitBrowser({status:'ready'}));
 await page.screenshot({path:out+'/connection-zh.png',fullPage:true});
+await pref('运行参数');
+check('Queue defaults are shown in a separate settings page',await page.getByLabel('Web 同时执行数',{exact:true}).inputValue()==='4'&&await page.getByLabel('排队超时',{exact:true}).inputValue()==='15'&&await page.getByLabel('最小发送间隔',{exact:true}).inputValue()==='3');
+await page.getByLabel('Web 同时执行数',{exact:true}).selectOption('3');
+check('Editing queue settings does not save implicitly',await page.evaluate(()=>window.__fixture.state.requestScheduling.maxConcurrent===4));
+await page.getByRole('button',{name:'恢复默认值',exact:true}).click();
+check('Restore defaults changes only the draft',await page.getByRole('button',{name:'保存设置',exact:true}).isDisabled());
+await page.getByLabel('最小发送间隔',{exact:true}).fill('0');
+check('Invalid send intervals cannot be saved',await page.getByRole('button',{name:'保存设置',exact:true}).isDisabled());
+await page.getByLabel('最小发送间隔',{exact:true}).fill('3');
+await page.getByLabel('Web 同时执行数',{exact:true}).selectOption('3');
+await page.getByRole('button',{name:'保存设置',exact:true}).click();await page.getByText('已保存并生效',{exact:true}).waitFor();
+check('Saved queue settings acknowledge the applied revision',await page.evaluate(()=>window.__fixture.state.requestScheduling.maxConcurrent===3));
+await page.screenshot({path:out+'/runtime-parameters-zh.png',fullPage:true});
+const leaveSettings=async()=>{await page.getByRole('button',{name:'运行控制',exact:true}).click();await page.getByRole('dialog',{name:'有未保存的修改'}).waitFor()};
+await page.getByLabel('Web 同时执行数',{exact:true}).selectOption('2');await leaveSettings();
+await page.getByRole('button',{name:'继续编辑',exact:true}).click();
+check('Keep editing preserves the draft and restores focus',await page.getByLabel('Web 同时执行数',{exact:true}).inputValue()==='2'&&await page.getByRole('button',{name:'运行控制',exact:true}).evaluate(el=>el===document.activeElement));
+await leaveSettings();await page.keyboard.press('Escape');
+check('Escape cancels navigation without losing edits',await page.getByLabel('Web 同时执行数',{exact:true}).inputValue()==='2');
+await page.getByLabel('最小发送间隔',{exact:true}).fill('0');await leaveSettings();
+check('Invalid draft cannot save from the navigation dialog',await page.getByRole('button',{name:'保存并离开',exact:true}).isDisabled());
+await page.getByRole('button',{name:'继续编辑',exact:true}).click();await page.getByLabel('最小发送间隔',{exact:true}).fill('3');
+await page.evaluate(()=>{window.__fixture.failQueueSave=true});await leaveSettings();await page.getByRole('button',{name:'保存并离开',exact:true}).click();
+await page.getByRole('alert').filter({hasText:'Fixture queue save failed'}).waitFor();
+check('Failed save keeps the page and editable draft',await page.getByLabel('Web 同时执行数',{exact:true}).inputValue()==='2');
+await page.evaluate(()=>{window.__fixture.failQueueSave=false;window.__fixture.holdQueueSave=true});await leaveSettings();
+const savesBefore=await page.evaluate(()=>window.__fixture.calls.filter(c=>c[0]==='saveQueueSettings').length);
+await page.getByRole('button',{name:'保存并离开',exact:true}).click();await page.getByRole('button',{name:'保存中…',exact:true}).last().waitFor();
+check('Navigation saving disables repeat save and discard',await page.getByRole('dialog').getByRole('button',{name:'保存中…',exact:true}).isDisabled()&&await page.getByRole('button',{name:'放弃修改',exact:true}).isDisabled());
+await page.evaluate(()=>{window.__fixture.holdQueueSave=false;window.__fixture.releaseQueueSave()});await page.getByRole('region',{name:'运行控制',exact:true}).waitFor();
+check('Save and leave performs one save and one navigation',await page.evaluate(n=>window.__fixture.calls.filter(c=>c[0]==='saveQueueSettings').length===n+1&&window.__fixture.state.requestScheduling.maxConcurrent===2,savesBefore));
+await pref('运行参数');await page.getByLabel('Web 同时执行数',{exact:true}).selectOption('5');await leaveSettings();await page.getByRole('button',{name:'放弃修改',exact:true}).click();await page.getByRole('region',{name:'运行控制',exact:true}).waitFor();await pref('运行参数');
+check('Discard restores the persisted baseline',await page.getByLabel('Web 同时执行数',{exact:true}).inputValue()==='2');
+await page.getByLabel('Web 同时执行数',{exact:true}).selectOption('3');
+await page.evaluate(()=>window.__fixture.emitBrowser({tabs:[{id:'draft-task',active:true,status:'running',interactionMode:'automatic',traceId:'draft-task'}]}));
+await page.getByText('浏览器中有任务，当前修改已保留。',{exact:false}).waitFor();
+check('Automatic browser reveal preserves dirty settings',await page.getByLabel('Web 同时执行数',{exact:true}).inputValue()==='3');
+await page.getByRole('button',{name:'查看任务',exact:true}).click();await page.getByRole('dialog').waitFor();await page.getByRole('button',{name:'继续编辑',exact:true}).click();
+await page.evaluate(()=>window.__fixture.emitBrowser({tabs:[]}));
+await page.evaluate(()=>{window.__fixture.failQueueApply=true});await leaveSettings();await page.getByRole('button',{name:'保存并离开',exact:true}).click();
+await page.getByRole('alert').filter({hasText:'设置已保存，但运行时应用未完成'}).waitFor();
+check('Saved but unapplied settings keep a truthful result on the page',await page.getByRole('button',{name:'保存设置',exact:true}).isDisabled()&&await page.evaluate(()=>window.__fixture.state.requestScheduling.maxConcurrent===3));
+await page.evaluate(()=>{window.__fixture.failQueueApply=false});
+await page.locator('.language-toggle').click();await page.getByRole('region',{name:'Runtime parameters',exact:true}).waitFor();
+await page.getByLabel('Concurrent Web turns',{exact:true}).selectOption('4');await page.getByRole('button',{name:'Runtime controls',exact:true}).click();await page.getByRole('dialog',{name:'Unsaved changes'}).waitFor();await page.screenshot({path:out+'/unsaved-settings-en.png'});await page.getByRole('button',{name:'Keep editing',exact:true}).click();
+await page.getByLabel('Concurrent Web turns',{exact:true}).selectOption('3');
+await page.screenshot({path:out+'/runtime-parameters-en.png',fullPage:true});await page.locator('.language-toggle').click();
+await page.setViewportSize({width:900,height:700});await page.waitForTimeout(350);await page.screenshot({path:out+'/runtime-parameters-narrow.png',fullPage:true});
+await page.setViewportSize({width:1440,height:1050});await pref('运行控制');await page.getByText('暂无任务',{exact:true}).waitFor();
+await page.screenshot({path:out+'/request-queue-zh.png',fullPage:true});
 await pref('偏好设置');
 await page.evaluate(()=>window.__fixture.patch({codexRestartRequired:true,codexCatalogVerified:false}));
 check('Preferences does not repeat the model-catalog reminder',await page.getByText('配置已更新。请在 DEV Codex 中刷新模型目录；如果列表仍未更新，再重启对应的 DEV Codex 会话。',{exact:true}).count()===0);
@@ -908,6 +970,7 @@ for (const language of ['zh-CN', 'en']) {
 }
 check('Renderer has no JavaScript errors',errors.length===0);
 await writeFile(out+'/results.json',JSON.stringify({passed:checks.length,checks,metrics,errors},null,2));console.log(JSON.stringify({passed:checks.length,metrics,errors}));
+}
 }catch(error){
  await writeFile(out+'/failure.json',JSON.stringify({message:error.message,checks,errors},null,2));
  throw error;

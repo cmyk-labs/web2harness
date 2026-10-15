@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 2,
+  "sourceId": "e84476463a7b8cc26f307b01cf404e44be62809870be89947639f06924314e56",
+  "recordedAt": "2026-10-15T06:29:00.588Z",
+  "firstRun": {
+    "startedAt": "2026-10-14T15:10:02.233Z",
+    "endedAt": "2026-10-14T15:12:05.079Z",
+    "status": "fail",
+    "findings": "The parent wrote through shell rather than the required apply_patch. After tool discovery the next round produced no handoff and an empty reply, with zero children. Procedure nonconformance and the unclassified missing handoff are distinct."
+  },
+  "subsequentRun": {
+    "status": "pass",
+    "endedAt": "2026-10-14T15:29:46.824Z",
+    "fourFilesExact": true,
+    "rootCauseResolved": false
+  },
+  "currentDisposition": "Preserve the successful observation but keep the handoff issue open. No retry count or later success constitutes a root-cause resolution or reliability claim.",
+  "recorderCorrection": "The later success-marker literal comparison failed solely on Markdown-escaped underscores. The original literal report remains; tool/file/command assertions were independently valid.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/main-three-01-summary.json",
+      "sha256": "a53d662b5ba6795fdaeeaaf58c10fc304402f0439cf3cd19d0013a8c7c1e97d1"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/live-main-three-01.private.log",
+      "sha256": "4347a05920b5148ff8916864332218470f44231514c70f24d19e4b75415b8d6b"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/main-three-02-validation-literal.json",
+      "sha256": "fe1f45b36c1a0183dd397882a48002c3411c5e46c2b012aad66b3d8917fc27ad"
+    },
+    {
+      "path": "output/2026-10-14-multi-agent-handoff/main-three-02-validation.json",
+      "sha256": "6b58c2dbabf4419553a0dcf90da16024ba9226d5c34c3fa3aef1720c2ca5931d"
+    }
+  ]
+}

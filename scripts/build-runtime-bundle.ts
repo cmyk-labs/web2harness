@@ -16,8 +16,10 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { VERSION } from "../src/version";
 import { pruneRuntimeDevelopmentFiles } from "./runtime-distribution";
 import { readTrustedKeysFile } from "../src/licensing/keys";
+import { candidateIdentity } from "../launcher/shared/candidate-identity.cjs";
 
 const root = resolve(import.meta.dir, "..");
+const candidate = candidateIdentity(root);
 const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
   version?: string;
   packageManager?: string;
@@ -56,7 +58,7 @@ if (licenseKeys.purpose !== (developmentLicense ? "development" : "production"))
 const positional = argumentsList.filter(arg => arg !== "--development-license");
 if (positional.length > 1 || positional.some(arg => arg.startsWith("--"))) throw new Error("Unknown runtime build arguments");
 const output = resolve(positional[0] ?? join(root, "dist", "runtime"));
-const licenseDefine = { __WEB2HARNESS_LICENSE_KEYS__: JSON.stringify(licenseKeys) };
+const licenseDefine = { __WEB2HARNESS_LICENSE_KEYS__: JSON.stringify(licenseKeys), __WEB2HARNESS_SOURCE_ID__: JSON.stringify(candidate.sourceId) };
 const appDir = join(output, "app");
 const runtimeDir = join(output, "runtime");
 const binDir = join(output, "bin");
@@ -217,6 +219,7 @@ const files = runtimeManifestFiles();
 writeFileSync(join(output, "manifest.json"), `${JSON.stringify({
   schemaVersion: 2,
   appVersion: VERSION,
+  sourceId: candidate.sourceId,
   bundleId: bundleIdFor(files),
   bunVersion: Bun.version,
   platform: process.platform,

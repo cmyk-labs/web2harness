@@ -1,0 +1,45 @@
+{
+  "sourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+  "loadedSourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+  "runtimeSha256": "58fc6d5b2c733c9cfae7610aeacb312431a98a073fe257e1ff5fb2fa42fabedb",
+  "cases": [
+    "CAP-003"
+  ],
+  "status": "pass",
+  "layer": "authenticated-dev",
+  "summary": "Native Tools / Automatic: three actual overlapping GPT-6 Sol/medium child agents and their parent retained read-only/on-request/auto_review. The GitHub child fetched actual README and complete MIT LICENSE content from the suggested fork and its public upstream miuuyy/codex-chatgpt-web, retaining file URLs and blob hashes. Two source-analysis children returned actual code with zero exit status; 111 and 80 numbered lines were matched against the isolated source copy, and static conclusions were reviewed. The parent received all three terminal results, summarized all actual IDs and findings, then closed every completed child. All 553 source-copy file hashes and inventory remained unchanged, with no file-change events or grandchildren. Initial wrong tool-prefix calls and restricted-language PowerShell failures were retained, followed by successful corrections without permission/model changes. Final DEV queue was idle on the same runtime; four production configuration/authentication hashes and all 63 initial process identities remained unchanged. Attempt 07 remains failed and preserved. This establishes this Native Tools case only, not MCP modes or installer acceptance.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-stage-settlement/cap3-08/cap003-owner.json",
+      "sha256": "18cd675ef240950c461e6ea9510d16778d0c9031607d440aae7d857360d07fc7"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap3-08/cap003-status.json",
+      "sha256": "5ea8523e88947f95734438e21d02dbf561c322302ec3faac236d8c71c7e3565f"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap3-08/cap003-audit.private.json",
+      "sha256": "0e6def32031526da8bc4d393be2ac530054ae8c074a6d57bce170f435f4b5191"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap3-08/cap003-tools-review.private.json",
+      "sha256": "37a445ab92006242c931cd9851f9c3426f8bc76ffe4b5ec45ac30c312a05f1e4"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap3-08/cap003-before.json",
+      "sha256": "7c91e1d56ab81220aef0065a0b581bfded98f4ebd1680009fb91a20a2688709a"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/cap3-08/cap003-after.json",
+      "sha256": "7c91e1d56ab81220aef0065a0b581bfded98f4ebd1680009fb91a20a2688709a"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/final-dev-state.private.json",
+      "sha256": "6a421490e34afb7c44c13dec564b446713513b54c8c1b15cd514a6297287c64d"
+    },
+    {
+      "path": "output/2026-10-15-stage-settlement/final-boundary-review.private.json",
+      "sha256": "873d97ccb38603ca5f5dea11914b8d30c21f81abbf1d70c933b5ea137b7b30f4"
+    }
+  ]
+}

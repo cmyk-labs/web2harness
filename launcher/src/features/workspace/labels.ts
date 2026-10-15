@@ -18,6 +18,7 @@ export const pageName = (page: WorkspacePage, t: Translate) =>
     connection: t("连接与模型", "Connection & Models"),
     diagnostics: t("用量与诊断", "Usage & Diagnostics"),
     preferences: t("偏好设置", "Preferences"),
+    "runtime-parameters": t("运行参数", "Runtime parameters"),
     about: t("关于", "About"),
     license: t("产品授权", "License"),
   })[page];

@@ -393,25 +393,28 @@ test("DEV driver uses shared browser methods and its own broker while an unrelat
     try {
       const token = prepared.text.match(/turn_token (turn_[A-Za-z0-9_-]+)/)?.[1];
       if (!token) throw new Error("missing DEV broker token");
-      const claimed = await callTurnBroker<{ bindingId: string }>(config.brokerSocketPath, { method: "claim", token });
+      localBroker.configureHandoffJournal(join(root, "handoff-receipts"));
+      const protocol = "web2harness-handoff-v1" as const;
+      const activityId = "activity_" + crypto.randomUUID().replaceAll("-", "");
+      const claimed = await callTurnBroker<{ bindingId: string }>(config.brokerSocketPath, { method: "claim", token, protocol, activityId });
       turn.onReasoningSummary?.("Exercising the real broker round");
-      const progress = turn.externalProgress;
-      if (!progress) throw new Error("DEV tool-capable browser has no progress transport");
-      const previousBatchRevision = progress.snapshot().lastToolBatchRevision;
-      const invocation = callTurnBroker<BrokerToolResult>(config.brokerSocketPath, {
-        method: "invoke",
-        bindingId: claimed.bindingId,
-        wireName: toolIdentityKey(undefined, "exec_command"),
-        arguments: { cmd: "git status --short" },
-      }, 30_000);
-      let snapshot = progress.snapshot();
-      while (snapshot.lastToolBatchRevision <= previousBatchRevision) {
-        snapshot = await progress.waitForChange(snapshot.revision, turn.abortSignal);
+      const common = { bindingId: claimed.bindingId, protocol, activityId };
+      const answer = browserStarts === 1 ? "Tool batch sealed" : "DEV receipt simulated=true";
+      if (browserStarts === 1) {
+        const receipt = await callTurnBroker<{ batch_id: string }>(config.brokerSocketPath, {
+          ...common, method: "handoff_submit", submissionId: "dev_command",
+          calls: [{ name: "exec_command", arguments: { cmd: "git status --short" } }],
+        });
+        await callTurnBroker(config.brokerSocketPath, { ...common, method: "handoff_yield", batchId: receipt.batch_id });
+      } else {
+        expect(prepared.text).toContain("simulated");
+        await callTurnBroker(config.brokerSocketPath, { ...common, method: "handoff_finish", finalAnswer: answer });
       }
-      await progress.acknowledgeToolBatch(snapshot.lastToolBatchRevision);
-      const result = await invocation;
-      const simulated = (result.structuredContent as { simulated: boolean }).simulated;
-      const answer = `DEV receipt simulated=${simulated}`;
+      await callTurnBroker(config.brokerSocketPath, { method: "activity_complete", token, activityId });
+      const revision = await turn.completionFence!.begin();
+      expect(revision.state).toBe("ready");
+      if (!("revision" in revision)) throw new Error("Expected a ready fence");
+      expect(await turn.completionFence!.commit(revision.revision)).toMatchObject({ state: "committed" });
       turn.onTextDelta(answer);
       return answer;
     } finally {
@@ -426,7 +429,7 @@ test("DEV driver uses shared browser methods and its own broker while an unrelat
     expect(result).toMatchObject({ text: "DEV receipt simulated=true", toolCalls: 1 });
     expect(state.input.find(item => (item as { role?: string }).role === "assistant"))
       .toMatchObject({ internal_chat_message_metadata_passthrough: { turn_id: expect.stringContaining("dev_turn_") } });
-    expect(browserStarts).toBe(1);
+    expect(browserStarts).toBe(2);
     expect(await (await fetch(`http://127.0.0.1:${occupied.port}`)).text()).toBe("live");
     expect(readFileSync(codexConfig, "utf8")).toBe(sentinel);
   } finally {

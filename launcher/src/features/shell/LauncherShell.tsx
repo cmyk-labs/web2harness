@@ -25,6 +25,7 @@ import { WorkspaceContent } from "../workspace/WorkspaceContent";
 import { WorkspaceSidebar } from "../workspace/WorkspaceSidebar";
 import { TitleBar } from "./TitleBar";
 import { useLicense } from "../licensing/LicenseContext";
+import { PageNavigationContext, UnsavedChangesDialog, type NavigationGuardRef } from "./PageNavigationGuard";
 
 const COMPACT_SIDEBAR_QUERY = "(max-width: 1000px)";
 
@@ -73,6 +74,53 @@ export function LauncherShell({
   ).current;
   const [sidebarOpen, setSidebarOpen] = useState(!compactAtMount),
     [compactSidebar, setCompactSidebar] = useState(compactAtMount);
+  const [, refreshGuard] = useState(0);
+  const navigationGuard = useRef<NavigationGuardRef>({ current: null }).current;
+  navigationGuard.notify = () => refreshGuard(value => value + 1);
+  const [pendingNavigation, setPendingNavigation] = useState<WorkspacePage | null>(null);
+  const navigationTransaction = useRef<{ next: WorkspacePage; resolve: (allow: boolean) => void } | null>(null);
+  const navigationSaving = useRef(false);
+  const [savingNavigation, setSavingNavigation] = useState(false);
+  const [browserPending, setBrowserPending] = useState(false);
+  const commitNavigation = useCallback((next: WorkspacePage) => {
+    setSurface(next);
+    if (compactSidebar) setSidebarOpen(false);
+    if (next === "browser") setBrowserPending(false);
+  }, [compactSidebar]);
+  const requestNavigation = useCallback((next: WorkspacePage): Promise<boolean> => {
+    if (navigationTransaction.current) return Promise.resolve(false);
+    if (next === surface) { commitNavigation(next); return Promise.resolve(true); }
+    const guard = navigationGuard.current;
+    if (!guard?.dirty && !guard?.busy) { commitNavigation(next); return Promise.resolve(true); }
+    return new Promise(resolve => {
+      navigationTransaction.current = { next, resolve };
+      setPendingNavigation(next);
+    });
+  }, [surface, navigationGuard, commitNavigation]);
+  const resolveNavigation = async (action: "save" | "discard" | "continue") => {
+    const transaction = navigationTransaction.current;
+    const guard = navigationGuard.current;
+    if (!transaction || navigationSaving.current || guard?.busy) return;
+    let allowed = action === "discard";
+    if (action === "save") {
+      if (!guard?.canSave || !licensed) return;
+      navigationSaving.current = true; setSavingNavigation(true);
+      try { allowed = await guard.save(); }
+      catch (error) { setError(messageOf(error)); }
+      finally { navigationSaving.current = false; setSavingNavigation(false); }
+    } else if (action === "discard") guard?.discard();
+    navigationTransaction.current = null;
+    setPendingNavigation(null);
+    if (allowed) commitNavigation(transaction.next);
+    transaction.resolve(allowed);
+  };
+  const revealBrowserAutomatically = useCallback(() => {
+    if (navigationGuard.current?.dirty || navigationGuard.current?.busy || navigationTransaction.current) {
+      setBrowserPending(true);
+      return;
+    }
+    commitNavigation("browser");
+  }, [navigationGuard, commitNavigation]);
   const [browserSlot, setBrowserSlot] = useState<HTMLDivElement | null>(null);
   const browserSlotRef = useCallback(
     (node: HTMLDivElement | null) => setBrowserSlot(node),
@@ -118,12 +166,8 @@ export function LauncherShell({
   );
   useEffect(() => {
     if (!licensed || !selectedManualTab) return;
-    setSurface("browser");
-    setSidebarOpen(false);
-    void api!
-      .setBrowserSurfaceActive(true)
-      .catch((error) => setError(messageOf(error)));
-  }, [licensed, selectedManualTab?.id, selectedManualTab?.manualState, setError]);
+    revealBrowserAutomatically();
+  }, [licensed, selectedManualTab?.id, selectedManualTab?.manualState, revealBrowserAutomatically]);
   const automaticTurn = browser?.tabs.find(
     (tab) =>
       tab.active &&
@@ -131,15 +175,18 @@ export function LauncherShell({
       tab.status === "running",
   );
   useEffect(() => {
+    if (!selectedManualTab && !automaticTurn) setBrowserPending(false);
+  }, [selectedManualTab?.id, automaticTurn?.id]);
+  useEffect(() => {
     if (!licensed || !automaticTurn || !snapshot.state.showBrowserDuringTurns) return;
-    setSurface("browser");
-    if (compactSidebar) setSidebarOpen(false);
+    revealBrowserAutomatically();
   }, [
     automaticTurn?.id,
     automaticTurn?.traceId,
     snapshot.state.showBrowserDuringTurns,
     compactSidebar,
     licensed,
+    revealBrowserAutomatically,
   ]);
   // Browser ownership, measurement and native surface behavior are retained unchanged.
   useLayoutEffect(() => {
@@ -213,12 +260,11 @@ export function LauncherShell({
 
   const activateBrowser = useCallback(
     async (show = false) => {
-      setSurface("browser");
-      if (compactSidebar) setSidebarOpen(false);
+      if (!await requestNavigation("browser")) return;
       await api!.setBrowserSurfaceActive(true);
       if (show) await api!.showBrowser();
     },
-    [compactSidebar],
+    [requestNavigation],
   );
   const toggleSidebar = () => {
     const next = !sidebarOpen;
@@ -232,8 +278,7 @@ export function LauncherShell({
     setSidebarOpen(next);
   };
   const navigateSurface = (next: WorkspacePage) => {
-    setSurface(next);
-    if (compactSidebar) setSidebarOpen(false);
+    void requestNavigation(next);
   };
   const dismissSessionReminder = async () => {
     setSessionReminderBusy(true);
@@ -258,6 +303,7 @@ export function LauncherShell({
     }
   };
   return (
+    <PageNavigationContext.Provider value={navigationGuard}>
     <motion.main
       animate={{ opacity: 1 }}
       initial={{ opacity: 0 }}
@@ -302,6 +348,10 @@ export function LauncherShell({
         </div>
       </motion.aside>
       <section className="workspace">
+        {browserPending && surface !== "browser" && <div className="note" role="status">
+          {language === "zh-CN" ? "浏览器中有任务，当前修改已保留。" : "A browser task is available. Your edits are preserved."}
+          <button className="text-button" onClick={() => navigateSurface("browser")} type="button">{language === "zh-CN" ? "查看任务" : "View task"}</button>
+        </div>}
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             animate={{ opacity: 1 }}
@@ -358,6 +408,13 @@ export function LauncherShell({
           />
         )}
       </AnimatePresence>
+      {pendingNavigation && <UnsavedChangesDialog language={language}
+        busy={savingNavigation || navigationGuard.current?.busy === true}
+        canSave={licensed && navigationGuard.current?.canSave === true}
+        onSave={() => { void resolveNavigation("save"); }}
+        onDiscard={() => { void resolveNavigation("discard"); }}
+        onContinue={() => { void resolveNavigation("continue"); }} />}
     </motion.main>
+    </PageNavigationContext.Provider>
   );
 }

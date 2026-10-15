@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { compileChatGptWebPrompt, chatGptReadOnlyContextWarning, withoutRetiredTurnHandles } from "../../../../src/adapters/chatgpt-web/prompt/compile";
 import { CHATGPT_WEB_LUNA_MODEL_ID, CHATGPT_WEB_MODEL_ID } from "../../../../src/adapters/chatgpt-web/model";
 import { parseRequest } from "../../../../src/responses/parser";
@@ -12,6 +13,15 @@ function request(reasoning = "high"): CodexParsedRequest {
   ] });
 }
 const context = (compiled: ReturnType<typeof compileChatGptWebPrompt>) => JSON.parse(compiled.contextFile?.text ?? compiled.text.split("<codex_context_json>\n")[1]!.split("\n</codex_context_json>")[0]!);
+
+test("delivery observation binds only the automatic MCP round without adding authority to task context", () => {
+  const parsed=request();
+  const compiled=compileChatGptWebPrompt(parsed,capabilities,token,{toolBatchHandoff:true});
+  expect(compiled.handoffBinding).toBe(createHash("sha256").update(token).digest("hex"));
+  expect(JSON.stringify(context(compiled))).not.toContain("handoffBinding");
+  expect(compileChatGptWebPrompt(parsed,capabilities,token).handoffBinding).toBeUndefined();
+  expect(compileChatGptWebPrompt(parsed,capabilities,token,{toolBatchHandoff:true,manualControl:true}).handoffBinding).toBeUndefined();
+});
 
 test("handle-shaped source strings and native call identities remain literal", () => {
   const original = { call_id: `call_${"A".repeat(32)}`, text: ["turn", "request", "binding"].map(kind => `${kind}_${"B".repeat(32)}`), literal: "Keep \\path and quotes exactly." };
@@ -127,4 +137,28 @@ test("large normal contexts remain complete before browser capacity validation",
   expect(context(compiled).input).toBe(text);
   expect(compiled.text).toContain(token);
   expect(compiled.contextFile).toBeUndefined();
+});
+
+test("context JSON avoids Markdown code-fence backtracking without changing source values", () => {
+  const literal = '```python\nprint("hello")\n``` '.repeat(20) + '\\u0060 \\` 中文 [link](url) ' + token;
+  const parsed = parseRequest({ model: CHATGPT_WEB_MODEL_ID, instructions: literal, input: literal,
+    tools: [{ type: "function", name: "example", parameters: { type: "object", properties: { '`key`': { type: "string", description: literal } } } }],
+  });
+  const original = structuredClone(parsed.context.source);
+  const compiled = compileChatGptWebPrompt(parsed, capabilities, token);
+  const envelope = compiled.text.split("<codex_context_json>\n")[1]!.split("\n</codex_context_json>")[0]!;
+  expect(envelope).not.toContain("`");
+  expect(context(compiled).input).toBe(literal);
+  expect(context(compiled).instructions).toBe(literal);
+  expect(context(compiled).tools).toEqual(original!.tools);
+  expect(parsed.context.source).toEqual(original);
+});
+
+test("encoded context attachments retain every code delimiter and literal escape", () => {
+  const literal = '```ts\nconst path = "\\\\u0060";\n``` '.repeat(5000) + token;
+  const parsed = parseRequest({ model: CHATGPT_WEB_MODEL_ID, input: literal });
+  const compiled = compileChatGptWebPrompt(parsed, capabilities, token, { experimentalContextFiles: true });
+  expect(compiled.contextFile).toBeDefined();
+  expect(compiled.contextFile!.text).not.toContain("`");
+  expect(context(compiled).input).toBe(literal);
 });

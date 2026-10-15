@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 2,
+  "kind": "legacy-mapping",
+  "id": "legacy-5bb51e-fixtures",
+  "source": {
+    "path": "sources/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474.json",
+    "sha256": "6fe6cab7387319377a03b34b7b3d76749efe705cc24bc0ba33744e081f54f932"
+  },
+  "recordedAt": "2026-10-15T06:00:52.560Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Original isolated fixtures; no live DEV task asserted",
+  "mappingRationale": "Reviewed mapping of unchanged original observations to check IDs. The archived whole-case rows and receipts remain authoritative provenance; timestamps and original source/runtime identities are preserved.",
+  "observations": [
+    {
+      "checkId": "http.body-budget",
+      "criteriaHash": "9b49836042b621e0298b0a5b37e21d51a9abecd5f1f5dde195a0747f86a2ed8c",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:05.978Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Shared HTTP allocation budget, encoded/decoded/depth limits, zstd, malformed bodies, overload admission, cancellation and physical-settlement cleanup fixtures passed. Current-candidate full verification: 1136 core and 570 launcher tests, audits, type checks, builds, relocated runtime smoke; 325 UI checks. No authenticated acceptance is asserted.",
+      "evidence": [
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/cap-010-5bb51e-fixtures.json",
+          "sha256": "de1c62216e8a986679d9735e52beda728d3c04f3fa2248523e65093ab2f41328"
+        }
+      ],
+      "legacy": {
+        "manifest": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/current.json",
+          "sha256": "888d69d50b736f247cc98faf0a8a67b5248a78c0207e1e8126c5b683303bf9cc"
+        },
+        "caseId": "CAP-010",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/cap-010-5bb51e-fixtures.json",
+          "sha256": "de1c62216e8a986679d9735e52beda728d3c04f3fa2248523e65093ab2f41328"
+        }
+      }
+    },
+    {
+      "checkId": "queue.cancellation",
+      "criteriaHash": "f2be2a1aa3d6fd05438bbcb74bfe33f9da079e91472ea66b9691075352a3bf10",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:05.984Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Cancellation/retry races passed in scheduler, queue-host, standalone and MCP-boundary fixtures: queued cancellation prevents dispatch, exact replay keeps identity, and physical cleanup retains capacity. Current-candidate full verification: 1136 core and 570 launcher tests, audits, type checks, builds, relocated runtime smoke; 325 UI checks. No authenticated acceptance is asserted.",
+      "evidence": [
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q06-5bb51e-fixtures.json",
+          "sha256": "2d2e5803b4f9a27c5ab9be22fcacbaf078d7f4f0a9c94b8239cd2fce735d553d"
+        }
+      ],
+      "legacy": {
+        "manifest": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/current.json",
+          "sha256": "888d69d50b736f247cc98faf0a8a67b5248a78c0207e1e8126c5b683303bf9cc"
+        },
+        "caseId": "Q06",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q06-5bb51e-fixtures.json",
+          "sha256": "2d2e5803b4f9a27c5ab9be22fcacbaf078d7f4f0a9c94b8239cd2fce735d553d"
+        }
+      }
+    },
+    {
+      "checkId": "queue.network",
+      "criteriaHash": "b0048e2045fc3cab17dc5d1c834dbec2fd70e56aa4153c410490e9083bd2e284",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:05.987Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Synthetic account-rate limits, network/preparation faults, ambiguous sends and bounded retries passed. No real account limit was deliberately triggered. Current-candidate full verification: 1136 core and 570 launcher tests, audits, type checks, builds, relocated runtime smoke; 325 UI checks. No authenticated acceptance is asserted.",
+      "evidence": [
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q09-5bb51e-fixtures.json",
+          "sha256": "2c2283a25c1ea967e657b9f8a02c26c7756b38fee5c44bd969653e8f602c1cbe"
+        }
+      ],
+      "legacy": {
+        "manifest": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/current.json",
+          "sha256": "888d69d50b736f247cc98faf0a8a67b5248a78c0207e1e8126c5b683303bf9cc"
+        },
+        "caseId": "Q09",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q09-5bb51e-fixtures.json",
+          "sha256": "2c2283a25c1ea967e657b9f8a02c26c7756b38fee5c44bd969653e8f602c1cbe"
+        }
+      }
+    },
+    {
+      "checkId": "queue.owner-loss",
+      "criteriaHash": "d193551d6b8615b1d6d25e496b0ce05c2ccadfc31b3542fbdc13441f8d7d2e3b",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:05.991Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Owner-loss, process-crash and restart fixtures passed: physical occupancy remains charged, uncertain receipts pause dispatch, and a replacement pool is not started without verified settlement. Current-candidate full verification: 1136 core and 570 launcher tests, audits, type checks, builds, relocated runtime smoke; 325 UI checks. No authenticated acceptance is asserted.",
+      "evidence": [
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q10-5bb51e-fixtures.json",
+          "sha256": "183d49ee927d89c8963a543c699fdbc55883e0ae42d224298725f96f2d9008e2"
+        }
+      ],
+      "legacy": {
+        "manifest": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/current.json",
+          "sha256": "888d69d50b736f247cc98faf0a8a67b5248a78c0207e1e8126c5b683303bf9cc"
+        },
+        "caseId": "Q10",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q10-5bb51e-fixtures.json",
+          "sha256": "183d49ee927d89c8963a543c699fdbc55883e0ae42d224298725f96f2d9008e2"
+        }
+      }
+    },
+    {
+      "checkId": "queue.pressure",
+      "criteriaHash": "4f126d69d26e832acd0a2b5124f4be79b339507c844749cdc63a4e2b298fe960",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:05.996Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Synthetic 50-request/200MiB pressure, count and 256MiB waiting-byte protection, metadata-only 25-row pages and 1000 timed queries passed. Sampled RSS is recorded separately and is not a guaranteed memory limit. UI paging fixtures passed. Current-candidate full verification: 1136 core and 570 launcher tests, audits, type checks, builds, relocated runtime smoke; 325 UI checks. No authenticated acceptance is asserted.",
+      "evidence": [
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q11-5bb51e-fixtures.json",
+          "sha256": "fccc8e96593c273ddfd19a0c073fda6ec1a8b861e613eeacf03e9427a93b186a"
+        }
+      ],
+      "legacy": {
+        "manifest": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/current.json",
+          "sha256": "888d69d50b736f247cc98faf0a8a67b5248a78c0207e1e8126c5b683303bf9cc"
+        },
+        "caseId": "Q11",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q11-5bb51e-fixtures.json",
+          "sha256": "fccc8e96593c273ddfd19a0c073fda6ec1a8b861e613eeacf03e9427a93b186a"
+        }
+      }
+    },
+    {
+      "checkId": "queue.lifecycle",
+      "criteriaHash": "8912ab661003dd4fe62981e6350a4d48a72485f17fede8c4e377fcaa6edd6fad",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:06.001Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Dependency-controlled lifecycle fixtures passed: waiting/running work blocks unsafe shutdown/update/removal transitions and global cancellation retains physical cleanup obligations. Actual installation, upgrade and uninstall remain maintainer-owned and unexecuted by the agent. Current-candidate full verification: 1136 core and 570 launcher tests, audits, type checks, builds, relocated runtime smoke; 325 UI checks. No authenticated acceptance is asserted.",
+      "evidence": [
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q16-5bb51e-fixtures.json",
+          "sha256": "ab0a16fd1a8ac0f54dfe17cfd276794a2b332deff2a901581a9b40b02befefdc"
+        }
+      ],
+      "legacy": {
+        "manifest": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/current.json",
+          "sha256": "888d69d50b736f247cc98faf0a8a67b5248a78c0207e1e8126c5b683303bf9cc"
+        },
+        "caseId": "Q16",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q16-5bb51e-fixtures.json",
+          "sha256": "ab0a16fd1a8ac0f54dfe17cfd276794a2b332deff2a901581a9b40b02befefdc"
+        }
+      }
+    },
+    {
+      "checkId": "diagnostics.contracts",
+      "criteriaHash": "6f11a27f68fcaceb58443f52092a09c927a8e1d85743b261da5842cdb4740ee9",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:06.006Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Diagnostic correlation, credential/content redaction, archive checksums, partial collection and malformed/missing-source fixtures passed, together with renderer log/filter/paging/export controls. Native save-dialog acceptance CAP-008 remains unexecuted. Current-candidate full verification: 1136 core and 570 launcher tests, audits, type checks, builds, relocated runtime smoke; 325 UI checks. No authenticated acceptance is asserted.",
+      "evidence": [
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q17-5bb51e-fixtures.json",
+          "sha256": "2e4cff45535251430a59a04d3701ed2ffeee831cd914b029712badf29726e73f"
+        }
+      ],
+      "legacy": {
+        "manifest": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/current.json",
+          "sha256": "888d69d50b736f247cc98faf0a8a67b5248a78c0207e1e8126c5b683303bf9cc"
+        },
+        "caseId": "Q17",
+        "attempt": 2,
+        "receipt": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q17-5bb51e-fixtures.json",
+          "sha256": "2e4cff45535251430a59a04d3701ed2ffeee831cd914b029712badf29726e73f"
+        }
+      }
+    }
+  ]
+}

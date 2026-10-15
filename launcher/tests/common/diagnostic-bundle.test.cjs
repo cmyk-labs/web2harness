@@ -20,6 +20,19 @@ function fixture(t) {
   return { root, options, log: path.join(options.logsDirectory, "launcher.jsonl") };
 }
 function writeLogs(file, records) { fs.writeFileSync(file, records.map(record => JSON.stringify(record)).join("\n") + "\n"); }
+test("queue lifecycle fields survive export without allowing arbitrary state or session text", t => {
+  const { options, log } = fixture(t);
+  const logger = createLogger({ filePath: log });
+  const groupId = diagnosticReference("native-session-opaque-id");
+  logger.info("queue.failed", { state: "failed", pausedReason: "send_outcome_unknown", groupId, requestId: "a".repeat(64), prompt: "SECRET_PROMPT" });
+  const record = queryLogs(options, {}).records[0];
+  assert.equal(record.detail.state, "failed");
+  assert.equal(record.detail.pausedReason, "send_outcome_unknown");
+  assert.equal(record.detail.groupId, groupId);
+  assert.doesNotMatch(JSON.stringify(record), /SECRET_PROMPT|native-session-opaque-id/);
+  const unsafe = createDiagnosticRecord("info", "queue.failed", { state: "PRIVATE_STATE", groupId: "PRIVATE_SESSION", pausedReason: "PRIVATE_REASON" });
+  assert.doesNotMatch(JSON.stringify(unsafe), /PRIVATE_STATE|PRIVATE_SESSION|PRIVATE_REASON/);
+});
 test("helper events keep source time, severity, safe correlations and error fields through persistence and export", t => {
   const { root, options, log } = fixture(t);
   const logger = createLogger({ filePath: log });

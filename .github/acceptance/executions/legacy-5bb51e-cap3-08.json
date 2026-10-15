@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "kind": "legacy-mapping",
+  "id": "legacy-5bb51e-cap3-08",
+  "source": {
+    "path": "sources/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474.json",
+    "sha256": "6fe6cab7387319377a03b34b7b3d76749efe705cc24bc0ba33744e081f54f932"
+  },
+  "recordedAt": "2026-10-15T06:00:52.560Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Original independently authenticated DEV runtime/profile/workspace; no new task executed during migration",
+  "mappingRationale": "Reviewed mapping of unchanged original observations to check IDs. The archived whole-case rows and receipts remain authoritative provenance; timestamps and original source/runtime identities are preserved.",
+  "observations": [
+    {
+      "checkId": "native.readonly-agents",
+      "criteriaHash": "b13335867996fff3f927da0fa5f66dfe8b96d15e32e185e4ae2fccab480ecdc8",
+      "outcome": "pass",
+      "at": "2026-10-15T04:24:26.432Z",
+      "layer": "authenticated-dev",
+      "mode": "native-tools",
+      "model": "chatgpt-web/gpt-6-sol",
+      "effort": "medium",
+      "summary": "Native Tools / Automatic: three actual overlapping GPT-6 Sol/medium child agents and their parent retained read-only/on-request/auto_review. The GitHub child fetched actual README and complete MIT LICENSE content from the suggested fork and its public upstream miuuyy/codex-chatgpt-web, retaining file URLs and blob hashes. Two source-analysis children returned actual code with zero exit status; 111 and 80 numbered lines were matched against the isolated source copy, and static conclusions were reviewed. The parent received all three terminal results, summarized all actual IDs and findings, then closed every completed child. All 553 source-copy file hashes and inventory remained unchanged, with no file-change events or grandchildren. Initial wrong tool-prefix calls and restricted-language PowerShell failures were retained, followed by successful corrections without permission/model changes. Final DEV queue was idle on the same runtime; four production configuration/authentication hashes and all 63 initial process identities remained unchanged. Attempt 07 remains failed and preserved. This establishes this Native Tools case only, not MCP modes or installer acceptance.",
+      "evidence": [
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/cap003-5bb51e-native-08.json",
+          "sha256": "70c34d592f327d8a8b03c79339e6974437e2630b1f14cddc520384c48fedd07f"
+        }
+      ],
+      "loadedSourceId": "5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474",
+      "runtimeSha256": "58fc6d5b2c733c9cfae7610aeacb312431a98a073fe257e1ff5fb2fa42fabedb",
+      "legacy": {
+        "manifest": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/current.json",
+          "sha256": "888d69d50b736f247cc98faf0a8a67b5248a78c0207e1e8126c5b683303bf9cc"
+        },
+        "caseId": "CAP-003",
+        "attempt": 3,
+        "receipt": {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/cap003-5bb51e-native-08.json",
+          "sha256": "70c34d592f327d8a8b03c79339e6974437e2630b1f14cddc520384c48fedd07f"
+        }
+      }
+    }
+  ]
+}

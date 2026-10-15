@@ -10,6 +10,8 @@
 
 - [配置归属与生效](#configuration-ownership)
 - [运行时与启动器设置](#runtime-settings)
+- [独立队列控制](#standalone-request-queue)
+- [HTTP 请求正文限制](#http-body-limits)
 - [模型目录与推理强度](#models)
 - [上下文与传输预算](#context-budgets)
 - [环境与数据位置](#data-locations)
@@ -55,6 +57,60 @@ CLI 的 `setup` 解析器在未传入模式参数时始终采用原生工具，�
 | `zeroRiskProEnabled` | `false` | 布尔值。在手动模式中额外发布使用 Pro 预算的模型条目。用户必须在每个回合选择 ChatGPT Pro，启动器不能验证该选择。 |
 
 自动和手动 MCP 配置使用不同的隧道 ID 与连接器身份。常规自动交互连接器为 `Codex Native2`，DEV 自动交互连接器为 `Codex Native2 DEV`，手动交互连接器为 `Codex Zero Risk`。当前 `appName` 和 `tunnel` 必须与所选交互方式一致。一条交互路径验证成功，不代表另一条也已验证。
+
+
+<a id="request-scheduling"></a>
+
+### 全局 Web 请求调度
+
+在独立的 **运行参数 → 请求调度** 页面编辑后点击 **保存设置**；恢复默认值只修改表单，保存后才生效。配置保存在当前 Launcher 的 `launcher-state.json`，不是各会话的独立参数。
+
+| 参数 | 默认值 | 可选值 | 生效方式 |
+| --- | --- | --- | --- |
+| Web 同时执行数 | 4 | 1～5 | 新派发立即采用；调低不终止已运行任务 |
+| 排队超时 | 15 分钟 | 5、10、15、30、60 分钟 | 只决定新入队请求的等待截止时间 |
+| 最小发送间隔 | 3 秒 | 1～60 秒整数 | 自动模式按真实发送许可控制；不控制手动点击 |
+
+同一 Launcher 浏览器环境的会话、模型、主代理和子代理共享队列；DEV 与生产独立。独立 managed Chrome 按配置档案拥有单独队列，使用相同的调度器实现、默认值和取值范围，不加入或控制 Launcher 队列。公平派发按会话轮转，并优先处理等待至少 60 秒的任务。每个队列最多保留 64 个等待请求和 256 MiB 的等待正文估算预算，与 [HTTP 正文预算](#http-body-limits)分别计量。这两项都不是进程内存硬上限或 Codex 子代理数量限制。超出资源保护会明确拒绝。
+
+排队期间不占网页名额，执行超时在获得名额后开始。暂停只停止新派发；已有任务继续。取消运行任务须等待物理清理后释放名额。限流或发送结果不明会暂停派发，必须停止仍在运行的任务、检查原因后明确确认恢复，不自动补发。
+
+Launcher 的脱敏队列回执保存在当前应用目录 `runtime/request-queue.json`，最多 4096 条、保留 24 小时，不保存提示词、工具参数或租约密钥。重启后未结束任务记为中断，不自动重发；长期排查使用运行日志和诊断包。
+
+<a id="standalone-request-queue"></a>
+
+### 独立队列控制
+
+使用 `browserHost: "managed-chrome"` 时，规范化后的 `storageStatePath` 标识跨进程唯一的队列所有者。文件系统别名和 Windows 路径大小写归并到同一所有者，其他运行时通过经过认证的回环传输加入。不同规范路径的档案与 Launcher 环境仍相互独立；加入不会创建第二个执行池。
+
+私有状态位于 `<canonical storageStatePath>.request-queue/`：`owner.json` 保存所有者身份与传输凭据；`receipts.json` 保存设置、暂停/发送状态及脱敏回执（最多 4096 条、保留 24 小时）。不要公开所有者描述符；仍保留的请求 ID 不能再次执行。
+
+CLI 读取所选应用目录的运行配置并输出 JSON。下列命令拒绝 Launcher 宿主配置，应使用其界面控制。
+
+| 命令 | 契约 |
+| --- | --- |
+| `browser queue status` | 读取持久化回执，不联系或启动浏览器。`ownerPresent` 只表示描述符存在，不证明所有者存活。 |
+| `browser queue configure --concurrency N --timeout-minutes N --send-interval-seconds N` | 三项整数参数各提供一次，使用上表范围。要求队列当前无所有者；保存的设置用于下一次独立运行时启动，不热更新运行中的所有者。 |
+| `browser queue recover --confirm-browser-stopped` | 旧运行时及其拥有的浏览器停止后离线恢复。拒绝存活或无法核验的所有者；将未结束回执记为失败，原因为 `runtime_restarted_outcome_unknown`，清除暂停/未知发送状态并保留回执，不重放。 |
+
+所有者丢失、遗留锁或未结束回执都不会触发自动接管或恢复。PID 消失或心跳过期不能证明浏览器已清理。未知发送和限流会暂停派发；查明原因、停止归属明确的运行时与浏览器后，再显式恢复。恢复命令不会停止进程或补发请求；解决原因后再发起新请求。
+
+<a id="http-body-limits"></a>
+
+### HTTP 请求正文限制
+
+每个 Responses 服务的 `/v1/responses` 与 `/v1/responses/compact` 共用一份 **256 MiB 分配估算预算**，包含原生透传请求。不同服务实例使用各自预算。这是固定保护，与 Web 执行名额及队列等待正文计量相互独立。
+
+| 限制 | 数值 | 拒绝结果 |
+| --- | --- | --- |
+| 编码后请求正文 | 每请求 64 MiB | HTTP 413 `request_body_too_large` |
+| 解码后 JSON 正文 | 每请求 128 MiB | HTTP 413 `request_body_too_large` |
+| JSON 容器嵌套 | 512 层 | HTTP 413 `request_body_too_large` |
+| 总分配估算 | 每服务 256 MiB | HTTP 503 `request_body_overloaded`、`retryable: true`、`Retry-After: 1` |
+
+支持 identity 与 zstd 编码。增量计量覆盖读取器/解码器开销、zstd 窗口、保留的编码字节，以及解析前估算的 JSON 字符串、结构和副本；密集 JSON 与压缩不能绕过预算。即使请求低于单项大小上限，总估算仍可能拒绝它。这**不是 RSS 硬上限**，也不是进程总内存测量值。
+
+请求等待、执行及交付响应期间保留预算占用；断开连接不会在执行清理结束前释放其内存预算。解析/解压失败及取消会在读取器/解码器清理后释放相应预留。HTTP 503 表示正文接收过载，不代表队列恢复，也不授权重放发送结果不明的浏览器请求。
 
 <a id="conversation-and-attachments"></a>
 
@@ -282,6 +338,8 @@ Pro 账户窗口包含 `8192` token 的平台预留，以及为适配器严格�
 
 ### Context as File 与三倍预算
 
+开启上下文文件传输后，完整序列化上下文不超过32 KiB（32768个UTF-8字节）时仍内联发送，超过时转成一个带完整性校验的TXT附件；输入框保留文件读取要求和桥接指令。大小包含JSON转义、角色、工具和结果，并非只计算最新用户正文。发送前须确认本回合全部附件处理完成；上传失败会在Send之前停止，不会回退为全文输入。阈值只改变传输方式，仍执行全部上下文与压缩预算检查。保留现有显式偏好，手动Zero Risk和Luna继续遵循其已公布的限制。
+
 `experimentalContextFiles` 改变较大上下文的发送方式；`experimentalContextTripleBudget` 是单独的选择，仅在文件传输开启时生效。对 GPT-5.6 和 GPT-6 的自动 Sol／Pro 策略，它将窗口与压缩阈值乘以三，有效百分比保持不变。例如，Pro 账户普通 Sol 变为 `333579` / `285000`，Pro 路由变为 `336579` / `285000`。
 
 三倍预算不会放大可见消息 token 上限、字符上限或账户使用额度；每张图片的 token 预留保持不变。它也不会改变 Luna 的检查点策略。手动模式拒绝文件传输并使用自己的固定预算。上传成功不证明浏览器模型使用了全部上传上下文。
@@ -364,6 +422,7 @@ DEV 拒绝与生产数据目录重叠，使用独立浏览器登录及 Codex 主
 | `subagents status` | 检查已配置的协作协议和路由状态。 |
 | `subagents compatibility-v1` / `subagents native` | 修改协议；需重启 Codex 和启动器。 |
 | `browser check` | 检查配置的浏览器引擎或启动器浏览器；手动模式仅检查宿主存活，不检查 ChatGPT DOM。 |
+| `browser queue status`、`configure …`、`recover --confirm-browser-stopped` | 查看独立队列保存的回执、配置下次运行时或显式恢复已停止的所有者。仅适用于 managed Chrome，详见[独立队列控制](#standalone-request-queue)。 |
 | `setup [options]` | 验证并配置运行时、账户能力及 Codex 集成，会修改所选环境。 |
 | `login` | 执行支持的浏览器登录流程；启动器拥有的登录仍由启动器控制。 |
 | `serve` | 在前台启动所选运行时的 Responses 服务。 |
@@ -436,6 +495,8 @@ bun run dev:codex -m chatgpt-web/gpt-6-pro
 | 持久化结构迁移 | [共享迁移](../launcher/shared/config-migration.cjs)，供 Bun 与桌面共用的纯模块；校验和文件写入仍由调用方负责。 |
 | 环境与桌面偏好 | [启动器环境](../launcher/electron/profile.cjs)、[启动器状态](../launcher/electron/state.cjs)、[DEV 环境](../src/dev/profile.ts)、[DEV 命令](../src/dev/cli.ts)。 |
 | 运行控制 | [停滞检测](../src/stall-timeout.ts)、[隧道存储](../src/runtime/tunnel.ts)。 |
+| 请求调度 | [共享调度器](../launcher/shared/request-scheduler.cjs)、[Launcher 所有者](../launcher/electron/runtime/request-queue.cjs)、[独立所有者](../src/browser/standalone-request-queue.ts)、[CLI 控制](../src/browser/standalone-queue-command.ts)、[跨进程传输](../src/browser/standalone-queue-transport.ts)。 |
+| HTTP 正文接收 | [流式读取器](../src/http-body.ts)、[服务分配预算](../src/http-body-budget.ts)、[zstd 窗口检查](../src/http-body-zstd.ts)、[端点生命周期](../src/server.ts)。 |
 | 模型身份与可用性 | [路由注册表](../src/models/chatgpt-web-model-registry.ts)、[账户感知解析](../src/models/chatgpt-web-models.ts)、[模型类型](../src/models/chatgpt-web-model-types.ts)。 |
 | 上下文与压缩预算 | [上下文与传输策略](../src/models/chatgpt-web-context.ts)、[输入估算与 Luna 边界](../src/adapters/chatgpt-web/prompt/input-tokens.ts)、[原始上下文保留](../src/adapters/chatgpt-web/prompt/source-context.ts)。 |
 | 目录与选择校验 | [模型目录扩展](../src/models/model-catalog.ts)、[原生上下文覆盖读取](../src/codex/integration-document.ts)、[浏览器家族验证](../src/adapters/chatgpt-web/browser/model-selection.ts)。 |

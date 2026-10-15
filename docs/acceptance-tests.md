@@ -2,11 +2,12 @@
 
 [English](acceptance-tests.md) | [简体中文](acceptance-tests.zh-CN.md) · [Release manual](release.md) · [Documentation](../README.md#documentation)
 
-This document maintains repeatable live capability cases: prompts, pass criteria, and required evidence. It is a checklist for each release, not a record of passed results. Record each candidate separately; a model's success claim, fixture result, or earlier release cannot establish a current pass.
+This catalog maintains repeatable capability requirements: prompts, pass criteria, and required fixture or live evidence. Select checks, combine flows and reuse reviewed valid evidence under the [acceptance protocol](acceptance-protocol.md). It is not a record of passed results. Preserve each execution's actual candidate; a model's success claim or fixture cannot establish a live pass, and earlier evidence needs an explicit validity review.
 
 **Contents**
 
 - [Release requirements and case index](#release-requirements)
+- [Queue requirements Q01–Q17](#queue-requirements)
 - [Preparation](#preparation)
 - [CAP-001: Code Mode parallel reads and native patch](#cap-001)
 - [CAP-002: Code Mode waiting and same-task continuation](#cap-002)
@@ -16,6 +17,8 @@ This document maintains repeatable live capability cases: prompts, pass criteria
 - [CAP-006: Offline device licensing](#cap-006)
 - [CAP-007: Optional GitHub support (retired)](#cap-007)
 - [CAP-008: Runtime logs and diagnostic bundles](#cap-008)
+- [CAP-009: Global Web request queue](#cap-009)
+- [CAP-010: Aggregate HTTP body budget](#cap-010)
 - [Candidate results](#result-record)
 - [Adding and maintaining cases](#extend-cases)
 
@@ -23,20 +26,48 @@ This document maintains repeatable live capability cases: prompts, pass criteria
 
 ## Release requirements and case index
 
-Run CAP-001 through CAP-006 and CAP-008, subject to each case’s applicability, again on the current candidate before every release, including previews. All applicable cases must pass with recorded evidence before pushing a tag that triggers publication or making the release public. Failed, blocked, and unexecuted checks are not passes; retest after fixes and retain earlier failures. This is a manual publication gate: neither `bun run verify` nor GitHub Actions currently runs or enforces these cases automatically.
+Every release, including previews, needs valid coverage of applicable CAP-001–006, CAP-008–010 and Q01–Q17 requirements. Under the [acceptance protocol](acceptance-protocol.md), newly executed checks and reviewed still-valid evidence can satisfy that coverage; do not rerun every case solely because the candidate changed. Keep failed, blocked and missing checks visible, confirm fixes and retain prior failures. Actual execution remains isolated and operator-reviewed. Release CI enforces the [evidence manifest](acceptance-evidence.md); schema 2 validates check-level coverage and inheritance while retaining schema-1 compatibility. Neither format permits bypassing the gate or unnecessary full reruns. `bun run verify` does not execute authenticated acceptance.
 
-| ID | Capability | Frequency | Key pass evidence |
+| ID | Capability | Coverage applicability | Key pass evidence |
 | --- | --- | --- | --- |
 | [CAP-001](#cap-001) | Code Mode, parallel tools, native patch, and result readback | Every release | Actual `Promise.all` reads inside `exec`, both returned values, patch event, and matching output file. |
 | [CAP-002](#cap-002) | Asynchronous cell lifecycle and waiting | Every release | One 15-second task, a running cell, `wait` on that cell, and the recorded result. |
 | [CAP-003](#cap-003) | Real delegation, parallel execution, aggregation, and read-only boundaries | Every release | Three distinct agents, actual tool execution, completed results, and before/after file checks. |
 | [CAP-004](#cap-004) | Explicit family, five effort positions, triple budget and send accounting | Automatic-mode releases; DEV account with both families and Pro | Ten family/effort menu checks, four live read/write routes, catalog budgets and model receipts. |
 | [CAP-005](#cap-005) | Send accounting, receipt recovery and separate references | Automatic mode releases | Live sends/compaction, fault fixtures, bilingual UI and migration evidence. |
-| [CAP-006](#cap-006) | Offline activation and runtime enforcement | Every licensed release, additional to CAP-001–005 | Activation before language; actual signed import; expiry/device/tamper rejection; Web/MCP and artifact evidence. |
+| [CAP-006](#cap-006) | Offline activation and runtime enforcement | Licensed releases; required alongside CAP-001–005 coverage | Activation before language; actual signed import; expiry/device/tamper rejection; Web/MCP and artifact evidence. |
 | [CAP-007](#cap-007) | Optional GitHub support (retired) | No longer applicable | Feature removed; ID reserved. |
 | [CAP-008](#cap-008) | Runtime logs and diagnostic bundles | Every desktop release | Readable history; native ZIP export; date boundaries, redaction, correlation and collection coverage. |
+| [CAP-009](#cap-009) | Global queue and MCP round handoff | Every release containing the scheduler; UI/MCP steps apply to their supported modes | Launcher controls, standalone cross-process ownership, shared capacity, send spacing, main plus three children, physical release and explicit recovery. |
+| [CAP-010](#cap-010) | Aggregate HTTP body budget | Every release containing the Responses service | Shared Responses/compact accounting, size/depth rejection, 503 overload and reservation cleanup; isolated synthetic evidence. |
 
-These cases do not replace the [release manual's](release.md#authenticated-runtime) cancellation, compaction, conversation reuse, MCP, platform, or installation/upgrade checks. Changes to candidate source or the loaded runtime that affect accepted behavior require new evidence for the changed candidate.
+The applicability column identifies required coverage, not a separate execution frequency. These cases and the [release manual's](release.md#authenticated-runtime) cancellation, compaction, reuse, MCP, platform and installation checks may share evidence where the same observations satisfy their requirements. Changed behavior or invalidated assumptions require affected checks to be revalidated; preserve valid coverage elsewhere. Split composite cases into traceable checks before choosing runs.
+
+<a id="queue-requirements"></a>
+
+## Queue requirements Q01–Q17
+
+These are the stable queue requirements used by CAP-009 and the evidence manifest. They are coverage references, not seventeen additional jobs. The detailed protocol, standalone and mode requirements in CAP-009 still apply.
+
+| ID | Required behavior and evidence |
+| --- | --- |
+| Q01 | Shared capacity and session fairness for 20–50 synthetic requests; no immediate failure merely at request six within backlog limits; small authenticated counterpart. |
+| Q02 | Mixed models/efforts share capacity and preserve actual explicit selections; fixtures and DEV. |
+| Q03 | A parent plus three children complete real tasks through supported Native Tools and MCP paths, with actual tool/file-change evidence; no recursive child delegation. |
+| Q04 | Small-capacity parent/child dependencies complete without hidden over-admission, leaked capacity or silent deadlock; state/protocol fixtures and bounded DEV checks. |
+| Q05 | Queue expiry starts at first admission, retries do not renew it and expired work is not sent; record real streaming/non-streaming client waiting limits. |
+| Q06 | Cancelled waiting requests never dispatch; cancellation/retry races do not duplicate pages, sends or capacity release; fault fixtures. |
+| Q07 | Triple budgets, compaction and continuation preserve send spacing and avoid duplicate capacity acquisition/self-deadlock; fixtures and DEV. |
+| Q08 | Lowering concurrency preserves running work, existing queue deadlines remain, new sends use changed spacing, and save/apply feedback is truthful; unit and DEV checks. |
+| Q09 | Rate limits pause the correct scope, retries are bounded and network/account-limit failures are distinguishable; synthetic faults, not deliberate real-account limiting. |
+| Q10 | Crashes/lease loss/restart retain ownership until physical state is verified, do not blindly resend unknown outcomes or resurrect old queues; isolated faults. |
+| Q11 | Count/byte backlog limits, paged metadata without full prompt transfer, sampled peak memory and query latency; local pressure fixtures. |
+| Q12 | Unlicensed users can read but cannot mutate/dispatch; expiry while waiting cannot bypass enforcement and safe stop remains available; fixtures and isolated DEV. |
+| Q13 | Manual mode never auto-sends, its submission deadline starts in execution and UI does not promise enforced user click spacing; real manual DEV flow. |
+| Q14 | Forms, tables, buttons and stable feedback remain usable in normal/maximized/narrow windows, with narrow overflow limited to the table; DEV UI. Session choices follow state/search across all pages, empty results expose no sessions, and the first page detects new tasks. Verify family/Pro/effort labels and matching model searches. |
+| Q15 | All three settings save together, defaults change drafts only, restart preserves settings and DEV/production remain isolated; configuration and DEV checks. |
+| Q16 | Waiting work participates in unfinished-work guards; global cancellation covers waiting/running tasks without leftovers during stop/update/removal; lifecycle fixtures and applicable native gates. |
+| Q17 | Queue/send/failure/cancel correlation is accurate, diagnostics exclude credentials and complete prompts; redaction/export evidence and CAP-008 for native export. |
 
 <a id="preparation"></a>
 
@@ -123,7 +154,7 @@ report the failed step explicitly; do not simulate success. Keep the read-only s
 
 **Pass criteria and evidence**
 
-- There are three distinct real child IDs, parent relationships, and delegation events. Dispatch the three delegations in one parallel batch, with overlapping execution lifetimes; three sequential tasks or three role descriptions do not establish parallel delegation.
+- There are three distinct real child IDs, parent relationships, and delegation events, with overlapping execution lifetimes. Preserve Codex's current call controls: when `parallel_tool_calls=false`, create children with separate calls across model rounds; use a parallel batch only when the declared tools and controls permit it. Create all three before waiting for their results. Serial creation can still produce concurrent children; completing each child before creating the next, or describing three roles, does not establish parallel delegation. Verify concurrency from native task events, not from a single HTTP request or tool batch.
 - Verify each child's actual Web model and read-only sandbox from runtime records or equivalent evidence. An instruction to inherit the model does not by itself prove that the model stayed unchanged.
 - Child 1 has successful GitHub repository access and license evidence. The other children have real source-read records and conclusions matching their assignments. Record individual page failures and do not support claims with failed page access.
 - All three children complete, and the parent actually receives their results and returns an aggregate answer. Successful creation, CLI exit code zero, or a child's success claim alone is insufficient.
@@ -147,6 +178,8 @@ Missing selection, execution or file evidence, or accepting 5.6 as 6, fails the 
 
 For viewport or response-extraction changes, also run the isolated Electron model-picker fixture at 100% and 125% zoom: changing the selected tab, finishing another tab, and hiding/showing the window must preserve the open picker and pane dimensions. A temporary native window size of 0×0 must preserve valid renderer measurements instead of collapsing the pane to 1×1. Run response DOM regressions for file-preview movement, repeated paragraphs, empty paragraphs that later receive text, and KaTeX source preservation; genuine edits or changed links must still fail. Complete an authenticated DEV read → patch → command task with the rebuilt shared runtime. New configurations and missing history preferences must select Temporary Chat; existing explicit history preferences must survive reload. Fixture results alone are not authenticated acceptance.
 
+For Context as File changes, use `context.file-contracts` to check the 32768-byte UTF-8 envelope boundary (including Chinese and JSON escapes), exact decoded source/roles/tools/results, unchanged standard/triple budgets, and file integrity/attachment limits. Real DOM/network fixtures must reject 503, processing errors, incomplete streams and cancellation before Send; only all owned files' completion permits submission. An enabled Send button is insufficient. Use `context.files` in the same authenticated read → patch → command flow: a large first request uploads one complete TXT, beginning/middle/end sentinels affect verified output, and tool-result continuation completes. A small subsequent envelope must use inline transport. Retain upload completion, transport selection, actual tool events and output bytes; upload success alone does not establish context use. Preserve explicit mode restrictions and the existing file preference.
+
 <a id="cap-005"></a>
 
 ## CAP-005: Local send accounting and receipt recovery
@@ -164,7 +197,7 @@ Retain receipt/tool/file evidence, old-ledger migration results, lifecycle state
 
 ## CAP-006: Offline device licensing
 
-This is an additional mandatory case for every licensed release. Use task-owned DEV storage and test keys, never production activation storage. The independent issuer stays outside Git. Customer installer acceptance uses a disposable OS and separately issued device licenses under the candidate's pinned public key.
+Licensed releases require this coverage alongside the other capabilities; execution and inheritance follow the acceptance protocol. Use task-owned DEV storage and test keys, never production activation storage. The independent issuer stays outside Git. Customer installer acceptance uses a disposable OS and separately issued device licenses under the candidate's pinned public key.
 
 1. Without a license, the unified Product license page opens first, before language or browser setup. All pages remain readable, including explanations and diagnostic views, but configuration, sign-in and runtime actions are disabled; Browser must not show an interactive web view. Overview shows the activation requirement and links to the same License page. Capture a copyable device code and verify no Web/MCP submission occurs.
 2. Import supplied test licenses with perpetual, day-based and calendar-month validity. Check their displayed expiry, including month-end and leap-year cases. Activation precedes language setup and survives restart/upgrade. Invalid import preserves the old license. Renewal on the same page immediately updates Overview; expiry restores read-only access.
@@ -195,11 +228,41 @@ Use the current desktop candidate in verified DEV storage. Create fault records 
 
 An unreadable ZIP, leaked sentinel, hidden collection failure, incorrect date boundary or lost fault correlation fails the case. Backend or renderer fixtures alone do not establish the native desktop save flow; record that step as unexecuted until exercised. No authenticated model task is required for this case; it does not replace the other cases' live tool acceptance. Preserve evidence and remove only individually owned fixtures.
 
+<a id="cap-009"></a>
+
+## CAP-009: Global Web request queue
+
+Use the current candidate and isolated DEV. Record configuration revision, request/session IDs, actual send and cleanup times, and real Codex tool evidence.
+
+1. Verify the independent Runtime parameters page: defaults 4/15 minutes/3 seconds, draft-only defaults reset, hot save, reload persistence and unlicensed backend rejection. Verify save/discard/keep-editing navigation, Escape/focus, invalid drafts, failed saves, saved-but-unapplied status, duplicate clicks, stale revisions and draft recovery after renderer restart. Automatic task display must preserve edited settings. Check both languages and narrow windows, then queue filters, paging, cancellation and related logs.
+2. Submit 50 requests through isolated HTTP clients; verify shared capacity, session fairness, count/byte protection, timeout and cancellation. These fixtures do not replace authenticated Web evidence.
+3. Run a real DEV Codex main agent with three children, each of the four agents reading its own independent file; children must not spawn further agents. Check Native Tools and MCP Bridge separately. With one MCP slot, children must finish after the parent releases its Web round, and the parent must deliver a successful final response using all actual results. Preserve tool events, all four file results and call IDs. File execution followed by a parser, queue-retry or final-response failure is not a pass.
+4. Check spacing against actual-send logs. Waiting must not consume execution timeout or create pages. Lowering concurrency must not terminate running work; cancellation retains capacity until physical cleanup.
+5. Follow the inventory's `submission_tool` and `submission_field`: single `call` object for `parallel_tool_calls=false`, otherwise the advertised `calls` batch. Reject arrays at the single-call schema and preserve parallel-call rejection at the batch endpoint. Verify server-derived round identity/state in inventory and manual-start replies: queries and failed validation keep the round open, old receipts do not close a new round, live duplicate starts are idempotent, and committed starts are rejected. Verify default 20-entry paging, query misses that retain discovery routes, exact namespace queries and unchanged schemas. Manual mode must exclude known recursive bridge methods, including app-prefixed aliases, while retaining unrelated tools. Check a two-round discovery continuation without an exec gateway: native `tool_search_output` must retain the discovered namespace and schema, and the next round must deliver the declared tool with its exact identity. Check that one successful submission atomically validates, registers and seals the batch, returning `sealed: true`, `execution_state: "not_executed"` and `next_action: "end_web_response"`. Accepted does not mean executed: end the Web response without a separate `codex_yield_turn`. Verify that delivery and execution remain blocked until the completion fence commits, physical Web/browser resources settle and a durable delivery-intent receipt is persisted; receipt failure must block delivery. Before completion is committed, identical retries with the same `submission_id` must retain batch/call IDs even when structured argument keys change order; optional repeated `codex_yield_turn` acknowledgements must be idempotent. Reject conflicting submissions and calls after commitment or cancellation; cancellation before delivery must prevent execution and retain capacity until physical cleanup. Check canonical results in the next request, including approvals/refusals, namespaces, freeform inputs, structured/error metadata and multimodal results. Reject incorrect bindings and undeclared identities without execution; correction must use the exact current binding and catalog. Preserve Codex's tool-choice and parallel-call controls, sandbox and approval policy. Zero Risk still requires user send and completion confirmation per round; atomic submission does not replace either confirmation or permit delivery before them, and the application performs no DOM automation.
+6. Inject rate limits, unknown sends, owner disconnect and restart. Require pause or explicit failure, no resurrected receipts and no duplicate sends. Recovery must be explicit and cannot release still-running pages.
+7. In owned standalone fixtures, join one canonical profile from separate CLI processes and path aliases; verify one owner, shared capacity/send permits and unchanged model/tool choices. A distinct profile and Launcher must remain independent. Reject unauthenticated, wrong-generation and cross-profile transport calls. Lost clients retain occupied physical resources; owner loss must not start a replacement pool.
+8. Check standalone `browser queue status` against persisted receipts, including an offline owner. Configure all three settings while stopped; verify ranges, persistence and next-start application, and rejection while owned or when configured for Launcher. Recover only after verifying that the old runtime and its owned browsers stopped, using `browser queue recover --confirm-browser-stopped`. Require rejection without confirmation or with a live owner, failed unknown-outcome receipts, no automatic recovery/replay and no reuse of retained request IDs.
+
+9. In Automatic MCP, verify a normal completed reply without `codex_finish_turn`, both before any tool and after real tool results; an exact reconnect must not resend. Empty replies, unfinished batches, active/late MCP activity and a required tool choice must not become successful prose replies. With one slot, record the parent's retained conversation identity before waiting and after re-admission, together with the actual child results. In browser-host fixtures, cover more than five waiting conversations, the independent cache bound, ordinary versus waiting expiry, and cancellation/explicit close; retained pages must not increase active Web concurrency. Zero Risk retains explicit reply and user completion confirmation.
+
+Record desktop UI, standalone/HTTP/protocol fixtures, authenticated Native Tools, automatic MCP and manual/Zero Risk results separately. An unexecuted live path cannot be replaced by another mode, synthetic stress or historical results.
+
+<a id="cap-010"></a>
+
+## CAP-010: Aggregate HTTP body budget
+
+Use isolated service/body fixtures on the current candidate, without browser login or production traffic. Record configured limits, HTTP statuses, reservation/peak counters and cleanup evidence; label these results synthetic, not authenticated Web acceptance.
+
+1. Verify one 256 MiB estimated allocation pool across Responses and compact, including native passthrough, with independent pools for separate services. Submit 50 small pending bodies without imposing a Codex agent limit, then 50 large synthetic bodies that exhaust the pool; require HTTP 503 `request_body_overloaded`, `Retry-After: 1`, and estimated reservations never above the configured budget. Full initial admission must reject before pulling the body.
+2. Check 64 MiB encoded, 128 MiB decoded and 512-level JSON limits independently of aggregate overload; boundary fixtures may isolate each limit with explicit test budgets. Check absent/false Content-Length, dense JSON, split UTF-8, zstd expansion/windows and concatenated frames. Oversize/depth violations return 413; malformed bodies return 400 and release reservations.
+3. Cover queued work, JSON/SSE responses, compact and native forwarding. A disconnect or delivered terminal event must not release execution reservations before actual adapter cleanup; cancellation and decompression failure must settle reader/decoder resources. After all work settles, reservations return to zero and a new request is admitted. Preserve native request bytes and explicit model/metadata choices.
+4. Record the HTTP allocation estimate separately from scheduler waiting bytes and any observed RSS. The 256 MiB estimate is not a hard RSS cap; a synthetic stress pass does not establish real browser concurrency or authenticated MCP/manual acceptance.
+
 <a id="result-record"></a>
 
 ## Candidate results
 
-Create a separate result record for each candidate. Keep raw logs, rollouts, snapshots, and artifacts in ignored `output/` or private DEV storage; share only redacted conclusions. Full release metadata and confidentiality requirements are in the [release manual](release.md#validation-evidence).
+Create a target-candidate coverage/validity record without resetting earlier outcomes. Preserve original run IDs and versions; reference inherited evidence with cumulative impact review. Keep raw logs, rollouts, snapshots, and artifacts in ignored `output/` or private DEV storage; share only redacted conclusions. Full release metadata and confidentiality requirements are in the [release manual](release.md#validation-evidence).
 
 Record version/commit and candidate-difference identifier, test date and operator, loaded runtime, Codex version, OS/architecture, model/effort, modes, conversation IDs, and each case's attempt number, evidence location, observed result, failure cause, and follow-up. Preserve earlier attempts when retesting.
 
@@ -212,26 +275,29 @@ Record version/commit and candidate-difference identifier, test date and operato
 | CAP-005 | Pending | Not executed | To record | To record |
 | CAP-006 | Pending | Not executed | To record | To record |
 | CAP-008 | Pending | Not executed | To record | To record |
+| CAP-009 | Pending | Not executed | To record | To record |
+| CAP-010 | Pending | Not executed | To record | To record |
 
-Use Passed / Failed / Not executed. A blocked check remains non-passing with its reason recorded. Distinguish model output, bridge conversion, the Codex executor, and permission/account/network conditions during diagnosis; do not blame one layer without evidence.
+The table above is an empty example, not an instruction to reset results for a new candidate. Record per-check coverage beneath composite cases. Keep original execution outcomes Passed / Failed / Not executed separate from target validity: newly executed, inherited, needs verification, environment blocked, owner-operated, or not applicable with rationale. Blocked/missing evidence remains non-passing. Distinguish model output, bridge conversion, the Codex executor and permission/account/network conditions; do not blame a layer without evidence.
 
 <a id="extend-cases"></a>
 
 ## Adding and maintaining cases
 
-When adding a target capability or changing an existing one, add or update its live acceptance case and execute it before publication. Continue numbering at `CAP-009`; do not renumber for a new version or reuse old IDs. Keep English and Chinese IDs, prompt semantics, and pass criteria aligned, and update the index above.
+When adding a target capability or changing an existing one, add or update its acceptance case, identifying fixture and live requirements, and execute it before publication. Continue numbering at `CAP-011`; do not renumber for a new version or reuse old IDs. Keep English and Chinese IDs, prompt semantics, and pass criteria aligned, and update the index above.
 
-New cases join the every-release baseline by default. If a case only applies to specific modes, platforms, or accounts, document those conditions and the required environment; execute it for every applicable release. Do not narrow scope, lower pass criteria, or relabel unexecuted checks as inapplicable to bypass a failure. Retain retired IDs with the reason and replacement case reference.
+New cases join required capability coverage by default. Document mode/platform/account applicability, dependency impact and required environment; establish initial evidence and revalidate under the acceptance protocol. Add reusable flow mappings so existing executions can cover multiple requirements. Do not narrow scope, lower pass criteria or relabel missing checks as inapplicable to bypass a failure. Retain retired IDs with the reason and replacement reference.
 
 Use this format for additions:
 
 ```text
-ID and name: CAP-009: <target capability>
-Scope and frequency: <every release, or explicit mode/platform/account conditions>
+ID and name: CAP-011: <target capability>
+Applicability and revalidation triggers: <modes/platforms/accounts; affected dependencies>
 Prerequisites: <candidate, environment, permissions, fixture, and selected model>
 Prompt and steps: <copyable; no private paths or historical conversation IDs>
 Pass criteria: <observable and verifiable behavior, prohibited substitutes>
 Required evidence: <tool calls, lifecycle, file/external results, boundary checks>
+Shared flows/checks: <stable check IDs, reusable flows and evidence references>
 Failure and non-execution criteria: <distinctions; outcomes that cannot count as a pass>
 Teardown: <only verified resources owned by this test; preserve evidence>
 ```

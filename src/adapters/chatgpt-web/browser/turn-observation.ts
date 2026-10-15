@@ -97,11 +97,12 @@ export function chatGptTurnIsComplete(state: {
   currentText: string;
   currentHtml?: string;
   completionActionVisible: boolean;
+  handoffCompletionVisible?: boolean;
 }): boolean {
   return state.responsePresent
     && !state.running
-    && state.currentText.length > 0
-    && state.completionActionVisible;
+    && ((state.currentText.length > 0 && state.completionActionVisible)
+      || state.handoffCompletionVisible === true);
 }
 
 export type ChatGptSubmissionEvidence = "user_turn" | "assistant_turn" | "generation_running" | "mcp_tool_call";
@@ -183,7 +184,7 @@ export class ChatGptCompletionTracker {
       this.missingPostToolAnswerSince = undefined;
       return false;
     }
-    if (this.postToolAnswerBaselineText === state.currentText) {
+    if (this.postToolAnswerBaselineText === state.currentText && !state.handoffCompletionVisible) {
       this.candidate = undefined;
       if (!chatGptTurnIsComplete(state)) {
         this.missingPostToolAnswerSince = undefined;

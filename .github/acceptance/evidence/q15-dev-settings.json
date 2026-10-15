@@ -1,0 +1,29 @@
+{
+  "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "loadedSourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "runtimeSha256": "4c18bb1b5055c56a31d71552f3f0b6f8432773d9c3f43ba0c34fec46c34543fd",
+  "cases": [
+    "Q15"
+  ],
+  "status": "pass",
+  "layer": "authenticated-dev",
+  "summary": "On the verified current-candidate DEV desktop, Restore defaults changed only the three-field draft. Saving 2/30/5 applied all settings together. After an owned DEV shutdown and restart, the renderer and backend retained those values; the original 1/15/3 settings were restored through the UI. All four production configuration/authentication fingerprints remained unchanged. Current-candidate configuration/queue-settings and renderer fixtures also passed. No installer or production application was operated.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-14-release-candidate/queue-ui-prepare.json",
+      "sha256": "05ca99886a084f11da14e1c4380e25497961c7b7906ba0e612b9744a6f3edf62"
+    },
+    {
+      "path": "output/2026-10-14-release-candidate/queue-ui-restore.json",
+      "sha256": "46088f02b78a58ad8b4ba0a44b85936e8296b3264b90f53b284f616179a23e84"
+    },
+    {
+      "path": "output/2026-10-14-release-candidate/boundary-queue-persistence.private.json",
+      "sha256": "c172d764a93598397b098e14dd07aaf1993e5e1126211a8067e65f4675ef1c8d"
+    },
+    {
+      "path": "output/2026-10-14-release-candidate/verify-final.log",
+      "sha256": "fbba6ee3e42d0f3c99b93f095e1124f1f348ad299d671123365085fbaf7b9b52"
+    }
+  ]
+}

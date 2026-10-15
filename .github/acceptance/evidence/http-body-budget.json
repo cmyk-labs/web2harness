@@ -1,0 +1,13 @@
+{
+  "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "cases": [
+    "CAP-010"
+  ],
+  "status": "pass",
+  "layer": "fixture",
+  "summary": "Current Windows x64 candidate passed the aggregate HTTP body budget fixtures: concurrent small and large request admission, shared Responses/compact reservations, false content lengths, incremental encoded/decoded limits, dense JSON, streaming zstd bounds, cancellation and physical-settlement cleanup. Full verification: 1131 core tests, 570 launcher tests, both audits and relocated runtime smoke passed. No authenticated or installer acceptance is asserted.",
+  "rawEvidence": {
+    "path": "output/2026-10-14-release-candidate/verify-final.log",
+    "sha256": "fbba6ee3e42d0f3c99b93f095e1124f1f348ad299d671123365085fbaf7b9b52"
+  }
+}

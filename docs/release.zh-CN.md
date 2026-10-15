@@ -2,7 +2,7 @@
 
 [English](release.md) | [简体中文](release.zh-CN.md) · [文档导航](../README.zh-CN.md#documentation)
 
-本手册说明候选版本的准备、构建、验收、发布和恢复，以及安全问题的报告与处置。每次发布均须建立当前候选版本的证据：可复现的原生包、运行时和安装验证、真实账户验收，以及准确的发布元数据。CI、夹具和历史版本的通过记录不能替代本次验收。本页列出执行要求，不表示这些检查已经通过；日常源码开发见[开发手册](development.zh-CN.md)。
+本手册说明候选版本的准备、构建、验收、发布和恢复，以及安全问题的报告与处置。每个候选须有可复现原生包、有效运行时/安装/账户证据及准确发布元数据。累计影响、共享流程及经评审的证据继承遵循[验收协议](acceptance-protocol.zh-CN.md)。夹具不能替代真实边界，历史通过须经过有效性评审。本页规定要求，不代表已通过；日常源码开发见[开发手册](development.zh-CN.md)。
 
 **本页内容**
 
@@ -35,7 +35,7 @@
 
 每个候选版本记录版本、源码提交/tag、工件 SHA-256、操作系统版本/架构、全新安装或升级路径、旧安装版本、Codex 版本、ChatGPT 计划、启用模式和逐项结果。通过、失败、未执行分别列出。包含脱敏失败日志和复现步骤；不得公开 Cookie、隧道 ID、API key、bearer token、凭据或提示词内容。原始证据和生产基线保存在被忽略的本地存储中。
 
-必需门禁失败或未执行均阻止稳定发布。公开预览版必须列明未完成/失败门禁、用户可见限制和恢复路径。依赖 audit 失败与功能检查独立保留。历史结果不能替代当前候选版本的证据。
+未解决阻断失败或必需检查点缺少有效证据时，不得稳定发布。公开预览版须列明允许未完成/失败的非基础门禁、用户可见限制及恢复路径；预览身份不豁免能力覆盖。依赖audit失败与功能检查独立保留。区分本次执行与经累计影响评审继承的证据。实际发布制品仍须有适用的完整性、启动和平台检查，旧制品通过不能替代。
 
 <a id="source-preparation"></a>
 
@@ -58,6 +58,8 @@ bun run app:package
 ```
 
 `build` 输出 `dist/runtime`。`app:package` 重建启动器和内嵌运行时、准备平台 helper，最终将分发包写入 `launcher/artifacts`。它不发布工件；封装脚本向 electron-builder 传入 `--publish never`。包清单中名义上的 `release` 输出目录被封装脚本的临时构建目录覆盖。
+
+申请发布确认前，先在候选分支或提交上手动运行 Release 工作流。它使用与标签构建相同的五个原生构建任务和正式公钥清单，上传 `candidate-assets`（七个包与 `checksums.txt`）及 `candidate-source`（源码身份）。手动运行不能进入 publish 任务，即使选择的是标签。下载并核验这些制品后开展验收；构建成功不代表验收通过。只有后续推送 `v*` 标签才能发布，且仍须通过当前候选验收门禁。后续运行若重建制品，必须再次核对源码身份和制品校验值。
 
 <a id="native-target-matrix"></a>
 
@@ -102,7 +104,7 @@ bun run smoke
 Windows 的 `app:package` 包含启动器 `build:runtime`，后者调用 `scripts/build-windows-helpers.ts`。该脚本构建独立安装/卸载 helper，然后使用包内实际 Bun 执行共享安装、运行时部署及卸载测试：
 
 ```powershell
-& .\launcher\build\runtime\runtime\bun.exe test ./launcher/tests/installation/windows-install.test.cjs ./launcher/tests/installation/runtime-install.test.cjs ./launcher/tests/installation/windows-uninstall.test.cjs
+& .\launcher\build\runtime\runtime\bun.exe test --timeout 30000 ./launcher/tests/installation/windows-install.test.cjs ./launcher/tests/installation/runtime-install.test.cjs ./launcher/tests/installation/windows-uninstall.test.cjs ./launcher/tests/installation/windows-shortcuts.test.cjs ./launcher/tests/installation/update-windows.test.cjs
 ```
 
 此门禁是强制步骤，失败即停止打包。`bun run verify` 在 Node 下执行启动器测试，不能替代内嵌 Bun 门禁。覆盖全新部署、同版本替换/修复、复制和回执失败、重复取消，以及 setup 进程未回滚退出后的重试。不得用仅加载 helper 的探针替代。夹具仍不能满足真实 NSIS 验收。
@@ -148,7 +150,7 @@ Shell 入口脚本必须以 Git 模式 `100755` 提交。Linux 工作流在检�
 
 共享运行时验收使用隔离 DEV；涉及安装应用的流程按要求在专用测试系统重复。凭据必须独立获得。模型能力以账户实际可见能力为依据，不能从标签或原生 Codex 模型条目推断。
 
-每次发布，包括预览版，都必须在当前候选版本执行适用的必测[能力验收用例 CAP-001～CAP-005](acceptance-tests.zh-CN.md#release-requirements)，全部通过并记录后，才能推送触发发布的 tag 或公开发布。预览状态不能豁免这些用例。新增或改变目标能力时同步增加或更新用例。提示词、证据标准和版本结果模板统一维护在该文档；`verify` 和发布 CI 尚不自动执行或强制检查这项人工门禁。
+每次发布，包括预览版，按[验收协议](acceptance-protocol.zh-CN.md)建立适用[能力要求 CAP-001～006、CAP-008～010](acceptance-tests.zh-CN.md#release-requirements)及Q01～Q17的有效覆盖。执行发生变化或其他原因失效的检查点，复用经评审仍有效的证据，并取得实际制品及关键路径证据。要求变化时增补检查点；昂贵完整能力重跑遵循协议触发条件，不默认每个小版本执行。下列流程定义必需行为和证据，不是在同次执行已覆盖后仍须重复的独立任务。执行保持隔离并由操作者复核。发布CI仍要求[证据清单](acceptance-evidence.zh-CN.md)；schema 2已校验共享检查点覆盖及经评审继承，缺证和未解决失败仍阻止发布。`verify` 不执行认证验收。
 
 ### 原生工具
 

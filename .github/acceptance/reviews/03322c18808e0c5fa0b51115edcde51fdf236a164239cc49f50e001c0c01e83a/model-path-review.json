@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 2,
+  "kind": "review-support",
+  "reviewer": "Codex",
+  "at": "2026-10-15T06:00:52.560Z",
+  "fromSourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "targetSourceId": "03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a",
+  "scope": [
+    "models.routes",
+    "models.picker",
+    "models.contracts",
+    "accounting.sends"
+  ],
+  "implementation": {
+    "path": "src/adapters/chatgpt-web/browser/browser-worker.ts",
+    "before": "fc35195fed7512ae77b127802c1329c37e30fc44c4c498d5a16e7340ecccec9f",
+    "after": "0e2457be8eae7b0c356259cc448b34cee59c418c7fa1f42cecc1da2f6b9226a6",
+    "comparison": "The old worker copy was hash-matched to the 4c305 source inventory and compared with the current source. Changes add bounded runStage timeout retirement, an owned-page retirement callback, and pass it to temporary-chat preparation and prompt attachment. Normal successful model selection, effort verification, submission and accounting are unchanged.",
+    "limitation": "This does not establish compaction, multi-agent MCP lifecycle, live cancellation or current external readiness. Those checks are not inherited by this review."
+  },
+  "addedTests": [
+    "tests/adapters/chatgpt-web/browser/stage-retirement.test.ts",
+    "tests/browser/launcher-stage-retirement.test.ts"
+  ],
+  "supplementalEvidence": [
+    {
+      "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/cap001-5bb51e-native-11.json",
+      "sha256": "61a6d1971662543e3fcf5612c5ff0ac6a9e1e9ed0f42b91e321eca8ca1a1800b"
+    },
+    {
+      "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/cap002-5bb51e-native-11.json",
+      "sha256": "ad87396aaa519055367c7ffb61b64bb970a45d0f4716024409f675b38b4420d7"
+    },
+    {
+      "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q06-5bb51e-fixtures.json",
+      "sha256": "2d2e5803b4f9a27c5ab9be22fcacbaf078d7f4f0a9c94b8239cd2fce735d553d"
+    }
+  ],
+  "conclusion": "The four prior model routes, ten picker combinations, accepted-send accounting and documented catalog/DOM/viewport fixtures retain validity. The later timeout cleanup branch is bounded and has separate regression and real DEV recovery evidence; no fresh four-route run is justified by these changes."
+}

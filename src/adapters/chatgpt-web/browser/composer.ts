@@ -85,41 +85,55 @@ export function chatGptPromptFilePayloads(
 }
 
 /**
- * Insert `value` at the caret of an already-resolved ChatGPT composer, returning whether the edit
- * was applied. Runs inside the page, so it may reference only globals and its two arguments.
+ * Prepare a focused, collapsed caret in an editable composer, optionally inserting plain text.
+ * Passed directly to locator.evaluate: keep this function independent of module closures.
  *
- * Effort selection closes a menu immediately before a prompt is attached, and focus is still
- * settling when this runs: the composer can be the active element while the caret has not yet been
- * placed inside it, or focus can still be on the menu that just closed. Reading that as a rejected
- * edit failed whole turns roughly a tenth of a second after the effort menu closed, so the caret is
- * placed explicitly instead of assumed. An existing collapsed caret inside the composer is left
+ * Focus alone does not establish a caret inside the composer. This is an input precondition,
+ * not proof of why a particular native keystroke was lost. An existing collapsed caret is left
  * exactly where the user put it; only a missing or foreign one is replaced, and always with a
  * position inside this composer, so an insert can never land in another element.
  */
-export function insertPlainTextIntoComposer(element: HTMLElement, value: string): boolean {
-  if (document.activeElement !== element) element.focus();
-  if (document.activeElement !== element) return false;
-  const selection = window.getSelection();
-  if (!selection) return false;
-  const alreadyPlaced = selection.isCollapsed
-    && selection.anchorNode !== null
-    && element.contains(selection.anchorNode);
-  if (!alreadyPlaced) {
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-  if (
-    !selection.isCollapsed
-    || !selection.anchorNode
-    || !element.contains(selection.anchorNode)
-  ) {
+export function prepareComposerForInput(element: HTMLElement, value?: string): boolean {
+  const document = element.ownerDocument;
+  const textarea = element.tagName === "TEXTAREA" ? element as HTMLTextAreaElement : undefined;
+  const editable = () => element.isConnected
+    && element.getAttribute("aria-readonly") !== "true"
+    && element.getAttribute("aria-disabled") !== "true"
+    && (textarea ? !textarea.readOnly && !textarea.matches(":disabled") : element.isContentEditable);
+  if (!editable()) return false;
+  try {
+    if (document.activeElement !== element) element.focus();
+    if (!editable() || document.activeElement !== element) return false;
+    if (textarea) {
+      if (textarea.selectionStart !== textarea.selectionEnd || textarea.selectionStart === null) {
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      }
+      if (textarea.selectionStart === null || textarea.selectionStart !== textarea.selectionEnd) return false;
+    } else {
+      const selection = document.defaultView?.getSelection();
+      if (!selection) return false;
+      const caretInside = () => selection.rangeCount === 1 && selection.isCollapsed
+        && selection.anchorNode !== null && element.contains(selection.anchorNode)
+        && selection.focusNode !== null && element.contains(selection.focusNode);
+      if (!caretInside()) {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      if (!caretInside()) return false;
+    }
+  } catch {
+    // A detached editor or unavailable selection must never permit input elsewhere.
     return false;
   }
-  return document.execCommand("insertText", false, value);
+  if (!editable() || document.activeElement !== element) return false;
+  return value === undefined || document.execCommand("insertText", false, value);
 }
+
+// An alias, not a wrapper: serialization must carry the entire DOM implementation into the page.
+export const insertPlainTextIntoComposer: (element: HTMLElement, value: string) => boolean = prepareComposerForInput;
 
 /**
  * Lexical/contenteditable may preserve runs of ASCII spaces by exposing some of them as NBSP

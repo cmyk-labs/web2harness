@@ -504,6 +504,7 @@ test("fresh-conversation snapshot uses runtime configuration and mode switching 
   };
   const sandbox = {
     startupFailed: false, startup: { snapshot: () => ({ status: "ready" }) },
+    createQueueSettingsSaver: require("../../electron/runtime/queue-settings.cjs").createQueueSettingsSaver,
     handle: (name, handler) => handlers.set(name, handler), runtimeHost,
     releaseRetainedConversation: require("../../electron/runtime/retained-turn-release.cjs").releaseRetainedConversation,
     stateStore: { read: () => ({ ...state }), update: patch => Object.assign(state, patch) },

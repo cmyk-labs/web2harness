@@ -191,6 +191,34 @@ export async function activateChatGptEffortMenu(
   );
 }
 
+/** Close the composer-owned picker and acknowledge its state before reading its label.
+ * Retained Electron surfaces can ignore an unfocused Escape. A still-open owner may
+ * be toggled through its own pointer handler; never toggle an already-closed picker. */
+export async function closeChatGptEffortMenu(
+  page: Page, control: Locator, options: { settleMs?: number } = {},
+): Promise<void> {
+  const settleMs = options.settleMs ?? 1_000;
+  const closed = async () => await control.getAttribute("aria-expanded") === "false"
+    && await control.getAttribute("data-state") !== "open";
+  const waitClosed = async () => {
+    const deadline = Date.now() + settleMs;
+    do {
+      if (await closed()) return true;
+      if (Date.now() >= deadline) return false;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    } while (true);
+  };
+  if (await closed()) return;
+  if (await control.getAttribute("aria-expanded") !== "true") throw new Error("ChatGPT effort picker owner state is unavailable");
+  await page.keyboard.press("Escape");
+  if (await waitClosed()) return;
+  // Recheck immediately before acting: Escape may have committed after the wait.
+  if (await closed()) return;
+  if (await control.getAttribute("aria-expanded") !== "true") throw new Error("ChatGPT effort picker owner changed while closing");
+  await control.dispatchEvent("pointerdown", { button: 0, buttons: 1, pointerType: "mouse", isPrimary: true });
+  if (!await waitClosed()) throw new Error("ChatGPT effort picker did not close; model selection was not confirmed");
+}
+
 function safeIntegerAttribute(value: string | null): number | undefined {
   if (value === null || !/^-?\d+$/.test(value)) return undefined;
   const parsed = Number(value);

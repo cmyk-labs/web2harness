@@ -2,11 +2,13 @@ import { createContextFile } from "../../../../src/adapters/chatgpt-web/prompt/c
 import { createInputFile } from "../../../../src/adapters/chatgpt-web/prompt/file-attachments";
 import { selectedSkillFile } from "../../../../src/adapters/chatgpt-web/prompt/skill-attachments";
 import { afterEach, expect, spyOn, test } from "bun:test";
+import { rejects } from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ChatGptCompactionHandoffAccepted, ChatGptWebAdapterError } from "../../../../src/adapters/chatgpt-web/adapter-error";
 import { LauncherBrowserHelperClient } from "../../../../src/adapters/chatgpt-web/browser/launcher-helper-client";
+import { ChatGptExternalTurnProgress } from "../../../../src/adapters/chatgpt-web/tools/turn-progress";
 import type { BrowserTurn, ResolvedBrowserConfig } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { LAUNCHER_BROWSER_HOST_KIND, LAUNCHER_BROWSER_IDLE_URL } from "../../../../src/browser/launcher-client";
 
@@ -15,16 +17,51 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
+test("smoke helper keeps the launcher's exact operation identity through real IPC and maintenance scheduling", async () => {
+  const { runBrowserHelperOperation } = require("../../../../launcher/electron/browser/browser-helper-verifier.cjs");
+  const root = mkdtempSync(join(tmpdir(), "codex-smoke-owner-"));
+  roots.push(root);
+  const helper = join(root, "helper.ts");
+  writeFileSync(helper, `
+    import { ChatGptBrowserWorker } from ${JSON.stringify(new URL("../../../../src/adapters/chatgpt-web/browser/browser-worker.ts", import.meta.url).href)};
+    // Only the browser action is substituted; real maintenance scheduling and IPC remain.
+    ChatGptBrowserWorker.prototype.smokeTestExclusive = async function(signal, traceId) {
+      if (!signal || !/^smoke-[a-f0-9]{24}$/.test(traceId)) throw new Error("Smoke ownership lost");
+      return { effort: traceId, response: "WEB2HARNESS READY" };
+    };
+    await import(${JSON.stringify(new URL("../../../../src/adapters/chatgpt-web/browser/browser-helper-main.ts", import.meta.url).href)});
+  `);
+  let owner: { id: string; pid: number } | undefined;
+  const result = await runBrowserHelperOperation({
+    helper: { executable: process.execPath, script: helper },
+    descriptorPath: join(root, "unused-launcher.json"), appName: "Codex Native2 DEV", operation: "smoke",
+    logger: { info() {} }, onStarted: (value: { id: string; pid: number }) => { owner = value; },
+  });
+  expect(owner?.id).toMatch(/^smoke-[a-f0-9]{24}$/);
+  expect(owner?.pid).toBeGreaterThan(0);
+  expect(owner?.pid).not.toBe(process.pid);
+  expect(result.id).toBe(owner?.id);
+  expect(result.value).toEqual({ effort: owner?.id, response: "WEB2HARNESS READY" });
+}, 30_000);
+
 test("daemon streams browser lifecycle through the real helper process", async () => {
   const root = mkdtempSync(join(tmpdir(), "codex-launcher-helper-client-"));
   roots.push(root);
   const helper = join(root, "helper.ts");
   writeFileSync(helper, `
     import { ChatGptBrowserWorker } from ${JSON.stringify(new URL("../../../../src/adapters/chatgpt-web/browser/browser-worker.ts", import.meta.url).href)};
+    import { chatGptResponseFailure, isChatGptResponseFailureCode } from ${JSON.stringify(new URL("../../../../src/adapters/chatgpt-web/adapter-error.ts", import.meta.url).href)};
+    import { preparationError } from ${JSON.stringify(new URL("../../../../src/adapters/chatgpt-web/browser/page-readiness.ts", import.meta.url).href)};
     // Substitute only the browser. Both sides of the production IPC protocol run unchanged.
     ChatGptBrowserWorker.prototype.run = async function(turn) {
+      if (isChatGptResponseFailureCode(turn.traceId)) throw chatGptResponseFailure(turn.traceId);
+      if (turn.traceId === "chatgpt_preparation_unsubmitted") {
+        if (turn.preparationDeadline !== 123456789) throw new Error("Shared preparation deadline lost in IPC");
+        throw preparationError(turn.traceId);
+      }
       if (this.config.useSavedChats !== true) throw new Error("Saved chat preference lost in helper IPC");
       if (turn.modelFamily !== "5.6") throw new Error("Pinned model family lost in helper IPC");
+      if (turn.nativeToolDefinitions?.[0]?.name !== "read_fixture") throw new Error("Native declarations lost in helper IPC");
       await turn.onPreparedSelected(false);
       const prepared = await turn.prepare();
       if (prepared.skillFiles?.[0]?.text !== "<skill>\\n<name>ipc</name>\\n<path>/skills/ipc/SKILL.md</path>\\ncheck IPC\\n</skill>") throw new Error("Skill file lost in IPC");
@@ -35,6 +72,9 @@ test("daemon streams browser lifecycle through the real helper process", async (
       turn.onReasoningSummary("Reading project");
       turn.onReasoningSummary(" files", true);
       turn.onTextDelta("done");
+      const fence = await turn.completionFence.begin();
+      const committed = await turn.completionFence.commit(fence.revision, "正文\\nwith tool result");
+      if (committed.state !== "committed" || committed.awaitingToolResults !== true) throw new Error("Completion disposition lost in IPC");
       if (turn.captureLunaCheckpoint) turn.onLunaCheckpoint({
         answerHash: "a".repeat(64),
         checkpoint: {
@@ -95,6 +135,16 @@ test("daemon streams browser lifecycle through the real helper process", async (
       modelId: "gpt-5.6-sol",
       reasoning: "high",
       modelFamily: "5.6",
+      nativeToolDefinitions: [{ name: "read_fixture", description: "read", parameters: {} }],
+      externalProgress: new ChatGptExternalTurnProgress(),
+      completionFence: {
+        begin: async () => ({ state: "ready", revision: 17 }),
+        commit: async (revision, reply) => {
+          expect(revision).toBe(17);
+          expect(reply).toBe("正文\nwith tool result");
+          return { state: "committed", revision, awaitingToolResults: true };
+        },
+      },
       capabilities: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: false, proAvailable: false },
       prepare: async () => ({
         text: "inspect", images: [],
@@ -132,6 +182,17 @@ test("daemon streams browser lifecycle through the real helper process", async (
       },
     }]);
     expect(released).toBe(true);
+    await rejects(client.run({ traceId: "chatgpt_preparation_unsubmitted", preparationDeadline: 123456789,
+      modelId: "gpt-6-sol", capabilities: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: false, proAvailable: false },
+      prepare: async () => ({ text: "inspect", images: [], release() {} }), onTextDelta() {} }),
+    { name: "ChatGptWebAdapterError", code: "chatgpt_preparation_unsubmitted", status: 502, retryable: false });
+    for (const code of ["chatgpt_empty_response", "chatgpt_assistant_turn_missing", "chatgpt_dom_unresponsive", "chatgpt_response_timeout"] as const) {
+      await rejects(client.run({
+        traceId: code, modelId: "gpt-5.6-sol", reasoning: "high",
+        capabilities: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: false, proAvailable: false },
+        prepare: async () => ({ text: "inspect", images: [], release() {} }), onTextDelta() {},
+      }), { name: "ChatGptWebAdapterError", code, retryable: false, status: 502 });
+    }
   } finally {
     await client.close();
   }
@@ -229,7 +290,7 @@ test("accepted compaction retires through the helper as completed without hiding
   }
 }, 30_000);
 
-test("launcher helper protocol preserves context file and the compaction flag", async () => {
+test("launcher helper protocol preserves context file, delivery binding and the compaction flag", async () => {
   const sent: Record<string, unknown>[] = [];
   const client = new LauncherBrowserHelperClient({
     appName: "Codex Native2 DEV",
@@ -252,7 +313,7 @@ test("launcher helper protocol preserves context file and the compaction flag", 
   };
   const child = {};
   internal.child = child;
-  internal.handleLine(child, JSON.stringify({type:"ready",features:["context-file"]}));
+  internal.handleLine(child, JSON.stringify({type:"ready",features:["context-file","mcp-delivery-observation"]}));
   internal.ensureChild = async () => {};
   internal.send = async message => {
     sent.push(message);
@@ -281,6 +342,7 @@ test("launcher helper protocol preserves context file and the compaction flag", 
     compaction: true,
     prepare: async () => ({
       text: "commit",
+      handoffBinding: "a".repeat(64),
       images: [],
       contextFile: createContextFile('{"version":3,"system":[],"messages":[]}'),
       trimmedCompactionMessages: 4,
@@ -299,6 +361,7 @@ test("launcher helper protocol preserves context file and the compaction flag", 
     type: "prepared_selected_ack",
     prepared: {
         text: "commit",
+        handoffBinding: "a".repeat(64),
         contextFile: createContextFile('{"version":3,"system":[],"messages":[]}'),
         trimmedCompactionMessages: 4,
     },
@@ -413,7 +476,7 @@ test("structured helper errors preserve the ChatGPT adapter failure contract", a
   });
 });
 
-for (const kind of ["skill", "input"] as const) test(`an older helper cannot silently drop ${kind} files and releases the prepared turn`, async () => {
+for (const kind of ["skill", "input", "handoff"] as const) test(`an older helper cannot silently drop ${kind} transport metadata and releases the prepared turn`, async () => {
   const client = new LauncherBrowserHelperClient({
     appName: "Codex Native2", browserHost: "launcher", browserHostDescriptorPath: "/durable/launcher.json",
     storageStatePath: "/durable/unused.json", chromeExecutablePath: "/durable/chrome", headed: true, autoApproveToolCalls: false, useSavedChats: false,
@@ -444,11 +507,13 @@ for (const kind of ["skill", "input"] as const) test(`an older helper cannot sil
     prepare: async () => ({ text: "inspect", images: [],
       ...(kind === "skill" ? { skillFiles: [selectedSkillFile({ role: "user", origin: "codex_skill", timestamp: 0,
         content: "<skill>\n<name>test</name>\n<path>/test</path>\ncheck\n</skill>",
-      })] } : { files: [createInputFile({ type: "file", filename: "input.txt", mimeType: "text/plain", data: "aGVsbG8=" })] }),
+      })] } : kind === "handoff" ? { handoffBinding: "a".repeat(64) }
+        : { files: [createInputFile({ type: "file", filename: "input.txt", mimeType: "text/plain", data: "aGVsbG8=" })] }),
       release() { released = true; },
     }),
     onTextDelta() {},
-  })).rejects.toThrow(kind === "skill" ? "does not support skill attachments" : "does not support input files");
+  })).rejects.toThrow(kind === "skill" ? "does not support skill attachments"
+    : kind === "handoff" ? "Restart the runtime and browser helper together" : "does not support input files");
   expect(sent).toEqual(["run", "abort"]);
   expect(released).toBe(true);
 });

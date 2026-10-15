@@ -2,6 +2,7 @@
 // operations and stopping existing work are exempt; new actions require a license.
 const UNLICENSED_CHANNELS = new Set([
   "launcher:license-status", "launcher:license-import", "launcher:snapshot", "launcher:workspace-status",
+  "launcher:queue-status", "launcher:queue-query", "launcher:queue-control",
   "launcher:window-state", "launcher:sidebar-state", "launcher:set-language",
   // Geometry does not activate the web view. Do not launch a verifier on every resize frame.
   "launcher:browser-bounds",

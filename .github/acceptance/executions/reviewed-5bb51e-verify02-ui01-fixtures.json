@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "id": "reviewed-5bb51e-verify02-ui01-fixtures",
+  "source": {
+    "path": "sources/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474.json",
+    "sha256": "6fe6cab7387319377a03b34b7b3d76749efe705cc24bc0ba33744e081f54f932"
+  },
+  "recordedAt": "2026-10-15T06:05:32.521Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Retrospective observation record from the original isolated 5bb51e verify-02 and workspace-ui-01 batch. No new tests ran during this mapping. Original attestation time is retained; exact individual test start times are not asserted.",
+  "observations": [
+    {
+      "checkId": "accounting.recovery",
+      "criteriaHash": "6afda7f1b87d789d4deea7620d6c9fffa105d4ffd8e07fbdb42ef87a2ed71437",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:05.984Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Receipt-only delivery/restart/ACK loss, accepted versus pending state, preserved corrupt records and v1/v2 migrations all passed; no second Web submission is represented by retry fixtures.",
+      "evidence": [
+        {
+          "path": "evidence/reviewed-5bb51e-fixture-observations.json",
+          "sha256": "983829d93bc5293f97872877959dca80c1ac44f000ad2224b486db90b65baed1"
+        },
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q06-5bb51e-fixtures.json",
+          "sha256": "2d2e5803b4f9a27c5ab9be22fcacbaf078d7f4f0a9c94b8239cd2fce735d553d"
+        }
+      ]
+    },
+    {
+      "checkId": "accounting.ui",
+      "criteriaHash": "0f448e760da8d2759630652277b976674bc8912d505b9494fd4c81e4fca65b78",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:05.984Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Existing mock-renderer results cover bilingual/narrow aggregation, unknown caps, stable counts and reference selectors. These are renderer fixtures, not native desktop acceptance.",
+      "evidence": [
+        {
+          "path": "evidence/reviewed-5bb51e-fixture-observations.json",
+          "sha256": "983829d93bc5293f97872877959dca80c1ac44f000ad2224b486db90b65baed1"
+        },
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q06-5bb51e-fixtures.json",
+          "sha256": "2d2e5803b4f9a27c5ab9be22fcacbaf078d7f4f0a9c94b8239cd2fce735d553d"
+        }
+      ]
+    },
+    {
+      "checkId": "queue.contracts",
+      "criteriaHash": "061d2bf3f693b5dce66f17aefa82c0a6188b3efe44b6e262afafcf458aa677db",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:05.984Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Shared capacity, group fairness, unchanged choices, first deadlines, retry/cancel/physical settlement, dynamic settings and parent/child ownership are deterministic fixture observations.",
+      "evidence": [
+        {
+          "path": "evidence/reviewed-5bb51e-fixture-observations.json",
+          "sha256": "983829d93bc5293f97872877959dca80c1ac44f000ad2224b486db90b65baed1"
+        },
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q06-5bb51e-fixtures.json",
+          "sha256": "2d2e5803b4f9a27c5ab9be22fcacbaf078d7f4f0a9c94b8239cd2fce735d553d"
+        }
+      ]
+    },
+    {
+      "checkId": "queue.standalone",
+      "criteriaHash": "e61e06562b47cfb7f80edee3ee3daf3cf32c5d496e68dfe87d50650b2202b755",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:05.984Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Separate CLI processes/profile ownership, authenticated host controls, owner loss, offline configuration/recovery, persisted spacing and no replay were all exercised in the original process fixtures.",
+      "evidence": [
+        {
+          "path": "evidence/reviewed-5bb51e-fixture-observations.json",
+          "sha256": "983829d93bc5293f97872877959dca80c1ac44f000ad2224b486db90b65baed1"
+        },
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q06-5bb51e-fixtures.json",
+          "sha256": "2d2e5803b4f9a27c5ab9be22fcacbaf078d7f4f0a9c94b8239cd2fce735d553d"
+        }
+      ]
+    },
+    {
+      "checkId": "mcp.retention",
+      "criteriaHash": "2d4b33e2cb7c6d0b2cf17c77479f7cb354d4b6bba44c08bafb8494328ba9e31c",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:05.984Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Original host fixtures preserve waiting parents beyond five, separate cache bounds and expiry/cancel; completion-fence fixtures reject empty, pending, late-revision and required-tool prose substitutes.",
+      "evidence": [
+        {
+          "path": "evidence/reviewed-5bb51e-fixture-observations.json",
+          "sha256": "983829d93bc5293f97872877959dca80c1ac44f000ad2224b486db90b65baed1"
+        },
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q06-5bb51e-fixtures.json",
+          "sha256": "2d2e5803b4f9a27c5ab9be22fcacbaf078d7f4f0a9c94b8239cd2fce735d553d"
+        }
+      ]
+    },
+    {
+      "checkId": "mcp.contracts",
+      "criteriaHash": "a53848359f7104e386a9a6fb985e89e1db672664762e3882710b17155f54221d",
+      "outcome": "pass",
+      "at": "2026-10-15T04:08:05.984Z",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "model": "fixture",
+      "effort": "fixture",
+      "summary": "Original deterministic tests cover inventory lookup, policy/namespace/schema, atomic handoff and durable delivery, retries/cancel, stable identity and freeform bytes. This provides no live connector discovery or authenticated agent claim.",
+      "evidence": [
+        {
+          "path": "evidence/reviewed-5bb51e-fixture-observations.json",
+          "sha256": "983829d93bc5293f97872877959dca80c1ac44f000ad2224b486db90b65baed1"
+        },
+        {
+          "path": "history/5bb51eb3756f299af1f85afd0c97f21480a67a16d0c7cfa3d5239a55f1676474/evidence/q06-5bb51e-fixtures.json",
+          "sha256": "2d2e5803b4f9a27c5ab9be22fcacbaf078d7f4f0a9c94b8239cd2fce735d553d"
+        }
+      ]
+    }
+  ]
+}

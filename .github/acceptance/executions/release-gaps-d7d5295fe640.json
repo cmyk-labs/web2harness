@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 2,
+  "kind": "execution",
+  "id": "release-gaps-d7d5295fe640",
+  "source": {
+    "path": "sources/d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9.json",
+    "sha256": "7a50333a862379161c423ac000d804a89fcb439cd6c4b8d46b3baf1c36b78702"
+  },
+  "recordedAt": "2026-10-15T08:28:44.042Z",
+  "actor": "Codex",
+  "platform": "Windows x64",
+  "environment": "Verified isolated DEV, independent fixture workspaces and actual extracted Windows candidate. No production authentication copied, no installer transaction executed.",
+  "observations": [
+    {
+      "checkId": "license.contracts",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "summary": "Current complete CLI/HTTP/IPC/MCP license, device/signature/key/rollback and cleanup regressions passed. Four signed client calendar-boundary cases add last-valid-millisecond/exact-expiry coverage. Actual packaged pinned keys reject environment test-key override. Issuer calendar arithmetic remains separately recorded historical tooling evidence.",
+      "criteriaHash": "571818defb0397c5fbf9e342e01c353da0ebca1d602998f6b99e11ebf5fbf489",
+      "outcome": "pass",
+      "at": "2026-10-15T08:28:44.042Z",
+      "model": "not-applicable",
+      "effort": "not-applicable",
+      "evidence": [
+        {
+          "path": "evidence/release-gaps-d7d5295fe640.json",
+          "sha256": "49d7644ff061d59086e41f45ca0a33a910b3609a38002229ba754c2a2f3a7592"
+        }
+      ]
+    },
+    {
+      "checkId": "diagnostics.performance",
+      "layer": "fixture",
+      "mode": "not-applicable",
+      "summary": "Current 100000-record 81.72 MiB benchmark: index 8899ms, cached page 2.98ms with zero source reread, search page 2.21ms, no repeated scans, peak RSS 289.54MiB. Current full suite covers cursor expiry/consistency, cancellation, bounded paging, persistence/error contracts; actual desktop bounds supplement it.",
+      "criteriaHash": "c56b28b4ae6e4b1e51bf12c15e9e51f2b9ce3f54d93e69b22439006df050ea49",
+      "outcome": "pass",
+      "at": "2026-10-15T08:28:44.042Z",
+      "model": "not-applicable",
+      "effort": "not-applicable",
+      "evidence": [
+        {
+          "path": "evidence/release-gaps-d7d5295fe640.json",
+          "sha256": "49d7644ff061d59086e41f45ca0a33a910b3609a38002229ba754c2a2f3a7592"
+        }
+      ]
+    },
+    {
+      "checkId": "diagnostics.desktop",
+      "layer": "authenticated-dev",
+      "mode": "desktop",
+      "loadedSourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+      "runtimeSha256": "86b1c72c63d4d63eab4308c0718ca4d63af48498e0a5cd84509bc5312f11e502",
+      "summary": "Actual independent DEV queue-to-log correlation, search, paging, selected JSON copied and read back from clipboard, pause/latest, Chinese normal and English 900-wide renderer, page size saved to disk/reloaded/restored. Partial observations survived corrected driver selectors; native Save/Cancel was not substituted.",
+      "criteriaHash": "1d16be46f27f1792d2b42744dc843ba1f9c9490a0040d9e42e67c104ffa06100",
+      "outcome": "pass",
+      "at": "2026-10-15T08:28:44.042Z",
+      "model": "not-applicable",
+      "effort": "not-applicable",
+      "evidence": [
+        {
+          "path": "evidence/release-gaps-d7d5295fe640.json",
+          "sha256": "49d7644ff061d59086e41f45ca0a33a910b3609a38002229ba754c2a2f3a7592"
+        }
+      ]
+    },
+    {
+      "checkId": "license.artifact",
+      "layer": "native-package",
+      "mode": "not-applicable",
+      "loadedSourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+      "runtimeSha256": "402be9917fa777f0761e77c84902d608b2d7be3f38a07b617b09fb737c60bcfb",
+      "artifactSha256": "2423ad903397e27af4e68778b29b21841b7a353016f1e90712afb8ebf5d85066",
+      "summary": "Actual Windows x64 NSIS payload extracted without executing installer. Verified 3947 runtime files and 1244 ASAR entries, no forbidden issuer/customer/auth paths, bundled fix bytes match build, production key override rejected. Actual extracted desktop started unactivated in fresh DEV paths, protected setup rejected, exited normally with code 0. This does not claim installed lifecycle or other platforms.",
+      "criteriaHash": "ef533fd70df410890eb62831481fbb17c4ddd6fdb2cd40659c7079ce7f32b132",
+      "outcome": "pass",
+      "at": "2026-10-15T08:28:44.042Z",
+      "model": "not-applicable",
+      "effort": "not-applicable",
+      "evidence": [
+        {
+          "path": "evidence/release-gaps-d7d5295fe640.json",
+          "sha256": "49d7644ff061d59086e41f45ca0a33a910b3609a38002229ba754c2a2f3a7592"
+        }
+      ]
+    }
+  ]
+}

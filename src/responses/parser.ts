@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import type {
   CodexAgentMessage,
   CodexAssistantMessage,
@@ -134,6 +135,14 @@ function normalizedToolNamespace(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0
     ? value
     : undefined;
+}
+
+function toolInvocationSpecification(specification: CodexTool["specification"]): CodexTool["specification"] {
+  if (!specification) return specification;
+  // Only the tool's top-level human description may differ (for example plugin provenance).
+  // Keep schema/format descriptions and all unknown metadata in the structural comparison.
+  const { description, ...invocation } = specification;
+  return invocation;
 }
 
 export function buildTools(tools: unknown[] | undefined): CodexTool[] | undefined {
@@ -569,23 +578,24 @@ export function parseRequest(body: unknown): CodexParsedRequest {
 
   const declaredTools = buildTools(source.tools) ?? [];
   const loadedTools = buildTools(loadedToolSpecs) ?? [];
+  const declaredToolKeys = new Set(declaredTools.map(t => toolIdentityKey(t.namespace, t.name)));
   const seenTools = new Map<string, CodexTool>();
-  const mergedTools = [...declaredTools, ...loadedTools]
-    .filter(t => {
-      const k = toolIdentityKey(t.namespace, t.name);
-      const previous = seenTools.get(k);
-      if (previous) {
-        if (previous.name !== t.name || previous.namespace !== t.namespace
-          || Boolean(previous.freeform) !== Boolean(t.freeform)
-          || Boolean(previous.toolSearch) !== Boolean(t.toolSearch)
-          || JSON.stringify(previous.specification) !== JSON.stringify(t.specification)) {
-          throw new Error(`Conflicting Codex tool identity: ${k}`);
-        }
-        return false;
+  for (const t of [...declaredTools, ...loadedTools]) {
+    const k = toolIdentityKey(t.namespace, t.name);
+    const previous = seenTools.get(k);
+    if (previous) {
+      if (previous.name !== t.name || previous.namespace !== t.namespace
+        || Boolean(previous.freeform) !== Boolean(t.freeform)
+        || Boolean(previous.toolSearch) !== Boolean(t.toolSearch)
+        || !isDeepStrictEqual(toolInvocationSpecification(previous.specification), toolInvocationSpecification(t.specification))) {
+        throw new Error(`Conflicting Codex tool identity: ${k}`);
       }
-      seenTools.set(k, t);
-      return true;
-    });
+    }
+    // Current declarations retain their guidance; otherwise use the latest loaded description.
+    // Replacing a Map value keeps inventory order stable and leaves source snapshots untouched.
+    if (!previous || !declaredToolKeys.has(k)) seenTools.set(k, t);
+  }
+  const mergedTools = [...seenTools.values()];
   const context: CodexContext = {
     source,
     ...(systemPrompt.length > 0 ? { systemPrompt } : {}),

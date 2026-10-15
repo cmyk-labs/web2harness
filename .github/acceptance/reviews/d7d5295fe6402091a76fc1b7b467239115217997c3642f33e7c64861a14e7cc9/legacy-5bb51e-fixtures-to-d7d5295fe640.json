@@ -1,0 +1,345 @@
+{
+  "schemaVersion": 2,
+  "id": "legacy-5bb51e-fixtures-to-d7d5295fe640",
+  "runId": "legacy-5bb51e-fixtures",
+  "targetSourceId": "d7d5295fe6402091a76fc1b7b467239115217997c3642f33e7c64861a14e7cc9",
+  "reviewer": "Codex",
+  "at": "2026-10-15T08:28:44.042Z",
+  "checkIds": [
+    "diagnostics.contracts",
+    "queue.cancellation",
+    "queue.network",
+    "queue.owner-loss",
+    "queue.pressure",
+    "queue.lifecycle",
+    "http.body-budget"
+  ],
+  "changes": [
+    {
+      "path": "AGENTS.md",
+      "before": "078eda3e9cd6cdfc6b0b98c7734c06a98a483644d2b0ad18d6d17865d985d9d7",
+      "after": "59c47fb847a608494249f706d51030aa836d01ac65981b5fcedabd677637aa34",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "AGENTS.zh-CN.md",
+      "before": "a6479d063dc38ce68d9d382345cf093e7dfc504673bb16ee1ecb41bd3c0a1409",
+      "after": "744e6d249be771d6700bca3a067e59f594a455e8fdb1cf720c1f172c1a10689c",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "README.md",
+      "before": "ea18e989f3a8c090ba3af8f6dd4588941e5bbbe1c72bde9abeaad48e2bc74707",
+      "after": "ac40f60674a20e6844326d104d6a78b091f3c19f331611ab1bfdf5c80ef4acad",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "README.zh-CN.md",
+      "before": "0faa8d13f7c0d3151388eaafdd50ecbbee6e45cd29ec05021ae4873af3435429",
+      "after": "916a15592089c59688b6a6ecc328fd2331447246dab28abce9c6b67d37616379",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-evidence.md",
+      "before": "48955fdf9210fd2ce79a6835d3a09e1b613c20c7e330ef3c75c2d6d720cc6659",
+      "after": "e8a7135c026afba90cdcdbf893a91c9b2ab97ebfd6a287a7737cff04d764bc6f",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-evidence.zh-CN.md",
+      "before": "1253f6a8fb02e4d1a0f937e5cf52bef5d76a6dcb0c064cd9dc0a37ecab631c79",
+      "after": "efdaac8dd6586b8cdef85723b0f54c5e9b5b77d755055f1a6446f04d8b32b079",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-protocol.md",
+      "before": null,
+      "after": "8afadbf50997605fb51def353220026acce3198d6d85b616a979972403f2b51c",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-protocol.zh-CN.md",
+      "before": null,
+      "after": "b72f0a2025c321555bbd52403c288214a5e556b2fdc38b9a172174f83b719e84",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/acceptance-tests.md",
+      "before": "2de679524aa227eb48cda8aaf156a053981fb20510403822364f450ea0db56f8",
+      "after": "92172f9af74cefb76fba367eaecf2e973349b65d8a4e4bca4320edbddc6c51af",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged. Additional review: Bilingual queue documentation; only queue.desktop criteria change, which is not inherited in this review."
+    },
+    {
+      "path": "docs/acceptance-tests.zh-CN.md",
+      "before": "697417cda17f7285bc98e5285ea152a4253a2c5552322041f7a4d379bb2d899a",
+      "after": "9e9fd03565725032f425eebca08694c38b72a56449bd1054e4c0b0febea20fd4",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged. Additional review: Bilingual queue documentation; only queue.desktop criteria change, which is not inherited in this review."
+    },
+    {
+      "path": "docs/development.md",
+      "before": "2477e6d41c2c1d14656f6d6879831020fe8ff04fe09e7d60b60407462e106ea7",
+      "after": "f6379dd6266b99d24d5b69a1b37756737adb891a634bd599a1811d7aedb98e84",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged. Additional review: Bilingual queue documentation; only queue.desktop criteria change, which is not inherited in this review."
+    },
+    {
+      "path": "docs/development.zh-CN.md",
+      "before": "fc388b608c8d6b42b1a3bf92d1421ff3798886da542cf3b5507015bcb38c874a",
+      "after": "900fe55060f1c4351f4890b22565006a3f49e33e4c3e6056321259fbe8285310",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged. Additional review: Bilingual queue documentation; only queue.desktop criteria change, which is not inherited in this review."
+    },
+    {
+      "path": "docs/release.md",
+      "before": "af9ef5d3469b9ece20303cdc523406e9d4db792eea1078583180358749562106",
+      "after": "5672b43d4d4a529dd5c2264ec9895898cf1d75ecbb07ba4ab9fd8f0cf4fa2ca4",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/release.zh-CN.md",
+      "before": "9ae7f810ea8083fc578ee2d02b94cdfac2baca0f329eb1e0a13c4a4a00a46da8",
+      "after": "0915999798947b444edfae8d65bb052262090115cf114be0513f88e1e44e6b6f",
+      "impact": "unrelated",
+      "reason": "Acceptance scope/evidence procedure, repository instructions or documentation links; selected product behavior and original observed pass criteria are unchanged."
+    },
+    {
+      "path": "docs/user-guide.md",
+      "before": "8d4fb6f9e62a17d3053c2b722bdce041d3b3a6b594b2fa4858db7465b12d4f34",
+      "after": "21943d3c7ba92e43827a07f7431e068b3fbced4fc20383e49c50e7087ce6bf40",
+      "impact": "unrelated",
+      "reason": "Bilingual queue documentation; only queue.desktop criteria change, which is not inherited in this review."
+    },
+    {
+      "path": "docs/user-guide.zh-CN.md",
+      "before": "53ff3b574accfc88863f9594cdfd2c2e44400c893f8ae58155061a9532be6014",
+      "after": "e89ec22c1d46b147ad4ed93235cdb870dfc64b5e13c63192d31ae83489289b96",
+      "impact": "unrelated",
+      "reason": "Bilingual queue documentation; only queue.desktop criteria change, which is not inherited in this review."
+    },
+    {
+      "path": "launcher/electron/browser/browser-host.cjs",
+      "before": "b80c379dea7adb3704c4a6f07eb45c893ce62bee69f3c3219ef5144eff79a621",
+      "after": "b696b094cdfd05db0c1bec6f5e51b84f8e6780b2bed25850b723abe878f26106",
+      "impact": "reviewed-unaffected",
+      "reason": "Only teardown guards changed: capture released view.webContents before closing home/turn/auth views and before auth-home refresh. Missing/already destroyed content no longer interrupts cleanup. Live close, owner cancellation and waiter resolution remain unchanged; no admission, prompt, model, connector, budget or send path changed. Three reproduced regressions, 159 related checks, full verification and real DEV graceful close/restart support this review.",
+      "support": [
+        {
+          "path": "evidence/release-gaps-d7d5295fe640.json",
+          "sha256": "49d7644ff061d59086e41f45ca0a33a910b3609a38002229ba754c2a2f3a7592"
+        }
+      ]
+    },
+    {
+      "path": "launcher/electron/runtime/request-queue.cjs",
+      "before": "32324e8589f6e18aeb3863d076976006c469449b5dc022cbad877311075f8400",
+      "after": "12355d3ba34efac146e472ed40ffb922137015d825dccab4fb95dc620cbfdd08",
+      "impact": "reviewed-unaffected",
+      "reason": "Only query snapshots capture/return the new groups list. Persistence, ownership, physical settlement and controls are unchanged. Host queries and renderer are exercised together in the isolated UI flow.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "launcher/scripts/smoke-queue.mjs",
+      "before": null,
+      "after": "96930b428da1fc65068385ca85a9a18466e23bedb5fd5a14f99a661e4f56bbd0",
+      "impact": "unrelated",
+      "reason": "New isolated renderer/real-host query fixture covers only current queue display/filter changes; independent headless browser and private receipts, no model execution or credentials."
+    },
+    {
+      "path": "launcher/scripts/smoke-workspace.mjs",
+      "before": "f74df0b190be4d6783c61b8f8ef5b16feda4fea0a09287b2829f5d42da97b089",
+      "after": "a61da5efd03ff6a96a32578ef0993f2238114f89b4bf723b070d0e54c1fec603",
+      "impact": "unrelated",
+      "reason": "Adds an explicit queue-only branch, retaining the original default suite and shared mocked IPC setup. No production/DEV product path added; no prior passed check assertion removed."
+    },
+    {
+      "path": "launcher/shared/request-scheduler.cjs",
+      "before": "116a109b95cebba0a6eb80adc694cd78842842de232b9ce69948a71ddd75970a",
+      "after": "552972d9439f5121a715caacba2ac46c4239c77053d33f71c67a43bf297ab1b5",
+      "impact": "reviewed-unaffected",
+      "reason": "Only query builds session choices before session filtering/pagination, then applies the original session filter to rows. Admission, capacity, fairness, deadlines, leases, sends and cancellation are unchanged. Shared scheduler/host tests passed, including 26-session facets, search and stable snapshots.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "launcher/shared/request-scheduler.d.cts",
+      "before": "a4a86bafe86050df53ccb3a7f0d56b1ee765d55255c7520f4a84d3f7d58ca117",
+      "after": "d64bf4bbe465219bbf9d7c0a3fa58536b758a1b9e8e38931f9049a25669cc94c",
+      "impact": "reviewed-unaffected",
+      "reason": "QueuePage adds groups metadata; execution and owner contracts are unchanged.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "launcher/src/features/workspace/RequestQueue.tsx",
+      "before": "c72c95e12b0687dc69714c0fa2377ae383026726388d39879546ec90532e36ad",
+      "after": "11c5e7af956e5629c96f706dbc3858fc3b45a4f37e29cf4b0ec8ffacda83d6f4",
+      "impact": "unrelated",
+      "reason": "Queue-only renderer uses query-scoped sessions, abbreviated IDs with full titles, live first page and stable later pages, resets stale selection, distinct no-match message and accessible selector names. Metadata/actions remain separate; license checks and controls unchanged."
+    },
+    {
+      "path": "launcher/src/features/workspace/pages/queue.css",
+      "before": "e0498d2402bb4c21dc57afa658b92361b90883b1c2f3272e85192b29f99ba3d3",
+      "after": "733ded3f995aacee9930f4c1cfba40b89443dcd22889a7ff93d5e9a90231342a",
+      "impact": "unrelated",
+      "reason": "Only request-queue typography and spacing use shared description tokens, headers have medium weight and empty feedback collapses. Settings/control rules outside the queue stay unchanged. Computed typography equality, visible focus and bilingual widths are checked."
+    },
+    {
+      "path": "launcher/tests/browser/browser-host.test.cjs",
+      "before": "375e6423536c58324f0237762efdbbeb5467a4b3216be6a816f6f25adcaedd2f",
+      "after": "cfba4f48e8e101a52e5a1955156cbd0fb9dbe192b294abadd822859d7ce09d45",
+      "impact": "reviewed-unaffected",
+      "reason": "Three new targeted regressions reproduce absent WebContents, remaining live-view closure/waiter cleanup, auth-home release and cancelled turn removal. Existing assertions and evidence oracles remain intact.",
+      "support": [
+        {
+          "path": "evidence/release-gaps-d7d5295fe640.json",
+          "sha256": "49d7644ff061d59086e41f45ca0a33a910b3609a38002229ba754c2a2f3a7592"
+        }
+      ]
+    },
+    {
+      "path": "launcher/tests/request-queue.test.cjs",
+      "before": "2913a2eed494a72afad3b7af62c8678f75d56f973a247b9201c2d03935bc0c82",
+      "after": "d44c2b26ba8d15c41cfc670628bc21dd27d96f531c951add4760918ce59bc77d",
+      "impact": "unrelated",
+      "reason": "Adds current-state/search session facets across pages and empty-to-arrival/terminal transitions. Existing scheduler/host oracles retained."
+    },
+    {
+      "path": "scripts/acceptance-evidence.ts",
+      "before": "e5cf37abc429c5e8c2264e85c9558ae0c26dd7d271ac7638a6542c8435157c9a",
+      "after": "6ab7585417bf4641d5af34b7aeff1b9485e1721dad0bf24a7ac3a617727f0cfc",
+      "impact": "unrelated",
+      "reason": "Acceptance evidence/catalog tooling only; not loaded by product execution. Mapping was checked against the documented original behavior and required evidence level."
+    },
+    {
+      "path": "scripts/acceptance/catalog.ts",
+      "before": null,
+      "after": "a9c93fdc14913c1828fe962146f7986e7582b6695e52f5e19cebedf8069a00a1",
+      "impact": "unrelated",
+      "reason": "Acceptance evidence/catalog tooling only; not loaded by product execution. Mapping was checked against the documented original behavior and required evidence level. Additional review: Only queue.desktop criterion explicitly adds the changed session/model behavior. No inherited check criterion changes; actual desktop remains a gap."
+    },
+    {
+      "path": "scripts/acceptance/checker.ts",
+      "before": null,
+      "after": "98c4d1b6a0a3afde3bd01af198d1847d8cbbb4cfa92276c1549c21b98cd36e09",
+      "impact": "unrelated",
+      "reason": "Acceptance evidence/catalog tooling only; not loaded by product execution. Mapping was checked against the documented original behavior and required evidence level."
+    },
+    {
+      "path": "src/adapters/chatgpt-web/adapter.ts",
+      "before": "29df3386a9eef85f3a1bcda8266ffba4509af812de919fae81ba0d27b419d2b5",
+      "after": "5d144488a9026243a0fdf1906cdd907105c10efd64aa3ff8d9fa3ef20346c2f4",
+      "impact": "reviewed-unaffected",
+      "reason": "Only scheduling.model now derives the requested family/Pro label. Execution modelId, family, effort, tools, permissions, retry key, grouping, timing and actual browser selection remain unchanged. The actual routed adapter admission is exercised by ten family/effort fixtures.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/browser-worker.ts",
+      "before": "0e2457be8eae7b0c356259cc448b34cee59c418c7fa1f42cecc1da2f6b9226a6",
+      "after": "783e612223ec71cf18de833c9d5056144180dcc9e2a02f2ec4d26613b11dae4d",
+      "impact": "reviewed-unaffected",
+      "reason": "Only the managed-chrome fallback admission model label uses the same helper. Actual execution and ownership are unchanged; two independent workers sharing one owned fixture host preserve backend/family/effort and query the actual admitted records.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "src/models/chatgpt-web-queue-model.ts",
+      "before": null,
+      "after": "a5c2fdedefe3ef72445529614bb503febbc4e5407aa4905d3940046f0f98b1a6",
+      "impact": "reviewed-unaffected",
+      "reason": "New pure metadata formatter maps the shared backend alias plus family and max effort to Sol/Pro labels; it is used only in scheduling metadata. Luna/manual profiles remain untouched. It does not select or send a model.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "tests/acceptance-evidence-v2.test.ts",
+      "before": null,
+      "after": "26447bd9bcbc0acad48ae41490d733ff5b33e86d7751cd4b8df9309efbb0abe1",
+      "impact": "reviewed-unaffected",
+      "reason": "New synthetic evidence-checker tests only; existing product fixtures and their pass criteria are unchanged.",
+      "support": [
+        {
+          "path": "reviews/03322c18808e0c5fa0b51115edcde51fdf236a164239cc49f50e001c0c01e83a/scope-review.json",
+          "sha256": "f8498354e43ad759028cf8746f4e91788ae22b38eb8fc220984930bcc711db3f"
+        }
+      ]
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/queue-model-metadata.test.ts",
+      "before": null,
+      "after": "5e6a6814befb05e9e5f812e2822ad6fbaed196e086d7653b27d9aa5dcb5febab",
+      "impact": "reviewed-unaffected",
+      "reason": "New real route-to-adapter admission regression and shared scheduler model searches; browser responses are stubbed. No change to prior test oracles.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    },
+    {
+      "path": "tests/browser/standalone-request-queue.test.ts",
+      "before": "f51a6ac797a772aa58660651048ded49d872c5ea0622e5328fb358b1b817b3fa",
+      "after": "25f161feb14db02af6f7e70d1809a42fad4b182481bde9a3e2c7ac2ed3274ebc",
+      "impact": "reviewed-unaffected",
+      "reason": "Strengthens existing managed-worker test to use actual canonical backend/family metadata and inspect owner-serialized admission receipts; retains concurrency and delayed preparation assertions.",
+      "support": [
+        {
+          "path": "evidence/queue-label-filter-ui-ff736b918657.json",
+          "sha256": "577b6391a5068a97674cc89540fa7231fe73c0087f3c01fbb2cb210fe79ea090"
+        }
+      ]
+    }
+  ],
+  "environment": {
+    "status": "revalidated",
+    "reason": "Same independent DEV profile and browser generation, controlled restart and graceful cleanup checked. Current large native first-send failure is a separate open release blocker, not generalized into a fresh external all-mode pass. Unrelated existing observations retain their original scope; no first-send or agent success is inferred from them.",
+    "evidence": [
+      {
+        "path": "evidence/release-gaps-d7d5295fe640.json",
+        "sha256": "49d7644ff061d59086e41f45ca0a33a910b3609a38002229ba754c2a2f3a7592"
+      },
+      {
+        "path": "evidence/native-first-send-d7d5295fe640.json",
+        "sha256": "f40c388751839e228fd39f77ada254f3b82e318e55a7b7b1554856305b545316"
+      }
+    ]
+  },
+  "resolvedFailures": []
+}

@@ -1,0 +1,18 @@
+{
+  "sourceId": "95c3b8a3b6d20a9edf483a9dfe5ef1375467b12f81b01d4e51157af3e569215b",
+  "cases": [
+    "Q16"
+  ],
+  "status": "pass",
+  "layer": "fixture",
+  "summary": "Current-candidate lifecycle fixtures passed: waiting and running work participate in active-state checks; global cancellation covers queued work, retains physical cleanup obligations, and shutdown/update/removal paths refuse unsafe active transitions. These are dependency-controlled lifecycle tests; maintainer-owned actual installation, upgrade and uninstall remain unexecuted by the agent.",
+  "tests": [
+    "launcher/tests/runtime/runtime-supervisor.test.cjs",
+    "launcher/tests/request-scheduler.test.cjs",
+    "launcher/tests/application/state.test.cjs"
+  ],
+  "rawEvidence": {
+    "path": "output/2026-10-14-release-candidate/verify-final.log",
+    "sha256": "fbba6ee3e42d0f3c99b93f095e1124f1f348ad299d671123365085fbaf7b9b52"
+  }
+}

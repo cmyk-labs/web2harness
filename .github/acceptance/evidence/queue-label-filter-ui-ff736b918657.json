@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 2,
+  "kind": "scoped-change-review",
+  "recordedAt": "2026-10-15T07:16:03.487Z",
+  "reviewer": "Codex",
+  "targetSourceId": "ff736b918657e64c3fcf3f31c2fa01a0a3b94edf2938fb94823861415647d754",
+  "source": {
+    "path": "sources/ff736b918657e64c3fcf3f31c2fa01a0a3b94edf2938fb94823861415647d754.json",
+    "sha256": "c5da9ff5add2169deb9d1e5cf5160274ac4de8c59b4b69eb54bc952d66deae40"
+  },
+  "scope": "Admission metadata, queue query/display/filtering only. Not authenticated DEV, native packaging, four-model live routes or parent-plus-three acceptance.",
+  "verified": {
+    "metadata": {
+      "tests": 12,
+      "assertions": 110,
+      "description": "Ten public route/effort combinations through actual adapter admission and scheduler search, legacy/manual/Luna metadata, managed-worker shared-owner admission."
+    },
+    "schedulerAndHost": {
+      "tests": 27
+    },
+    "renderer": {
+      "checks": 20,
+      "errors": [],
+      "description": "Shared renderer with isolated real RequestQueue, mocked IPC, bilingual 1440/900/390 widths; screenshots visually inspected after transition settlement."
+    },
+    "rootTypecheck": "passed",
+    "launcherTypecheck": "passed",
+    "rendererBuild": "passed before final aria-label-only JSX adjustment; final renderer fixture and launcher typecheck passed after that adjustment"
+  },
+  "reviewedChanges": [
+    {
+      "path": "docs/acceptance-tests.md",
+      "before": "e96db0756ee46c2dc1ca9c6099bc852a0227e9276ce14130d70cc5db6b95da67",
+      "after": "92172f9af74cefb76fba367eaecf2e973349b65d8a4e4bca4320edbddc6c51af",
+      "reason": "Bilingual documentation: queue UX expectations and scoped verification workflow. Other acceptance criteria and product paths unchanged."
+    },
+    {
+      "path": "docs/acceptance-tests.zh-CN.md",
+      "before": "62ddbd2aba0b10e9318d8905640e49d87d3e48a37ed1d5eb19939fb4c3ec81d4",
+      "after": "9e9fd03565725032f425eebca08694c38b72a56449bd1054e4c0b0febea20fd4",
+      "reason": "Bilingual documentation: queue UX expectations and scoped verification workflow. Other acceptance criteria and product paths unchanged."
+    },
+    {
+      "path": "docs/development.md",
+      "before": "43497fd7b0bc3b0ed6b2cbb71beaa9b82b2d99d2a84a6c8d121a98e8f51192f7",
+      "after": "f6379dd6266b99d24d5b69a1b37756737adb891a634bd599a1811d7aedb98e84",
+      "reason": "Bilingual documentation: queue UX expectations and scoped verification workflow. Other acceptance criteria and product paths unchanged."
+    },
+    {
+      "path": "docs/development.zh-CN.md",
+      "before": "802da6f35a705958e7318c74987abfa5387b78c92dfd96768770db2adf1c3214",
+      "after": "900fe55060f1c4351f4890b22565006a3f49e33e4c3e6056321259fbe8285310",
+      "reason": "Bilingual documentation: queue UX expectations and scoped verification workflow. Other acceptance criteria and product paths unchanged."
+    },
+    {
+      "path": "docs/user-guide.md",
+      "before": "8d4fb6f9e62a17d3053c2b722bdce041d3b3a6b594b2fa4858db7465b12d4f34",
+      "after": "21943d3c7ba92e43827a07f7431e068b3fbced4fc20383e49c50e7087ce6bf40",
+      "reason": "Bilingual documentation: queue UX expectations and scoped verification workflow. Other acceptance criteria and product paths unchanged."
+    },
+    {
+      "path": "docs/user-guide.zh-CN.md",
+      "before": "53ff3b574accfc88863f9594cdfd2c2e44400c893f8ae58155061a9532be6014",
+      "after": "e89ec22c1d46b147ad4ed93235cdb870dfc64b5e13c63192d31ae83489289b96",
+      "reason": "Bilingual documentation: queue UX expectations and scoped verification workflow. Other acceptance criteria and product paths unchanged."
+    },
+    {
+      "path": "launcher/electron/runtime/request-queue.cjs",
+      "before": "32324e8589f6e18aeb3863d076976006c469449b5dc022cbad877311075f8400",
+      "after": "12355d3ba34efac146e472ed40ffb922137015d825dccab4fb95dc620cbfdd08",
+      "reason": "Only query snapshots capture/return the new groups list. Persistence, ownership, physical settlement and controls are unchanged. Host queries and renderer are exercised together in the isolated UI flow."
+    },
+    {
+      "path": "launcher/scripts/smoke-queue.mjs",
+      "before": null,
+      "after": "96930b428da1fc65068385ca85a9a18466e23bedb5fd5a14f99a661e4f56bbd0",
+      "reason": "New isolated renderer/real-host query fixture covers only current queue display/filter changes; independent headless browser and private receipts, no model execution or credentials."
+    },
+    {
+      "path": "launcher/scripts/smoke-workspace.mjs",
+      "before": "f74df0b190be4d6783c61b8f8ef5b16feda4fea0a09287b2829f5d42da97b089",
+      "after": "a61da5efd03ff6a96a32578ef0993f2238114f89b4bf723b070d0e54c1fec603",
+      "reason": "Adds an explicit queue-only branch, retaining the original default suite and shared mocked IPC setup. No production/DEV product path added; no prior passed check assertion removed."
+    },
+    {
+      "path": "launcher/shared/request-scheduler.cjs",
+      "before": "116a109b95cebba0a6eb80adc694cd78842842de232b9ce69948a71ddd75970a",
+      "after": "552972d9439f5121a715caacba2ac46c4239c77053d33f71c67a43bf297ab1b5",
+      "reason": "Only query builds session choices before session filtering/pagination, then applies the original session filter to rows. Admission, capacity, fairness, deadlines, leases, sends and cancellation are unchanged. Shared scheduler/host tests passed, including 26-session facets, search and stable snapshots."
+    },
+    {
+      "path": "launcher/shared/request-scheduler.d.cts",
+      "before": "a4a86bafe86050df53ccb3a7f0d56b1ee765d55255c7520f4a84d3f7d58ca117",
+      "after": "d64bf4bbe465219bbf9d7c0a3fa58536b758a1b9e8e38931f9049a25669cc94c",
+      "reason": "QueuePage adds groups metadata; execution and owner contracts are unchanged."
+    },
+    {
+      "path": "launcher/src/features/workspace/RequestQueue.tsx",
+      "before": "c72c95e12b0687dc69714c0fa2377ae383026726388d39879546ec90532e36ad",
+      "after": "11c5e7af956e5629c96f706dbc3858fc3b45a4f37e29cf4b0ec8ffacda83d6f4",
+      "reason": "Queue-only renderer uses query-scoped sessions, abbreviated IDs with full titles, live first page and stable later pages, resets stale selection, distinct no-match message and accessible selector names. Metadata/actions remain separate; license checks and controls unchanged."
+    },
+    {
+      "path": "launcher/src/features/workspace/pages/queue.css",
+      "before": "e0498d2402bb4c21dc57afa658b92361b90883b1c2f3272e85192b29f99ba3d3",
+      "after": "733ded3f995aacee9930f4c1cfba40b89443dcd22889a7ff93d5e9a90231342a",
+      "reason": "Only request-queue typography and spacing use shared description tokens, headers have medium weight and empty feedback collapses. Settings/control rules outside the queue stay unchanged. Computed typography equality, visible focus and bilingual widths are checked."
+    },
+    {
+      "path": "launcher/tests/request-queue.test.cjs",
+      "before": "2913a2eed494a72afad3b7af62c8678f75d56f973a247b9201c2d03935bc0c82",
+      "after": "d44c2b26ba8d15c41cfc670628bc21dd27d96f531c951add4760918ce59bc77d",
+      "reason": "Adds current-state/search session facets across pages and empty-to-arrival/terminal transitions. Existing scheduler/host oracles retained."
+    },
+    {
+      "path": "scripts/acceptance/catalog.ts",
+      "before": "ce796a6656dc318acd47732ebb41a0719d1424959ef7241edd3cd1ee3c5c048a",
+      "after": "a9c93fdc14913c1828fe962146f7986e7582b6695e52f5e19cebedf8069a00a1",
+      "reason": "Only queue.desktop criterion explicitly adds the changed session/model behavior. No inherited check criterion changes; actual desktop remains a gap."
+    },
+    {
+      "path": "src/adapters/chatgpt-web/adapter.ts",
+      "before": "29df3386a9eef85f3a1bcda8266ffba4509af812de919fae81ba0d27b419d2b5",
+      "after": "5d144488a9026243a0fdf1906cdd907105c10efd64aa3ff8d9fa3ef20346c2f4",
+      "reason": "Only scheduling.model now derives the requested family/Pro label. Execution modelId, family, effort, tools, permissions, retry key, grouping, timing and actual browser selection remain unchanged. The actual routed adapter admission is exercised by ten family/effort fixtures."
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/browser-worker.ts",
+      "before": "0e2457be8eae7b0c356259cc448b34cee59c418c7fa1f42cecc1da2f6b9226a6",
+      "after": "783e612223ec71cf18de833c9d5056144180dcc9e2a02f2ec4d26613b11dae4d",
+      "reason": "Only the managed-chrome fallback admission model label uses the same helper. Actual execution and ownership are unchanged; two independent workers sharing one owned fixture host preserve backend/family/effort and query the actual admitted records."
+    },
+    {
+      "path": "src/models/chatgpt-web-queue-model.ts",
+      "before": null,
+      "after": "a5c2fdedefe3ef72445529614bb503febbc4e5407aa4905d3940046f0f98b1a6",
+      "reason": "New pure metadata formatter maps the shared backend alias plus family and max effort to Sol/Pro labels; it is used only in scheduling metadata. Luna/manual profiles remain untouched. It does not select or send a model."
+    },
+    {
+      "path": "tests/adapters/chatgpt-web/queue-model-metadata.test.ts",
+      "before": null,
+      "after": "5e6a6814befb05e9e5f812e2822ad6fbaed196e086d7653b27d9aa5dcb5febab",
+      "reason": "New real route-to-adapter admission regression and shared scheduler model searches; browser responses are stubbed. No change to prior test oracles."
+    },
+    {
+      "path": "tests/browser/standalone-request-queue.test.ts",
+      "before": "f51a6ac797a772aa58660651048ded49d872c5ea0622e5328fb358b1b817b3fa",
+      "after": "25f161feb14db02af6f7e70d1809a42fad4b182481bde9a3e2c7ac2ed3274ebc",
+      "reason": "Strengthens existing managed-worker test to use actual canonical backend/family metadata and inspect owner-serialized admission receipts; retains concurrency and delayed preparation assertions."
+    }
+  ],
+  "preservedFailures": [
+    "First metadata fixture omitted required native turn/current-user metadata; corrected fixture, production identity guard preserved.",
+    "First fallback assertion called nonexistent query API; corrected to authenticated serialized poll. A direct receipt read introduced a Windows rename race (EPERM); retained failure log and removed the extra competing file read.",
+    "Initial UI runner branch missed a closing brace, then selectors used nested option/model text incorrectly. Queue selectors now have explicit bilingual accessible names; model-cell locators corrected.",
+    "Narrow language switch initially attempted a hidden sidebar control; driver now opens/closes sidebar. First passed narrow screenshot caught its closing transition; final screenshot waits and asserts sidebar bounds.",
+    "First renderer build was denied ancestor-directory reads by sandbox; the same project-local build passed with reviewed command-level execution permission. No global settings changed."
+  ],
+  "limitations": [
+    "Older retained queue receipts retain original labels; no history rewriting.",
+    "Current user DEV window was not restarted or controlled. Changes require a verified DEV restart before that window loads them.",
+    "Historical model-route, admission, send-spacing and unrelated passed checks remain inherited by cumulative review; no fresh external readiness claimed.",
+    "Known queue label defect is fixed and confirmed within the authorized fixture scope. Existing composite native desktop/mixed-model gaps remain; do not schedule four-route or main-plus-three reruns just for this label fix.",
+    "The independent unresolved historical MCP handoff failure remains unchanged."
+  ],
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/metadata-02.log",
+      "sha256": "405003d4cdc90c2b95bbb2d11d3a8952b861bd51a1704058f1c014bdf5ba5045"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/metadata-03.log",
+      "sha256": "acf86ae7800195b7d2ca21de516f0ff09c97ad484bf441124d2c1448458fc90a"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/queue-tests.log",
+      "sha256": "e9bad6165536e7c4088397693fec58e389f7a332534bc50f46fbc83b9e2706b0"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/typecheck-02.log",
+      "sha256": "8670e722a80795c2de9002bdb4d7040f339e9bb333122e4a9f9fdc1f36baf689"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/launcher-typecheck-final.log",
+      "sha256": "95873b903513dd0ca344e65dc925bda81200a2114722436399fc0ac546454950"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/launcher-build.log",
+      "sha256": "8c1f0cfff1de03e9673ff39feb045d3d055f58b3b6a52e7fbab32f8c20c6b746"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/launcher-build-02.log",
+      "sha256": "5849b01d1d551be7f6a008aa4a765d9a6e562b59ee06656cc9b11cd4cf90c9ec"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-01.log",
+      "sha256": "1d762068648da88be3bf71df75e2972032360e956d817f938a20ab3ac2d4f268"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-02.log",
+      "sha256": "d7f603077b3dcdde8e4cb8e1c1a56c7cccb29737d598782fe5d9a33d5a705533"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-03.log",
+      "sha256": "0ac6601d284b940353bfce5f399ed5145b80740699c2e551b62651384fefdec1"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-04.log",
+      "sha256": "3a4e3297742f53fba7ccd259e45c09969910eae379e577902769c4999e646b35"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-05.log",
+      "sha256": "77a23b0ace1ac230659e6ea4898bb1f5f6e5bac4f057126b9c2ca319eed26ca4"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-06.log",
+      "sha256": "460e79af352fa0831b7e647003b9abef7df8ff2ba43593189f697c30713ad0cc"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-06/queue-empty-zh.png",
+      "sha256": "a83d4e9db6a76115149dc6b667b9ebbf7b6e4253c107e1cd78de7bf5b4c9ad90"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-06/queue-en-390.png",
+      "sha256": "c35c03843597338c337ec7bcc5e2c115988e580f089b25ef3a473b0734af8731"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-06/queue-en-900.png",
+      "sha256": "2e6a6848545b92088f60eb6f71ac4b13cbbd10809e4f19e8031de0f6037a838e"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-06/queue-error-en.png",
+      "sha256": "86f873f278a72a9db3a47366ef665526eca4d30bca2fe992e665e220c9f3e7f7"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-06/queue-filtered-en.png",
+      "sha256": "2323312b3260f49ac678b8646ff327d635142ee355bb18675897ae5ef344ad42"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-06/queue-filtered-zh.png",
+      "sha256": "3cc7f2f2ab1c5673317eb179a938a8d60e065e2878950d5c36a992a0fbaa2c8c"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-06/queue-zh-390.png",
+      "sha256": "1d2140645b8d4b5e27497955cd2622ab64e876b95fecdfc865d68437cb2c443e"
+    },
+    {
+      "path": "output/2026-10-15-queue-label-filter-ui/ui-06/results.json",
+      "sha256": "824b6c1624e8049ac34daecd71bdb5dff985574269e751dfcd996be4b29136f0"
+    }
+  ]
+}

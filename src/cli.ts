@@ -7,6 +7,7 @@ import { removeApplicationData } from "./application-data";
 import { isAbsolute } from "node:path";
 import { stdin, stdout } from "node:process";
 import { captureSystemBrowserLoginToFile, checkBrowserEngine, loginToChatGpt } from "./browser/login";
+import { standaloneQueueCommand } from "./browser/standalone-queue-command";
 import { defaultConfig, getConfigDir, getConfigPath, loadConfig, loadConfigForSetup } from "./config";
 import {
   inspectLauncherBrowserHost,
@@ -48,6 +49,9 @@ Usage:
   web2harness route <status|connect|disconnect>
   web2harness subagents <status|compatibility-v1|native>
   web2harness browser check
+  web2harness browser queue status
+  web2harness browser queue configure --concurrency N --timeout-minutes N --send-interval-seconds N
+  web2harness browser queue recover --confirm-browser-stopped
   web2harness dev launcher
   web2harness dev status [--json]
   web2harness dev setup [--native-tools|--browser-only|--mcp-bridge] [options]
@@ -607,6 +611,12 @@ async function main(): Promise<void> {
   else if (command === "subagents") await subagentsCommand(args);
   else if (command === "browser") {
     const action = args.shift();
+    if (action === "queue") {
+      const config = loadConfig();
+      if (config.browserHost !== "managed-chrome") throw new Error("Use Launcher controls for its request queue");
+      stdout.write(`${JSON.stringify(await standaloneQueueCommand(config.storageStatePath, args), null, 2)}\n`);
+      return;
+    }
     assertNoArgs(args);
     if (action !== "check") throw new Error("Browser command must be: browser check");
     const config = loadConfig();

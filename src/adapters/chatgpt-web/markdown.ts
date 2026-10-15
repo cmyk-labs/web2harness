@@ -313,6 +313,16 @@ export class ChatGptMarkdownBuffer {
     return delta;
   }
 
+  /** Read the complete current projection without committing unstable tail blocks. */
+  preview(): string {
+    if (this.consistencyError) throw this.consistencyError;
+    const copy = new ChatGptMarkdownBuffer(this.transform, this.stabilityMs);
+    copy.markdown = this.markdown;
+    copy.lastGroup = this.lastGroup;
+    for (const segment of this.latest) copy.commit(segment);
+    return copy.markdown;
+  }
+
   finish(): { markdown: string; delta: string } {
     if (this.consistencyError) throw this.consistencyError;
     let delta = "";

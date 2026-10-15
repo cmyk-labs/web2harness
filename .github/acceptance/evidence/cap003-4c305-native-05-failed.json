@@ -1,0 +1,29 @@
+{
+  "sourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "loadedSourceId": "4c305b625be9833feaa7487c5f9f92702d512483636aed1f495adc636b66c57e",
+  "runtimeSha256": "1f64954d7ad32218fe73fb7a2b530e0cb5a506ded5d520d5aa70c9ab70ef4222",
+  "cases": [
+    "CAP-003"
+  ],
+  "status": "fail",
+  "layer": "authenticated-dev",
+  "summary": "The DEV invocation explicitly disabled unsupported hosted API search while retaining GPT-6 Sol/medium, read-only sandbox, on-request approval and auto_review. It failed before child creation: temporary_chat_preparation timed out after 30 seconds, then reconnects reported a terminal queue. Structural browser observation also timed out. No actual tool call or child was created; all 551 candidate-copy file hashes stayed unchanged. Initial DEV home navigation had independently timed out. This does not exercise or pass multi-agent completion.",
+  "rawEvidence": [
+    {
+      "path": "output/2026-10-15-acceptance-resume/cap3-05/cap003-status.json",
+      "sha256": "83d80cd631942a2e4a462995205a17c6e42a0755e76be1fbcfad1681f810ee00"
+    },
+    {
+      "path": "output/2026-10-15-acceptance-resume/cap3-05/cap003-audit.private.json",
+      "sha256": "c29273ffdcac19faafbbc91569ae9cf5ce6d76a046416bbe8785da655319ed0a"
+    },
+    {
+      "path": "output/2026-10-15-acceptance-resume/cap3-05/cap003-native-01.private.log",
+      "sha256": "71b753022c89b73a71cf67695e6ca3aaefec204fd2e76083d407bb215ca368a6"
+    },
+    {
+      "path": "output/2026-10-15-acceptance-resume/cap3-05/browser-failure.private.json",
+      "sha256": "a812fb7a9d679906ba6593b6a3550b23cfad018daf53d9205991f0b1d132c252"
+    }
+  ]
+}

@@ -17,12 +17,12 @@ function localMinute(date: Date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 16);
 }
-export function Logs({ api, language, recent, savedPageSize, updateState }: {
-  api: LauncherApi; language: Language; recent: LogRecord[]; savedPageSize: number; updateState: (state: LauncherState) => void;
+export function Logs({ api, language, recent, savedPageSize, updateState, initialSearch }: {
+  initialSearch?: string; api: LauncherApi; language: Language; recent: LogRecord[]; savedPageSize: number; updateState: (state: LauncherState) => void;
 }) {
   const t = translate(language);
   const { active: licensed } = useLicense();
-  const [level, setLevel] = useState("all"), [source, setSource] = useState("all"), [search, setSearch] = useState("");
+  const [level, setLevel] = useState("all"), [source, setSource] = useState("all"), [search, setSearch] = useState(initialSearch ?? "");
   const [page, setPage] = useState<LogPage | null>(null), [cursor, setCursor] = useState<string | undefined>();
   const offset = page?.offset ?? 0;
   const [before, setBefore] = useState<string | undefined>(), [revision, setRevision] = useState(0);
