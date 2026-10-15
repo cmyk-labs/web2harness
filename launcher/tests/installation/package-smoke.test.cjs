@@ -23,7 +23,7 @@ function fixture(action) {
 }
 
 // Execute the actual harness with fixture processes, never an installer or desktop app.
-function runWindowsHarness(root, { fail = false, exportFails = false, damageLicense = false } = {}) {
+function runWindowsHarness(root, { fail = false, exportFails = false, damageLicense = false, installTimesOut = false } = {}) {
   const launcher = path.join(root, "launcher");
   const temp = path.join(root, "temp");
   fs.mkdirSync(path.join(launcher, "artifacts"), { recursive: true });
@@ -48,7 +48,11 @@ function runWindowsHarness(root, { fail = false, exportFails = false, damageLice
     calls.push({ command, args, env: invocation.env });
     const profile = resolveLauncherProfile({ ...options, argv: [], env: invocation.env });
     registerInstallation({ ...options, profile });
-    if (args[0] === "/S") return { status: 0, stdout: "fixture installed", stderr: "" };
+    if (args[0] === "/S") {
+      if (installTimesOut) return { status: null, signal: "SIGTERM", stdout: "Copying runtime components (3222/3947)",
+        stderr: "", error: Object.assign(new Error("fixture installer timed out"), { code: "ETIMEDOUT" }) };
+      return { status: 0, stdout: "fixture installed", stderr: "" };
+    }
     assert.equal(command, executable);
     if (fail) {
       const logs = path.join(profile.userData, "logs");
@@ -121,6 +125,20 @@ test("package smoke rejects a dependency license changed during packaging", () =
   const result = runWindowsHarness(root, { damageLicense: true });
   assert.match(result.thrown?.message, /Packaged license differs from source/);
   assert.doesNotMatch(result.stdout, /SMOKE_OK/);
+}));
+
+test("installer timeout fails without launching the app or deleting a helper's workspace", () => fixture(root => {
+  const result = runWindowsHarness(root, { installTimesOut: true });
+  assert.equal(result.thrown?.code, "ETIMEDOUT");
+  assert.equal(result.calls.length, 1);
+  assert.equal(result.validated, false);
+  assert.doesNotMatch(result.stdout, /SMOKE_OK/);
+  assert.match(result.stderr, /Retained smoke directory:/);
+  assert.equal(fs.readdirSync(result.temp).length, 1);
+  const reportDirectory = path.join(result.diagnostics, fs.readdirSync(result.diagnostics)[0]);
+  const report = JSON.parse(fs.readFileSync(path.join(reportDirectory, "failure.json"), "utf8"));
+  assert.equal(report.commands[0].errorCode, "ETIMEDOUT");
+  assert.match(report.commands[0].stdout, /3222\/3947/);
 }));
 
 test("diagnostic export failure preserves the original smoke error and owned workspace", () => fixture(root => {

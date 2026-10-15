@@ -29,7 +29,7 @@ function run(command, args, options = {}) {
     windowsHide: true,
   });
   commands.push({ command, args, status: result.status, signal: result.signal,
-    error: result.error?.message,
+    error: result.error?.message, errorCode: result.error?.code,
     stdout: result.stdout?.slice(-64 * 1024), stderr: result.stderr?.slice(-64 * 1024) });
   if (result.error) throw result.error;
   if (result.status !== 0) {
@@ -111,7 +111,8 @@ try {
     env.APPIMAGE_EXTRACT_AND_RUN = "1";
   } else if (process.platform === "win32") {
     const installer = artifact(/-win-x64\.exe$/, "Windows installer");
-    run(installer, ["/S", "/currentuser"], { env, timeout: 120_000 });
+    // Hosted Windows runners can still be copying runtime files after two minutes.
+    run(installer, ["/S", "/currentuser"], { env, timeout: 300_000 });
     executable = path.join(windowsInstallLocation(), `${launcherManifest.build.productName}.exe`);
     command = executable;
     args = ["--launcher-smoke-test"];
@@ -180,7 +181,9 @@ try {
   } catch (error) {
     failure ??= error;
   }
-  let retainScratch = false;
+  // A timed-out installer can leave its owned helper using this directory.
+  // Preserve the original failure and evidence instead of deleting files under it.
+  let retainScratch = commands.some(command => command.errorCode === "ETIMEDOUT");
   if (failure) {
     try {
       const diagnostics = capturePackageSmokeFailure({ scratch, error: failure, commands,
@@ -188,11 +191,12 @@ try {
       process.stderr.write(`Package smoke diagnostics: ${diagnostics}\n`);
     } catch (error) {
       retainScratch = true;
-      process.stderr.write(`Could not export smoke diagnostics: ${redactExportText(error.message)}\n`
-        + `Retained smoke directory: ${scratch}\n`);
+      process.stderr.write(`Could not export smoke diagnostics: ${redactExportText(error.message)}\n`);
     }
   }
-  if (!retainScratch) {
+  if (retainScratch) {
+    process.stderr.write(`Retained smoke directory: ${scratch}\n`);
+  } else {
     if (fs.realpathSync(path.dirname(scratch)) !== fs.realpathSync(os.tmpdir())
       || !path.basename(scratch).startsWith("web2harness-package-smoke-")) {
       throw new Error("Refusing to remove an unowned package smoke directory");
