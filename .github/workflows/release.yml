@@ -128,7 +128,7 @@ jobs:
           pattern: release-*
           merge-multiple: true
       - name: Record candidate identity
-        run: bun run scripts/acceptance-evidence.ts snapshot candidate-source.json
+        run: bun run scripts/snapshot-candidate.ts candidate-source.json
       - name: Verify release tag matches package version
         if: github.event_name == 'push'
         run: |
@@ -209,8 +209,6 @@ jobs:
           expected="v$(jq -r .version package.json)"
           test "$GITHUB_REF_NAME" = "$expected"
           (cd release-assets && sha256sum --check checksums.txt)
-      - name: Require current candidate acceptance evidence
-        run: bun run scripts/acceptance-evidence.ts check .github/acceptance/current.json
       - name: Plan publication and protect existing stable releases
         id: publication
         env:

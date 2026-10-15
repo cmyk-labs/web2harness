@@ -35,7 +35,7 @@ Select a **(Web)** model in Codex to use your signed-in ChatGPT account for repo
 | Model switching and subagents | Use native and Web models within a task, with subagent delegation governed by the selected compatibility protocol. |
 | Desktop management | Sign in, configure modes, check connections, inspect runtime health, and export safe logs in the application. |
 
-**2.0.0 updates:** Refines desktop layouts and usage views; adds raw JSON logs, full-history search, related-request filtering and configurable pagination; exports diagnostic bundles by date range, improves event coverage and redaction, and speeds up large log histories.
+**2.1.0 updates:** Adds a shared web-request queue with concurrency and send-spacing controls, improves multi-agent handoff and model catalog recovery, and sends long contexts as complete TXT attachments when Context as File is enabled. See the [release history](#release-history) and release notes for validation scope and known limitations.
 
 Available models and efforts depend on the signed-in account and browser checks. See the [configuration and model reference](docs/reference.md); the application does not add account quota or unlock unavailable models.
 
@@ -91,7 +91,7 @@ A task typically follows **select a Web model → submit a task → receive a we
 
 Have Codex available on your computer and a ChatGPT account you can sign in to. The header buttons open the [latest stable release](https://github.com/cmyk-labs/web2harness/releases/latest). Choose one installer for Windows x64, macOS Apple silicon/Intel, or Linux x64/arm64. Refer to the actual release assets for versions, checksums and validation notes; installed applications can check for available updates. See the [user guide](docs/user-guide.md) for installation methods and platform requirements, or [run an existing checkout from source](#development).
 
-1. **Start Web2Harness.** Use a package matching your platform and architecture, or run from source. Version 2.0.0 shows activation before language selection. Enter the publisher's license for this device; upgrades from 1.x also require activation. See [licensing](docs/licensing.md).
+1. **Start Web2Harness.** Use a package matching your platform and architecture, or run from source. Without activation, Product license opens first and other pages remain available for browsing. Enter the publisher's license for this device to enable protected actions; first-time language selection follows activation. Upgrades from 1.x also require activation. See [licensing](docs/licensing.md).
 2. **Sign in through the browser.** Open **Connection & Models**, sign in to ChatGPT in the application browser, and run **Check connection**.
 3. **Apply configuration.** Select **Native Tools** and **Automatic**, then choose **Apply configuration**.
 4. **Choose a Web model.** Refresh the Codex model catalog or restart the affected client as prompted. Select a model marked **(Web)** and one of its supported reasoning efforts.
@@ -147,7 +147,7 @@ User-visible features, fixes, and compatibility changes are recorded by version,
 
 | Version | Date | Changes |
 | --- | --- | --- |
-| 2.1.0 | Unreleased | Adds a shared web-request queue with concurrency, expiry and send-interval controls; improves multi-agent tool handoff, retained-chat input preparation and request diagnostics; adds candidate-specific release evidence and build-only candidate artifacts. |
+| 2.1.0 | 2026-10-16 | Adds a shared web-request queue with concurrency, expiry and send-interval controls; improves multi-agent tool handoff, retained-chat input preparation and model catalog recovery; supports complete long-context TXT attachments and improves request diagnostics. |
 | 2.0.0 | 2026-10-10 | Refines desktop layouts and usage views; adds raw JSON logs, full-history search, related-request filtering and configurable pagination; exports diagnostic bundles by date range, improves event coverage and redaction, and speeds up large log histories. |
 | 1.2.0 | 2026-10-09 | Adds GPT-6 and GPT-5.6 Sol family/effort selection, model-level local usage and recoverable send receipts. New configurations default to Temporary Chat. Stabilizes browser viewports, repeated paragraphs and formula extraction; updates security dependencies. |
 | 1.1.1 | 2026-10-05 | Preserve original Codex context and tool declarations, namespaces, call scopes, and raw exec input. Separate bridge transport instructions; verify retained-history prefixes and reject unsupported content without silent trimming. Refresh MCP tool definitions after upgrading. Fix automatic tab switches interrupting model selection during parallel tasks, and add three mandatory live release acceptance cases. |
@@ -170,8 +170,7 @@ Start with the user guide. Go directly to troubleshooting for a failure, and con
 | Components, request flow, conversation lifecycle, and permission boundaries | [Architecture](docs/architecture.md) |
 | Source development, contributions and review, isolated tests, naming, and documentation maintenance | [Development manual](docs/development.md) |
 | Builds, packages, acceptance, publication, rollback, and security maintenance | [Release manual](docs/release.md) |
-| Change impact, shared test flows, evidence inheritance and completion criteria | [Acceptance protocol](docs/acceptance-protocol.md) |
-| Capability requirements, reusable cases and evidence/checker formats | [Acceptance tests](docs/acceptance-tests.md) · [Evidence](docs/acceptance-evidence.md) |
+| Capability cases, manual acceptance records and case extensions | [Acceptance tests](docs/acceptance-tests.md) |
 
 See [Contributing and review](docs/development.md#contributing) for submissions, [Report a vulnerability](docs/release.md#vulnerability-reporting) for private reports, and the [repository instructions](AGENTS.md) for automated work.
 

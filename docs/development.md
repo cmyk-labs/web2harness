@@ -175,7 +175,7 @@ Avoid bare test-name filters that could discover source copies under ignored dir
 
 ### Verification by change type
 
-Apply the [acceptance protocol](acceptance-protocol.md) to a coherent change batch. Analyze cumulative differences from relevant evidence baselines, identify affected checks, reuse reviewed valid evidence and combine compatible flows before execution. The table selects evidence layers, not a requirement to rerun unrelated cases. Use affordable full automation once at an appropriate integration/freeze point; do not repeat it solely for a new receipt or documentation change.
+Choose verification from the requested scope and changed behavior. Review relevant existing evidence before running anything; retain valid results and combine compatible observations in one flow. Use the capability cases for manual acceptance and the table below to select the appropriate evidence layer. A new source digest, record or documentation edit does not require repeating unrelated flows.
 
 | Change | Required evidence |
 | --- | --- |
@@ -396,7 +396,7 @@ Architecture diagrams should identify the participating process/service, transpo
 
 Keep the six primary manuals—usage, troubleshooting, reference, architecture, development, and release—directly under `docs/`. Maintain each detailed rule in the manual that owns its subject and link to it elsewhere. README provides direct links to contribution requirements in this manual and vulnerability reporting in the release manual. Technical trust boundaries belong in the architecture manual; AGENTS governs automated work. Do not add separate documents that duplicate these sections or only redirect readers. Dated evidence in `dev-notes/` does not replace current instructions.
 
-The companion [acceptance protocol](acceptance-protocol.md), [capability catalog](acceptance-tests.md) and [evidence manual](acceptance-evidence.md) also live directly under `docs/`. They own scope/reuse rules, reusable prompts/pass criteria, and evidence/checker formats respectively. Other manuals link to them instead of duplicating those rules. Extend both language editions when requirements change; keep dated executions and validity reviews in the candidate's evidence record.
+The companion [acceptance cases](acceptance-tests.md) also live directly under `docs/`. They maintain reusable prompts, pass criteria and a simple manual result-record format. Keep both language editions aligned, link to them from other manuals, and retain dated evidence in the development records and ignored `output/`. CI does not require a machine-readable capability manifest.
 
 Keep assets by purpose in root `assets/brand/`, `assets/readme/`, `assets/demos/` and `assets/diagrams/`; maintain diagram JSON with its SVG. Generators belong in `scripts/`, and platform installation and launch scripts belong in `launcher/packaging/`. Do not duplicate assets in individual modules. Renderer imports select the required icons and videos. Explicit Electron packaging mappings retain the installed `assets/` paths for application/tray icons and the Linux runner, without bundling README demonstrations, diagram sources or documentation assets.
 

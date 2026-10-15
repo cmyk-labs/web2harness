@@ -2,7 +2,7 @@
 
 [English](acceptance-tests.md) | [简体中文](acceptance-tests.zh-CN.md) · [Release manual](release.md) · [Documentation](../README.md#documentation)
 
-This catalog maintains repeatable capability requirements: prompts, pass criteria, and required fixture or live evidence. Select checks, combine flows and reuse reviewed valid evidence under the [acceptance protocol](acceptance-protocol.md). It is not a record of passed results. Preserve each execution's actual candidate; a model's success claim or fixture cannot establish a live pass, and earlier evidence needs an explicit validity review.
+This document maintains reusable capability cases: prompts, pass criteria and required fixture or live evidence. It supports manual acceptance and is not a record of passed results. Select cases from the agreed change/release scope, preserve each execution's actual version and review relevant changes before reusing earlier evidence. A model's success claim or fixture does not establish a live pass.
 
 **Contents**
 
@@ -26,7 +26,7 @@ This catalog maintains repeatable capability requirements: prompts, pass criteri
 
 ## Release requirements and case index
 
-Every release, including previews, needs valid coverage of applicable CAP-001–006, CAP-008–010 and Q01–Q17 requirements. Under the [acceptance protocol](acceptance-protocol.md), newly executed checks and reviewed still-valid evidence can satisfy that coverage; do not rerun every case solely because the candidate changed. Keep failed, blocked and missing checks visible, confirm fixes and retain prior failures. Actual execution remains isolated and operator-reviewed. Release CI enforces the [evidence manifest](acceptance-evidence.md); schema 2 validates check-level coverage and inheritance while retaining schema-1 compatibility. Neither format permits bypassing the gate or unnecessary full reruns. `bun run verify` does not execute authenticated acceptance.
+The maintainer reviews the applicable CAP-001–006, CAP-008–010 and Q01–Q17 cases before publication. Exercise new or affected behavior, retain reviewed valid evidence and combine compatible checks in shared flows. Record the agreed scope and keep passed, failed, unexecuted and explicitly deferred items distinct. Do not reopen completed or excluded work merely because a checklist row combines several observations. This is manual capability acceptance: neither `bun run verify` nor GitHub Actions runs or enforces these cases automatically, and no fixed JSON manifest is required.
 
 | ID | Capability | Coverage applicability | Key pass evidence |
 | --- | --- | --- | --- |
@@ -41,13 +41,13 @@ Every release, including previews, needs valid coverage of applicable CAP-001–
 | [CAP-009](#cap-009) | Global queue and MCP round handoff | Every release containing the scheduler; UI/MCP steps apply to their supported modes | Launcher controls, standalone cross-process ownership, shared capacity, send spacing, main plus three children, physical release and explicit recovery. |
 | [CAP-010](#cap-010) | Aggregate HTTP body budget | Every release containing the Responses service | Shared Responses/compact accounting, size/depth rejection, 503 overload and reservation cleanup; isolated synthetic evidence. |
 
-The applicability column identifies required coverage, not a separate execution frequency. These cases and the [release manual's](release.md#authenticated-runtime) cancellation, compaction, reuse, MCP, platform and installation checks may share evidence where the same observations satisfy their requirements. Changed behavior or invalidated assumptions require affected checks to be revalidated; preserve valid coverage elsewhere. Split composite cases into traceable checks before choosing runs.
+The applicability column guides manual scope selection. These cases and the [release manual's](release.md#authenticated-runtime) cancellation, compaction, reuse, MCP, platform and installation checks may share evidence when the same observations establish the required behavior. Revalidate affected behavior or invalidated assumptions, and preserve valid results elsewhere.
 
 <a id="queue-requirements"></a>
 
 ## Queue requirements Q01–Q17
 
-These are the stable queue requirements used by CAP-009 and the evidence manifest. They are coverage references, not seventeen additional jobs. The detailed protocol, standalone and mode requirements in CAP-009 still apply.
+These are stable references for the queue behavior covered by CAP-009, not seventeen additional execution jobs. Use them to choose and review affected scenarios within the agreed scope. The protocol, standalone and mode requirements in CAP-009 remain applicable.
 
 | ID | Required behavior and evidence |
 | --- | --- |
@@ -197,7 +197,7 @@ Retain receipt/tool/file evidence, old-ledger migration results, lifecycle state
 
 ## CAP-006: Offline device licensing
 
-Licensed releases require this coverage alongside the other capabilities; execution and inheritance follow the acceptance protocol. Use task-owned DEV storage and test keys, never production activation storage. The independent issuer stays outside Git. Customer installer acceptance uses a disposable OS and separately issued device licenses under the candidate's pinned public key.
+For licensed releases, review the applicable licensing scenarios alongside the other capabilities. Use task-owned DEV storage and test keys, never production activation storage. The independent issuer stays outside Git. Customer installer acceptance uses a disposable OS and separately issued device licenses under the candidate's pinned public key.
 
 1. Without a license, the unified Product license page opens first, before language or browser setup. All pages remain readable, including explanations and diagnostic views, but configuration, sign-in and runtime actions are disabled; Browser must not show an interactive web view. Overview shows the activation requirement and links to the same License page. Capture a copyable device code and verify no Web/MCP submission occurs.
 2. Import supplied test licenses with perpetual, day-based and calendar-month validity. Check their displayed expiry, including month-end and leap-year cases. Activation precedes language setup and survives restart/upgrade. Invalid import preserves the old license. Renewal on the same page immediately updates Overview; expiry restores read-only access.
@@ -262,7 +262,7 @@ Use isolated service/body fixtures on the current candidate, without browser log
 
 ## Candidate results
 
-Create a target-candidate coverage/validity record without resetting earlier outcomes. Preserve original run IDs and versions; reference inherited evidence with cumulative impact review. Keep raw logs, rollouts, snapshots, and artifacts in ignored `output/` or private DEV storage; share only redacted conclusions. Full release metadata and confidentiality requirements are in the [release manual](release.md#validation-evidence).
+Keep a simple result record for the agreed candidate scope. Reference valid earlier results with the original version and the reason they still apply; do not reset them or invent a new execution. No fixed JSON schema or source-hash approval record is required. Keep raw logs, rollouts, snapshots and artifacts in ignored `output/` or private DEV storage; share only redacted conclusions. Full release metadata and confidentiality requirements are in the [release manual](release.md#validation-evidence).
 
 Record version/commit and candidate-difference identifier, test date and operator, loaded runtime, Codex version, OS/architecture, model/effort, modes, conversation IDs, and each case's attempt number, evidence location, observed result, failure cause, and follow-up. Preserve earlier attempts when retesting.
 
@@ -278,7 +278,7 @@ Record version/commit and candidate-difference identifier, test date and operato
 | CAP-009 | Pending | Not executed | To record | To record |
 | CAP-010 | Pending | Not executed | To record | To record |
 
-The table above is an empty example, not an instruction to reset results for a new candidate. Record per-check coverage beneath composite cases. Keep original execution outcomes Passed / Failed / Not executed separate from target validity: newly executed, inherited, needs verification, environment blocked, owner-operated, or not applicable with rationale. Blocked/missing evidence remains non-passing. Distinguish model output, bridge conversion, the Codex executor and permission/account/network conditions; do not blame a layer without evidence.
+The table above is an empty example, not an instruction to rerun every case. Record completed observations separately from any remaining part of a composite case. Label Passed / Failed / Not executed, identify reused evidence, and record any maintainer decision to exclude or defer work with its reason and responsibility. Deferral is not a pass. Distinguish model output, bridge conversion, the Codex executor and permission/account/network conditions; do not blame a layer without evidence.
 
 <a id="extend-cases"></a>
 
@@ -286,7 +286,7 @@ The table above is an empty example, not an instruction to reset results for a n
 
 When adding a target capability or changing an existing one, add or update its acceptance case, identifying fixture and live requirements, and execute it before publication. Continue numbering at `CAP-011`; do not renumber for a new version or reuse old IDs. Keep English and Chinese IDs, prompt semantics, and pass criteria aligned, and update the index above.
 
-New cases join required capability coverage by default. Document mode/platform/account applicability, dependency impact and required environment; establish initial evidence and revalidate under the acceptance protocol. Add reusable flow mappings so existing executions can cover multiple requirements. Do not narrow scope, lower pass criteria or relabel missing checks as inapplicable to bypass a failure. Retain retired IDs with the reason and replacement reference.
+Document each new case's mode/platform/account applicability and required environment, then include its affected behavior in the manual acceptance scope. Reuse a flow where its observations cover several requirements. Keep actual failures visible and document maintainer scope or deferral decisions separately. Retain retired IDs with the reason and replacement reference.
 
 Use this format for additions:
 

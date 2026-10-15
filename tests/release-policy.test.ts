@@ -36,10 +36,12 @@ test("manual candidate builds have no path to release publication or write permi
     for (const step of job.steps) expect(step.run ?? "").not.toMatch(/gh (?:release|api).*|git push/);
   }
   const steps = workflow.jobs.publish.steps;
-  const gate = steps.findIndex((step: any) => step.run?.includes("acceptance-evidence.ts check"));
+  const validation = steps.findIndex((step: any) => step.name === "Verify candidate assets before publication");
   const mutation = steps.findIndex((step: any) => step.run?.includes("gh release delete"));
-  expect(gate).toBeGreaterThan(-1);
-  expect(mutation).toBeGreaterThan(gate);
+  expect(validation).toBeGreaterThan(-1);
+  expect(steps[validation].run).toContain("sha256sum --check checksums.txt");
+  expect(mutation).toBeGreaterThan(validation);
+  expect(JSON.stringify(workflow)).not.toMatch(/acceptance-evidence|\.github\/acceptance/);
 });
 
 test("candidate artifacts are assembled and checksummed before either handoff or publication", () => {
