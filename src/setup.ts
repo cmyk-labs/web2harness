@@ -1,12 +1,13 @@
 import { existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:net";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { AppConfig, BrowserInteractionMode, RuntimeMode, SubagentProtocol } from "./config";
 import {
   currentRuntimeCommand,
   defaultBrokerEndpoint,
   defaultConfig,
+  expandUserPath,
   getConfigPath,
   loadConfigForSetup,
   resolveInteractionConnectorIdentities,
@@ -274,7 +275,7 @@ function baseConfig(
   if (options.chromeExecutablePath) config.chromeExecutablePath = options.chromeExecutablePath;
   if (options.browserHostDescriptorPath) {
     config.browserHost = "launcher";
-    config.browserHostDescriptorPath = options.browserHostDescriptorPath;
+    config.browserHostDescriptorPath = resolve(expandUserPath(options.browserHostDescriptorPath));
     config.brokerSocketPath = defaultBrokerEndpoint();
   } else if (options.chromeExecutablePath) {
     config.browserHost = "managed-chrome";
@@ -692,7 +693,7 @@ export async function setupDevProfile(options: SetupOptions): Promise<DevProfile
     throw new Error("DEV setup requires its own browser descriptor path");
   }
   const config = baseConfig(existing, options, DEV_LAUNCHER_PROFILE);
-  if (readLauncherBrowserHostDescriptor(options.browserHostDescriptorPath).profile !== DEV_LAUNCHER_PROFILE) {
+  if (readLauncherBrowserHostDescriptor(config.browserHostDescriptorPath!).profile !== DEV_LAUNCHER_PROFILE) {
     throw new Error("DEV setup refuses a production browser descriptor");
   }
   if (config.browserHost !== "launcher") {

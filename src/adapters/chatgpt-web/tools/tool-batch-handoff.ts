@@ -4,6 +4,7 @@ import { toolIdentityKey, type CodexRequestOptions, type CodexTool } from "../..
 import type { BrokerToolRequest } from "./turn-broker";
 import { validateDeclaredToolCallBatch } from "./tool-call-policy";
 import { chatGptResponseFailure } from "../adapter-error";
+import { modelToolChoice } from "../../../responses/tool-choice";
 
 export const TOOL_BATCH_HANDOFF_PROTOCOL = "web2harness-handoff-v1" as const;
 export type HandoffToolPolicy = Pick<CodexRequestOptions, "toolChoice" | "parallelToolCalls">;
@@ -79,7 +80,7 @@ export class ToolBatchHandoff {
     };
   }
   get callControls() {
-    return { tool_choice: structuredClone(this.policy.toolChoice ?? "auto"),
+    return { tool_choice: modelToolChoice(this.policy.toolChoice, this.tools),
       parallel_tool_calls: this.policy.parallelToolCalls ?? true,
       max_calls_per_batch: this.policy.parallelToolCalls === false ? 1 : 32 };
   }

@@ -61,11 +61,17 @@ test("native external-link policy permits exact project destinations and rejects
 
 test("continuing onboarding saves setup without a repository visit", () => {
   const state = { onboardingComplete: false, autoStart: false };
+  const published = [];
   const complete = handler("launcher:complete-onboarding", {
     stateStore: { read: () => state, update: patch => Object.assign(state, patch) },
     validateLanguage: value => value, validateBrowserInteractionMode: value => value,
+    browserHost: { writeDescriptor: () => published.push({ ...state }) },
     updateTrayMenu() {}, logger: { info() {} },
   });
   complete(null, "zh-CN", "automatic");
   assert.equal(state.onboardingComplete, true);
+  assert.deepEqual(published, [{
+    onboardingComplete: true, autoStart: false,
+    language: "zh-CN", browserInteractionMode: "automatic",
+  }]);
 });

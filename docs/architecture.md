@@ -320,6 +320,12 @@ Subagent compatibility is also explicit. Compatibility V1 applies a coordinated 
 
 ## Failure contracts
 
+Error boundaries preserve explicit status, type, code and retryability instead of reclassifying structured errors from their message. Local diagnostics retain bounded, redacted cause and aggregate-error chains with correlation identifiers; internal stacks are not copied into public Responses payloads. Network wrappers retain the original cause. Updater relaunch waits for process creation or an asynchronous launch error: process creation is not proof that the application is ready.
+
+JSON and SSE share terminal classification and compaction eligibility. The first terminal event is authoritative; filtered, truncated, failed or prematurely ended output cannot become replacement history. Tool-choice controls have an explicit conversion from internal identity keys to declared tool kind and separate namespace/name. A required empty allowed-tools set is rejected, while the original Codex source remains unchanged. Browser surface IPC explicitly allows a null result before browser construction and validates its boolean input.
+
+Configuration persistence validates the serialized document through the same loading contract before replacing the existing file. Runtime and DEV preference readers accept UTF-8 BOM consistently; saving preserves an existing BOM and explicit preference provenance.
+
 | Condition | Required behavior |
 | --- | --- |
 | Unsupported route, effort, account capability, or browser selector | Explicit error; no silent model or effort substitution |

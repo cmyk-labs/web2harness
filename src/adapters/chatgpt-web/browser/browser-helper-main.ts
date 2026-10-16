@@ -8,7 +8,8 @@ import { createInterface } from "node:readline";
 import { stdin, stderr, stdout } from "node:process";
 import type { CodexProviderConfig } from "../../../types";
 import { ChatGptBrowserWorker, closeChatGptBrowserWorkers, type BrowserTurn } from "./browser-worker";
-import { ChatGptCompactionHandoffAccepted, ChatGptWebAdapterError } from "../adapter-error";
+import { ChatGptCompactionHandoffAccepted } from "../adapter-error";
+import { browserHelperError } from "./browser-helper-error";
 import type { ChatGptWebCapabilities } from "../model";
 import { createProcessLineWriter } from "../process-line-writer";
 import { createBrowserHelperPromptSelection } from "./browser-helper-prompt-selection";
@@ -336,18 +337,7 @@ async function run(message: RunMessage): Promise<void> {
     const text = await diagnosticContext.run({ requestId: message.id, traceId: turn.traceId }, () => ChatGptBrowserWorker.forProvider(provider).run(turn));
     writeProtocol({ type: "result", id: message.id, text });
   } catch (error) {
-    writeProtocol({
-      type: "error",
-      id: message.id,
-      name: error instanceof Error ? error.name : "Error",
-      message: error instanceof Error ? error.message : String(error),
-      ...(error instanceof ChatGptWebAdapterError ? {
-        status: error.status,
-        errorType: error.errorType,
-        code: error.code,
-        retryable: error.retryable,
-      } : {}),
-    });
+    writeProtocol(browserHelperError(message.id, error, turn.traceId));
   } finally {
     preparedSelections.get(message.id)?.cancel();
     preparedSelections.delete(message.id);
@@ -370,12 +360,7 @@ async function verify(message: VerifyMessage): Promise<void> {
     const selected = await maintenanceWorker(message).verifyConnector(message.id);
     writeProtocol({ type: "result", id: message.id, text: selected });
   } catch (error) {
-    writeProtocol({
-      type: "error",
-      id: message.id,
-      name: error instanceof Error ? error.name : "Error",
-      message: error instanceof Error ? error.message : String(error),
-    });
+    writeProtocol(browserHelperError(message.id, error));
   }
 }
 
@@ -408,12 +393,7 @@ async function maintain(message: InspectMessage | SmokeMessage | LimitsMessage):
       : await worker.smokeTest(abortController.signal, message.id);
     writeProtocol({ type: "result", id: message.id, value });
   } catch (error) {
-    writeProtocol({
-      type: "error",
-      id: message.id,
-      name: error instanceof Error ? error.name : "Error",
-      message: error instanceof Error ? error.message : String(error),
-    });
+    writeProtocol(browserHelperError(message.id, error));
   } finally {
     abortControllers.delete(message.id);
   }
@@ -438,7 +418,7 @@ input.on("line", line => {
     }
     try { validateSkillFiles(prepared.skillFiles); validateContextFile(prepared.contextFile); validateInputFiles(prepared.files); }
     catch (error) {
-      writeProtocol({ type: "error", id: message.id, message: error instanceof Error ? error.message : String(error) });
+      writeProtocol(browserHelperError(message.id, error));
       abortControllers.get(message.id)?.abort();
       return;
     }
@@ -517,23 +497,11 @@ input.on("line", line => {
   else if (message.type === "shutdown") {
     void requestShutdown();
   } else if (message.type === "verify") {
-    void verify(message).catch(error => writeProtocol({
-      type: "error",
-      id: message.id,
-      message: error instanceof Error ? error.message : String(error),
-    }));
+    void verify(message).catch(error => writeProtocol(browserHelperError(message.id, error)));
   } else if (message.type === "inspect" || message.type === "smoke" || message.type === "limits") {
-    void maintain(message).catch(error => writeProtocol({
-      type: "error",
-      id: message.id,
-      message: error instanceof Error ? error.message : String(error),
-    }));
+    void maintain(message).catch(error => writeProtocol(browserHelperError(message.id, error)));
   } else if (message.type === "run") {
-    void run(message).catch(error => writeProtocol({
-      type: "error",
-      id: message.id,
-      message: error instanceof Error ? error.message : String(error),
-    }));
+    void run(message).catch(error => writeProtocol(browserHelperError(message.id, error)));
   } else {
     // Never treat an unrecognised frame as a run; unsupported protocol data fails explicitly.
     writeProtocol({

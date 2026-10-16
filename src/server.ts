@@ -31,7 +31,7 @@ import { readLauncherBrowserHostDescriptor } from "./browser/launcher-client";
 import { AsyncEventQueue } from "./event-queue";
 import { readReservedJsonRequestBody, type ReservedJsonBody } from "./http-body";
 import { HttpBodyBudget, HttpBodyError, type HttpBodyReservation } from "./http-body-budget";
-import { httpStatusFromTerminalError } from "./lib/errors";
+import { adapterErrorEvent, httpStatusFromTerminalError } from "./lib/errors";
 import { createHash } from "node:crypto";
 import { augmentNativeModelCatalog } from "./models/model-catalog";
 import {
@@ -736,7 +736,10 @@ async function responseRequestFromBody(
         queue.push(event);
       });
     } catch (error) {
-      const event: AdapterEvent = { type: "error", message: error instanceof Error ? error.message : String(error) };
+      const event = adapterErrorEvent(error);
+      diagnosticEvent(event.status === 499 ? "info" : "error", "http.adapter_failed", {
+        traceId, requestedModel: parsed.modelId, ...diagnosticError(error),
+      });
       options.onAdapterEvent?.(event);
       queue.push(event);
     } finally {

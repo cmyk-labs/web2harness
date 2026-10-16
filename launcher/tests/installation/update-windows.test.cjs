@@ -12,7 +12,7 @@ test("the standalone worker enters main with the current Node or embedded Bun ru
   assert.equal(result.status, 1, "a missing job must fail, not silently skip the worker entrypoint");
 });
 
-test("Windows worker shows localized install progress and restarts exactly once after success", t => {
+test("Windows worker shows localized install progress and restarts exactly once after success", async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "w2h-update-window-"));
   t.after(() => {
     assert.equal(path.dirname(root), os.tmpdir());
@@ -23,7 +23,7 @@ test("Windows worker shows localized install progress and restarts exactly once 
   fs.writeFileSync(source, "fixture");
   const job = buildJob({ platform: "win32", version: "1.0.2", assetPath: source, executablePath: target, language: "zh-CN" });
   let started = 0;
-  updateWindows(job, (file, args, options) => {
+  await updateWindows(job, (file, args, options) => {
     assert.equal(file, source);
     assert.deepEqual(args, ["/currentuser", "--updated", "/W2HUPDATE", "/W2HLANG=zh-CN"]);
     assert.equal(options.windowsHide, false);
@@ -33,8 +33,8 @@ test("Windows worker shows localized install progress and restarts exactly once 
     return { status: 0 };
   }, file => { assert.equal(file, target); started++; });
   assert.equal(started, 1);
-  assert.throws(() => updateWindows(job, () => ({ status: 2 }), () => started++), /code 2/);
-  assert.throws(() => updateWindows(job, () => ({ error: new Error("launch failed") }), () => started++), /launch failed/);
+  await assert.rejects(updateWindows(job, () => ({ status: 2 }), () => started++), /code 2/);
+  await assert.rejects(updateWindows(job, () => ({ error: new Error("launch failed") }), () => started++), /launch failed/);
   assert.equal(started, 1, "failed or cancelled installers do not enter the success restart path");
   const invalidLanguage = buildJob({ platform: "win32", language: "en /S", executablePath: target });
   assert.equal(invalidLanguage.language, "en");

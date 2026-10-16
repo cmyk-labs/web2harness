@@ -191,6 +191,7 @@ Run these cases on a disposable Windows test OS, including interactive and silen
 | Scenario | Required result |
 | --- | --- |
 | Fresh install, upgrade, same-version repair | Runtime deployment finishes before installer success. First launch only checks readiness, initializes the browser, and enters the workspace; no full-tree hash/copy in the launcher. |
+| Relaunch failure after update | An asynchronous process-launch error is logged and enters recovery; do not record a successful relaunch before process creation. Verify application readiness separately. Exercise failure injection in owned fixtures and actual upgrade/relaunch only on the dedicated test OS. |
 | Valid receipt with damaged non-entry dependency | Rerunning setup detects and repairs damage through complete bundle validation. |
 | Copy/runtime failure, busy files, insufficient disk, interrupted setup | Previous program files, runtime/receipt, registration, and shortcuts recover. Failed recovery retains evidence and can recover on the next installer run. |
 | Cancellation at each available wizard stage, then retry | Pending installs recover first; a committed install survives closing the finish page. |

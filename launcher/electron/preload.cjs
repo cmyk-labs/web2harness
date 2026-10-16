@@ -16,7 +16,7 @@ contextBridge.exposeInMainWorld("codexWebLauncher", {
   snapshot: () => ipcRenderer.invoke("launcher:snapshot"),
   queueStatus: () => ipcRenderer.invoke("launcher:queue-status"),
   queryQueue: (query) => ipcRenderer.invoke("launcher:queue-query", query),
-  saveQueueSettings: (settings, expectedRevision, parameters) => ipcRenderer.invoke("launcher:queue-settings", settings, expectedRevision, parameters),
+  saveQueueSettings: (settings, expectedRevision, parameters, parameterEdits) => ipcRenderer.invoke("launcher:queue-settings", settings, expectedRevision, parameters, parameterEdits),
   controlQueue: (action, id) => ipcRenderer.invoke("launcher:queue-control", action, id),
   getLimits: () => ipcRenderer.invoke("launcher:limits"),
   setupLimits: () => ipcRenderer.invoke("launcher:limits-setup"),
@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld("codexWebLauncher", {
   ),
   openExternal: (url) => ipcRenderer.invoke("launcher:open-external", url),
   setBrowserBounds: (bounds) => ipcRenderer.invoke("launcher:browser-bounds", bounds),
+  // Sandboxed preloads cannot require local modules; the channel is checked against the shared contract in tests.
   setBrowserSurfaceActive: (active) => ipcRenderer.invoke("launcher:browser-surface-active", active),
   showBrowser: () => ipcRenderer.invoke("launcher:browser-show"),
   hideBrowser: () => ipcRenderer.invoke("launcher:browser-hide"),

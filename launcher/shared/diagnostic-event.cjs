@@ -2,6 +2,7 @@
 const { randomUUID, createHash } = require("node:crypto");
 const PREFIX = "@web2harness/diagnostic ";
 const processInstanceId = randomUUID();
+const errorReferences = new WeakMap();
 let sequence = 0;
 const SECRET = /authorization|cookie|password|secret|token|credential|runtimekey|license(code)?|privatekey|apikey|storageState/i;
 const CONTENT = /^(prompt|response|content|html|dom|input|output|arguments|result|text|messages|command|patch|script|stdout|stderr|conversationTitles?|chatTitles?|sidebarRows|visibleRows)$/i;
@@ -23,12 +24,13 @@ function cleanText(input) {
     .replace(/\b[A-Za-z]:\\+Users\\+[^\\/\r\n"'`<>|]+/gi, "[user-home]")
     .replace(/\/(?:Users|home)\/[^/\r\n"'`<>]+/g, "[user-home]")
     .replace(/<codex_context_json>[\s\S]*?(?:<\/codex_context_json>|$)/gi, "[conversation removed]")
-    .replace(/\b(?:access_token|refresh_token|api[_-]?key|password|cookie|authorization|controlToken|runtimeKey|client_secret|licenseCode)\s*[=:]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/gi, "[credential removed]")
+    .replace(/\b(?:token|access_token|refresh_token|api[_-]?key|password|cookie|authorization|controlToken|runtimeKey|client_secret|licenseCode)\s*[=:]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/gi, "[credential removed]")
     .replace(/\b(?:turn|binding|call)_[A-Za-z0-9_-]{12,}\b/g, "[binding removed]")
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email]")
     .replace(/((?:visible rows|sidebar (?:rows|titles)|conversation titles):)\s*[^\r\n]*/gi, "$1 [redacted]")
     .replace(/((?:prompt|response|tool result|tool output|conversation content)\s*[:=])[\s\S]*/gi, "$1 [content removed]");
 }
+for (const key of ["errorType", "errno", "syscall"]) TEXT.add(key);
 function safeDetail(value, depth = 0) {
   if (depth > 10) return "[depth limit]";
   if (value === null || typeof value === "boolean") return value;
@@ -38,7 +40,7 @@ function safeDetail(value, depth = 0) {
   return Object.fromEntries(Object.entries(value).slice(0, 200).filter(([, item]) => item !== undefined).map(([key, item]) => [
     key, SECRET.test(key) || CONTENT.test(key) ? "[removed]"
       : typeof item === "string" ? (Object.hasOwn(QUEUE_ENUMS, key) ? (QUEUE_ENUMS[key].has(item) ? item : "[text removed]")
-        : key === "groupId" || key === "roundRef" ? (/^diag-[a-f0-9]{24}$/.test(item) ? item : "[text removed]")
+        : ["groupId", "roundRef", "errorRef", "diagnosticRef"].includes(key) ? (/^diag-[a-f0-9]{24}$/.test(item) ? item : "[text removed]")
         : key === "sourceId" ? (/^[a-f0-9]{64}$/.test(item) ? item : "[text removed]")
         : TEXT.has(key) ? cleanText(item) : "[text removed]")
       : safeDetail(item, depth + 1),
@@ -69,14 +71,52 @@ function parseDiagnosticLine(line) {
       component: sourceFor(value), event: value.event, detail: safeDetail(value.detail ?? {}) };
   } catch { return null; }
 }
-function diagnosticError(error, depth = 0) {
-  const candidate = error && typeof error === "object" ? error : {};
-  const cancelled = candidate.name === "AbortError" || candidate.code === "client_cancelled";
-  return safeDetail({ errorName: candidate.name ?? "Error", code: candidate.code ?? "unknown",
-    message: candidate.message ?? String(error), ...(candidate.stack ? { stack: candidate.stack } : {}),
-    category: cancelled ? "cancelled" : /timeout|timed out/i.test(candidate.message ?? "") ? "timeout" : "failure",
-    ...(typeof candidate.retryable === "boolean" ? { retryable: candidate.retryable } : {}),
-    ...(candidate.cause && depth < 3 ? { cause: diagnosticError(candidate.cause, depth + 1) } : {}) });
+function diagnosticError(error) {
+  // Bound the whole graph, not just each branch: AggregateError can fan out exponentially.
+  const seen = new WeakSet();
+  let remaining = 16;
+  let remainingText = 32768;
+  const text = value => {
+    const cleaned = cleanText(value).slice(0, Math.min(2048, remainingText));
+    remainingText -= cleaned.length;
+    return cleaned;
+  };
+  const read = (object, key) => { try { return object[key]; } catch { return undefined; } };
+  const visit = (value, depth) => {
+    const candidate = value && typeof value === "object" ? value : {};
+    let errorRef = errorReferences.get(candidate);
+    if (!errorRef) { errorRef = diagnosticReference(randomUUID()); errorReferences.set(candidate, errorRef); }
+    if (seen.has(candidate)) return { errorRef, message: "[circular or repeated error]" };
+    seen.add(candidate);
+    remaining--;
+    const name = read(candidate, "name"), code = read(candidate, "code"), message = read(candidate, "message");
+    const status = read(candidate, "status"), retryable = read(candidate, "retryable");
+    const stack = read(candidate, "stack"), cause = read(candidate, "cause"), errors = read(candidate, "errors");
+    const cancelled = name === "AbortError" || code === "client_cancelled" || status === 499;
+    const result = { errorRef, errorName: text(typeof name === "string" ? name : "Error"),
+      code: text(typeof code === "string" || typeof code === "number" ? code : "unknown"),
+      message: text(typeof message === "string" ? message : typeof value === "string" ? value : "Unknown error"),
+      ...(typeof stack === "string" ? { stack: text(stack) } : {}),
+      category: cancelled ? "cancelled" : /timeout|timed out/i.test(typeof message === "string" ? message : "") ? "timeout" : "failure",
+      ...(typeof status === "number" && Number.isInteger(status) ? { status } : {}),
+      ...(typeof retryable === "boolean" ? { retryable } : {}) };
+    // Whitelist network metadata; never serialize an entire request, response or socket.
+    for (const key of ["errorType", "errno", "syscall", "diagnosticRef"]) {
+      const item = read(candidate, key);
+      if (typeof item === "string" || (typeof item === "number" && Number.isFinite(item))) result[key] = typeof item === "string" ? text(item) : item;
+    }
+    if (cause !== undefined) {
+      if (depth < 3 && remaining > 0) result.cause = visit(cause, depth + 1);
+      else result.causeOmitted = true;
+    }
+    if (Array.isArray(errors)) {
+      result.errors = [];
+      for (let i = 0; i < Math.min(errors.length, 8) && depth < 3 && remaining > 0; i++) result.errors.push(visit(errors[i], depth + 1));
+      if (result.errors.length < errors.length) result.errorsOmitted = errors.length - result.errors.length;
+    }
+    return result;
+  };
+  return safeDetail(visit(error, 0));
 }
 // Inputs must be opaque, high-entropy task/call IDs, never passwords or user content.
 function diagnosticReference(value) { return `diag-${createHash("sha256").update(String(value)).digest("hex").slice(0, 24)}`; }

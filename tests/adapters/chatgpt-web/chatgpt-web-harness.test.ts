@@ -403,6 +403,7 @@ describe("ChatGPT outer-native harness v4", () => {
       chatgptWeb: {
         browserHost: "launcher",
         browserHostDescriptorPath: join(tempRoot, "retained-launcher.json"),
+        runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
         experimentalFreshConversationPerTurn: freshConversation,
         brokerSocketPath: socketPath,
         localToolsEnabled: true,
@@ -534,8 +535,15 @@ describe("ChatGPT outer-native harness v4", () => {
       expect(browserStarts).toBe(1);
 
       const replayEvents: AdapterEvent[] = [];
-      await adapter.runTurn!(request, { headers: new Headers() }, event => replayEvents.push(event));
-      expect(replayEvents.at(-1)).toMatchObject({ type: "error", code: "client_cancelled", retryable: false });
+      // Cancelled native turns are rejected before admission to the session's event journal.
+      await rejects(adapter.runTurn!(request, { headers: new Headers() }, event => replayEvents.push(event)), {
+        name: "ChatGptWebAdapterError",
+        status: 499,
+        errorType: "client_closed_request",
+        code: "client_cancelled",
+        retryable: false,
+      });
+      expect(replayEvents.filter(event => event.type !== "heartbeat")).toEqual([]);
       expect(browserStarts).toBe(1);
     } finally {
       (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = originalRun;

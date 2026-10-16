@@ -110,6 +110,7 @@ test("Luna-only account exposes no paid ChatGPT Web routes", async () => {
 test("Zero Risk returns one generic Web row without using scanned capabilities", async () => {
   const config = defaultConfig("mcp-bridge");
   config.browserInteractionMode = "manual";
+  config.experimentalContextFiles = false;
   config.solAvailable = true;
   config.extraHighAvailable = true;
   config.proAvailable = true;

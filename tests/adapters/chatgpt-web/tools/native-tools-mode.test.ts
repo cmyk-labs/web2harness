@@ -1,8 +1,9 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaultConfig, loadConfig, loadConfigForSetup, providerConfig } from "../../../../src/config";
+import { defaultBrokerEndpoint, defaultConfig, loadConfig, loadConfigForSetup, providerConfig } from "../../../../src/config";
 import { augmentNativeModelCatalog } from "../../../../src/models/model-catalog";
 import {
   CHATGPT_WEB_LUNA_MODEL_ID,
@@ -13,6 +14,7 @@ import { chatGptReadOnlyContextWarning, compileChatGptWebPrompt } from "../../..
 import { CODEX_TOOL_CALLS_FENCE } from "../../../../src/adapters/chatgpt-web/tools/native-tool-call-block";
 import { ChatGptBrowserWorker, type BrowserTurn } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { createChatGptWebAdapter } from "../../../../src/adapters/chatgpt-web/adapter";
+import { TurnBroker } from "../../../../src/adapters/chatgpt-web/tools/turn-broker";
 import { StandaloneRequestQueue } from "../../../../src/browser/standalone-request-queue";
 import { DEFAULT_RUNTIME_PARAMETERS } from "../../../../launcher/shared/runtime-parameters.cjs";
 import { withQueuedRequest } from "../../../../src/browser/request-queue-client";
@@ -451,11 +453,18 @@ describe("native-tools adapter emission", () => {
 
   test.each([false, true])("native tool rounds and follow-up messages honor fresh conversation=%s", async fresh => {
     const provider = nativeProvider();
+    const socketHome = join(tempRoot, `retention-${fresh}`);
+    // Keep the Unix endpoint below macOS's 103-byte limit, including its long TMPDIR.
+    const socketId = createHash("sha256").update(socketHome).digest("hex").slice(0, 24);
+    const socketPath = process.platform === "win32"
+      ? defaultBrokerEndpoint(socketHome)
+      : join(tmpdir(), `w2h-${socketId}.sock`);
     provider.baseUrl += `/retention-${fresh}-${Date.now()}`;
     Object.assign(provider.chatgptWeb!, {
       browserHost: "launcher",
       browserHostDescriptorPath: join(tempRoot, `retention-${fresh}.json`),
       runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
+      brokerSocketPath: socketPath,
       experimentalFreshConversationPerTurn: fresh,
       useSavedChats: true,
     });
@@ -532,6 +541,7 @@ describe("native-tools adapter emission", () => {
       }
     } finally {
       (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = originalRun;
+      await TurnBroker.forSocket(socketPath).close();
     }
   });
 });

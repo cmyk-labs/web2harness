@@ -97,6 +97,8 @@ Execution values are captured for new requests; an existing retry sequence keeps
 
 Values and per-field `user`/`default` sources live in `launcher-state.json`. Only valid values explicitly marked `user` survive default migrations; absent or other sources use current defaults. The private, process-bound Launcher descriptor publishes validated execution settings to the shared runtime for subsequent requests without a service restart. In Launcher mode these controls own the effective `stallTimeoutSec`; standalone managed Chrome retains its existing config/defaults and does not read another Launcher's settings.
 
+**Restore defaults** remains a draft until saved. Saving it restores `default` provenance for these execution settings, including values already equal to the current default, so later default migrations apply. Editing an individual setting afterwards marks only that setting `user`; matching the default number does not imply default provenance. Unsaved drafts retain this intent.
+
 <a id="standalone-request-queue"></a>
 
 ### Standalone queue controls
@@ -161,7 +163,7 @@ These fields support runtime integration and diagnostics. Prefer setup over edit
 | `chromeExecutablePath` | macOS: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; Windows: `%PROGRAMFILES%\Google\Chrome\Application\chrome.exe` with `C:\Program Files` fallback; Linux: `/usr/bin/google-chrome` | Nonempty executable path used by the managed browser/login path; override through `--chrome`. |
 | `headed` | `true` | Boolean controlling the managed browser's visible-window setting. |
 | `storageStatePath` | `<home>/browser/storage-state.json` | Nonempty session-file path for the managed browser. The launcher's persistent browser partition has its own session storage. |
-| `browserHostDescriptorPath` | Supplied by the launcher | Required absolute path for `browserHost: "launcher"`. Describes the owning browser process and private control endpoint. |
+| `browserHostDescriptorPath` | Supplied by the launcher | Required absolute path for `browserHost: "launcher"`. Setup expands `~` and resolves relative input before validation and saving. Describes the owning browser process and private control endpoint. |
 | `brokerSocketPath` | Unix: `<home>/runtime/turn-broker.sock`; Windows: `\\.\pipe\web2harness-<home hash>` | Absolute Unix socket or valid Windows named-pipe endpoint, according to the platform. Windows identity derives from the resolved home. |
 | `controlToken` | Generated from 32 random bytes | Private base64url control credential; parser requires at least 40 characters from letters, digits, `_` and `-`. |
 | `runtimeCommand` | Current durable runtime executable and optional entry point | Nonempty string array with an absolute existing executable. Absolute command paths must not point into temporary directories. |
@@ -423,7 +425,7 @@ Overrides apply to the process receiving them. These are supported launch overri
 | `CODEX_HOME` | Regular Codex home. DEV sets its own child environment to `<DEV home>/codex-home`. |
 | `WEB2HARNESS_LAUNCHER_DATA_DIR` | Regular Electron user-data directory. DEV selects `<DEV home>/launcher` instead. |
 | `WEB2HARNESS_CODEX_EXECUTABLE` | Explicit Codex executable or npm JavaScript entry for DEV executable discovery. |
-| `WEB2HARNESS_LAUNCHER_EXECUTABLE` | Explicit packaged launcher for DEV. It must support the DEV profile; without this override, a source checkout can use its launcher development script. |
+| `WEB2HARNESS_LAUNCHER_EXECUTABLE` | Explicit packaged launcher for DEV. It must support the DEV profile. An empty, missing or unusable explicit path fails without selecting another installation; without this override, a source checkout can use its launcher development script. |
 | `WEB2HARNESS_BUN` | Durable installed Bun executable for runtime discovery. Temporary executables are rejected for installed runtime commands. |
 | `WEB2HARNESS_REPOSITORY` | Explicit `OWNER/REPOSITORY` release source. Packaged metadata may provide the launcher fallback. Invalid explicit values do not fall back silently. See [Release](release.md) for installer requirements. |
 

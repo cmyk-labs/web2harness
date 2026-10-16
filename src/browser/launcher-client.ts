@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { expandUserPath } from "../config";
 import { processRunning } from "../runtime/process";
+import { diagnosticError, diagnosticEvent } from "../diagnostics";
 import { validateRuntimeParameters, type RuntimeParameters } from "../../launcher/shared/runtime-parameters.cjs";
 
 export const LAUNCHER_BROWSER_HOST_KIND = "web2harness-launcher";
@@ -169,7 +170,7 @@ export function readLauncherBrowserHostDescriptor(configuredPath: string): Launc
   let decoded: unknown;
   try { decoded = JSON.parse(readFileSync(path, "utf8")); }
   catch (error) {
-    throw new Error(`Launcher browser descriptor is invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Launcher browser descriptor is invalid JSON: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
   }
   const descriptor = assertDescriptorShape(decoded);
   if (!processRunning(descriptor.pid)) {
@@ -189,7 +190,7 @@ async function assertCdpReady(descriptor: LauncherBrowserHostDescriptor, timeout
       throw new Error("CDP metadata did not expose a loopback WebSocket endpoint");
     }
   } catch (error) {
-    throw new Error(`Launcher browser CDP endpoint is not ready: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Launcher browser CDP endpoint is not ready: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
   } finally {
     clearTimeout(timer);
   }
@@ -271,7 +272,7 @@ export async function connectLauncherBrowserHost(
   try {
     browser = await chromium.connectOverCDP(descriptor.endpoint, { timeout: timeoutMs });
   } catch (error) {
-    throw new Error(`Could not connect Playwright to the launcher browser: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Could not connect Playwright to the launcher browser: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
   }
   const closeOnAbort = () => { void browser.close().catch(() => {}); };
   abortSignal?.addEventListener("abort", closeOnAbort, { once: true });
@@ -352,7 +353,7 @@ export async function inspectLauncherBrowserHost(
     const detail = timedOut
       ? `session inspection timed out after ${timeoutMs}ms`
       : error instanceof Error ? error.message : String(error);
-    throw new Error(`Launcher ChatGPT session could not be verified: ${detail}`);
+    throw new Error(`Launcher ChatGPT session could not be verified: ${detail}`, { cause: error });
   } finally {
     clearTimeout(timer);
   }
@@ -678,7 +679,7 @@ export async function notifyLauncherTurn(
         );
       }
       const detail = typeof body.error === "string" ? body.error : "";
-      throw new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
+      throw Object.assign(new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`), { status: response.status });
     }
     const body = await response.json().catch(() => ({})) as Record<string, unknown>;
     if (activity.phase === "usage") {
@@ -729,11 +730,17 @@ export async function notifyLauncherTurn(
     }
     return {};
   } catch (error) {
-    if (signal?.aborted) throw new DOMException("Launcher browser acquisition cancelled", "AbortError");
-    if (controller.signal.aborted) throw new Error(`Launcher browser control ${activity.phase} timed out after ${timeoutMs}ms`);
-    if (error instanceof LauncherBrowserTurnCancelledError
-      || error instanceof LauncherRetainedConversationUnavailableError) throw error;
-    throw new Error(`Launcher browser control channel failed: ${error instanceof Error ? error.message : String(error)}`);
+    const failure = signal?.aborted
+      ? Object.assign(new DOMException("Launcher browser acquisition cancelled", "AbortError"), { cause: error })
+      : controller.signal.aborted
+        ? new Error(`Launcher browser control ${activity.phase} timed out after ${timeoutMs}ms`, { cause: error })
+        : error instanceof LauncherBrowserTurnCancelledError || error instanceof LauncherRetainedConversationUnavailableError
+          ? error
+          : new Error(`Launcher browser control channel failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    diagnosticEvent(signal?.aborted || error instanceof LauncherBrowserTurnCancelledError ? "info" : "error", "browser.control_failed", {
+      traceId: activity.traceId, phase: activity.phase, ...diagnosticError(failure),
+    });
+    throw failure;
   } finally {
     clearTimeout(timer);
   }
@@ -767,7 +774,9 @@ export async function releaseLauncherRetainedConversation(
     }
     return Number(body.released);
   } catch (error) {
-    throw new Error(`Launcher retained conversation release failed: ${error instanceof Error ? error.message : String(error)}`);
+    const failure = new Error(`Launcher retained conversation release failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    diagnosticEvent("error", "browser.control_failed", { phase: "release", ...diagnosticError(failure) });
+    throw failure;
   } finally {
     clearTimeout(timer);
   }

@@ -1,8 +1,8 @@
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, posix, resolve, win32 } from "node:path";
-import { expandUserPath, getConfigPath } from "../config";
+import { expandUserPath, getConfigPath, readConfigJson } from "../config";
 import {
   readLauncherBrowserHostDescriptor,
   type LauncherBrowserHostDescriptor,
@@ -81,7 +81,7 @@ export function readDevChatExperimentalFeatures(
 ): DevChatExperimentalFeatures {
   let value: unknown;
   try {
-    value = JSON.parse(readFileSync(paths.configPath, "utf8"));
+    value = readConfigJson(paths.configPath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return { contextFiles: true, contextTripleBudget: false };
     throw new Error(
@@ -125,9 +125,13 @@ export function installedLauncherCandidates({
   platform?: NodeJS.Platform;
   windowsInstallLocation?: string;
 } = {}): string[] {
-  const override = environment.WEB2HARNESS_LAUNCHER_EXECUTABLE?.trim();
-  const candidates = override ? [expandUserPath(override)] : [];
   const targetPath = platform === "win32" ? win32 : posix;
+  const override = environment.WEB2HARNESS_LAUNCHER_EXECUTABLE;
+  if (override !== undefined) {
+    if (!override.trim()) throw new Error("WEB2HARNESS_LAUNCHER_EXECUTABLE must specify an executable path");
+    return [targetPath.resolve(expandUserPath(override.trim()))];
+  }
+  const candidates: string[] = [];
   if (platform === "darwin") {
     candidates.push(
       "/Applications/Web2Harness.app/Contents/MacOS/Web2Harness",
@@ -158,6 +162,9 @@ export function findInstalledLauncherExecutable(options: Parameters<typeof insta
   const candidates = installedLauncherCandidates(options);
   const executable = candidates.find(executableFile);
   if (executable) return executable;
+  if ((options.environment ?? process.env).WEB2HARNESS_LAUNCHER_EXECUTABLE !== undefined) {
+    throw new Error(`WEB2HARNESS_LAUNCHER_EXECUTABLE is not an executable regular file: ${candidates[0]}`);
+  }
   throw new Error(
     "Installed launcher (legacy Web2Harness package) was not found. Install it first or set WEB2HARNESS_LAUNCHER_EXECUTABLE to its absolute executable path."
       + ` Checked: ${candidates.join(", ") || "no platform candidates"}`,
@@ -213,7 +220,7 @@ export async function launchDevProfile(
   catch { /* A stale or absent descriptor is replaced only by its owning launcher. */ }
 
   const sourceScript = resolve(import.meta.dir, "../../launcher/scripts/dev.cjs");
-  const fromSource = !options.executable && !process.env.WEB2HARNESS_LAUNCHER_EXECUTABLE
+  const fromSource = !options.executable && process.env.WEB2HARNESS_LAUNCHER_EXECUTABLE === undefined
     && existsSync(sourceScript);
   const executable = fromSource ? process.execPath
     : options.executable ? resolve(options.executable) : findInstalledLauncherExecutable();

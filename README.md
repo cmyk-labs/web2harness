@@ -36,7 +36,7 @@ Select a **(Web)** model in Codex to use your signed-in ChatGPT account for repo
 | Model switching and subagents | Use native and Web models within a task, with subagent delegation governed by the selected compatibility protocol. |
 | Desktop management | Sign in, configure modes, check connections, inspect runtime health, and export safe logs in the application. |
 
-**2.1.0 updates:** Adds a shared web-request queue with concurrency and send-spacing controls, improves multi-agent handoff and model catalog recovery, and sends long contexts as complete TXT attachments when Context as File is enabled. See the [release history](#release-history) and release notes for validation scope and known limitations.
+**2.2.0 updates:** Refines window sizing and login recovery, adds browser input protection with a confirmed manual override, exposes runtime parameters, and improves Native Tools context recovery. Supported automatic modes default to context-file transfer with the standard budget; upgrades preserve context preferences explicitly marked as user choices. Also improves error handling, tool controls, response completion, configuration persistence and updater launch checks. See the [release history](#release-history) and [release notes](.github/release-notes.md) for validation scope and known limitations.
 
 Available models and efforts depend on the signed-in account and browser checks. See the [configuration and model reference](docs/reference.md); the application does not raise account limits or unlock unavailable models.
 
@@ -150,6 +150,7 @@ User-visible features, fixes, and compatibility changes are recorded by version,
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 2.2.0 | 2026-10-16 | Refines window sizing, login recovery and About presentation; adds browser input protection with a confirmed manual override, configurable runtime parameters and Native Tools context resynchronization. Makes context defaults and saved preference sources consistent; improves error causes, tool controls, JSON/SSE completion, configuration persistence and updater process-launch checks. |
 | 2.1.0 | 2026-10-16 | Adds a shared web-request queue with concurrency, expiry and send-interval controls; improves multi-agent tool handoff, retained-chat input preparation and model catalog recovery; supports complete long-context TXT attachments and improves request diagnostics. |
 | 2.0.0 | 2026-10-10 | Refines desktop layouts and usage views; adds raw JSON logs, full-history search, related-request filtering and configurable pagination; exports diagnostic bundles by date range, improves event coverage and redaction, and speeds up large log histories. |
 | 1.2.0 | 2026-10-09 | Adds GPT-6 and GPT-5.6 Sol family/effort selection, model-level local usage and recoverable send receipts. New configurations default to Temporary Chat. Stabilizes browser viewports, repeated paragraphs and formula extraction; updates security dependencies. |

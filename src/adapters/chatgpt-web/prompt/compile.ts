@@ -12,6 +12,7 @@ import { nativeToolCallContractLines } from "../tools/native-tool-call-block";
 import { handoffContract } from "../tools/handoff-contract";
 import { type CodexAssistantContentPart, type CodexContentPart, type CodexMessage, type CodexParsedRequest } from "../../../types";
 import { COMPACT_PROMPT, isReadableCompactionSummaryText } from "../../../responses/compaction";
+import { modelToolChoice } from "../../../responses/tool-choice";
 import { CHATGPT_WEB_LUNA_MODEL_ID, CHATGPT_WEB_MODEL_ID, resolveChatGptWebModelMode, type ChatGptWebCapabilities } from "../model";
 
 export interface ChatGptWebPromptImage {
@@ -302,7 +303,7 @@ export function compileChatGptWebPrompt(
       "Continue the active Codex task through the attached MCP connector now. The OUTER tools in the task context run in Codex; they need not appear as directly callable ChatGPT tools.",
       "Current binding (copy the exact JSON value, including every character; never reconstruct it from memory or earlier history):",
       JSON.stringify(manualControl ? { request_id: turnToken } : { turn_token: turnToken }),
-      `Current Codex call controls: ${JSON.stringify({ tool_choice: parsed.options.toolChoice, parallel_tool_calls: parsed.options.parallelToolCalls })}. Preserve these controls.`,
+      `Current Codex call controls: ${JSON.stringify({ tool_choice: modelToolChoice(parsed.options.toolChoice, parsed.context.tools ?? []), parallel_tool_calls: parsed.options.parallelToolCalls })}. Preserve these controls.`,
       ...(parsed.options.parallelToolCalls === false ? ["Codex disabled parallel_tool_calls: use codex_submit_tool_call with one call object. Continue dependent work only after its actual result arrives in the next request."] : []),
       ...(manualControl ? [] : [`Pass turn_token ${turnToken} unchanged to each connector action.`]),
       "Use the current inventory and real results above to continue the task under the bridge protocol. Submit declared calls with their advertised scope and separate name/namespace, or finish with the complete answer. Do not execute outer calls in ChatGPT-native tools.",

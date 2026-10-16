@@ -2,6 +2,7 @@ import type { AdapterEvent, CodexMessagePhase, CodexProviderContinuationState, C
 import { encodeCompactionSummary } from "./compaction";
 import { encodeReasoningEnvelope, type ReasoningEnvelope } from "./reasoning-envelope";
 import { uuid, responsesUsage, adapterFailureFromEvent, plaintextCollaborationFields, type OutputItem } from "./encoding";
+import { responseTerminal, type AdapterTerminalEvent } from "./terminal";
 
 export function buildResponseJSON(
   events: AdapterEvent[],
@@ -19,10 +20,8 @@ export function buildResponseJSON(
   const responseId = `resp_${uuid()}`;
   const output: OutputItem[] = [];
   let usage: CodexUsage | undefined;
-  let errorEvent: Extract<AdapterEvent, { type: "error" }> | undefined;
-  let incompleteEvent: Extract<AdapterEvent, { type: "incomplete" }> | undefined;
+  let terminalEvent: AdapterTerminalEvent | undefined;
   let endTurn: boolean | undefined;
-  let stopReason: string | undefined;
   let compactionText = "";
 
   let currentText = "";
@@ -180,21 +179,19 @@ export function buildResponseJSON(
         flushToolCall();
         break;
       case "error":
-        errorEvent = e;
+        terminalEvent = e;
         usage = e.usage ?? usage;
         break;
       case "incomplete":
-        incompleteEvent = e;
-        endTurn = e.endTurn;
-        if (e.providerState) options?.onProviderState?.(e.providerState);
-        break;
       case "done":
+        terminalEvent = e;
         usage = e.usage;
         endTurn = e.endTurn;
         if (e.providerState) options?.onProviderState?.(e.providerState);
-        if (e.stopReason === "max_tokens") stopReason = "max_tokens";
         break;
     }
+    // Match streaming: events after the first terminal do not belong to this response.
+    if (terminalEvent) break;
   }
   flushText();
   flushSummaryReasoning();
@@ -202,33 +199,22 @@ export function buildResponseJSON(
   flushToolCall();
   // A truncated turn must never become replacement history. Emit a compaction item only after
   // authoritative turn completion.
-  if (options?.compaction && !errorEvent && !incompleteEvent && stopReason !== "max_tokens") {
+  const terminal = responseTerminal(terminalEvent);
+  if (options?.compaction && terminal.compactionAllowed) {
     output.push({ type: "compaction", id: `cmp_${uuid()}`, encrypted_content: encodeCompactionSummary(compactionText) });
   }
 
+  const errorEvent = terminalEvent?.type === "error" ? terminalEvent : undefined;
   const failure = errorEvent ? adapterFailureFromEvent(errorEvent) : undefined;
-  const status = errorEvent
-    ? "failed"
-    : incompleteEvent || stopReason === "max_tokens"
-      ? "incomplete"
-      : "completed";
   return {
     id: responseId, object: "response",
     created_at: Math.floor(Date.now() / 1000),
-    status,
+    status: terminal.status,
     model: modelId, output,
     ...(endTurn !== undefined ? { end_turn: endTurn } : {}),
     ...(failure ? { error: failure.error, last_error: failure.error } : {}),
     ...(errorEvent?.retryable !== undefined ? { retryable: errorEvent.retryable } : {}),
-    ...(incompleteEvent ? {
-      incomplete_details: {
-        reason: incompleteEvent.reason,
-        ...(incompleteEvent.message ? { message: incompleteEvent.message } : {}),
-        ...(incompleteEvent.retryable !== undefined ? { retryable: incompleteEvent.retryable } : {}),
-      },
-    } : stopReason === "max_tokens" ? {
-      incomplete_details: { reason: "max_output_tokens" },
-    } : {}),
-    usage: responsesUsage(incompleteEvent?.usage ?? usage),
+    ...(terminal.status === "incomplete" ? { incomplete_details: terminal.incompleteDetails } : {}),
+    usage: responsesUsage(usage),
   };
 }

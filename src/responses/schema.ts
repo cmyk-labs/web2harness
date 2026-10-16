@@ -138,7 +138,10 @@ export const toolChoiceSchema = z.union([
   z.object({ type: z.literal("function"), name: z.string().min(1), namespace: z.string().optional() }),
   z.object({ type: z.literal("custom"), name: z.string().min(1), namespace: z.string().optional() }),
   z.object({ type: hostedToolType }),
-  z.object({ type: z.literal("allowed_tools"), mode: z.enum(["auto", "required"]), tools: z.array(allowedToolEntrySchema) }),
+  z.object({ type: z.literal("allowed_tools"), mode: z.enum(["auto", "required"]), tools: z.array(allowedToolEntrySchema) })
+    .refine(choice => choice.mode !== "required" || choice.tools.length > 0, {
+      message: "required allowed_tools must contain at least one tool", path: ["tools"],
+    }),
 ]);
 
 export const reasoningConfigSchema = z.object({

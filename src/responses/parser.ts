@@ -19,6 +19,7 @@ import { compactionItemToText, isNativeTextCompaction } from "./compaction";
 import { previousResponseReplayPrefixLength } from "./state";
 import { decodeReasoningEnvelope } from "./reasoning-envelope";
 import { parseInputFile } from "./file-input";
+import { toolChoiceKind } from "./tool-choice";
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -78,18 +79,29 @@ function outputTextOf(blocks: unknown[] | string | undefined): CodexTextContent[
   return out;
 }
 
-function mapToolChoice(value: unknown): CodexRequestOptions["toolChoice"] {
+function mapToolChoice(value: unknown, tools: readonly CodexTool[]): CodexRequestOptions["toolChoice"] {
+  const available = new Map(tools.map(tool => [toolIdentityKey(tool.namespace, tool.name), tool]));
+  const checkedKey = (reference: Record<string, unknown>): string => {
+    const key = allowedToolName(reference);
+    if (!key) throw new Error("Unsupported allowed_tools entry");
+    const tool = available.get(key);
+    if (tool && reference.type !== toolChoiceKind(tool)) {
+      throw new Error("Codex tool_choice kind does not match the declared tool");
+    }
+    return key;
+  };
   if (value === undefined || value === null) return undefined;
   if (value === "auto" || value === "none" || value === "required") return value;
   if (isObj(value) && "type" in value) {
     const t = (value as { type: string }).type;
     if ((t === "function" || t === "custom") && "name" in value) {
-      return { name: toolIdentityKey(normalizedToolNamespace(value.namespace), (value as { name: string }).name) };
+      return { name: checkedKey(value) };
     }
     if (t === "allowed_tools" && Array.isArray(value.tools)) {
-      const names = value.tools
-        .map(tool => { const name = allowedToolName(tool); if (!name) throw new Error("Unsupported allowed_tools entry"); return name; })
-        .filter((name): name is string => Boolean(name));
+      const names = value.tools.map(tool => {
+        if (!isObj(tool)) throw new Error("Unsupported allowed_tools entry");
+        return checkedKey(tool);
+      });
       return names.length > 0
         ? { allowedTools: [...new Set(names)], mode: value.mode === "required" ? "required" : "auto" }
         : "none";
@@ -610,7 +622,7 @@ export function parseRequest(body: unknown): CodexParsedRequest {
   if (data.stop !== undefined && data.stop !== null) {
     options.stopSequences = typeof data.stop === "string" ? [data.stop] : data.stop;
   }
-  const tc = mapToolChoice(data.tool_choice);
+  const tc = mapToolChoice(data.tool_choice, mergedTools);
   if (tc !== undefined) options.toolChoice = tc;
   if (data.parallel_tool_calls !== undefined) options.parallelToolCalls = data.parallel_tool_calls;
   // Upstream codex-rs converts "ultra" to "max" at the inference boundary (core/src/client.rs

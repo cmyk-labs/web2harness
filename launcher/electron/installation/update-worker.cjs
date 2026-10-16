@@ -27,8 +27,18 @@ async function waitForParent(pid, timeoutMs = 120_000) {
 }
 
 function launch(bin, args = []) {
-  const child = spawn(bin, args, { detached: true, stdio: "ignore", windowsHide: true });
-  child.unref();
+  return new Promise((resolve, reject) => {
+    const child = spawn(bin, args, { detached: true, stdio: "ignore", windowsHide: true });
+    child.once("error", reject);
+    child.once("spawn", () => {
+      child.unref();
+      resolve();
+    });
+  });
+}
+
+function failureDescription(error) {
+  return `${error?.code ? `[${error.code}] ` : ""}${error instanceof Error ? error.stack || error.message : String(error)}`;
 }
 
 function requireFile(filePath, label) {
@@ -37,7 +47,7 @@ function requireFile(filePath, label) {
   }
 }
 
-function updateMac(job) {
+async function updateMac(job) {
   const sourceExecutable = path.join(job.source, "Contents", "MacOS", "Web2Harness");
   requireFile(sourceExecutable, "Staged macOS launcher");
   const next = `${job.target}.updating-${process.pid}`;
@@ -57,10 +67,10 @@ function updateMac(job) {
     throw error;
   }
   fs.rmSync(previous, { recursive: true, force: true });
-  launch("/usr/bin/open", [job.target]);
+  await launch("/usr/bin/open", [job.target]);
 }
 
-function updateWindows(job, runInstaller = spawnSync, relaunch = launch) {
+async function updateWindows(job, runInstaller = spawnSync, relaunch = launch) {
   requireFile(job.source, "Windows installer");
   // NSIS owns the progress window while the old launcher is being replaced.
   const language = job.language === "zh-CN" ? "zh-CN" : "en";
@@ -70,7 +80,7 @@ function updateWindows(job, runInstaller = spawnSync, relaunch = launch) {
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`Windows installer exited with code ${result.status}`);
   requireFile(job.target, "Installed Windows launcher");
-  relaunch(job.target);
+  await relaunch(job.target);
 }
 
 function shellQuote(value) {
@@ -86,7 +96,7 @@ function installLinuxFile(source, target) {
   fs.renameSync(next, target);
 }
 
-function updateLinux(job) {
+async function updateLinux(job) {
   requireFile(job.source, "Linux AppImage");
   requireFile(job.runnerSource, "Linux AppImage runner");
   const wrapper = job.wrapper && path.isAbsolute(job.wrapper) ? job.wrapper : null;
@@ -110,40 +120,40 @@ function updateLinux(job) {
     && path.dirname(path.dirname(job.target)) === versionsRoot) {
     fs.rmSync(path.dirname(job.target), { recursive: true, force: true });
   }
-  launch(wrapper);
+  await launch(wrapper);
 }
 
-function relaunchExisting(job) {
+async function relaunchExisting(job) {
   try {
-    if (job.platform === "darwin" && fs.existsSync(job.target)) launch("/usr/bin/open", [job.target]);
-    else if (job.platform === "win32" && fs.existsSync(job.target)) launch(job.target);
+    if (job.platform === "darwin" && fs.existsSync(job.target)) await launch("/usr/bin/open", [job.target]);
+    else if (job.platform === "win32" && fs.existsSync(job.target)) await launch(job.target);
     else if (job.platform === "linux") {
       const target = job.wrapper && fs.existsSync(job.wrapper) ? job.wrapper : job.target;
-      if (fs.existsSync(target)) launch(target);
+      if (fs.existsSync(target)) await launch(target);
     }
-  } catch {}
+  } catch (error) { appendLog(job, `recovery launch failed: ${failureDescription(error)}`); }
 }
 
-async function main() {
-  const jobPath = process.argv[2];
+async function main(jobPath = process.argv[2]) {
   if (!jobPath || !path.isAbsolute(jobPath)) throw new Error("Update worker requires an absolute job path");
   const job = JSON.parse(fs.readFileSync(jobPath, "utf8"));
   appendLog(job, `waiting for launcher PID ${job.parentPid} before installing v${job.version}`);
   await waitForParent(job.parentPid);
   appendLog(job, `installing v${job.version} on ${job.platform}`);
   try {
-    if (job.platform === "darwin") updateMac(job);
-    else if (job.platform === "win32") updateWindows(job);
-    else if (job.platform === "linux") updateLinux(job);
+    if (job.platform === "darwin") await updateMac(job);
+    else if (job.platform === "win32") await updateWindows(job);
+    else if (job.platform === "linux") await updateLinux(job);
     else throw new Error(`Unsupported update platform: ${job.platform}`);
-    appendLog(job, `v${job.version} installed and relaunched`);
+    // spawn acknowledges process creation, not readiness of the application it launches.
+    appendLog(job, `v${job.version} installed; relaunch process started`);
     try { fs.rmSync(job.tempRoot, { recursive: true, force: true }); } catch {}
   } catch (error) {
-    appendLog(job, `update failed: ${error instanceof Error ? error.stack || error.message : String(error)}`);
-    relaunchExisting(job);
+    appendLog(job, `update failed: ${failureDescription(error)}`);
+    await relaunchExisting(job);
     throw error;
   }
 }
 
 if (require.main === module) void main().catch(() => process.exit(1));
-module.exports = { updateWindows };
+module.exports = { updateWindows, launch, main };

@@ -2,7 +2,8 @@ import type { ChatGptWebAccountCapabilities } from "../../src/models/chatgpt-web
 import languages from "../electron/languages.json";
 import type { LimitsSnapshot } from "./features/limits/limits-types";
 import type { RequestSchedulingSettings, QueueSnapshot, QueueQuery, QueuePage } from "../shared/request-scheduler.cjs";
-import type { RuntimeParameters, RuntimeParameterSources } from "../shared/runtime-parameters.cjs";
+import type { RuntimeParameters, RuntimeParameterSources, RuntimeParameterEdits } from "../shared/runtime-parameters.cjs";
+import type { BrowserSurfaceActiveRequest, BrowserSurfaceActiveResult } from "../shared/browser-surface-ipc.cjs";
 export type { RequestSchedulingSettings, QueueSnapshot, QueueQuery, QueuePage, QueueRecord } from "../shared/request-scheduler.cjs";
 export interface RequestQueueStatus {
   status: "ready" | "stopped";
@@ -218,7 +219,7 @@ export interface WorkspaceStatus {
 export interface LauncherApi {
   queueStatus(): Promise<RequestQueueStatus>;
   queryQueue(query?: QueueQuery & { snapshotId?: string }): Promise<QueuePage & { snapshotId: string }>;
-  saveQueueSettings(settings: RequestSchedulingSettings, expectedRevision: number, parameters?: RuntimeParameters): Promise<{
+  saveQueueSettings(settings: RequestSchedulingSettings, expectedRevision: number, parameters?: RuntimeParameters, parameterEdits?: RuntimeParameterEdits): Promise<{
     state: LauncherState; persistedRevision: number; appliedRevision: number | null;
     applyState: "applied" | "pending-start" | "apply-failed";
   }>;
@@ -236,7 +237,7 @@ export interface LauncherApi {
   completeOnboarding(language: Language, browserInteractionMode: BrowserInteractionMode): Promise<LauncherState>;
   openExternal(url: string): Promise<boolean>;
   setBrowserBounds(bounds: { x: number; y: number; width: number; height: number }): Promise<boolean>;
-  setBrowserSurfaceActive(active: boolean): Promise<BrowserState>;
+  setBrowserSurfaceActive(active: BrowserSurfaceActiveRequest): Promise<BrowserSurfaceActiveResult<BrowserState>>;
   showBrowser(): Promise<BrowserState>;
   hideBrowser(): Promise<BrowserState>;
   navigateBrowser(action: "back" | "forward" | "reload"): Promise<BrowserState>;

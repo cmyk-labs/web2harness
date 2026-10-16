@@ -9,5 +9,17 @@ export function safeDetail(value: unknown): Record<string, unknown>;
 export function sourceFor(record: { event: string; component?: string }): string;
 export function createDiagnosticRecord(level: DiagnosticRecord["level"], event: string, detail?: Record<string, unknown>): DiagnosticRecord;
 export function parseDiagnosticLine(line: string): DiagnosticRecord | null;
-export function diagnosticError(error: unknown): Record<string, unknown>;
+export interface DiagnosticError extends Record<string, unknown> {
+  errorRef: string;
+  errorName: string;
+  code: string;
+  message: string;
+  category: "cancelled" | "timeout" | "failure";
+  stack?: string;
+  cause?: Record<string, unknown>;
+  errors?: Record<string, unknown>[];
+  causeOmitted?: boolean;
+  errorsOmitted?: number;
+}
+export function diagnosticError(error: unknown): DiagnosticError;
 export function diagnosticReference(value: string): string;

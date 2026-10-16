@@ -41,3 +41,35 @@ test("failed descriptor publication remains a saved but unapplied result", async
   assert.equal(result.applyState, "apply-failed");
   assert.equal(state.runtimeParameters.maxRetries, 0);
 });
+
+test("restoring defaults clears user provenance, including a value already equal to its default", async () => {
+  let state = { requestSchedulingRevision: 1, ...normalizeRuntimeParameters(defaults, { idleTabMinutes: "user" }) };
+  const save = createQueueSettingsSaver({ stateStore: { read: () => state, update: patch => (state = { ...state, ...patch }) },
+    assertActive() {}, publish() {}, getQueue: () => null });
+  const scheduling = { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3 };
+  assert.equal(state.runtimeParameterSources.idleTabMinutes, "user");
+  await save(scheduling, 1, defaults, { idleTabMinutes: "default" });
+  assert.equal(state.runtimeParameterSources.idleTabMinutes, "default");
+  // A following explicit choice can pin the same number; equality is not provenance.
+  await save(scheduling, 2, defaults, { idleTabMinutes: "user" });
+  assert.equal(state.runtimeParameterSources.idleTabMinutes, "user");
+  await save(scheduling, 3, { ...defaults, idleTabMinutes: 60 });
+  const reset = Object.fromEntries(Object.keys(defaults).map(key => [key, "default"]));
+  await save(scheduling, 4, defaults, reset);
+  assert.deepEqual(state.runtimeParameters, defaults);
+  assert.ok(Object.values(state.runtimeParameterSources).every(source => source === "default"));
+});
+
+test("invalid reset intent cannot persist conflicting values or advance the revision", async () => {
+  let state = { requestSchedulingRevision: 1, ...normalizeRuntimeParameters() };
+  const save = createQueueSettingsSaver({ stateStore: { read: () => state, update: patch => (state = { ...state, ...patch }) },
+    assertActive() {}, publish() {}, getQueue: () => null });
+  const scheduling = { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3 };
+  for (const edits of [null, [], { idleTabMinutes: "automatic" }, { foreign: "user" }]) {
+    await assert.rejects(save(scheduling, 1, defaults, edits), /Invalid runtime parameter edits/);
+  }
+  await assert.rejects(save(scheduling, 1, { ...defaults, idleTabMinutes: 60 }, { idleTabMinutes: "default" }), /must use its default/);
+  await assert.rejects(save(scheduling, 1, undefined, { idleTabMinutes: "default" }), /require values/);
+  assert.equal(state.requestSchedulingRevision, 1);
+  assert.deepEqual(state.runtimeParameters, defaults);
+});

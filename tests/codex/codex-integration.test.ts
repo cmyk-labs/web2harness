@@ -697,7 +697,7 @@ describe("reversible native Codex route integration", () => {
   test("explicit setup restores a removed hook without discarding the current Codex config", () => {
     for (const ending of ["\n", "\r\n"]) {
       for (const keepRoute of [true, false]) {
-        const { codexHome } = fixture();
+        const { codexHome, appHome } = fixture();
         const configPath = join(codexHome, "config.toml");
         const original = [
           'model = "gpt-5.6-sol"',
@@ -707,7 +707,17 @@ describe("reversible native Codex route integration", () => {
         ].join(ending);
         writeFileSync(configPath, original);
         const config = nativeConfig("mcp-bridge");
+        // Persist a complete MCP configuration; this route-only fixture never launches a tunnel.
+        config.tunnel = {
+          binaryPath: join(appHome, "fixture-tunnel-never-executed"),
+          tunnelId: `tunnel_${"0".repeat(32)}`,
+          runtimeKeyFile: join(appHome, "fixture-runtime-key"),
+          profileDir: join(appHome, "fixture-tunnel-profile"),
+          profileName: "fixture",
+          alias: "fixture",
+        };
         saveConfig(config);
+        expect(loadConfig().tunnel).toEqual(config.tunnel);
         const installed = installCodexIntegration(config);
         const current = keepRoute
           ? readFileSync(configPath, "utf8").replace(installed.interruptHook.fragment, "")

@@ -1,3 +1,31 @@
+import type { AdapterEvent } from "../types";
+import { cleanText } from "../../launcher/shared/diagnostic-event.cjs";
+
+/** Public boundary text excludes embedded JS stacks; full evidence belongs in diagnostics. */
+export function publicErrorMessage(error: unknown): string {
+  const value = error && typeof error === "object" ? (error as { message?: unknown }).message : error;
+  const message = typeof value === "string" ? value : "An unexpected error occurred";
+  return cleanText(message.split(/\r?\n\s*at\s/)[0]).trim() || "An unexpected error occurred";
+}
+
+/** Keep explicit error semantics when a failure escapes the adapter's own boundary. */
+export function adapterErrorEvent(error: unknown): Extract<AdapterEvent, { type: "error" }> {
+  const candidate = (error && typeof error === "object" ? error : {}) as Record<string, unknown>;
+  const field = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_.-]{1,128}$/.test(value) ? value : undefined;
+  const status = typeof candidate.status === "number" && Number.isInteger(candidate.status)
+    && candidate.status >= 400 && candidate.status <= 599 ? candidate.status : undefined;
+  const cancelled = status === 499 || (status === undefined && candidate.name === "AbortError");
+  return {
+    type: "error", message: publicErrorMessage(error),
+    ...(status !== undefined ? { status } : cancelled ? { status: 499 } : {}),
+    ...(field(candidate.errorType) ? { errorType: field(candidate.errorType) }
+      : cancelled ? { errorType: "client_closed_request" } : {}),
+    ...(field(candidate.code) ? { code: field(candidate.code) } : cancelled ? { code: "client_cancelled" } : {}),
+    ...(typeof candidate.retryable === "boolean" ? { retryable: candidate.retryable }
+      : cancelled ? { retryable: false } : {}),
+  };
+}
+
 export interface CodexErrorPayload {
   message: string;
   type: string;

@@ -24,6 +24,7 @@ const { requestBrowserInputOverride } = require("./browser/browser-input-overrid
 const { BrowserControlServer } = require("./control-server.cjs");
 const { RequestQueue } = require("./runtime/request-queue.cjs");
 const { createQueueSettingsSaver } = require("./runtime/queue-settings.cjs");
+const { BROWSER_SURFACE_ACTIVE_CHANNEL, validateBrowserSurfaceActive } = require("../shared/browser-surface-ipc.cjs");
 let requestQueue = null;
 const { LimitsController } = require("./limits/limits-controller.cjs");
 const { SOURCE_URL: LIMITS_SOURCE_URL } = require("./limits/limits-store.cjs");
@@ -576,7 +577,7 @@ function registerIpc({ logger, stateStore }) {
   const saveQueueSettings = createQueueSettingsSaver({ stateStore, getQueue: () => requestQueue,
     applyRuntimeParameters: () => browserHost?.writeDescriptor(),
     publish: state => send("launcher:state-changed", state), assertActive: () => licenseController.assertActive() });
-  handle("launcher:queue-settings", (_event, value, expectedRevision, parameters) => saveQueueSettings(value, expectedRevision, parameters));
+  handle("launcher:queue-settings", (_event, value, expectedRevision, parameters, parameterEdits) => saveQueueSettings(value, expectedRevision, parameters, parameterEdits));
   handle("launcher:queue-control", async (_event, action, id) => {
     // Stopping remains available after license expiry. Resume requires a fresh check.
     if (action === "resume" || action === "recover") await licenseController.assertActive();
@@ -618,7 +619,10 @@ function registerIpc({ logger, stateStore }) {
     browserHost?.setBounds(validateBounds(bounds), event.sender.getZoomFactor());
     return true;
   });
-  handle("launcher:browser-surface-active", (_event, active) => browserHost?.setSurfaceActive(active === true) ?? null);
+  handle(BROWSER_SURFACE_ACTIVE_CHANNEL, (_event, active) => {
+    const requested = validateBrowserSurfaceActive(active);
+    return browserHost?.setSurfaceActive(requested) ?? null;
+  });
   handle("launcher:browser-show", () => browserHost.reveal(
     stateStore.read().browserInteractionMode === "automatic",
   ));

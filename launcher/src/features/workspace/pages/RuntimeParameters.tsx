@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "../../../components/Buttons";
 import { useLicense } from "../../licensing/LicenseContext";
 import type { LauncherState, RequestSchedulingSettings, RequestQueueStatus } from "../../../types";
-import type { RuntimeParameters as ExecutionParameters } from "../../../../shared/runtime-parameters.cjs";
+import type { RuntimeParameters as ExecutionParameters, RuntimeParameterEdits } from "../../../../shared/runtime-parameters.cjs";
 import parameterOptions from "../../../../shared/runtime-parameter-options.json";
 import { PageIntro, Row, Section } from "../controls";
 import { translate } from "../labels";
@@ -26,21 +26,26 @@ function loadDraft(settings: Draft, revision: number) {
       && [saved.baseline, saved.draft].every(item => [1, 2, 3, 4, 5].includes(item.maxConcurrent)
         && [5, 10, 15, 30, 60].includes(item.queueTimeoutMinutes)
         && (item.minSendIntervalSeconds === null || typeof item.minSendIntervalSeconds === "number")
-        && validParameters(item.runtimeParameters ?? parameterOptions.defaults))) {
+        && validParameters(item.runtimeParameters ?? parameterOptions.defaults))
+      && (saved.parameterEdits === undefined || (saved.parameterEdits && typeof saved.parameterEdits === "object"
+        && !Array.isArray(saved.parameterEdits) && Object.entries(saved.parameterEdits).every(([key, source]) =>
+          Object.hasOwn(parameterOptions.defaults, key) && (source === "default" || source === "user"))))) {
       return { ...saved,
+        parameterEdits: saved.parameterEdits ?? {},
         baseline: { ...saved.baseline, runtimeParameters: saved.baseline.runtimeParameters ?? settings.runtimeParameters },
         draft: { ...saved.draft, runtimeParameters: saved.draft.runtimeParameters ?? settings.runtimeParameters, minSendIntervalSeconds: saved.draft.minSendIntervalSeconds ?? NaN } } as {
-        baseline: Draft; draft: Draft; revision: number;
+        baseline: Draft; draft: Draft; revision: number; parameterEdits: RuntimeParameterEdits;
       };
     }
   } catch { /* Storage may be unavailable; in-memory navigation protection still applies. */ }
-  return { baseline: settings, draft: settings, revision };
+  return { baseline: settings, draft: settings, revision, parameterEdits: {} as RuntimeParameterEdits };
 }
 export function RuntimeParameters({ api, snapshot, updateState }: WorkspaceProps) {
   const t = translate(snapshot.state.language ?? "en");
   const { active: licensed } = useLicense();
   const [initial] = useState(() => loadDraft(stateDraft(snapshot.state), snapshot.state.requestSchedulingRevision));
   const [draft, setDraft] = useState(initial.draft);
+  const [parameterEdits, setParameterEdits] = useState(initial.parameterEdits);
   const [baseline, setBaseline] = useState({ settings: initial.baseline, revision: initial.revision });
   const [status, setStatus] = useState<RequestQueueStatus | null>(null);
   const [feedback, setFeedback] = useState<string | { zh: string; en: string }>("");
@@ -54,13 +59,13 @@ export function RuntimeParameters({ api, snapshot, updateState }: WorkspaceProps
     });
     return () => { disposed = true; };
   }, [api]);
-  const changed = JSON.stringify(draft) !== JSON.stringify(baseline.settings);
+  const changed = JSON.stringify(draft) !== JSON.stringify(baseline.settings) || Object.keys(parameterEdits).length > 0;
   useEffect(() => {
     try {
-      if (changed) localStorage.setItem(draftKey, JSON.stringify({ draft, baseline: baseline.settings, revision: baseline.revision }));
+      if (changed) localStorage.setItem(draftKey, JSON.stringify({ draft, baseline: baseline.settings, revision: baseline.revision, parameterEdits }));
       else localStorage.removeItem(draftKey);
     } catch { /* Do not block editing when storage is unavailable. */ }
-  }, [draft, baseline, changed]);
+  }, [draft, baseline, changed, parameterEdits]);
   useEffect(() => {
     if (!changed && !working && baseline.revision !== snapshot.state.requestSchedulingRevision) {
       setDraft(stateDraft(snapshot.state));
@@ -74,10 +79,11 @@ export function RuntimeParameters({ api, snapshot, updateState }: WorkspaceProps
     setWorking(true); setFeedback(""); setFailed(false);
     try {
       const { runtimeParameters, ...scheduling } = draft;
-      const result = await api.saveQueueSettings(scheduling, baseline.revision, runtimeParameters);
+      const result = await api.saveQueueSettings(scheduling, baseline.revision, runtimeParameters, parameterEdits);
       updateState(result.state);
       setBaseline({ settings: stateDraft(result.state), revision: result.persistedRevision });
       setDraft(stateDraft(result.state));
+      setParameterEdits({});
       setFailed(result.applyState === "apply-failed");
       setFeedback(result.applyState === "applied" ? { zh: "已保存并生效", en: "Saved and applied" }
         : result.applyState === "pending-start" ? { zh: "已保存，服务启动后生效", en: "Saved; applies when the service starts" }
@@ -90,13 +96,17 @@ export function RuntimeParameters({ api, snapshot, updateState }: WorkspaceProps
   usePageNavigationGuard({ dirty: changed, canSave: licensed && valid && changed, busy: working, save,
     discard: () => {
       setDraft(stateDraft(snapshot.state));
+      setParameterEdits({});
       setBaseline({ settings: stateDraft(snapshot.state), revision: snapshot.state.requestSchedulingRevision });
       try { localStorage.removeItem(draftKey); } catch { /* best effort */ }
     } });
   const parameter = (key: keyof ExecutionParameters, title: string, description: string, unit: string) => (
     <Row key={key} title={title} description={description}>
       <select aria-label={title} disabled={!licensed || working} value={draft.runtimeParameters[key]}
-        onChange={event => setDraft({ ...draft, runtimeParameters: { ...draft.runtimeParameters, [key]: Number(event.target.value) } })}>
+        onChange={event => {
+          setDraft({ ...draft, runtimeParameters: { ...draft.runtimeParameters, [key]: Number(event.target.value) } });
+          setParameterEdits({ ...parameterEdits, [key]: "user" });
+        }}>
         {parameterOptions.choices[key].map(value => <option key={value} value={value}>{key === "maxRetries" && value === 0 ? t("不重试", "No retries") : `${value} ${unit}`}</option>)}
       </select>
     </Row>
@@ -135,7 +145,11 @@ export function RuntimeParameters({ api, snapshot, updateState }: WorkspaceProps
       <div className="queue-settings-footer">
         <p className="muted">{t("修改不打断已有任务。执行等待用于新请求，保留时间用于下一次进入空闲的标签；排队超时仅用于新入队请求。", "Changes do not interrupt running tasks. Execution waits apply to new requests, retention to newly idle tabs, and queue timeout to newly queued requests.")}</p>
         <div className="queue-actions"><Button type="submit" disabled={!licensed || working || !changed || !valid}>{working ? t("保存中…", "Saving…") : t("保存设置", "Save settings")}</Button>
-          <Button type="button" disabled={!licensed || working} onClick={() => { setDraft({ ...defaults }); setFeedback({ zh: "已恢复默认值，保存后生效", en: "Defaults restored; save to apply" }); setFailed(false); }}>{t("恢复默认值", "Restore defaults")}</Button></div>
+          <Button type="button" disabled={!licensed || working} onClick={() => {
+            setDraft({ ...defaults });
+            setParameterEdits(Object.fromEntries(Object.keys(parameterOptions.defaults).map(key => [key, "default"])));
+            setFeedback({ zh: "已恢复默认值，保存后生效", en: "Defaults restored; save to apply" }); setFailed(false);
+          }}>{t("恢复默认值", "Restore defaults")}</Button></div>
         <div className={`queue-feedback${failed ? " error" : ""}`} role={failed ? "alert" : "status"}>{(typeof feedback === "string" ? feedback : t(feedback.zh, feedback.en)) || (status?.status === "stopped" ? t("服务未启动", "Service not running") : "\u00a0")}</div>
       </div>
     </form>

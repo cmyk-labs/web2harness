@@ -22,7 +22,8 @@ export async function runRuntimeParametersSmoke({ context, origin, out, check, e
   await save().click(); await page.getByText('已保存并生效', { exact: true }).waitFor();
   check('One save includes execution and scheduling values', await page.evaluate(() => {
     const call = window.__fixture.calls.filter(c => c[0] === 'saveQueueSettings').at(-1);
-    return call[1].maxConcurrent === 4 && call[3].retainedTabTarget === 12 && call[3].attachmentMinutes === 10 && call[3].maxRetries === 0;
+    return call[1].maxConcurrent === 4 && call[3].retainedTabTarget === 12 && call[3].attachmentMinutes === 10 && call[3].maxRetries === 0
+      && call[4].retainedTabTarget === 'user' && call[4].attachmentMinutes === 'user' && call[4].maxRetries === 'user';
   }));
   await select('空闲标签保留时间').selectOption('120');
   await page.getByRole('navigation').getByRole('button', { name: '偏好设置', exact: true }).click();
@@ -44,6 +45,25 @@ export async function runRuntimeParametersSmoke({ context, origin, out, check, e
   await page.getByRole('button', { name: '恢复默认值', exact: true }).click();
   check('Restore defaults remains an unsaved edit', await select('标签页保留数量').inputValue() === '5'
     && await page.evaluate(() => window.__fixture.state.runtimeParameters.retainedTabTarget === 12));
+  check('Reset provenance is retained with the unsaved draft', await page.evaluate(() => {
+    const draft = JSON.parse(localStorage.getItem('web2harness.runtimeParametersDraft.v1'));
+    return Object.keys(draft.parameterEdits).length === 7 && Object.values(draft.parameterEdits).every(source => source === 'default');
+  }));
+  await save().click(); await page.getByText('已保存并生效', { exact: true }).waitFor();
+  check('Restore sends explicit default intent for every runtime parameter', await page.evaluate(() => {
+    const call = window.__fixture.calls.filter(c => c[0] === 'saveQueueSettings').at(-1);
+    return Object.values(call[4]).every(source => source === 'default') && Object.keys(call[4]).length === 7;
+  }));
+  await select('空闲标签保留时间').selectOption('60');
+  await select('空闲标签保留时间').selectOption('30');
+  check('An explicit choice equal to the default remains saveable', await save().isEnabled());
+  await save().click(); await page.getByText('已保存并生效', { exact: true }).waitFor();
+  check('Explicit numeric default is marked user, not inferred default', await page.evaluate(() => {
+    const call = window.__fixture.calls.filter(c => c[0] === 'saveQueueSettings').at(-1);
+    return call[3].idleTabMinutes === 30 && call[4].idleTabMinutes === 'user';
+  }));
+  await page.getByRole('button', { name: '恢复默认值', exact: true }).click();
+  check('Restoring only provenance remains saveable even when all numbers match', await save().isEnabled());
   await save().click(); await page.getByText('已保存并生效', { exact: true }).waitFor();
   await page.screenshot({ path: out + '/parameters-zh.png', fullPage: true });
   await page.evaluate(() => window.__fixture.patch({ browserInteractionMode: 'manual' }));

@@ -200,6 +200,10 @@ export function preserveUtf8Bom(text: string, original: string): string {
   return original.startsWith("\uFEFF") ? `\uFEFF${stripUtf8Bom(text)}` : stripUtf8Bom(text);
 }
 
+export function readConfigJson(path: string): unknown {
+  return JSON.parse(stripUtf8Bom(readFileSync(path, "utf8")));
+}
+
 export function defaultConfig(mode: RuntimeMode = "native-tools"): AppConfig {
   const home = getConfigDir();
   return {
@@ -353,14 +357,14 @@ export function defaultChromeExecutable(
 export function loadConfig(): AppConfig {
   const path = getConfigPath();
   if (!existsSync(path)) throw new Error(`Configuration is missing: ${path}. Run web2harness setup first.`);
-  const raw: unknown = JSON.parse(stripUtf8Bom(readFileSync(path, "utf8")));
+  const raw = readConfigJson(path);
   return parseConfig(migrateRuntimeConfig(raw), path);
 }
 
 export function loadConfigForSetup(): AppConfig {
   const path = getConfigPath();
   if (!existsSync(path)) throw new Error(`Configuration is missing: ${path}. Run web2harness setup first.`);
-  const migrated = migrateRuntimeConfig(JSON.parse(stripUtf8Bom(readFileSync(path, "utf8"))), { forSetup: true });
+  const migrated = migrateRuntimeConfig(readConfigJson(path), { forSetup: true });
   if (!migrated || typeof migrated !== "object" || Array.isArray(migrated)) return parseConfig(migrated, path);
   const raw = migrated as Record<string, unknown>;
   const interactionMode = raw.browserInteractionMode ?? "automatic";
@@ -572,8 +576,12 @@ function parseConfig(value: unknown, path: string): AppConfig {
 
 export function saveConfig(config: AppConfig): void {
   const path = getConfigPath();
+  const serialized = `${JSON.stringify(config, null, 2)}\n`;
+  // Validate the exact persisted representation through the load contract. Keep normalization
+  // on this copy so validation cannot mutate the caller or rewrite preference provenance.
+  parseConfig(migrateRuntimeConfig(JSON.parse(serialized)), path);
   const original = existsSync(path) ? readFileSync(path, "utf8") : "";
-  atomicWriteFile(path, preserveUtf8Bom(`${JSON.stringify(config, null, 2)}\n`, original));
+  atomicWriteFile(path, preserveUtf8Bom(serialized, original));
 }
 
 export function providerConfig(config: AppConfig): CodexProviderConfig {

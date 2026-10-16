@@ -174,6 +174,7 @@ test("Zero Risk DEV chats open only the generic route", () => {
   const config = {
     ...defaultConfig("mcp-bridge"),
     browserInteractionMode: "manual" as const,
+    experimentalContextFiles: false,
   };
   const driver = new DevChatDriver(
     config,
@@ -205,7 +206,7 @@ test("an existing DEV chat changes route only when the user explicitly requests 
   store.save(original);
 
   const manual = new DevChatDriver(
-    { ...defaultConfig("mcp-bridge"), browserInteractionMode: "manual" },
+    { ...defaultConfig("mcp-bridge"), browserInteractionMode: "manual", experimentalContextFiles: false },
     store,
     (_provider: CodexProviderConfig): ProviderAdapter => {
       throw new Error("adapter is not needed to open a DEV chat");

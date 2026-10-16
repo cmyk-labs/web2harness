@@ -1,6 +1,7 @@
 import type { AdapterEvent, CodexMessagePhase, CodexProviderContinuationState, CodexUsage } from "../types";
 import { encodeCompactionSummary } from "./compaction";
 import { encodeReasoningEnvelope, type ReasoningEnvelope } from "./reasoning-envelope";
+import { responseTerminal, type ResponseTerminal } from "./terminal";
 
 import { uuid, responsesUsage, responseError, adapterFailureFromEvent, plaintextCollaborationFields, type OutputItem } from "./encoding";
 import { resolveStallTimeoutSec } from "../stall-timeout";
@@ -9,7 +10,7 @@ function sseEvent(name: string, data: Record<string, unknown>): string {
   return `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-export type ResponsesTerminalStatus = "completed" | "failed" | "incomplete";
+export type ResponsesTerminalStatus = ResponseTerminal["status"];
 
 export function bridgeToResponsesSSE(
   events: AsyncIterable<AdapterEvent>,
@@ -513,7 +514,10 @@ export function bridgeToResponsesSSE(
               closeCurrentToolCall();
               break;
             }
-            case "done": {
+            case "done":
+            case "incomplete":
+            case "error": {
+              const terminal = responseTerminal(event);
               if (currentMsg) closeCurrentMessage();
               if (currentReasoning) closeCurrentReasoning();
               if (currentRawReasoning) closeCurrentRawReasoning();
@@ -522,8 +526,8 @@ export function bridgeToResponsesSSE(
               // Redacted-only turns (or hidden thinking without a trailing signature event) still
               // need their envelope-only reasoning item so the blocks replay next turn.
               flushHiddenReasoningEnvelope();
-              if (options?.compaction) {
-                // Exactly one compaction item per turn; codex-rs takes the first and fatals on 0.
+              if (options?.compaction && terminal.compactionAllowed) {
+                // Only complete summaries can replace history; partials must never be replayed.
                 const item = {
                   type: "compaction", id: `cmp_${uuid()}`,
                   encrypted_content: encodeCompactionSummary(compactionText),
@@ -532,73 +536,22 @@ export function bridgeToResponsesSSE(
                 finishedItems.push(item as OutputItem);
                 outputIndex++;
               }
-              if (event.stopReason === "max_tokens" || event.stopReason === "content_filter") {
-                // Upstream stopped before a normal completion. Surface as incomplete so the
-                // client can distinguish a truncated/filtered turn from a finished one.
-                const response = {
-                  ...responseSnapshot("incomplete", finishedItems, event.endTurn),
-                  usage: responsesUsage(event.usage),
-                  incomplete_details: {
-                    reason: event.stopReason === "max_tokens" ? "max_output_tokens" : "content_filter",
-                  },
-                };
+              const failure = event.type === "error" ? adapterFailureFromEvent(event) : undefined;
+              const response = {
+                ...responseSnapshot(terminal.status, finishedItems, event.type === "error" ? undefined : event.endTurn),
+                // Preserve best-effort partial usage on failures without claiming an absent count.
+                ...(event.type !== "error" || event.usage ? { usage: responsesUsage(event.usage) } : {}),
+                ...(terminal.status === "incomplete" ? { incomplete_details: terminal.incompleteDetails } : {}),
+                ...(failure ? { error: failure.error, last_error: failure.error } : {}),
+                ...(event.type === "error" && event.retryable !== undefined ? { retryable: event.retryable } : {}),
+              };
+              if (event.type === "done") {
                 // Cache max-output partials so previous_response_id replay can continue them;
                 // rememberResponseState rejects content-filtered incomplete responses.
                 options?.onCompletedResponse?.(response, event.providerState);
-                emit("response.incomplete", { response });
-                reportTerminal("incomplete");
-              } else {
-                const response = { ...responseSnapshot("completed", finishedItems, event.endTurn), usage: responsesUsage(event.usage) };
-                options?.onCompletedResponse?.(response, event.providerState);
-                emit("response.completed", {
-                  response,
-                });
-                reportTerminal("completed");
               }
-              terminalEvent = true;
-              break;
-            }
-            case "incomplete": {
-              if (currentMsg) closeCurrentMessage();
-              if (currentReasoning) closeCurrentReasoning();
-              if (currentRawReasoning) closeCurrentRawReasoning();
-              flushHiddenRawReasoning();
-              if (currentToolCall) closeCurrentToolCall();
-              flushHiddenReasoningEnvelope();
-              emit("response.incomplete", {
-                response: {
-                  ...responseSnapshot("incomplete", finishedItems, event.endTurn),
-                  usage: responsesUsage(event.usage),
-                  incomplete_details: {
-                    reason: event.reason,
-                    ...(event.message ? { message: event.message } : {}),
-                    ...(event.retryable !== undefined ? { retryable: event.retryable } : {}),
-                  },
-                },
-              });
-              reportTerminal("incomplete");
-              terminalEvent = true;
-              break;
-            }
-            case "error": {
-              if (currentMsg) closeCurrentMessage();
-              if (currentReasoning) closeCurrentReasoning();
-              if (currentRawReasoning) closeCurrentRawReasoning();
-              flushHiddenRawReasoning();
-              if (currentToolCall) closeCurrentToolCall();
-              const failure = adapterFailureFromEvent(event);
-              emit("response.failed", {
-                response: {
-                  ...responseSnapshot("failed", finishedItems),
-                  // Partial consumption from a mid-stream upstream failure: surfaced so the request
-                  // log can record real tokens instead of usageStatus "unreported" with 0.
-                  ...(event.usage ? { usage: responsesUsage(event.usage) } : {}),
-                  error: failure.error,
-                  last_error: failure.error,
-                  ...(event.retryable !== undefined ? { retryable: event.retryable } : {}),
-                },
-              });
-              reportTerminal("failed");
+              emit(`response.${terminal.status}`, { response });
+              reportTerminal(terminal.status);
               terminalEvent = true;
               break;
             }
@@ -642,14 +595,15 @@ export function bridgeToResponsesSSE(
         if (currentRawReasoning) closeCurrentRawReasoning();
         flushHiddenRawReasoning();
         if (currentToolCall) closeCurrentToolCall();
-        emit("response.incomplete", {
+        const terminal = responseTerminal(undefined);
+        emit(`response.${terminal.status}`, {
           response: {
-            ...responseSnapshot("incomplete", finishedItems),
+            ...responseSnapshot(terminal.status, finishedItems),
             usage: responsesUsage(undefined),
-            incomplete_details: { reason: "adapter_eof" },
+            ...(terminal.status === "incomplete" ? { incomplete_details: terminal.incompleteDetails } : {}),
           },
         });
-        reportTerminal("incomplete");
+        reportTerminal(terminal.status);
         terminated = true;
       }
 

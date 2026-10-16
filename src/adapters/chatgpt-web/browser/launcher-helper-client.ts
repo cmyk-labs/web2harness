@@ -7,6 +7,8 @@ import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { notifyLauncherTurn, readLauncherBrowserHostDescriptor } from "../../../browser/launcher-client";
 import { ChatGptCompactionHandoffAccepted, ChatGptWebAdapterError } from "../adapter-error";
+import { diagnosticError, diagnosticEvent } from "../../../diagnostics";
+import type { BrowserHelperError } from "./browser-helper-error";
 import type { CompiledChatGptWebPrompt } from "../prompt/compile";
 import type { BrowserTurn, ResolvedBrowserConfig } from "./browser-worker";
 import {
@@ -34,16 +36,7 @@ type HelperMessage =
   | { type: "event"; id: string; event: "prepared_selected"; reused: boolean }
   | { type: "event"; id: string; event: "luna_checkpoint"; checkpoint: ChatGptLunaCheckpoint; answerHash: string }
   | { type: "result"; id: string; text: string }
-  | {
-      type: "error";
-      id: string;
-      name?: string;
-      message: string;
-      status?: number;
-      errorType?: string;
-      code?: string;
-      retryable?: boolean;
-    };
+  | BrowserHelperError;
 
 function parseHelperMessage(line: string): HelperMessage {
   const value = JSON.parse(line) as unknown;
@@ -150,6 +143,8 @@ function parseHelperMessage(line: string): HelperMessage {
       || retryable !== undefined;
     if (typeof errorMessage !== "string"
       || (errorName !== undefined && typeof errorName !== "string")
+      || (message.diagnosticRef !== undefined && (typeof message.diagnosticRef !== "string"
+        || !/^diag-[a-f0-9]{24}$/.test(message.diagnosticRef)))
       || (structured && (
         !Number.isInteger(status)
         || (status as number) < 400
@@ -166,6 +161,7 @@ function parseHelperMessage(line: string): HelperMessage {
       type: "error",
       id: message.id,
       message: errorMessage,
+      ...(typeof message.diagnosticRef === "string" ? { diagnosticRef: message.diagnosticRef } : {}),
       ...(errorName !== undefined ? { name: errorName as string } : {}),
       ...(structured ? {
         status: status as number,
@@ -574,6 +570,13 @@ export class LauncherBrowserHelperClient {
         : message.name === "AbortError"
           ? new DOMException(message.message, "AbortError")
           : new Error(message.message);
+      if (error instanceof ChatGptWebAdapterError && message.name === "AbortError") error.name = "AbortError";
+      if (message.diagnosticRef) {
+        Object.defineProperty(error, "diagnosticRef", { value: message.diagnosticRef });
+        diagnosticEvent(message.status === 499 || message.name === "AbortError" ? "info" : "error", "browser.helper_error_received", {
+          requestId: message.id, traceId: pending.turn.traceId, ...diagnosticError(error),
+        });
+      }
       this.finish(message.id);
       pending.reject(pending.localFailure ?? error);
     }

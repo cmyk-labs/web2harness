@@ -290,7 +290,7 @@ test("detached worker replaces an installed Linux AppImage and removes the old v
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
     }
     assert.equal(fs.readFileSync(marker, "utf8"), "launched");
-    assert.match(fs.readFileSync(logPath, "utf8"), /installed and relaunched/);
+    assert.match(fs.readFileSync(logPath, "utf8"), /installed; relaunch process started/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

@@ -52,7 +52,7 @@ function legacyFixture(home: string, interaction: "automatic" | "manual") {
 
 describe("persisted runtime mode migration", () => {
   for (const interaction of ["automatic", "manual"] as const) {
-    test(`upgrades ${interaction} state without changing connector, credential references or preferences`, () => {
+    test(`upgrades ${interaction} state while preserving connector references and applying supported defaults`, () => {
       withFixtureHome(home => {
         const raw = legacyFixture(home, interaction);
         const original = structuredClone(raw);
@@ -67,7 +67,7 @@ describe("persisted runtime mode migration", () => {
         writeFileSync(path, bytes);
         for (const load of [loadConfig, loadConfigForSetup]) {
           const config = load();
-          expect(config).toMatchObject({ ...original, version: 5, mode: "mcp-bridge" });
+          expect(config).toMatchObject({ ...original, version: 5, mode: "mcp-bridge", experimentalContextFiles: interaction === "automatic" });
           expect(providerConfig(config).chatgptWeb?.localToolsEnabled).toBe(true);
           expect(readFileSync(path, "utf8")).toBe(bytes);
         }
@@ -76,7 +76,7 @@ describe("persisted runtime mode migration", () => {
         const savedText = readFileSync(path, "utf8");
         expect(savedText.startsWith("\uFEFF")).toBe(true);
         const saved = JSON.parse(savedText.slice(1));
-        expect(saved).toMatchObject({ ...original, version: 5, mode: "mcp-bridge" });
+        expect(saved).toMatchObject({ ...original, version: 5, mode: "mcp-bridge", experimentalContextFiles: interaction === "automatic" });
         expect(loadConfig()).toMatchObject({ version: 5, mode: "mcp-bridge" });
       });
     });

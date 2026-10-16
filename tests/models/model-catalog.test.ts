@@ -240,6 +240,7 @@ describe("native /models augmentation", () => {
   test("Zero Risk publishes exactly one generic model without capability inference", () => {
     const config = defaultConfig("mcp-bridge");
     config.browserInteractionMode = "manual";
+    config.experimentalContextFiles = false;
     config.solAvailable = false;
     config.proAvailable = false;
     const models = augmentNativeModelCatalog(source(), config).models as Array<Record<string, unknown>>;

@@ -97,6 +97,8 @@ Launcher 的脱敏队列回执保存在当前应用目录 `runtime/request-queue
 
 数值和每个字段的`user`／`default`来源保存在`launcher-state.json`。只有有效且明确标为`user`的值在默认值迁移时保留，缺失或其他来源使用当前默认值。私有、进程绑定的启动器描述文件向共享运行时发布已校验的执行设置，后续请求无需重启服务即可采用。在Launcher模式下，此界面管理实际`stallTimeoutSec`；独立managed Chrome保留原配置／默认值，不读取其他启动器的设置。
 
+**恢复默认值**在保存前仍是草稿。保存时，这些执行设置的来源恢复为`default`，即使数值本来就与当前默认相等，后续也会跟随默认值迁移。之后单独修改某项，只把该项标为`user`；数值恰好等于默认值并不代表默认来源。未保存草稿会保留这项操作意图。
+
 <a id="standalone-request-queue"></a>
 
 ### 独立队列控制
@@ -161,7 +163,7 @@ CLI 读取所选应用目录的运行配置并输出 JSON。下列命令拒绝 L
 | `chromeExecutablePath` | macOS：`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`；Windows：`%PROGRAMFILES%\Google\Chrome\Application\chrome.exe`，缺省根目录为 `C:\Program Files`；Linux：`/usr/bin/google-chrome` | 受管理浏览器及登录路径使用的非空可执行文件路径，可通过 `--chrome` 覆盖。 |
 | `headed` | `true` | 布尔值，控制受管理浏览器是否显示窗口。 |
 | `storageStatePath` | `<主目录>/browser/storage-state.json` | 受管理浏览器使用的非空会话文件路径；启动器持久浏览器分区单独保存会话。 |
-| `browserHostDescriptorPath` | 启动器提供 | `browserHost: "launcher"` 时必需的绝对路径，描述浏览器所属进程及私有控制端点。 |
+| `browserHostDescriptorPath` | 启动器提供 | `browserHost: "launcher"` 时必需的绝对路径；setup在校验和保存前展开`~`并将相对输入转为绝对路径。描述浏览器所属进程及私有控制端点。 |
 | `brokerSocketPath` | Unix：`<主目录>/runtime/turn-broker.sock`；Windows：`\\.\pipe\web2harness-<主目录哈希>` | 根据平台使用绝对 Unix socket 路径或有效 Windows 命名管道。Windows 身份从解析后的主目录派生。 |
 | `controlToken` | 从 32 个随机字节生成 | 私有 base64url 控制凭据；解析器要求至少 40 个字符，且仅含字母、数字、`_` 和 `-`。 |
 | `runtimeCommand` | 当前持久安装的运行时可执行文件及可选入口文件 | 非空字符串数组；首项必须是存在的绝对可执行文件路径。命令中的绝对路径不能位于临时目录。 |
@@ -423,7 +425,7 @@ DEV 拒绝与生产数据目录重叠，使用独立浏览器登录及 Codex 主
 | `CODEX_HOME` | 常规 Codex 主目录；DEV 将其子进程环境设置为 `<DEV 主目录>/codex-home`。 |
 | `WEB2HARNESS_LAUNCHER_DATA_DIR` | 常规 Electron 用户数据目录；DEV 改用 `<DEV 主目录>/launcher`。 |
 | `WEB2HARNESS_CODEX_EXECUTABLE` | 为 DEV 可执行文件发现指定 Codex 可执行文件或 npm JavaScript 入口。 |
-| `WEB2HARNESS_LAUNCHER_EXECUTABLE` | 为 DEV 指定打包启动器，该构建必须支持 DEV 环境；没有此覆盖项时，源码目录可使用自己的启动器开发脚本。 |
+| `WEB2HARNESS_LAUNCHER_EXECUTABLE` | 为 DEV 指定打包启动器，该构建必须支持 DEV 环境。显式路径为空、不存在或不可执行时直接失败，不选择其他安装；没有此覆盖项时，源码目录可使用自己的启动器开发脚本。 |
 | `WEB2HARNESS_BUN` | 运行时发现使用的持久安装 Bun 可执行文件；安装运行命令时拒绝临时可执行文件。 |
 | `WEB2HARNESS_REPOSITORY` | 显式 `OWNER/REPOSITORY` 发布源；打包元数据可提供启动器的缺省值。显式值无效时不会静默回退。安装脚本要求见[发布指南](release.zh-CN.md)。 |
 
