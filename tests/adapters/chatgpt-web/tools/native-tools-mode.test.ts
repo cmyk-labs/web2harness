@@ -14,6 +14,7 @@ import { CODEX_TOOL_CALLS_FENCE } from "../../../../src/adapters/chatgpt-web/too
 import { ChatGptBrowserWorker, type BrowserTurn } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { createChatGptWebAdapter } from "../../../../src/adapters/chatgpt-web/adapter";
 import { StandaloneRequestQueue } from "../../../../src/browser/standalone-request-queue";
+import { DEFAULT_RUNTIME_PARAMETERS } from "../../../../launcher/shared/runtime-parameters.cjs";
 import { withQueuedRequest } from "../../../../src/browser/request-queue-client";
 import { toolIdentityKey, type AdapterEvent, type CodexParsedRequest, type CodexProviderConfig, type CodexTool } from "../../../../src/types";
 
@@ -173,7 +174,7 @@ describe("native-tools model mode and prompt contract", () => {
     expect(chatGptReadOnlyContextWarning(request, nativeCapabilities)).toBeUndefined();
 
     const envelope = JSON.parse(compiled.text.split("<codex_context_json>")[1]!.split("</codex_context_json>")[0]!);
-    expect(envelope.version).toBe(5);
+    expect(envelope.version).toBe(6);
     expect(envelope.tools).toEqual([
       { type: "function", name: "exec_command", description: "Run command", parameters: tools[0]!.parameters },
       { type: "custom", name: "apply_patch", description: "Patch files" },
@@ -182,7 +183,7 @@ describe("native-tools model mode and prompt contract", () => {
 
     const browserOnly = compileChatGptWebPrompt(parsedRequest(tools), browserOnlyCapabilities);
     const browserEnvelope = JSON.parse(browserOnly.text.split("<codex_context_json>")[1]!.split("</codex_context_json>")[0]!);
-    expect(browserEnvelope.version).toBe(5);
+    expect(browserEnvelope.version).toBe(6);
     expect(browserEnvelope.tools).toBeUndefined();
   });
 
@@ -206,7 +207,7 @@ describe("native-tools model mode and prompt contract", () => {
     const compiled = compileChatGptWebPrompt(request, nativeCapabilities);
     expect(compiled.text).not.toContain(CODEX_TOOL_CALLS_FENCE);
     const envelope = JSON.parse(compiled.text.split("<codex_context_json>")[1]!.split("</codex_context_json>")[0]!);
-    expect(envelope.version).toBe(5);
+    expect(envelope.version).toBe(6);
     expect(envelope.tools).toBeUndefined();
   });
 });
@@ -454,6 +455,7 @@ describe("native-tools adapter emission", () => {
     Object.assign(provider.chatgptWeb!, {
       browserHost: "launcher",
       browserHostDescriptorPath: join(tempRoot, `retention-${fresh}.json`),
+      runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
       experimentalFreshConversationPerTurn: fresh,
       useSavedChats: true,
     });

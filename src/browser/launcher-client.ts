@@ -57,6 +57,7 @@ export interface LauncherBrowserHostDescriptor {
   surfaceTargets: Record<string, string>;
   createdAt: string;
   runtimeParameters?: RuntimeParameters;
+  language?: "en" | "zh-CN";
 }
 
 export interface LauncherBrowserConnection {
@@ -148,6 +149,7 @@ function assertDescriptorShape(value: unknown): LauncherBrowserHostDescriptor {
     surfaceId: descriptor.surfaceId,
     surfaceTargets: targets,
     createdAt: descriptor.createdAt,
+    ...(descriptor.language === "zh-CN" || descriptor.language === "en" ? { language: descriptor.language } : {}),
     ...(descriptor.runtimeParameters === undefined ? {} : { runtimeParameters: validateRuntimeParameters(descriptor.runtimeParameters) }),
   };
 }

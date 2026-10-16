@@ -588,6 +588,7 @@ function registerIpc({ logger, stateStore }) {
     const state = stateStore.update({ language: validateLanguage(language) });
     updateTrayMenu(state.language);
     browserHost?.syncInputProtection();
+    browserHost?.writeDescriptor();
     return state;
   });
   handle("launcher:complete-onboarding", (_event, language, rawInteractionMode) => {
@@ -599,6 +600,7 @@ function registerIpc({ logger, stateStore }) {
       onboardingComplete: true,
     });
     updateTrayMenu(next.language);
+    browserHost?.writeDescriptor();
     logger.info("launcher.onboarding_completed", {
       language: next.language,
       browserInteractionMode: next.browserInteractionMode,

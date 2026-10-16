@@ -60,7 +60,7 @@ function contextEnvelope(parsed: CodexParsedRequest, token: string, manual: bool
   const json = compiled.contextFile?.text
     ?? compiled.text.split("<codex_context_json>\n")[1]?.split("\n</codex_context_json>")[0];
   expect(json).toBeString();
-  return JSON.parse(json!) as CodexSourceContext & { transport_context: { mode: string; prefix_items?: number; prefix_sha256?: string } };
+  return JSON.parse(json!) as CodexSourceContext & { transport_context: { mode: string; prefix_items?: number } };
 }
 
 // Supply the encoder's public mapping inputs from the parsed registry, as the Responses
@@ -211,7 +211,7 @@ for (const manual of [false, true]) test(`two-round ${manual ? "manual" : "autom
     const envelope = contextEnvelope(resume, nextRound.token, manual);
     expect(envelope).toMatchObject({ instructions: body.instructions, tools: body.tools, input: suffix,
       controls: { parallel_tool_calls: false, tool_choice: "auto" },
-      transport_context: { mode: "append", prefix_items: body.input.length, prefix_sha256: expect.stringMatching(/^[a-f0-9]{64}$/) } });
+      transport_context: { mode: "append", prefix_items: body.input.length } });
     expect(envelope.input).toEqual(suffix);
     expect(next.context.source?.input).toEqual([...body.input, ...suffix]);
 

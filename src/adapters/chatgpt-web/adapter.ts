@@ -48,6 +48,7 @@ import { ChatGptTextFeed, ChatGptTraceFeed, chatGptCompactionSourceExecutionKey,
 import { estimateChatGptWebUsage } from "./usage";
 import { ChatGptThreadEnvironmentStore } from "./prompt/thread-environment";
 import { savedChatTask } from "./conversation/saved-chat-task";
+import { contextResyncError, contextResyncProgress, contextResyncReplayCandidate, parseContextResyncReply } from "./conversation/context-resync";
 import { ChatGptExternalTurnProgress } from "./tools/turn-progress";
 import {
   canonicalizeCompactionHandoff,
@@ -62,6 +63,7 @@ import {
   chatGptConversationKey,
   retainedConversationResumeRequest,
   rememberRetainedConversationSource,
+  forgetRetainedConversationSource,
 } from "./conversation/conversation-key";
 
 function brokerSocketPath(provider: CodexProviderConfig): string {
@@ -209,9 +211,10 @@ function safeManualTerminalError(status: "cancelled" | "failed"): ChatGptWebAdap
 }
 
 export function chatGptWebExecutionNamespace(provider: CodexProviderConfig): string {
+  const { uiLanguage: _uiLanguage, ...web } = provider.chatgptWeb ?? {};
   return createHash("sha256").update(JSON.stringify({
     baseUrl: provider.baseUrl,
-    chatgptWeb: provider.chatgptWeb ?? {},
+    chatgptWeb: web,
   })).digest("hex");
 }
 
@@ -492,7 +495,7 @@ export function createChatGptWebAdapter(
       : resolveChatGptWebModelMode(parsed.modelId, parsed.options.reasoning, turnCapabilities);
     const savedChat = !manualRequest && provider.chatgptWeb?.useSavedChats === true
       && retainedLauncherDescriptor ? savedChatTask(parsed) : undefined;
-    const conversationKey = !parsed._compactionRequest
+    let conversationKey = !parsed._compactionRequest
       && !freshConversationPerTurn
       && parsed.modelId !== CHATGPT_WEB_LUNA_MODEL_ID
       && (mode.localTools || mode.nativeTools)
@@ -525,6 +528,8 @@ export function createChatGptWebAdapter(
     };
     const releaseRetainedConversation = conversationKey && retainedLauncherDescriptor
       ? async () => {
+        if (!conversationKey) return;
+        forgetRetainedConversationSource(conversationKey);
         await releaseLauncherRetainedConversation(retainedLauncherDescriptor, conversationKey);
       }
       : undefined;
@@ -791,32 +796,88 @@ export function createChatGptWebAdapter(
       };
     }
     if (!mode.localTools) {
+      const resyncEnabled = mode.nativeTools && !parsed._compactionRequest;
+      const language = provider.chatgptWeb?.uiLanguage ?? "en";
+      let resyncAttempted = false;
+      let resyncId = randomBytes(24).toString("hex");
       const prepareWith = async (input: CodexParsedRequest) => ({
-        ...compileChatGptWebPrompt(input, turnCapabilities, undefined, compileOptionsFor()),
+        ...compileChatGptWebPrompt(input, turnCapabilities, undefined, {
+          ...compileOptionsFor(), ...(resyncEnabled ? { contextResyncId: resyncId } : {}),
+        }),
         release: () => {},
       });
-      const browserTurn = cancellableBrowserTurn(finalizeBrowserReply(worker.run({
-        ...(mode.nativeTools ? { nativeToolDefinitions: parsed.context.tools ?? [] } : {}),
-        traceId,
-        scheduling,
-        ...preparationIdentity,
-        onQueueDispatched: hooks.onQueueDispatched,
-        modelId: parsed.modelId,
-        reasoning: parsed.options.reasoning,
-        usagePurpose: parsed._compactionRequest ? "compaction" : parsed.context.messages.at(-1)?.role === "toolResult" ? "tool-result" : "task",
-        ...(parsed._chatgptModelFamily ? { modelFamily: parsed._chatgptModelFamily } : {}),
-        capabilities: turnCapabilities,
-        prepare: () => prepareWith(parsed),
-        ...(savedChat ? { savedChat } : {}),
-        ...(resumeInput ? { prepareResume: () => prepareWith(resumeInput) } : {}),
-        ...(retainConversation ? { retainConversation: true, conversationKey } : {}),
-        abortSignal: browserAbort.signal,
-        ...(parsed._compactionRequest ? { compaction: true } : {}),
-        ...submissionLifecycle,
-        onReasoningSummary: (text, continuation) => trace.push({ kind: "reasoning", text, ...(continuation ? { continuation: true } : {}) }),
-        onCommentary: (text, continuation) => trace.push({ kind: "commentary", text, ...(continuation ? { continuation: true } : {}) }),
-        onTextDelta: delta => text.push(delta),
-      })), browserAbort);
+      const runBrowser = async (): Promise<string> => {
+        for (;;) {
+          browserAbort.signal.throwIfAborted();
+          // Native replies stay private until classification. A rejected control response must
+          // neither enter the final text feed nor become a retained canonical baseline.
+          let attemptText = "";
+          const answer = await worker.run({
+            ...(mode.nativeTools ? { nativeToolDefinitions: parsed.context.tools ?? [] } : {}),
+            traceId,
+            scheduling: resyncAttempted ? { ...scheduling,
+              // Independent of generic retries: the durable receipt also blocks a replay after restart.
+              id: createHash("sha256").update(`${executionNamespace}:${chatGptTurnRoundKey(parsed)}:context-resync`).digest("hex"),
+            } : scheduling,
+            ...preparationIdentity,
+            ...(resyncAttempted ? { allowPreparationRecovery: false } : {}),
+            onQueueDispatched: hooks.onQueueDispatched,
+            modelId: parsed.modelId,
+            reasoning: parsed.options.reasoning,
+            usagePurpose: parsed._compactionRequest ? "compaction" : parsed.context.messages.at(-1)?.role === "toolResult" ? "tool-result" : "task",
+            ...(parsed._chatgptModelFamily ? { modelFamily: parsed._chatgptModelFamily } : {}),
+            capabilities: turnCapabilities,
+            prepare: () => prepareWith(parsed),
+            ...(savedChat ? { savedChat } : {}),
+            ...(!resyncAttempted && resumeInput ? { prepareResume: () => prepareWith(resumeInput) } : {}),
+            ...(retainConversation ? { retainConversation: true, conversationKey } : {}),
+            abortSignal: browserAbort.signal,
+            ...(parsed._compactionRequest ? { compaction: true } : {}),
+            ...submissionLifecycle,
+            onReasoningSummary: (text, continuation) => trace.push({ kind: "reasoning", text, ...(continuation ? { continuation: true } : {}) }),
+            onCommentary: (text, continuation) => trace.push({ kind: "commentary", text, ...(continuation ? { continuation: true } : {}) }),
+            onTextDelta: delta => { if (resyncEnabled) attemptText += delta; else text.push(delta); },
+          });
+          // worker.run includes browser end/release and queue settlement, not only model output.
+          browserAbort.signal.throwIfAborted();
+          if (resyncEnabled) {
+            if (attemptText !== answer) throw new Error("ChatGPT browser Markdown stream did not reproduce the completed answer");
+            let reason;
+            try { reason = parseContextResyncReply(answer, resyncId, language); }
+            catch (error) { await releaseRetainedConversation?.(); throw error; }
+            if (reason) {
+              await releaseRetainedConversation?.();
+              browserAbort.signal.throwIfAborted();
+              if (resyncAttempted) throw contextResyncError("context_resync_failed", language);
+              resyncAttempted = true;
+              diagnosticEvent("info", "browser.context_resync", { traceId, reason, attempt: 1 });
+              trace.push({ kind: "commentary", text: contextResyncProgress(language) });
+              if (conversationKey) conversationKey = createHash("sha256")
+                .update(`${conversationKey}:${chatGptTurnRoundKey(parsed)}:context-resync`).digest("hex");
+              resyncId = randomBytes(24).toString("hex");
+              submission.phase = "prepared";
+              continue;
+            }
+            if (resyncAttempted) {
+              const reply = parseNativeToolCallReply(answer, parsed.context.tools ?? []);
+              try { validateToolCallBatch(parsed, reply.calls.map(nativeBrokerRequest)); }
+              catch (error) { reply.issues.push({ callIndex: null, problem: String(error) }); }
+              if (reply.issues.length) {
+                await releaseRetainedConversation?.();
+                throw contextResyncError("context_resync_failed", language);
+              }
+            }
+            text.push(answer);
+          }
+          return finalizeBrowserReply(Promise.resolve(answer));
+        }
+      };
+      const browserTurn = cancellableBrowserTurn(runBrowser().catch(async error => {
+        if (!resyncAttempted || browserAbort.signal.aborted
+          || (error instanceof ChatGptWebAdapterError && ["client_cancelled", "queue_cancelled", "context_resync_invalid", "context_resync_failed"].includes(error.code))) throw error;
+        await releaseRetainedConversation?.();
+        throw contextResyncError("context_resync_failed", language, error);
+      }), browserAbort);
       return {
         mode: "read-only",
         browser: browserTurn.browser,
@@ -825,7 +886,9 @@ export function createChatGptWebAdapter(
         text,
         usageInput: parsed,
         submission,
-        ...(conversationKey ? { conversationKey } : {}),
+        get conversationKey() { return conversationKey; },
+        get contextResyncAttempted() { return resyncAttempted; },
+        get contextResyncProgress() { return resyncAttempted ? contextResyncProgress(language) : undefined; },
         ...(releaseRetainedConversation ? { releaseRetainedConversation } : {}),
         cancel: browserTurn.cancel,
       };
@@ -1270,7 +1333,17 @@ export function createChatGptWebAdapter(
           const responseExecutionKey = `${executionNamespace}:${chatGptCompactionSourceExecutionKey(parsed)}`;
           await chatGptTurnSessions.retireAndWait(responseExecutionKey, incoming.abortSignal);
         }
-        const nativeRoundKey = nativeToolsTurn || mode.localTools ? chatGptTurnRoundKey(parsed) : undefined;
+        let nativeRoundKey = nativeToolsTurn || mode.localTools ? chatGptTurnRoundKey(parsed) : undefined;
+        if (nativeToolsTurn) {
+          const replay = contextResyncReplayCandidate(parsed);
+          if (replay) {
+            const priorRound = chatGptTurnRoundKey(replay.parsed);
+            const prior = chatGptTurnSessions.find(`${executionNamespace}:${priorRound}`);
+            // Only an existing owner that actually emitted this progress may accept the alias.
+            // All source fields, tools, controls and native identity must otherwise match exactly.
+            if (prior?.runtime.contextResyncAttempted && prior.runtime.contextResyncProgress === replay.progress) nativeRoundKey = priorRound;
+          }
+        }
         // Native-tools rounds are per request: Codex resends the full history every round
         // (store:false), so each roundKey (input hash) owns its own response journal. Keying the
         // session by thread+turn alone would replay round 1's settled reply to round 2 — the
@@ -1370,6 +1443,7 @@ export function createChatGptWebAdapter(
             return;
           }
           if (parsedReply.issues.length > 0) {
+            if (session.runtime.contextResyncAttempted) throw contextResyncError("context_resync_failed", provider.chatgptWeb?.uiLanguage);
             recordNativeToolCallCorrection(retryKey, answer, parsedReply.issues);
             throw new ChatGptWebAdapterError(
               "ChatGPT returned a tool-call block that could not be relayed to Codex",

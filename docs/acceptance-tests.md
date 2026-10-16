@@ -105,6 +105,8 @@ If exec is unavailable, explicitly report that; do not complete the task by anot
 
 Missing exec, lack of real parallel dispatch, unmet requirements after tool errors, incorrect output, or writes outside the fixture cannot be recorded as a pass.
 
+For native context-resynchronization changes, extend the owned file task with a controlled `codex_context_resync` response before a tool call is delivered. Verify one fresh `complete` submission, unchanged model/effort/tool controls, actual native patch and command assertion afterward, and normal reuse on the next round. Record controlled fault injection separately from a naturally occurring missing-context failure. Fixtures must cover image/file/skill encoding without source mutation, genuine prefix edits, two compaction epochs, stale or mixed signals, terminal second failure, parallel task isolation, HTTP reconnect and explicit cancellation without duplicate tool delivery. Include reconnects whose input now contains the bridge progress message: cancellation must prevent another browser submission, while a new native turn remains usable. Original prefix hashes stay internal; attachment-integrity checks remain enforced. These focused checks do not require rerunning unrelated capabilities.
+
 <a id="cap-002"></a>
 
 ## CAP-002: Code Mode waiting and same-task continuation

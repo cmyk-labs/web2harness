@@ -3525,6 +3525,7 @@ class BrowserHost {
       surfaceId: this.surfaceId,
       surfaceTargets,
       runtimeParameters: runtimeParametersFor(this),
+      language: this.getLanguage?.() === "zh-CN" ? "zh-CN" : "en",
       createdAt: new Date().toISOString(),
     };
     writePrivateFileAtomic(this.descriptorPath, `${JSON.stringify(descriptor, null, 2)}\n`);

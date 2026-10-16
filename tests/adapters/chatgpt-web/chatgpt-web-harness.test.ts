@@ -1,4 +1,5 @@
 import { toolIdentityKey } from "../../../src/types";
+import { DEFAULT_RUNTIME_PARAMETERS } from "../../../launcher/shared/runtime-parameters.cjs";
 import { diagnosticReference, parseDiagnosticLine } from "../../../launcher/shared/diagnostic-event.cjs";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { rejects } from "node:assert/strict";
@@ -1550,7 +1551,7 @@ describe("ChatGPT outer-native harness v4", () => {
     const compiled = compileChatGptWebPrompt(request, toolCapabilities, "turn_123456789012345678901234");
     expect(compiled.text).not.toContain(imageUrl);
     expect(compiled.text).toContain('"attachment_ref":"codex-input-image-1"');
-    expect(compiled.text).toContain('"version":5');
+    expect(compiled.text).toContain('"version":6');
     expect(compiled.text).toContain("Use the attached Codex transport tools to relay calls to the active Codex task");
     expect(compiled.text).toContain("Codex retains sandbox and approval enforcement");
     expect(compiled.text).toContain("Follow the Codex task's own tool-use instructions");
@@ -2079,7 +2080,7 @@ describe("ChatGPT outer-native harness v4", () => {
     const compiled = compileChatGptWebPrompt(request, toolCapabilities, "turn_123456789012345678901234");
     const encoded = compiled.text.match(/<codex_context_json>\n(.+)\n<\/codex_context_json>/s)?.[1];
     const envelope = JSON.parse(encoded!) as { version: number; system: string[]; messages: Array<Record<string, unknown>> };
-    expect(envelope.version).toBe(5);
+    expect(envelope.version).toBe(6);
     expect(envelope.system).toEqual(["system-rule", "repo-rule"]);
     expect(envelope.messages.map(message => message.role)).toEqual(["developer", "user", "assistant", "tool_result", "user"]);
     expect(envelope.messages[2]?.content).toEqual([
@@ -2362,7 +2363,7 @@ describe("ChatGPT outer-native harness v4", () => {
   test("MCP final survives a separately queued compaction checkpoint and exact reconnect", async () => {
     const socketPath = brokerTestEndpoint("queued-compaction-" + Date.now());
     const provider: CodexProviderConfig = { adapter: "chatgpt-web", baseUrl: "browser://queued-compaction-" + Date.now(),
-      chatgptWeb: { browserHost: "launcher", browserHostDescriptorPath: join(tempRoot, "compaction.json"), brokerSocketPath: socketPath,
+      chatgptWeb: { browserHost: "launcher", browserHostDescriptorPath: join(tempRoot, "compaction.json"), runtimeParameters: DEFAULT_RUNTIME_PARAMETERS, brokerSocketPath: socketPath,
         localToolsEnabled: true, solAvailable: true, extraHighAvailable: true, proAvailable: true } };
     const worker = ChatGptBrowserWorker.forProvider(provider), originalRun = worker.run.bind(worker);
     let starts = 0, releases = 0;

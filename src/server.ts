@@ -704,7 +704,7 @@ async function responseRequestFromBody(
   const logContext = diagnosticContext.getStore();
   if (logContext && traceId) { logContext.traceId = traceId; logContext.requestedModel = parsed.modelId; logContext.mode = config.mode; }
   diagnosticEvent("info", "http.request_bound", { traceId, requestedModel: parsed.modelId, mode: config.mode, compaction });
-  const cancelledError = traceId ? chatGptTurnSessions.cancelledError(traceId) : undefined;
+  const cancelledError = traceId ? chatGptTurnSessions.cancelledError(traceId, extractChatGptTurnIdentity(parsed)) : undefined;
   if (cancelledError) {
     // Codex retries unknown streamed response.failed codes. A replay after the user explicitly
     // closed the only browser document is instead a terminal client state: repeating that exact

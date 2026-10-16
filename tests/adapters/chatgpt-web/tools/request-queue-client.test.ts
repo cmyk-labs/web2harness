@@ -12,6 +12,21 @@ const require = createRequire(import.meta.url);
 const { RequestQueue } = require("../../../../launcher/electron/runtime/request-queue.cjs");
 const { BrowserControlServer } = require("../../../../launcher/electron/control-server.cjs");
 
+test("cancellation while the physical attempt settles cannot return a recovery-eligible reply", async () => {
+  const abort = new AbortController();
+  const settlements: unknown[] = [];
+  const transport = { async request<T>(action: string, body: unknown): Promise<T> {
+    if (action === "enqueue") return { record: { state: "preparing" }, secret: "fixture" } as T;
+    if (action === "settle") settlements.push(body);
+    return {} as T;
+  } };
+  await expect(withQueuedRequest({ descriptorPath: transport, traceId: "late-cancel", signal: abort.signal,
+    job: { id: "late-cancel", groupId: "fixture", model: "gpt-6", mode: "native-tools", bytes: 1 },
+    execute: async () => { abort.abort(); return "must not recover from this reply"; },
+  })).rejects.toBeDefined();
+  expect(settlements).toEqual([{ id: "late-cancel", secret: "fixture", outcome: "cancelled", reason: undefined }]);
+});
+
 test("50 independent HTTP queue clients share four slots, and a cancelled waiter never executes", async () => {
   const root = await mkdtemp(join(tmpdir(), "w2h-http-queue-"));
   const logger = { info() {}, warn() {}, error() {} }, resources = new Set<string>();

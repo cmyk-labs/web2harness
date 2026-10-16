@@ -49,6 +49,7 @@ import {
   structuredCompactionHandoffInstruction,
 } from "../../../../src/adapters/chatgpt-web/tools/native-compaction-control";
 import type { AdapterEvent, CodexParsedRequest, CodexProviderConfig } from "../../../../src/types";
+import { DEFAULT_RUNTIME_PARAMETERS } from "../../../../launcher/shared/runtime-parameters.cjs";
 
 /**
  * These fixtures hand the turn broker a Unix socket under their temp root. macOS puts TMPDIR at
@@ -1026,7 +1027,7 @@ test("adapter compact returns one same-agent handoff and preserves a pre-existin
     baseUrl: `browser://retained-compact-${Date.now()}`,
     chatgptWeb: {
       browserHost: "launcher",
-      browserHostDescriptorPath: join(root, "launcher.json"),
+      browserHostDescriptorPath: join(root, "launcher.json"), runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
       brokerSocketPath: defaultBrokerEndpoint(root),
       appName: "Codex Native DEV",
       localToolsEnabled: true,
@@ -1122,7 +1123,7 @@ test("a compact HTTP observer can reconnect without sending a second retained-ch
     baseUrl: `browser://compact-reconnect-${Date.now()}`,
     chatgptWeb: {
       browserHost: "launcher",
-      browserHostDescriptorPath: join(root, "launcher.json"),
+      browserHostDescriptorPath: join(root, "launcher.json"), runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
       brokerSocketPath: defaultBrokerEndpoint(root),
       appName: "Codex Native DEV",
       localToolsEnabled: true,
@@ -1221,7 +1222,7 @@ test.each([false, true])("structured compact rebuilds canonical context when its
     chatgptWeb: {
       experimentalContextFiles,
       browserHost: "launcher",
-      browserHostDescriptorPath: join(root, "launcher.json"),
+      browserHostDescriptorPath: join(root, "launcher.json"), runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
       brokerSocketPath: defaultBrokerEndpoint(root),
       localToolsEnabled: true,
       solAvailable: true,
@@ -1276,7 +1277,7 @@ test.each([false, true])("configured fresh compaction waits for cleanup and pres
   const root = mkdtempSync(join(shortSocketTempRoot(), "cgw-fresh-owner-"));
   const provider: CodexProviderConfig = {
     adapter: "chatgpt-web", baseUrl: `browser://fresh-owner-${root}`,
-    chatgptWeb: { browserHost: "launcher", browserHostDescriptorPath: join(root, "launcher.json"),
+    chatgptWeb: { browserHost: "launcher", browserHostDescriptorPath: join(root, "launcher.json"), runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
       brokerSocketPath: defaultBrokerEndpoint(root), localToolsEnabled: true, solAvailable: true,
       experimentalFreshConversationPerTurn: true },
   };
@@ -1329,7 +1330,7 @@ test.each([false, true])("fresh compaction preserves phase budgets with fresh mo
     baseUrl: `browser://phased-fallback-${Date.now()}`,
     chatgptWeb: {
       browserHost: "launcher",
-      browserHostDescriptorPath: join(root, "launcher.json"),
+      browserHostDescriptorPath: join(root, "launcher.json"), runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
       brokerSocketPath: defaultBrokerEndpoint(root),
       localToolsEnabled: true,
       solAvailable: true,
@@ -1377,7 +1378,7 @@ test("cancel-all waits for physical settlement of a fresh compaction fallback", 
     baseUrl: `browser://cancel-fresh-${Date.now()}`,
     chatgptWeb: {
       browserHost: "launcher",
-      browserHostDescriptorPath: join(root, "launcher.json"),
+      browserHostDescriptorPath: join(root, "launcher.json"), runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
       brokerSocketPath: defaultBrokerEndpoint(root),
       localToolsEnabled: true,
       solAvailable: true,
@@ -1431,7 +1432,7 @@ test("a timed-out fresh compaction retains its owner until helper cleanup comple
     baseUrl: `browser://timeout-cleanup-${Date.now()}`,
     chatgptWeb: {
       browserHost: "launcher",
-      browserHostDescriptorPath: join(root, "launcher.json"),
+      browserHostDescriptorPath: join(root, "launcher.json"), runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
       brokerSocketPath: defaultBrokerEndpoint(root),
       localToolsEnabled: true,
       solAvailable: true,
@@ -1505,7 +1506,7 @@ test.each([false, true])("structured compact rebuild after retained browser loss
     baseUrl: `browser://stale-retained-${Date.now()}`,
     chatgptWeb: {
       browserHost: "launcher",
-      browserHostDescriptorPath: join(root, "launcher.json"),
+      browserHostDescriptorPath: join(root, "launcher.json"), runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
       brokerSocketPath: defaultBrokerEndpoint(root),
       localToolsEnabled: true,
       solAvailable: true,
@@ -1576,7 +1577,7 @@ test("a disappeared retained source cannot leave its fresh compaction rebuild pa
     baseUrl: `browser://stale-retained-deadline-${Date.now()}`,
     chatgptWeb: {
       browserHost: "launcher",
-      browserHostDescriptorPath: join(root, "launcher.json"),
+      browserHostDescriptorPath: join(root, "launcher.json"), runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
       brokerSocketPath: defaultBrokerEndpoint(root),
       localToolsEnabled: true,
       solAvailable: true,
@@ -1625,7 +1626,7 @@ test("a disappeared retained source cannot leave its fresh compaction rebuild pa
       type: "error",
       code: "compaction_handoff_timeout",
       retryable: false,
-      message: "ChatGPT compaction did not fully settle within 25ms",
+      message: "ChatGPT compaction did not fully settle within its allowed waiting period",
     });
   } finally {
     releaseBrowser?.();

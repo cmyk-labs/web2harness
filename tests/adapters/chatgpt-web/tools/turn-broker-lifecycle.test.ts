@@ -7,6 +7,24 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { callTurnBroker, TurnBroker } from "../../../../src/adapters/chatgpt-web/tools/turn-broker";
 import { defaultBrokerEndpoint, isWindowsPipeEndpoint } from "../../../../src/config";
+import { ChatGptWebAdapterError } from "../../../../src/adapters/chatgpt-web/adapter-error";
+
+test("a helper lease failure is not relabelled as native operator cancellation", async () => {
+  const sessions = new ChatGptTurnSessions();
+  let rejectBrowser!: (reason: Error) => void;
+  const browser = new Promise<string>((_resolve, reject) => { rejectBrowser = reject; });
+  const session = sessions.getOrCreate("lease", () => ({
+    mode: "read-only", browser, physicalSettlement: browser.then(() => undefined, () => undefined),
+    trace: new ChatGptTraceFeed(), text: new ChatGptTextFeed(), cancel: reason => rejectBrowser(reason!),
+  }), "lease-trace", "lease-owner", "lease-turn", "lease-thread");
+  const reason = new ChatGptWebAdapterError("Helper lease expired", {
+    status: 504, errorType: "server_error", code: "helper_heartbeat_expired", retryable: false,
+  });
+  await sessions.cancelTrace("lease-trace", reason);
+  expect(await session.browserOutcome).toEqual({ type: "error", error: reason });
+  expect(sessions.cancelledError("changed-trace", { threadId: "lease-thread", turnId: "lease-turn" })).toBeUndefined();
+  sessions.clear();
+});
 
 test("explicit browser-turn cancellation aborts and removes every registered session", async () => {
   const sessions = new ChatGptTurnSessions();
@@ -118,6 +136,9 @@ test("native interruption retires only the exact browser turn identity", async (
   expect(sessions.find("target")).toBeUndefined();
   expect(sessions.find("other-thread")?.nativeThreadId).toBe("thread_other");
   expect(sessions.activeCount()).toBe(1);
+  expect(sessions.cancelledError("changed-trace", { threadId: "thread_target", turnId: "turn_shared" })).toBeDefined();
+  expect(sessions.cancelledError("changed-trace", { threadId: "thread_other", turnId: "turn_shared" })).toBeUndefined();
+  expect(sessions.cancelledError("changed-trace", { threadId: "thread_target", turnId: "new_turn" })).toBeUndefined();
   sessions.clear();
 });
 
@@ -388,16 +409,19 @@ test("operator cancellation survives cleanup, is bounded, and expires", async ()
     cancel: () => {},
   });
   for (const trace of ["oldest", "middle", "latest"]) {
-    sessions.getOrCreate(trace, runtime, trace);
+    sessions.getOrCreate(trace, runtime, trace, "owner", trace, "thread");
     expect(sessions.clear(reason)).toBe(1);
     expect(sessions.activeCount()).toBe(0);
     expect(sessions.cancelledError(trace)).toBe(reason);
+    expect(sessions.cancelledError("changed", { threadId: "thread", turnId: trace })).toBe(reason);
   }
   expect(sessions.cancelledError("oldest")).toBeUndefined();
+  expect(sessions.cancelledError("changed", { threadId: "thread", turnId: "oldest" })).toBeUndefined();
   expect(sessions.cancelledError("middle")).toBe(reason);
   expect(sessions.cancelledError("unrelated")).toBeUndefined();
   await Bun.sleep(35);
   expect(sessions.cancelledError("latest")).toBeUndefined();
+  expect(sessions.cancelledError("changed", { threadId: "thread", turnId: "latest" })).toBeUndefined();
   sessions.getOrCreate("fresh", runtime, "fresh");
   sessions.clear(reason);
   expect(sessions.cancelledError("fresh")).toBe(reason);

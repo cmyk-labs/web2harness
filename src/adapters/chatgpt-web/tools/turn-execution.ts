@@ -143,6 +143,9 @@ export class ChatGptTextFeed {
 }
 
 interface ChatGptTurnRuntimeBase {
+  /** A context recovery shares this runtime/journal; reconnects cannot allocate a second one. */
+  contextResyncAttempted?: boolean;
+  contextResyncProgress?: string;
   handoff?: { result?: { terminal: import("./tool-batch-handoff").HandoffTerminal; requests: BrokerToolRequest[] } };
   browser: Promise<string>;
   /** Physical helper/Playwright settlement, including the launcher end/release acknowledgement. */
@@ -364,11 +367,11 @@ export class ChatGptTurnSession {
   }
 
   conversationKey(): string | undefined {
-    return this.attachedConversationKey;
+    return this.attachedConversationKey === undefined ? undefined : this.runtime.conversationKey;
   }
 
   detachConversation(conversationKey: string): boolean {
-    if (this.attachedConversationKey !== conversationKey) return false;
+    if (this.conversationKey() !== conversationKey) return false;
     this.attachedConversationKey = undefined;
     return true;
   }
@@ -522,6 +525,7 @@ export class ChatGptTurnSession {
 export class ChatGptTurnSessions {
   private readonly entries = new Map<string, ChatGptTurnSession>();
   private readonly cancelledTraces = new Map<string, { reason: Error; at: number }>();
+  private readonly cancelledNativeTurns = new Map<string, { reason: Error; at: number }>();
   private readonly conversationHeads = new Map<string, ChatGptTurnSession>();
   private readonly retirements = new Map<string, Promise<void>>();
   private readonly ownerRetirements = new Map<string, Promise<void>>();
@@ -570,6 +574,8 @@ export class ChatGptTurnSessions {
   ): Promise<ChatGptTurnSession> {
     for (;;) {
       if (signal?.aborted) throw new DOMException("ChatGPT web turn aborted", "AbortError");
+      const cancelled = this.cancelledNativeError(nativeThreadId, nativeTurnId);
+      if (cancelled) throw cancelled;
       const existing = this.entries.get(key);
       if (existing) {
         if (existing.supersededError) throw existing.supersededError;
@@ -616,7 +622,12 @@ export class ChatGptTurnSessions {
   }
 
   findConversationHead(conversationKey: string): ChatGptTurnSession | undefined {
-    const session = this.conversationHeads.get(conversationKey);
+    let session = this.conversationHeads.get(conversationKey);
+    if (session?.conversationKey() !== conversationKey) {
+      this.conversationHeads.delete(conversationKey);
+      session = [...this.entries.values()].findLast(candidate => candidate.conversationKey() === conversationKey);
+      if (session) this.conversationHeads.set(conversationKey, session);
+    }
     session?.touch();
     return session;
   }
@@ -753,8 +764,9 @@ export class ChatGptTurnSessions {
     const cancelled = this.entries.size;
     // Operator cancellation must outlive physical session cleanup: Codex retries a
     // disconnected stream, and must not recreate the same explicitly stopped task.
-    if (!reason) this.cancelledTraces.clear();
+    if (!reason) { this.cancelledTraces.clear(); this.cancelledNativeTurns.clear(); }
     for (const [key, session] of this.entries) {
+      if (reason) this.rememberNativeCancellation(session.nativeThreadId, session.nativeTurnId, reason);
       if (reason && session.traceId) {
         this.cancelledTraces.delete(session.traceId);
         this.cancelledTraces.set(session.traceId, { reason, at: Date.now() });
@@ -779,7 +791,14 @@ export class ChatGptTurnSessions {
   beginCancelTrace(traceId: string, reason: Error): { cancelled: number; settlement: Promise<void> } {
     const sessions = [...this.entries.values()]
       .filter(session => session.traceId === traceId && session.isActive());
-    for (const session of sessions) session.cancel(reason);
+    for (const session of sessions) {
+      // Lease failures retain their own failure classification; only an explicit client stop
+      // becomes a native-turn cancellation tombstone at the HTTP boundary.
+      if (reason instanceof ChatGptWebAdapterError && reason.code === "client_cancelled") {
+        this.rememberNativeCancellation(session.nativeThreadId, session.nativeTurnId, reason);
+      }
+      session.cancel(reason);
+    }
     return { cancelled: sessions.length, settlement: Promise.all(sessions.map(session => session.physicalSettlement)).then(() => undefined) };
   }
 
@@ -796,6 +815,7 @@ export class ChatGptTurnSessions {
     turnId: string,
     reason: Error,
   ): { cancelled: number; settlement: Promise<void> } {
+    this.rememberNativeCancellation(threadId, turnId, reason);
     const matches = [...this.entries].filter(([, session]) => (
       session.nativeThreadId === threadId
       && session.nativeTurnId === turnId
@@ -811,7 +831,9 @@ export class ChatGptTurnSessions {
     return { cancelled: matches.length, settlement };
   }
 
-  cancelledError(traceId: string): Error | undefined {
+  cancelledError(traceId: string, identity?: { threadId?: string; turnId?: string }): Error | undefined {
+    const native = this.cancelledNativeError(identity?.threadId, identity?.turnId);
+    if (native) return native;
     const cancelled = this.cancelledTraces.get(traceId);
     if (cancelled && cancelled.at >= Date.now() - this.ttlMs) return cancelled.reason;
     if (cancelled) this.cancelledTraces.delete(traceId);
@@ -823,6 +845,22 @@ export class ChatGptTurnSessions {
       if ("code" in outcome.error && outcome.error.code === "client_cancelled") return outcome.error;
     }
     return undefined;
+  }
+
+  private rememberNativeCancellation(threadId: string | undefined, turnId: string | undefined, reason: Error): void {
+    if (!threadId || !turnId) return;
+    const key = JSON.stringify([threadId, turnId]);
+    this.cancelledNativeTurns.delete(key);
+    this.cancelledNativeTurns.set(key, { reason, at: Date.now() });
+    while (this.cancelledNativeTurns.size > this.maxEntries) this.cancelledNativeTurns.delete(this.cancelledNativeTurns.keys().next().value!);
+  }
+
+  private cancelledNativeError(threadId?: string, turnId?: string): Error | undefined {
+    if (!threadId || !turnId) return;
+    const key = JSON.stringify([threadId, turnId]);
+    const cancelled = this.cancelledNativeTurns.get(key);
+    if (cancelled && cancelled.at >= Date.now() - this.ttlMs) return cancelled.reason;
+    if (cancelled) this.cancelledNativeTurns.delete(key);
   }
 
   activeCount(): number {
@@ -837,6 +875,9 @@ export class ChatGptTurnSessions {
     for (const [traceId, cancelled] of this.cancelledTraces) {
       if (cancelled.at < cutoff) this.cancelledTraces.delete(traceId);
     }
+    for (const [key, cancelled] of this.cancelledNativeTurns) {
+      if (cancelled.at < cutoff) this.cancelledNativeTurns.delete(key);
+    }
     for (const [key, session] of this.entries) {
       if (session.isActive() || session.lastUsedAt() >= cutoff) continue;
       session.cancel();
@@ -846,10 +887,7 @@ export class ChatGptTurnSessions {
   }
 
   private forgetConversationHead(session: ChatGptTurnSession): void {
-    const conversationKey = session.conversationKey();
-    if (conversationKey && this.conversationHeads.get(conversationKey) === session) {
-      this.conversationHeads.delete(conversationKey);
-    }
+    for (const [key, head] of this.conversationHeads) if (head === session) this.conversationHeads.delete(key);
   }
 
   private beginRetirement(key: string, session: ChatGptTurnSession, reason?: Error): Promise<void> {

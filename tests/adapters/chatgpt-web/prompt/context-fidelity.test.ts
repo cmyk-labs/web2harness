@@ -198,7 +198,7 @@ test("retained context appends only a verified completed prefix and rebuilds on 
   const resume = retainedConversationResumeRequest(next, key)!;
   const payload = envelope(compileChatGptWebPrompt(resume, capabilities));
   expect(payload.input).toEqual(suffix);
-  expect(payload.transport_context).toMatchObject({ mode: "append", prefix_items: 2, prefix_sha256: expect.any(String) });
+  expect(payload.transport_context).toEqual({ mode: "append", prefix_items: 2 });
   expect(next.context.source!.input).toEqual([...input, ...suffix]);
   const edited = parseRequest({ model, instructions: "original", input: [{ role: "developer", content: "changed rule" }, ...input.slice(1), ...suffix], tools, client_metadata: metadata });
   expect(chatGptConversationKey(edited, namespace)).not.toBe(key);
@@ -217,4 +217,24 @@ test("bridge framing follows original context without inserting a task summary",
   expect(compiled.text.slice(0, contextStart).trim().split("\n")).toHaveLength(1);
   expect(protocol).toBeGreaterThan(contextEnd);
   expect(envelope(compiled).input).toEqual([{ role: "user", content: "original task" }]);
+});
+
+test("skill attachments preserve the original hash guard without exposing that hash to the model", () => {
+  const ns = "skill-prefix-fidelity", metadata = { "x-codex-turn-metadata": JSON.stringify({ thread_id: ns, turn_id: ns }) };
+  const skill = { role: "user", content: "<skill>\n<name>fixture</name>\n<instructions>Keep original instructions</instructions>\n</skill>", internal_chat_message_metadata_passthrough: { content_item_kinds: ["skills.selected_skill_instructions"] } };
+  const input = [skill, { role: "user", content: "Use the skill" }];
+  const first = parseRequest({ model, input, client_metadata: metadata });
+  const before = structuredClone(first);
+  const key = chatGptConversationKey(first, ns)!;
+  const compiled = compileChatGptWebPrompt(first, capabilities, undefined, { experimentalSkillAttachments: true });
+  expect(compiled.skillFiles![0]!.text).toBe(skill.content);
+  expect(first).toEqual(before);
+  rememberRetainedConversationSource(first, ns, key);
+  const next = parseRequest({ model, input: [...input, { role: "user", content: "Continue" }], client_metadata: metadata });
+  const resume = retainedConversationResumeRequest(next, key)!;
+  expect(resume.context.sourceContinuation?.prefixHash).toMatch(/^[a-f0-9]{64}$/);
+  expect(envelope(compileChatGptWebPrompt(resume, capabilities)).transport_context).toEqual({ mode: "append", prefix_items: 2 });
+  const edited = parseRequest({ model, input: [{ ...skill, content: "changed instructions" }, ...input.slice(1)], client_metadata: metadata });
+  expect(chatGptConversationKey(edited, ns)).not.toBe(key);
+  expect(retainedConversationResumeRequest(edited, key)).toBe(edited);
 });

@@ -117,10 +117,11 @@ test("owned runtime parameter updates apply to new request snapshots without mut
   const descriptor = JSON.parse(readFileSync(path, "utf8"));
   const provider = { chatgptWeb: { browserHost: "launcher", browserHostDescriptorPath: path } } as CodexProviderConfig;
   expect(withLauncherRuntimeParameters(provider)).toBe(provider);
-  writeFileSync(path, JSON.stringify({ ...descriptor, runtimeParameters: { ...DEFAULT_RUNTIME_PARAMETERS, stallMinutes: 10, attachmentMinutes: 5 } }));
+  writeFileSync(path, JSON.stringify({ ...descriptor, language: "zh-CN", runtimeParameters: { ...DEFAULT_RUNTIME_PARAMETERS, stallMinutes: 10, attachmentMinutes: 5 } }));
   const first = withLauncherRuntimeParameters(provider);
   expect(first.chatgptWeb?.stallTimeoutSec).toBe(600);
   expect(first.chatgptWeb?.runtimeParameters?.attachmentMinutes).toBe(5);
+  expect(first.chatgptWeb?.uiLanguage).toBe("zh-CN");
   writeFileSync(path, JSON.stringify({ ...descriptor, runtimeParameters: { ...DEFAULT_RUNTIME_PARAMETERS, stallMinutes: 2 } }));
   expect(withLauncherRuntimeParameters(provider).chatgptWeb?.stallTimeoutSec).toBe(120);
   expect(withLauncherRuntimeParameters(first)).toBe(first);

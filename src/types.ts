@@ -320,6 +320,8 @@ export interface CodexProviderConfig {
     stallTimeoutSec?: number;
     /** Launcher-owned snapshot for this request; not an independent worker configuration. */
     runtimeParameters?: import("../launcher/shared/runtime-parameters.cjs").RuntimeParameters;
+    /** Runtime-only UI language snapshot supplied by the launcher descriptor. */
+    uiLanguage?: "en" | "zh-CN";
     /** Keep the single controlled browser visible. */
     headed?: boolean;
     /** Attach the turn-bound Codex MCP capability for every connector-capable Web model. */

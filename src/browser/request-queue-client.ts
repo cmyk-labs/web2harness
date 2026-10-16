@@ -56,6 +56,7 @@ export async function withQueuedRequest<T>(options: {
       }).catch(error => abort.abort(error)).finally(() => { pollPending = false; });
     }, 2000);
     const result = await options.execute(ticket, signal);
+    signal.throwIfAborted();
     outcome = "succeeded";
     return result;
   } catch (error) {

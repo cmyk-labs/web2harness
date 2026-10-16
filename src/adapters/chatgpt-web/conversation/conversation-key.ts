@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { SUMMARY_PREFIX } from "../../../responses/compaction";
 import type { CodexParsedRequest } from "../../../types";
 import { extractChatGptTurnIdentity } from "../prompt/environment";
+import { CONTEXT_TRANSPORT_VERSION } from "./context-resync";
 
 function messageText(item: Record<string, unknown>): string | undefined {
   const content = item.content;
@@ -34,7 +35,7 @@ function conversationScope(
   if (!identity.threadId) return undefined;
   const raw = parsed._rawBody as { input?: unknown[] } | undefined;
   return createHash("sha256").update(JSON.stringify({
-    transportVersion: 5,
+    transportVersion: CONTEXT_TRANSPORT_VERSION,
     namespace,
     threadId: identity.threadId,
     modelId: parsed.modelId,
@@ -55,6 +56,11 @@ interface RetainedSource {
 // text or credentials are retained. A daemon restart therefore rebuilds the complete context.
 const retainedSources = new Map<string, RetainedSource>();
 const sourceHash = (value: unknown): string => createHash("sha256").update(JSON.stringify(value) ?? "undefined").digest("hex");
+
+/** Invalidate only the rejected page, not another task's or a newer completed source. */
+export function forgetRetainedConversationSource(key: string): void {
+  for (const [scope, source] of retainedSources) if (source.key === key) retainedSources.delete(scope);
+}
 
 function matchesPrefix(parsed: CodexParsedRequest, previous: RetainedSource): boolean {
   const source = parsed.context.source;

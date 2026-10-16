@@ -892,7 +892,7 @@ test("a Codex retry after " + (cancelAll ? "launcher" : "tab") + " cancellation 
     trace: new ChatGptTraceFeed(),
     text: new ChatGptTextFeed(),
     cancel: reason => rejectBrowser(reason ?? new Error("cancelled")),
-  }), traceId);
+  }), traceId, "cancelled-replay-owner", turnId, "thread_cancelled_replay");
 
   try {
     if (server) {
@@ -923,6 +923,15 @@ test("a Codex retry after " + (cancelAll ? "launcher" : "tab") + " cancellation 
         message: cancelAll ? "Active turn cancelled by launcher" : "The ChatGPT browser tab was closed, so the Codex turn was cancelled.",
       },
     });
+    expect(adapterConstructions).toBe(0);
+    const changedInput = { ...body, input: [...body.input, {
+      type: "message", role: "assistant", phase: "commentary",
+      content: [{ type: "output_text", text: "正在重新同步任务上下文（1/1）…" }],
+    }] };
+    const reconnect = await responseRequest(new Request("http://127.0.0.1:17841/v1/responses", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(changedInput),
+    }), config, () => { adapterConstructions += 1; throw new Error("cancelled native turn reopened with progress"); });
+    expect(reconnect.status).toBe(400);
     expect(adapterConstructions).toBe(0);
   } finally {
     chatGptTurnSessions.clear();
