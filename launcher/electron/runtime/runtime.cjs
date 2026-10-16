@@ -995,8 +995,8 @@ class RuntimeHost {
       ...(development ? [] : ["--replace-codex-route"]),
       "--acknowledge-unofficial",
       ...(development ? [] : ["--restart-service"]),
-      experimentalContextFiles ? "--context-files" : "--no-context-files",
-      experimentalContextTripleBudget ? "--context-triple-budget" : "--standard-context-budget",
+      ...(patch.experimentalContextFiles === undefined ? [] : [experimentalContextFiles ? "--context-files" : "--no-context-files"]),
+      ...(patch.experimentalContextTripleBudget === undefined ? [] : [experimentalContextTripleBudget ? "--context-triple-budget" : "--standard-context-budget"]),
     ];
     if (current.config?.autoApproveToolCalls === true) args.push("--auto-approve-tool-calls");
     const options = {
@@ -1008,7 +1008,8 @@ class RuntimeHost {
       ? await this.runDevSetup("context-files", args, options)
       : await this.runSetup("context-files", args, options);
     return { ...result, mode: current.mode, enabled: experimentalContextFiles,
-      experimentalContextFiles, experimentalContextTripleBudget, budgetChanged };
+      experimentalContextFiles, experimentalContextTripleBudget, budgetChanged,
+      contextPreferenceSources: this.runtimeConfigSnapshot().config?.contextPreferenceSources };
   }
 
   async setSkillAttachments(enabled) {
@@ -1110,7 +1111,6 @@ class RuntimeHost {
       this.browserDescriptorPath,
       ...this.browserInteractionArgs({ mode: "manual" }),
       "--acknowledge-unofficial",
-      "--no-context-files",
       profileFlag,
       ...(this.launcherProfile === "production" ? ["--replace-codex-route", "--restart-service"] : []),
     ];
@@ -1331,11 +1331,7 @@ class RuntimeHost {
       ...this.browserInteractionArgs({ mode, refreshCapabilities: true }),
       "--acknowledge-unofficial",
       ...(this.launcherProfile === "production" ? ["--replace-codex-route", "--restart-service"] : []),
-      mode === "automatic" && current.config?.experimentalContextFiles === true
-        ? "--context-files"
-        : "--no-context-files",
-      mode === "automatic" && current.config?.experimentalContextFiles === true && current.config?.experimentalContextTripleBudget === true
-        ? "--context-triple-budget" : "--standard-context-budget",
+
     ];
     if (current.config?.autoApproveToolCalls === true) args.push("--auto-approve-tool-calls");
     const options = {

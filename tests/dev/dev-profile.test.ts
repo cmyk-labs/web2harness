@@ -32,14 +32,14 @@ test("DEV profile paths isolate browser, Codex, config, chat, and runtime state"
   });
 });
 
-test("Bigger Context is disabled by default and read from the isolated DEV runtime config", () => {
+test("Context as File defaults on with standard budget and respects only sourced DEV preferences", () => {
   const root = mkdtempSync(join(tmpdir(), "web2harness-dev-features-"));
   try {
     const paths = resolveDevProfilePaths({
       homeDirectory: root,
       environment: { WEB2HARNESS_DEV_HOME: join(root, "dev") },
     });
-    expect(readDevChatExperimentalFeatures(paths)).toEqual({ contextFiles: false, contextTripleBudget: false });
+    expect(readDevChatExperimentalFeatures(paths)).toEqual({ contextFiles: true, contextTripleBudget: false });
     mkdirSync(paths.home, { recursive: true });
     writeFileSync(paths.configPath, JSON.stringify({
       version: 3,
@@ -47,14 +47,14 @@ test("Bigger Context is disabled by default and read from the isolated DEV runti
     }));
     expect(readDevChatExperimentalFeatures(paths)).toEqual({ contextFiles: true, contextTripleBudget: false });
     for (const version of [4, 5]) {
-      writeFileSync(paths.configPath, JSON.stringify({ version, experimentalContextFiles: true, experimentalContextTripleBudget: true }));
+      writeFileSync(paths.configPath, JSON.stringify({ version, experimentalContextFiles: true, experimentalContextTripleBudget: true, contextPreferenceSources: { files: "user", budget: "user" } }));
       expect(readDevChatExperimentalFeatures(paths)).toEqual({ contextFiles: true, contextTripleBudget: true });
     }
     writeFileSync(paths.configPath, JSON.stringify({
       version: 3,
       experimentalBiggerContext: "yes",
     }));
-    expect(() => readDevChatExperimentalFeatures(paths)).toThrow("Invalid context file preference");
+    expect(() => readDevChatExperimentalFeatures(paths)).toThrow("Invalid experimentalBiggerContext");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

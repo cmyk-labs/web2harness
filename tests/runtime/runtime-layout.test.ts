@@ -354,7 +354,7 @@ test("context file preferences migrate legacy transport without granting a tripl
   mkdirSync(root, { recursive: true });
   const config: Record<string, unknown> = { ...defaultConfig("browser-only") };
   const persist = () => writeFileSync(join(root, "config.json"), JSON.stringify(config));
-  expect(config.experimentalContextFiles).toBe(false);
+  expect(config.experimentalContextFiles).toBe(true);
   expect(config.experimentalContextTripleBudget).toBe(false);
   delete config.experimentalContextFiles;
   delete config.experimentalContextTripleBudget;
@@ -367,6 +367,10 @@ test("context file preferences migrate legacy transport without granting a tripl
   expect(providerConfig(loaded).chatgptWeb).toMatchObject({ experimentalContextFiles: true, experimentalContextTripleBudget: false });
   config.experimentalContextFiles = false;
   config.experimentalContextTripleBudget = true;
+  persist();
+  expect(loadConfig()!.experimentalContextFiles).toBe(true);
+  expect(loadConfig()!.experimentalContextTripleBudget).toBe(false);
+  config.contextPreferenceSources = { files: "user", budget: "user" };
   persist();
   loaded = loadConfig()!;
   expect(loaded.experimentalContextFiles).toBe(false);

@@ -50,7 +50,8 @@ test("launcher state persists onboarding, language, and autostart atomically", (
       keepRunningOnClose: true,
       showBrowserDuringTurns: true,
       browserInteractionMode: "automatic",
-      experimentalContextFiles: false,
+      experimentalContextFiles: true,
+      contextPreferenceSources: { files: "default", budget: "default" },
       experimentalContextTripleBudget: false,
       experimentalSkillAttachments: false,
       experimentalFreshConversationPerTurn: false,
@@ -83,7 +84,8 @@ test("launcher state persists onboarding, language, and autostart atomically", (
       keepRunningOnClose: false,
       showBrowserDuringTurns: true,
       browserInteractionMode: "automatic",
-      experimentalContextFiles: false,
+      experimentalContextFiles: true,
+      contextPreferenceSources: { files: "default", budget: "default" },
       experimentalContextTripleBudget: false,
       experimentalSkillAttachments: false,
       experimentalFreshConversationPerTurn: false,
@@ -189,7 +191,8 @@ test("persisted sidebar corruption is repaired without changing the rest of laun
       keepRunningOnClose: true,
       showBrowserDuringTurns: true,
       browserInteractionMode: "automatic",
-      experimentalContextFiles: false,
+      experimentalContextFiles: true,
+      contextPreferenceSources: { files: "default", budget: "default" },
       experimentalContextTripleBudget: false,
       experimentalSkillAttachments: false,
       experimentalFreshConversationPerTurn: false,
@@ -260,7 +263,7 @@ test("legacy context preference migrates to files with standard budget and never
   assert.equal(Object.hasOwn(state, "experimentalBiggerContext"), false);
   fs.writeFileSync(file, JSON.stringify({ version: 1, experimentalBiggerContext: true, experimentalContextFiles: false, experimentalContextTripleBudget: true }));
   state = createStateStore(file).read();
-  assert.equal(state.experimentalContextFiles, false);
+  assert.equal(state.experimentalContextFiles, true);
   assert.equal(state.experimentalContextTripleBudget, false);
   fs.unlinkSync(file);
   fs.rmdirSync(root);

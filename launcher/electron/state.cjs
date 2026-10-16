@@ -7,6 +7,8 @@ const SIDEBAR_MIN_WIDTH = 240;
 const SIDEBAR_MAX_WIDTH = 420;
 const SESSION_REFRESH_REMINDER_INTERVAL_MS = 48 * 60 * 60 * 1000;
 
+const { normalizeContextPreferences } = require("../shared/context-preferences.cjs");
+
 const DEFAULT_STATE = Object.freeze({
   version: 1,
   requestScheduling: DEFAULT_REQUEST_SCHEDULING,
@@ -18,7 +20,8 @@ const DEFAULT_STATE = Object.freeze({
   keepRunningOnClose: true,
   showBrowserDuringTurns: true,
   browserInteractionMode: "automatic",
-  experimentalContextFiles: false,
+  experimentalContextFiles: true,
+  contextPreferenceSources: { files: "default", budget: "default" },
   experimentalContextTripleBudget: false,
   experimentalSkillAttachments: false,
   experimentalFreshConversationPerTurn: false,
@@ -48,9 +51,6 @@ function readState(filePath) {
     if (!Number.isSafeInteger(state.requestSchedulingRevision) || state.requestSchedulingRevision < 1) state.requestSchedulingRevision = 1;
     delete state.bridgeEnabled;
     delete state.xOpened;
-    state.experimentalContextFiles = parsed.experimentalContextFiles === undefined
-      ? parsed.experimentalBiggerContext === true : parsed.experimentalContextFiles === true;
-    state.experimentalContextTripleBudget = state.experimentalContextFiles && parsed.experimentalContextTripleBudget === true;
     delete state.experimentalBiggerContext;
     // Preserve completed setup when a saved UI locale is retired.
     if (state.language === "zh-TW") state.language = "zh-CN";
@@ -109,6 +109,8 @@ function readState(filePath) {
     ]) {
       if (state[key] !== undefined && typeof state[key] !== "boolean") delete state[key];
     }
+    const preferences = normalizeContextPreferences({ ...state, contextPreferenceSources: parsed.contextPreferenceSources });
+    for (const key of ["experimentalContextFiles", "experimentalContextTripleBudget", "contextPreferenceSources"]) state[key] = preferences[key];
     return state;
   } catch {
     return { ...DEFAULT_STATE };

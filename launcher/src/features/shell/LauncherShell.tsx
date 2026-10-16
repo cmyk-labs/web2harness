@@ -27,7 +27,6 @@ import { TitleBar } from "./TitleBar";
 import { useLicense } from "../licensing/LicenseContext";
 import { PageNavigationContext, UnsavedChangesDialog, type NavigationGuardRef } from "./PageNavigationGuard";
 
-const COMPACT_SIDEBAR_QUERY = "(max-width: 1000px)";
 
 export function LauncherShell({
   browser,
@@ -69,11 +68,8 @@ export function LauncherShell({
       setChangingLanguage(false);
     }
   };
-  const compactAtMount = useRef(
-    window.matchMedia(COMPACT_SIDEBAR_QUERY).matches,
-  ).current;
-  const [sidebarOpen, setSidebarOpen] = useState(!compactAtMount),
-    [compactSidebar, setCompactSidebar] = useState(compactAtMount);
+  const [sidebarOpen, setSidebarOpen] = useState(snapshot.state.sidebarOpen);
+  useEffect(() => setSidebarOpen(snapshot.state.sidebarOpen), [snapshot.state.sidebarOpen]);
   const [, refreshGuard] = useState(0);
   const navigationGuard = useRef<NavigationGuardRef>({ current: null }).current;
   navigationGuard.notify = () => refreshGuard(value => value + 1);
@@ -84,9 +80,8 @@ export function LauncherShell({
   const [browserPending, setBrowserPending] = useState(false);
   const commitNavigation = useCallback((next: WorkspacePage) => {
     setSurface(next);
-    if (compactSidebar) setSidebarOpen(false);
     if (next === "browser") setBrowserPending(false);
-  }, [compactSidebar]);
+  }, []);
   const requestNavigation = useCallback((next: WorkspacePage): Promise<boolean> => {
     if (navigationTransaction.current) return Promise.resolve(false);
     if (next === surface) { commitNavigation(next); return Promise.resolve(true); }
@@ -127,7 +122,7 @@ export function LauncherShell({
     [],
   );
   const browserSurfaceActive =
-    licensed && surface === "browser" && !(compactSidebar && sidebarOpen);
+    licensed && surface === "browser";
   const [status, setStatus] = useState<WorkspaceStatus | null>(null),
     [statusError, setStatusError] = useState<string | null>(null);
   const [sessionReminderBusy, setSessionReminderBusy] = useState(false),
@@ -184,7 +179,6 @@ export function LauncherShell({
     automaticTurn?.id,
     automaticTurn?.traceId,
     snapshot.state.showBrowserDuringTurns,
-    compactSidebar,
     licensed,
     revealBrowserAutomatically,
   ]);
@@ -230,17 +224,6 @@ export function LauncherShell({
   }, [browserSlot, browserSurfaceActive, snapshot.startup.status, setError]);
 
   useEffect(() => {
-    const media = window.matchMedia(COMPACT_SIDEBAR_QUERY);
-    const apply = () => {
-      setCompactSidebar(media.matches);
-      setSidebarOpen(!media.matches);
-    };
-    apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, []);
-
-  useEffect(() => {
     const reminderAt = snapshot.state.sessionRefreshReminderAt;
     const reminderTime =
       reminderAt === null ? Number.NaN : Date.parse(reminderAt);
@@ -268,14 +251,9 @@ export function LauncherShell({
   );
   const toggleSidebar = () => {
     const next = !sidebarOpen;
-    if (compactSidebar && next && surface === "browser") {
-      void api!
-        .setBrowserSurfaceActive(false)
-        .then(() => setSidebarOpen(true))
-        .catch((error) => setError(messageOf(error)));
-      return;
-    }
     setSidebarOpen(next);
+    void api!.setSidebarState({ open: next, width: snapshot.state.sidebarWidth }).then(updateState)
+      .catch(error => { setSidebarOpen(snapshot.state.sidebarOpen); setError(messageOf(error)); });
   };
   const navigateSurface = (next: WorkspacePage) => {
     void requestNavigation(next);
@@ -307,23 +285,16 @@ export function LauncherShell({
     <motion.main
       animate={{ opacity: 1 }}
       initial={{ opacity: 0 }}
-      className={`app-shell workspace-shell${compactSidebar ? " is-compact" : ""}${sidebarOpen ? " is-sidebar-open" : ""}`}
+      className={`app-shell workspace-shell${sidebarOpen ? " is-sidebar-open" : ""}`}
     >
       <TitleBar
         copy={copy}
+        platform={snapshot.platform}
         devProfile={devProfile}
         draggable={surface !== "browser"}
         sidebarOpen={sidebarOpen}
         toggleSidebar={toggleSidebar}
       />
-      {compactSidebar && sidebarOpen && (
-        <button
-          type="button"
-          className="sidebar-backdrop"
-          aria-label={copy.hideSidebar}
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
       <motion.aside
         id="workspace-sidebar"
         inert={!sidebarOpen}

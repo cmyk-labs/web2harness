@@ -135,7 +135,7 @@ bun run check-version
 
 颜色、字号、尺寸和动效时长统一在 `launcher/src/tokens.css` 中维护。界面采用深灰背景、中性灰按钮和选中状态；绿色、橙色、红色分别表达正常、警告和错误。选中状态同时提供底色、边框或标记，不仅依赖颜色。各页面使用一致的标题层级、控件尺寸和内容边距，功能专属样式与对应组件放在同一模块。
 
-欢迎与准备界面使用居中内容列，短窗口允许滚动。工作区及产品授权内容左对齐，页面标题24px、正文14px、控件36px、左右边距32px（窄窗口20px）。概览使用步骤流程图保持展开；关于和已激活的授权管理先显示简要信息，补充说明及授权更新表单按需打开。未授权时各栏目保留只读浏览，受保护操作同时由后台校验。
+欢迎与准备界面使用居中内容列，短窗口允许滚动。工作区及产品授权内容左对齐，页面标题24px、正文14px、控件36px、左右边距32px。原生窗口将1120×720设计画布整体等比缩放到内容区，调整窗口保持构图和手动侧栏状态；系统缩放与工作区限制仍由原生窗口处理。概览使用步骤流程图保持展开；关于和已激活的授权管理先显示简要信息，补充说明及授权更新表单按需打开。未授权时各栏目保留只读浏览，受保护操作同时由后台校验。
 
 界面变更须检查中英文、宽窄窗口、长内容、错误和禁用状态，以及键盘焦点、隐藏导航和系统减少动效设置。运行 `node launcher/scripts/smoke-workspace.mjs` 可通过独立浏览器和模拟 IPC 验证界面；用 `WORKSPACE_SMOKE_OUTPUT` 指定本次证据目录。仅队列显示/筛选变更可设置 `WORKSPACE_SMOKE_SCOPE=queue`，由共享界面连接隔离的真实队列宿主，在一次流程中覆盖双语、空列表/历史/活动任务、模型搜索、分页、错误和窄窗口。截图须在页面切换和侧栏动画结束后采集。这类检查不代表真实 ChatGPT、原生嵌入浏览器或安装器验收。
 
@@ -234,6 +234,8 @@ DEV 仅向其独立 Codex home 写入路由和中断 hook，监管相同的 daem
 
 <a id="standard-isolated-test-procedure"></a>
 
+窗口与登录展示的定向检查：先执行`bun run launcher:build`，再运行`node launcher/scripts/smoke-window-session.mjs`；`WINDOW_SESSION_OUTPUT`可指定证据目录。夹具使用自有原生Electron窗口和模拟IPC，检查固定设计画布、侧栏状态、认证控件及中英文默认预算。这是展示证据，不是认证DEV或安装验收。普通Chromium工作区夹具模拟应用缩放后的逻辑视口，其截图不证明原生像素尺寸。
+
 ## 标准隔离测试流程
 
 ![DEV 与常规运行共享实现，分别维护身份、数据、端点和测试工作区](../assets/diagrams/isolation.zh-CN.svg)
@@ -318,7 +320,7 @@ bun run src/cli.ts dev list
 | `/reset yes` | 重置命名模拟会话。 |
 | `/help`、`/exit` | 显示命令或退出。 |
 
-在 DEV 偏好设置中配置 Context as File、Skills as files、复用/历史偏好和交互模式，其行为与常规运行相同。Context as File 默认关闭，预算默认 Standard，Triple 必须明确选择。启用后，完整序列化上下文的 UTF-8 大小超过 32 KiB 时使用 TXT 附件，较小的上下文保持内联。所有附件必须完成处理后才发送，文件内容仍计入原有 token 预算。此功能需要 Automatic，且不支持 Luna。完整约定见[配置参考](reference.zh-CN.md)。
+在 DEV 偏好设置中配置 Context as File、Skills as files、复用/历史偏好和交互模式，其行为与常规运行相同。Context as File 默认开启，预算默认 Standard，Triple 必须明确选择；迁移默认值时仅保留标记为用户选择的偏好。启用后，完整序列化上下文的 UTF-8 大小超过 32 KiB 时使用 TXT 附件，较小的上下文保持内联。所有附件必须完成处理后才发送，文件内容仍计入原有 token 预算。此功能需要 Automatic，且不支持 Luna。完整约定见[配置参考](reference.zh-CN.md)。
 
 DEV setup 支持 `--context-files` / `--no-context-files` 和 `--context-triple-budget` / `--standard-context-budget`。仅修改隔离配置，并重启其 Codex 客户端以刷新目录。浏览器实验仍消耗真实账户额度。
 

@@ -18,7 +18,9 @@ const {
   shell,
   Tray,
 } = require("electron");
+const { fitWindowLayout } = require("./window-layout.cjs");
 const { BrowserHost, navigationErrorForLog } = require("./browser/browser-host.cjs");
+const { requestBrowserInputOverride } = require("./browser/browser-input-override.cjs");
 const { BrowserControlServer } = require("./control-server.cjs");
 const { RequestQueue } = require("./runtime/request-queue.cjs");
 const { createQueueSettingsSaver } = require("./runtime/queue-settings.cjs");
@@ -400,6 +402,10 @@ function createWindow({ logger, stateStore, windowStatePath, startHidden }) {
     },
   });
   window.setMenuBarVisibility(false);
+  window.fitContentLayout = () => fitWindowLayout(window);
+  window.on("resize", window.fitContentLayout);
+  window.webContents.on("did-finish-load", window.fitContentLayout);
+  window.fitContentLayout();
   const guardRendererNavigation = (event, url) => {
     if (rendererNavigationAllowed(url)) return;
     event.preventDefault();
@@ -580,6 +586,7 @@ function registerIpc({ logger, stateStore }) {
   handle("launcher:set-language", (_event, language) => {
     const state = stateStore.update({ language: validateLanguage(language) });
     updateTrayMenu(state.language);
+    browserHost?.syncInputProtection();
     return state;
   });
   handle("launcher:complete-onboarding", (_event, language, rawInteractionMode) => {
@@ -617,8 +624,13 @@ function registerIpc({ logger, stateStore }) {
   handle("launcher:browser-zoom", (_event, action) => browserHost.zoom(action));
   handle("launcher:browser-tab-select", (_event, tabId) => browserHost.selectTab(tabId));
   handle("launcher:browser-tab-close", (_event, tabId) => browserHost.closeTab(tabId));
+  handle("launcher:browser-tab-stop", (_event, tabId) => browserHost.stopTab(tabId));
+  handle("launcher:browser-input-override", (_event, tabId, allowed) => requestBrowserInputOverride({
+    host: browserHost, window: mainWindow, dialog, language: stateStore.read().language, tabId, allowed,
+  }));
   handle("launcher:manual-prompt-copy", (_event, tabId) => browserHost.copyManualPrompt(tabId));
   handle("launcher:manual-prompt-sent", (_event, tabId) => browserHost.confirmManualSent(tabId));
+  handle("launcher:browser-authentication", () => browserHost.refreshAuthentication());
   handle("launcher:browser-login", async () => {
     const browser = await browserHost.openLogin();
     if (browser.authenticated) {
@@ -783,7 +795,8 @@ function registerIpc({ logger, stateStore }) {
       mcpGuideStep: 0,
       codexRestartRequired: true,
       browserInteractionMode: "automatic",
-      experimentalContextFiles: false,
+      experimentalContextFiles: true,
+      contextPreferenceSources: { files: "default", budget: "default" },
       experimentalContextTripleBudget: false,
       experimentalSkillAttachments: false,
       experimentalFreshConversationPerTurn: false,
@@ -817,8 +830,12 @@ function registerIpc({ logger, stateStore }) {
       );
     }
     const result = IS_DEV_PROFILE ? await runtimeHost.setupDevCore() : await runtimeHost.setupCore();
+    const preferences = runtimeHost.runtimeConfigSnapshot().config;
     stateStore.update({
       coreSetupComplete: true,
+      experimentalContextFiles: preferences?.experimentalContextFiles === true,
+      experimentalContextTripleBudget: preferences?.experimentalContextTripleBudget === true,
+      contextPreferenceSources: preferences?.contextPreferenceSources,
       codexCatalogVerified: false,
       codexRestartRequired: true,
       zeroRiskProEnabled: runtimeHost.runtimeConfigSnapshot().config?.zeroRiskProEnabled === true,
@@ -866,7 +883,10 @@ function registerIpc({ logger, stateStore }) {
       : await runSetup();
     const state = stateStore.update({
       browserInteractionMode: interactionMode,
-      ...(interactionMode === "manual" ? { experimentalContextFiles: false, experimentalContextTripleBudget: false, experimentalSkillAttachments: false } : {}),
+      experimentalContextFiles: runtimeHost.runtimeConfigSnapshot().config?.experimentalContextFiles === true,
+      experimentalContextTripleBudget: runtimeHost.runtimeConfigSnapshot().config?.experimentalContextTripleBudget === true,
+      contextPreferenceSources: runtimeHost.runtimeConfigSnapshot().config?.contextPreferenceSources,
+      ...(interactionMode === "manual" ? { experimentalSkillAttachments: false } : {}),
       zeroRiskProEnabled: runtimeHost.runtimeConfigSnapshot().config?.zeroRiskProEnabled === true,
       experimentalFreshConversationPerTurn: runtimeHost.runtimeConfigSnapshot().config?.experimentalFreshConversationPerTurn === true,
       useSavedChats: runtimeHost.runtimeConfigSnapshot().config?.useSavedChats === true,
@@ -903,6 +923,7 @@ function registerIpc({ logger, stateStore }) {
       }
       const result = await runtimeHost[method](enabled === true);
       const state = stateStore.update({
+        contextPreferenceSources: result.contextPreferenceSources,
         experimentalContextFiles: result.experimentalContextFiles,
         experimentalContextTripleBudget: result.experimentalContextTripleBudget,
         ...(result.budgetChanged ? { codexCatalogVerified: false, codexRestartRequired: true } : {}),
@@ -972,8 +993,13 @@ function registerIpc({ logger, stateStore }) {
         afterRuntimeReady => runtimeHost.setToolMode(mode, targetMode, afterRuntimeReady))
       : await runtimeHost.setToolMode(mode, targetMode);
     if (!result.changed) return { state: current, credentialsRequired: false, targetMode };
+    const preferences = runtimeHost.runtimeConfigSnapshot().config;
     const state = stateStore.update({
       browserInteractionMode: targetMode,
+      experimentalContextFiles: preferences?.experimentalContextFiles === true,
+      experimentalContextTripleBudget: preferences?.experimentalContextTripleBudget === true,
+      contextPreferenceSources: preferences?.contextPreferenceSources,
+      ...(targetMode === "manual" ? { experimentalSkillAttachments: false } : {}),
       mcpRuntimeInstalled: mode === "mcp-bridge", mcpSetupComplete: false,
       mcpGuideStep: mode === "mcp-bridge" ? 2 : 0,
       codexCatalogVerified: false, codexRestartRequired: true,
@@ -1010,7 +1036,10 @@ function registerIpc({ logger, stateStore }) {
       browserInteractionMode: mode,
       experimentalFreshConversationPerTurn: runtimeHost.runtimeConfigSnapshot().config?.experimentalFreshConversationPerTurn === true,
       useSavedChats: runtimeHost.runtimeConfigSnapshot().config?.useSavedChats === true,
-      ...(mode === "manual" ? { experimentalContextFiles: false, experimentalContextTripleBudget: false, experimentalSkillAttachments: false } : {}),
+      experimentalContextFiles: runtimeHost.runtimeConfigSnapshot().config?.experimentalContextFiles === true,
+      experimentalContextTripleBudget: runtimeHost.runtimeConfigSnapshot().config?.experimentalContextTripleBudget === true,
+      contextPreferenceSources: runtimeHost.runtimeConfigSnapshot().config?.contextPreferenceSources,
+      ...(mode === "manual" ? { experimentalSkillAttachments: false } : {}),
       ...(result.configured ? {
         codexCatalogVerified: false,
         codexRestartRequired: true,
@@ -1093,7 +1122,7 @@ async function requestQuit() {
   }
   shutdownInProgress = true;
   try {
-    const activeOperation = runtimeHost?.currentOperation() || browserHost?.currentOperation();
+    const activeOperation = runtimeHost?.currentOperation() || browserHost?.currentOperation({ includeTasks: false });
     if (activeOperation) {
       throw new Error(`Wait for ${activeOperation} to finish before quitting Web2Harness`);
     }
@@ -1300,6 +1329,7 @@ async function start() {
     publishState: (state) => send("launcher:browser-state", state),
     showWindow: showMainWindow,
     getBrowserInteractionMode: () => stateStore.read().browserInteractionMode,
+    getLanguage: () => stateStore.read().language,
   });
   const updaterRuntimeRoot = runtimeRootProvider();
   updateController = createUpdateController({
@@ -1356,7 +1386,8 @@ async function start() {
       ...(config?.mode !== "mcp-bridge" ? { mcpSetupComplete: false, mcpGuideStep: 0 } : {}),
       codexRestartRequired: false,
       autoStart: false,
-      experimentalContextFiles: config?.experimentalContextFiles === true,
+      contextPreferenceSources: config?.contextPreferenceSources ?? { files: "default", budget: "default" },
+      experimentalContextFiles: config?.experimentalContextFiles ?? true,
       experimentalContextTripleBudget: config?.experimentalContextTripleBudget === true,
       experimentalSkillAttachments: config?.experimentalSkillAttachments === true,
       experimentalFreshConversationPerTurn: config?.experimentalFreshConversationPerTurn === true,
@@ -1420,13 +1451,14 @@ async function start() {
       const useSavedChats = configuredRuntime.config?.useSavedChats === true;
       const zeroRiskProEnabled = configuredRuntime.config?.zeroRiskProEnabled === true;
       const saved = stateStore.read();
-      if (saved.experimentalSkillAttachments !== experimentalSkillAttachments
+      if (JSON.stringify(saved.contextPreferenceSources) !== JSON.stringify(configuredRuntime.config?.contextPreferenceSources)
+        || saved.experimentalSkillAttachments !== experimentalSkillAttachments
         || saved.experimentalFreshConversationPerTurn !== experimentalFreshConversationPerTurn
         || saved.useSavedChats !== useSavedChats
         || saved.experimentalContextFiles !== enabled
         || saved.experimentalContextTripleBudget !== experimentalContextTripleBudget
         || saved.zeroRiskProEnabled !== zeroRiskProEnabled) {
-        const state = stateStore.update({ experimentalContextFiles: enabled, experimentalContextTripleBudget, experimentalSkillAttachments, experimentalFreshConversationPerTurn, useSavedChats, zeroRiskProEnabled });
+        const state = stateStore.update({ contextPreferenceSources: configuredRuntime.config?.contextPreferenceSources, experimentalContextFiles: enabled, experimentalContextTripleBudget, experimentalSkillAttachments, experimentalFreshConversationPerTurn, useSavedChats, zeroRiskProEnabled });
         send("launcher:state-changed", state);
       }
     }
@@ -1441,6 +1473,7 @@ async function start() {
       const patch = {
         coreSetupComplete: true,
         mcpRuntimeInstalled: config.mode === "mcp-bridge",
+        contextPreferenceSources: config.contextPreferenceSources,
         experimentalContextFiles: config.experimentalContextFiles === true,
         experimentalContextTripleBudget: config.experimentalContextTripleBudget === true,
         experimentalSkillAttachments: config.experimentalSkillAttachments === true,

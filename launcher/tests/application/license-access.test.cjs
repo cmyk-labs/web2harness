@@ -6,8 +6,8 @@ const { BrowserControlServer } = require("../../electron/control-server.cjs");
 test("direct IPC cannot start or configure features without a current valid license", async () => {
   let state = "active", effects = 0, checks = 0;
   const controller = { async assertActive() { checks++; if (state !== "active") throw new Error(`license: ${state}`); } };
-  const actions = ["setup-core", "setup-mcp", "complete-onboarding", "browser-show", "browser-login",
-    "browser-navigate", "browser-smoke", "tool-mode", "skill-attachments", "fresh-conversation-per-turn",
+  const actions = ["setup-core", "setup-mcp", "complete-onboarding", "browser-show", "browser-login", "browser-authentication",
+    "browser-navigate", "browser-input-override", "browser-smoke", "tool-mode", "skill-attachments", "fresh-conversation-per-turn",
     "use-saved-chats", "zero-risk-pro", "autostart", "manual-prompt-sent", "limits-setup", "future-feature"];
   for (const action of actions) {
     const execute = guardLicensedIpc(controller, `launcher:${action}`, () => ++effects);
@@ -29,10 +29,13 @@ test("direct IPC cannot start or configure features without a current valid lice
 
 test("activation, read-only previews, window hiding and cancellation remain accessible", async () => {
   const controller = { async assertActive() { throw new Error("license: expired"); } };
-  for (const action of ["license-status", "license-import", "snapshot", "workspace-status", "limits", "query-logs", "cancel-turns", "browser-tab-close", "window-state", "browser-bounds"]) {
+  for (const action of ["license-status", "license-import", "snapshot", "workspace-status", "limits", "query-logs", "cancel-turns", "browser-tab-close", "browser-tab-stop", "window-state", "browser-bounds"]) {
     assert.equal(await guardLicensedIpc(controller, `launcher:${action}`, () => "allowed")({}), "allowed");
   }
   assert.equal(await guardLicensedIpc(controller, "launcher:browser-surface-active", (_, active) => active)({}, false), false);
+  const restore = guardLicensedIpc(controller, "launcher:browser-input-override", (_, tabId, allowed) => allowed);
+  assert.equal(await restore({}, "owned", false), false);
+  await assert.rejects(restore({}, "owned", true), /license: expired/);
 });
 
 test("control token cannot bypass license admission; existing work may finish or cancel", async () => {

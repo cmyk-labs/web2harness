@@ -26,6 +26,7 @@ export interface LauncherState {
   keepRunningOnClose: boolean;
   showBrowserDuringTurns: boolean;
   browserInteractionMode: BrowserInteractionMode;
+  contextPreferenceSources?: { files: "default" | "user"; budget: "default" | "user" };
   experimentalContextFiles: boolean;
   experimentalContextTripleBudget: boolean;
   experimentalSkillAttachments: boolean;
@@ -52,6 +53,8 @@ export interface BrowserState {
   url: string;
   title: string;
   authenticated: boolean;
+  authenticationStatus?: "unknown" | "checking" | "authenticated" | "signed-out" | "error";
+  authenticationMessage?: string;
   visible: boolean;
   surfaceActive: boolean;
   loading: boolean;
@@ -61,6 +64,12 @@ export interface BrowserState {
   activeTabId: string;
   maxTabs: number;
   tabs: BrowserTabState[];
+  inputLocked?: boolean;
+  inputLockReason?: "running" | "waiting-tools" | "stopping" | "retained" | "checking" | null;
+  automationBusy?: boolean;
+  zoomLocked?: boolean;
+  canOverrideInput?: boolean;
+  inputOverrideActive?: boolean;
 }
 
 export interface BrowserTabState {
@@ -71,6 +80,10 @@ export interface BrowserTabState {
   loading: boolean;
   active: boolean;
   closable: boolean;
+  inputLocked?: boolean;
+  awaitingToolResults?: boolean;
+  stopping?: boolean;
+  canStop?: boolean;
   interactionMode?: BrowserInteractionMode;
   manualState?: "awaiting-finish" | "awaiting-user" | "sent" | "running" | "completed" | "timed-out" | "cancelled" | "failed";
   manualDeadlineAt?: string;
@@ -227,8 +240,11 @@ export interface LauncherApi {
   zoomBrowser(action: "in" | "out" | "reset"): Promise<BrowserState>;
   selectBrowserTab(tabId: string): Promise<BrowserState>;
   closeBrowserTab(tabId: string): Promise<BrowserState>;
+  stopBrowserTab(tabId: string): Promise<BrowserState>;
+  setBrowserInputOverride(tabId: string, allowed: boolean): Promise<BrowserState>;
   copyManualPrompt(tabId: string): Promise<BrowserState>;
   confirmManualSent(tabId: string): Promise<BrowserState>;
+  checkAuthentication(): Promise<BrowserState>;
   openLogin(): Promise<BrowserState>;
   openPasskeyLogin(): Promise<BrowserState>;
   continuePasskeyLogin(): Promise<boolean>;

@@ -1,21 +1,25 @@
 import { IconButton } from "../../components/Buttons";
+import { createPortal } from "react-dom";
 import type { Copy } from "../../i18n";
 
 export function TitleBar({
   copy,
+  platform,
   devProfile,
   draggable,
   sidebarOpen,
   toggleSidebar,
 }: {
   copy: Copy;
+  platform: string;
   devProfile: boolean;
   draggable: boolean;
   sidebarOpen: boolean;
   toggleSidebar: () => void;
 }) {
-  return (
-    <header className={`app-titlebar${draggable ? " draggable" : ""}`}>
+  // Native window controls belong to the viewport, outside the centered canvas.
+  return createPortal(
+    <header data-platform={platform} className={`app-titlebar${draggable ? " draggable" : ""}`}>
       <div className="titlebar-left no-drag">
         <IconButton
           icon="sidebar"
@@ -28,6 +32,6 @@ export function TitleBar({
           <span className="titlebar-dev-profile">{copy.devBadge}</span>
         ) : null}
       </div>
-    </header>
+    </header>, document.getElementById("root")!,
   );
 }

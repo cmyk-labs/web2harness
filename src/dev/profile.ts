@@ -8,6 +8,7 @@ import {
   type LauncherBrowserHostDescriptor,
 } from "../browser/launcher-client";
 
+import { normalizeContextPreferences } from "../../launcher/shared/context-preferences.cjs";
 import { DEV_LAUNCHER_PROFILE } from "./constants";
 import { assertSeparateDevHome } from "./isolation";
 
@@ -82,7 +83,7 @@ export function readDevChatExperimentalFeatures(
   try {
     value = JSON.parse(readFileSync(paths.configPath, "utf8"));
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { contextFiles: false, contextTripleBudget: false };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { contextFiles: true, contextTripleBudget: false };
     throw new Error(
       `Could not read DEV runtime settings from ${paths.configPath}: ${error instanceof Error ? error.message : String(error)}`,
     );
@@ -90,15 +91,8 @@ export function readDevChatExperimentalFeatures(
   if (!value || typeof value !== "object" || Array.isArray(value) || ![3, 4, 5].includes((value as { version?: number }).version ?? 0)) {
     throw new Error(`Invalid DEV runtime settings in ${paths.configPath}`);
   }
-  const config = value as { experimentalContextFiles?: unknown; experimentalContextTripleBudget?: unknown; experimentalBiggerContext?: unknown };
-  const enabled = config.experimentalContextFiles ?? config.experimentalBiggerContext;
-  if (enabled !== undefined && typeof enabled !== "boolean") {
-    throw new Error(`Invalid context file preference in ${paths.configPath}`);
-  }
-  if (config.experimentalContextTripleBudget !== undefined && typeof config.experimentalContextTripleBudget !== "boolean") {
-    throw new Error(`Invalid context budget preference in ${paths.configPath}`);
-  }
-  return { contextFiles: enabled === true, contextTripleBudget: enabled === true && config.experimentalContextTripleBudget === true };
+  const config = normalizeContextPreferences(value);
+  return { contextFiles: config.experimentalContextFiles, contextTripleBudget: config.experimentalContextTripleBudget };
 }
 
 export function activateDevProfileEnvironment(paths = resolveDevProfilePaths()): DevProfilePaths {

@@ -170,7 +170,7 @@ export function Preferences(p: WorkspaceProps) {
       </div>
       <details>
         <summary>
-          {t("实验功能", "Experimental features")} · {t("按需启用", "Optional")}
+          {t("实验功能", "Experimental features")} · {t("按需调整", "Optional settings")}
         </summary>
         <Row
           title={copy.contextFiles}

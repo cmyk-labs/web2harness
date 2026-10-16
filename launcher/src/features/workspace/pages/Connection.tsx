@@ -90,6 +90,12 @@ export function Connection(p: WorkspaceProps) {
       </div>
     </div>
   );
+  const authenticationStatus = browser?.authenticationStatus ?? (browser?.authenticated ? "authenticated" : "unknown");
+  const authenticationLabel = authenticationStatus === "checking" ? t("检测中", "Checking")
+    : authenticationStatus === "error" ? t("检测失败", "Check failed")
+    : authenticationStatus === "signed-out" ? t("未登录", "Signed out")
+    : authenticationStatus === "authenticated" ? t("已登录", "Signed in") : t("尚未检测", "Not checked");
+  const authenticationChecking = authenticationStatus === "checking";
   const browserSteps = (
     <>
       {step(
@@ -121,9 +127,17 @@ export function Connection(p: WorkspaceProps) {
           >
             {t("打开浏览器", "Open browser")}
           </Button>
+          {!manual && snapshot.state.browserInteractionMode !== "manual" && (
+            <Button disabled={busy || authenticationChecking} onClick={() => void run("login", async () => { await api.checkAuthentication(); })}>
+              {authenticationChecking ? t("正在检测登录…", "Checking sign-in…") : t("重新检测登录", "Recheck sign-in")}
+            </Button>
+          )}
+          {!manual && authenticationStatus === "error" && (
+            <div className="note warn" role="alert">{localizeRuntimeMessage(copy, browser?.authenticationMessage || browser?.message || "", undefined, language)}</div>
+          )}
           {errorFor("login")}
         </>,
-        manual ? t("手动管理", "Managed manually") : undefined,
+        manual ? t("手动管理", "Managed manually") : authenticationLabel,
       )}
       {step(
         2,
@@ -145,6 +159,8 @@ export function Connection(p: WorkspaceProps) {
                   "当前会话已通过连接检查。",
                   "The current session passed the connection check.",
                 )
+              : snapshot.state.browserSmokePassed && snapshot.state.browserSmokeVersion !== snapshot.version
+                ? t("应用版本已更新，请重新检查浏览器连接。", "The app version changed. Check the browser connection again.")
               : t(
                   "运行浏览器检查，验证当前会话是否可用。",
                   "Run a browser check to verify that this session is available.",
@@ -159,7 +175,7 @@ export function Connection(p: WorkspaceProps) {
             <Button
               disabled={
                 busy ||
-                !browser?.authenticated ||
+                !browser?.authenticated || authenticationChecking ||
                 snapshot.state.browserInteractionMode === "manual"
               }
               onClick={() =>

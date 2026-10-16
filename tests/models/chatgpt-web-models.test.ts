@@ -337,6 +337,7 @@ describe("fixed ChatGPT Web model routes", () => {
   test("Zero Risk routing preserves its internal backend identity and only a technical Codex effort", () => {
     const config = defaultConfig("mcp-bridge");
     config.browserInteractionMode = "manual";
+    config.experimentalContextFiles = false;
     const request = parsed("chatgpt-web/zero-risk", "ultra");
     const route = routeChatGptWebRequest(request, config);
 

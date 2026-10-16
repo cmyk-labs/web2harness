@@ -57,6 +57,9 @@ const en = {
   showSidebar: "Show sidebar",
   resizeSidebar: "Resize sidebar",
   hideTab: "Close tab",
+  stopBrowserTask: "Stop browser task",
+  allowBrowserInput: "Exit view-only",
+  restoreBrowserReadOnly: "Restore view-only",
   browserTabLimit: "Up to five simultaneous ChatGPT Web tabs. The limit avoids excessive parallel traffic on your ChatGPT account.",
   browserAddress: "ChatGPT browser",
   noActiveTask: "No active task",
@@ -274,6 +277,9 @@ const zh: Record<keyof typeof en, string> = {
   showSidebar: "显示侧边栏",
   resizeSidebar: "调整侧边栏宽度",
   hideTab: "关闭标签页",
+  stopBrowserTask: "停止网页任务",
+  allowBrowserInput: "取消只读",
+  restoreBrowserReadOnly: "恢复只读",
   browserTabLimit: "最多可同时运行五个 ChatGPT Web 标签页，以避免向您的 ChatGPT 帐户发送过多并行流量。",
   browserAddress: "ChatGPT 浏览器",
   noActiveTask: "当前没有任务",
@@ -448,6 +454,18 @@ export function localizeRuntimeMessage(
   language: Language,
 ): string {
   if (language === "en") return message;
+  const authenticationMessages: Record<string, string> = {
+    "ChatGPT browser closed during sign-in verification. Open the browser and retry.": "登录状态检测期间浏览器已关闭，请打开浏览器后重试。",
+    "ChatGPT session verification failed. Check your network or proxy and retry.": "登录状态检测失败，请检查连接后重试。",
+    "ChatGPT sign-in verification was interrupted. Wait for the page to finish loading and retry.": "登录状态检测被页面跳转中断，请等待页面加载完成后重新检测。",
+    "ChatGPT session verification timed out. Check your network or proxy and retry.": "登录状态检测超时，请检查连接后重试。",
+    "ChatGPT session verification received an unexpected response. Check your connection and retry.": "登录状态检测收到异常响应，请检查连接后重试。",
+    "ChatGPT session verification received an invalid response. Retry after the page finishes loading.": "登录状态检测收到无效响应，请等待页面加载完成后重试。",
+    "ChatGPT session verification could not inspect the browser. Retry after the page finishes loading.": "暂时无法检测浏览器登录状态，请等待页面加载完成后重试。",
+  };
+  if (authenticationMessages[message]) return authenticationMessages[message];
+  const authenticationHttp = /^ChatGPT session verification failed \(HTTP (\d+)\)\. Check your connection and retry\.$/.exec(message);
+  if (authenticationHttp) return `登录状态检测失败（HTTP ${authenticationHttp[1]}），请检查连接后重试。`;
   if (checkId === undefined && message === "Checking ChatGPT connector") return copy.checkingChatGptConnector;
   if (checkId === undefined && message === "Checking local runtime") return copy.checkingLocalRuntime;
   if (checkId === "dev-profile" && message === "Isolated DEV harness configuration is valid") return copy.doctorDevConfigValid;

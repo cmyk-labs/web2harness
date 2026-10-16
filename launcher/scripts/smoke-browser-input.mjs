@@ -1,0 +1,82 @@
+import { _electron } from '../../node_modules/playwright-core/index.mjs';
+import { createRequire } from 'node:module';
+import { mkdir, mkdtemp, writeFile, readFile, access } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import assert from 'node:assert/strict';
+const out = resolve(process.env.BROWSER_INPUT_OUTPUT || 'output/2026-10-16-browser-lock/native');
+await mkdir(out,{recursive:true});
+const profile=await mkdtemp(resolve(out,'input-profile-'));
+const env={...process.env,WEB2HARNESS_INPUT_FIXTURE_PROFILE:profile};delete env.ELECTRON_RUN_AS_NODE;
+const app=await _electron.launch({executablePath:createRequire(import.meta.url)('electron'),args:[resolve('launcher/scripts/fixtures/browser-input.cjs')],env,timeout:30000});
+const checks=[];
+const check=(name,yes)=>{assert.ok(yes,name);checks.push(name);};
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const owned=fn=>app.evaluate(fn);
+try {
+  await app.firstWindow();
+  for(let i=0;i<100&&!await owned(()=>!!global.inputFixture);i++)await wait(100);
+  check('shared BrowserHost initialized with isolated profile',await owned(()=>global.inputFixture.host.profile==='development'));
+  const page=app.context().pages().find(p=>p.url().endsWith('#task'));
+  const shield=app.context().pages().find(p=>p.url().endsWith('browser-input-shield.html'));
+  await shield.locator('#title').getByText('自动执行中，仅供查看',{exact:true}).waitFor();
+  check('persistent Chinese notice explains blocked input',await shield.locator('#message').innerText().then(s=>s.includes('Codex')));
+  check('active automatic tab cannot be closed casually',await owned(()=>{const {host,tab}=global.inputFixture;return !host.tabSnapshot(tab).closable&&host.tabSnapshot(tab).canStop;}));
+  await page.locator('#input').click();await page.keyboard.type('AUTOMATION');await page.locator('#click').click();
+  check('automated click and keyboard pass through native guard',await page.evaluate(()=>document.querySelector('#input').value==='AUTOMATION'&&clicks===1));
+  await page.locator('#models').click();
+  await owned(()=>{const {host}=global.inputFixture;host.selectTab('home');host.selectTab(global.inputFixture.tab.id);});
+  check('observation tab switching preserves open model menu',await page.locator('#modelmenu').isVisible());
+  await page.locator('#model').click();check('automated model action works',await page.evaluate(()=>chosen===1));
+  const file=resolve(out,'upload.txt');await writeFile(file,'isolated fixture attachment');await page.locator('#file').setInputFiles(file);
+  check('automated file attachment works',await page.locator('#file').evaluate(el=>el.files.length===1));
+  await page.locator('#input').focus();const before=await page.evaluate(()=>({value:document.querySelector('#input').value,keys}));
+  await owned(()=>{const c=global.inputFixture.tab.view.webContents;c.sendInputEvent({type:'keyDown',keyCode:'B'});c.sendInputEvent({type:'char',keyCode:'B'});c.sendInputEvent({type:'keyUp',keyCode:'B'});});await wait(150);
+  check('native keyboard dispatch is blocked even with composer focused',JSON.stringify(await page.evaluate(()=>({value:document.querySelector('#input').value,keys})))===JSON.stringify(before));
+  check('native rejected input highlights notice',await shield.locator('#notice').evaluate(el=>el.classList.contains('attempted')));
+  await page.mouse.wheel(0,300);await wait(100);check('automated wheel remains usable',await page.evaluate(()=>scrollY>0));await page.evaluate(()=>scrollTo(0,0));
+  await owned(()=>{const f=global.inputFixture;f.host.hide();f.host.show();f.win.maximize();});await wait(250);
+  await owned(()=>global.inputFixture.win.unmaximize());await wait(250);
+  check('guard remains on top after visibility and native window changes',await owned(()=>{const {host,win}=global.inputFixture;return win.contentView.children.at(-1)===host.inputGuard.view&&host.inputGuard.visible;}));
+  const descriptor=await readFile(await owned(()=>{const f=global.inputFixture;f.host.writeDescriptor();return f.host.descriptorPath;}),'utf8');
+  check('guard is absent from advertised automation targets',Object.keys(JSON.parse(descriptor).surfaceTargets).length===2);
+  await owned(()=>{global.fixtureLanguage='en';global.inputFixture.host.snapshot();});
+  await shield.getByText('Automatic task · view only',{exact:true}).waitFor();
+  check('English notice available',true);
+  await owned(()=>{global.fixtureLanguage='zh-CN';global.inputFixture.host.snapshot();});
+  if(process.env.BROWSER_INPUT_PHYSICAL==='1') {
+    await page.locator('#input').fill('AUTOMATION');await page.evaluate(()=>{clicks=1;keys=0;report();});
+    await owned(()=>global.inputFixture.host.inputGuard.focus());
+    await writeFile(resolve(out,'physical-ready.json'),JSON.stringify({pid:await owned(()=>process.pid),stage:'locked',profile}));
+    console.log('PHYSICAL_READY: attempt native click, typing and wheel in the owned fixture, then create physical-continue');
+    // A timeout is never evidence that a person attempted input. Wait for explicit confirmation.
+    for(;;){try{await access(resolve(out,'physical-continue'));break;}catch{}await wait(250);}
+    const state=await page.evaluate(()=>({clicks,value:document.querySelector('#input').value,keys,scroll:scrollY}));
+    await writeFile(resolve(out,'physical-result.json'),JSON.stringify(state,null,2));
+    check('physical pointer, keyboard and wheel did not reach task page',state.clicks===1&&state.value==='AUTOMATION'&&state.keys===0&&state.scroll===0);
+  }
+  await owned(async()=>{const {host,tab}=global.inputFixture;await host.endTurn(tab.traceId,tab.helperPid,'completed',false,'',true,false,true);});
+  await shield.getByText('等待工具结果，仅供查看',{exact:true}).waitFor();
+  check('tools gap stays locked',await owned(()=>global.inputFixture.host.snapshot().inputLocked));
+  await owned(()=>{const {host,tab}=global.inputFixture;tab.awaitingToolResults=false;host.selectTab('home');});
+  check('idle home unlocks while retained task page stays protected',await owned(()=>!global.inputFixture.host.inputGuard.visible));
+  await owned(()=>{const {host,tab}=global.inputFixture;host.selectTab(tab.id);});
+  await shield.getByText('会话已保留，仅供查看',{exact:true}).waitFor();
+  await shield.screenshot({path:resolve(out,'notice-zh-CN.png')});
+  await owned(()=>{const {host,tab}=global.inputFixture;host.setInputOverride(tab.id,true,host.inputOverrideContext(tab.id));});
+  check('explicit override hides native shield without releasing conversation',await owned(()=>{const {host}=global.inputFixture;return !host.inputGuard.visible&&host.snapshot().inputOverrideActive&&host.turnTabs.size===1;}));
+  await page.locator('#input').focus();
+  await owned(()=>{const c=global.inputFixture.tab.view.webContents;c.sendInputEvent({type:'keyDown',keyCode:'X'});c.sendInputEvent({type:'char',keyCode:'X'});c.sendInputEvent({type:'keyUp',keyCode:'X'});});
+  await page.waitForFunction(()=>document.querySelector('#input').value.includes('X'));
+  check('override allows native keyboard dispatch',true);
+  await owned(()=>{const {host,tab}=global.inputFixture;host.setInputOverride(tab.id,false,host.inputOverrideContext(tab.id));});
+  check('restore puts native shield back',await owned(()=>global.inputFixture.host.inputGuard.visible));
+  await owned(async()=>{const {host,tab}=global.inputFixture;host.setInputOverride(tab.id,true,host.inputOverrideContext(tab.id));await host.beginTurn('fixture_trace_two',false,process.pid,tab.conversationKey);});
+  await shield.getByText('自动执行中，仅供查看',{exact:true}).waitFor();
+  check('real beginTurn reinstates protection for retained conversation',await owned(()=>global.inputFixture.host.inputGuard.visible&&!global.inputFixture.host.snapshot().inputOverrideActive));
+  await owned(async()=>{const {host,tab}=global.inputFixture;await host.endTurn(tab.traceId,tab.helperPid,'completed',false,'',true);});
+  await owned(async()=>{const {host,tab}=global.inputFixture;await host.closeTab(tab.id);});
+  check('release restores empty browser input state',await owned(()=>!global.inputFixture.host.snapshot().inputLocked&&!global.inputFixture.host.snapshot().zoomLocked));
+  await writeFile(resolve(out,'result.json'),JSON.stringify({passed:checks.length,checks,physical:process.env.BROWSER_INPUT_PHYSICAL==='1'},null,2));
+  console.log(JSON.stringify({passed:checks.length,physical:process.env.BROWSER_INPUT_PHYSICAL==='1'}));
+}catch(error){await writeFile(resolve(out,'failure.json'),JSON.stringify({checks,error:String(error)},null,2));throw error;}
+finally{await app.close();}

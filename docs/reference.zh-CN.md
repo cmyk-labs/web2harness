@@ -120,7 +120,7 @@ CLI 读取所选应用目录的运行配置并输出 JSON。下列命令拒绝 L
 | --- | --- | --- |
 | `useSavedChats` | `false` | 任务会话默认使用临时聊天；`true` 保存到 ChatGPT 历史记录。加载配置时保留已有明确选择。此设置与会话是否复用相互独立。 |
 | `experimentalFreshConversationPerTurn` | `false` | `false` 允许原生工具或 MCP Bridge 复用启动器宿主上符合条件的 Sol／Pro 会话；`true` 为每个自动回合新建浏览器会话。仅浏览器与 Luna 使用其他连续性机制。手动配置流程拒绝显式启用。参见[对话状态](architecture.zh-CN.md#conversation-state-and-compaction)。 |
-| `experimentalContextFiles` | `false` | 对较大上下文启用实验性的 Context as File 文件传输，较小输入仍可内联发送。手动模式不可用。 |
+| `experimentalContextFiles` | 支持的自动模式下为 `true` | 对较大上下文启用实验性的 Context as File 文件传输，较小输入仍可内联发送。手动模式不可用。 |
 | `experimentalContextTripleBudget` | `false` | Context as File 开启后，将适用的自动 Sol／Pro 模型目录上下文与压缩预算乘以三。不增加单条浏览器消息限制、账户额度或底层模型容量。关闭 Context as File 会清除此设置。 |
 | `experimentalSkillAttachments` | `false` | 将选中的 skill 内容作为文本附件发送。手动模式不可用。 |
 
@@ -338,7 +338,9 @@ Pro 账户窗口包含 `8192` token 的平台预留，以及为适配器严格�
 
 ### Context as File 与三倍预算
 
-开启上下文文件传输后，完整序列化上下文不超过32 KiB（32768个UTF-8字节）时仍内联发送，超过时转成一个带完整性校验的TXT附件；输入框保留文件读取要求和桥接指令。大小包含JSON转义、角色、工具和结果，并非只计算最新用户正文。发送前须确认本回合全部附件处理完成；上传失败会在Send之前停止，不会回退为全文输入。阈值只改变传输方式，仍执行全部上下文与压缩预算检查。保留现有显式偏好，手动Zero Risk和Luna继续遵循其已公布的限制。
+`contextPreferenceSources` 为 `files` 和 `budget` 分别记录 `default` 或 `user`。缺少来源不视为用户明确选择。通过CLI设置某项时，仅该项标为 `user`；自动默认值和联动约束不会授予三倍预算。
+
+开启上下文文件传输后，完整序列化上下文不超过32 KiB（32768个UTF-8字节）时仍内联发送，超过时转成一个带完整性校验的TXT附件；输入框保留文件读取要求和桥接指令。大小包含JSON转义、角色、工具和结果，并非只计算最新用户正文。发送前须确认本回合全部附件处理完成；上传失败会在Send之前停止，不会回退为全文输入。阈值只改变传输方式，仍执行全部上下文与压缩预算检查。文件传输与预算分别保存设置来源：只有明确标为 `user` 的选择在升级时保留；缺少来源或其他来源均采用当前版本默认值。因此旧配置即使保存关闭或三倍预算，没有 `user` 标记也会迁移为文件开启与标准预算。用户明确操作才标为 `user`，普通保存与配置同步不会代替用户选择。手动模式及Luna仍受原有支持限制。
 
 `experimentalContextFiles` 改变较大上下文的发送方式；`experimentalContextTripleBudget` 是单独的选择，仅在文件传输开启时生效。对 GPT-5.6 和 GPT-6 的自动 Sol／Pro 策略，它将窗口与压缩阈值乘以三，有效百分比保持不变。例如，Pro 账户普通 Sol 变为 `333579` / `285000`，Pro 路由变为 `336579` / `285000`。
 

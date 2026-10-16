@@ -2,11 +2,12 @@ const fs = require("node:fs");
 const { writePrivateFileAtomic } = require("./common/atomic-file.cjs");
 
 const DEFAULT_WINDOW_STATE = Object.freeze({
-  bounds: { width: 1120, height: 720 },
+  bounds: { width: 900, height: 600 },
   maximized: false,
   fullscreen: false,
 });
-const MIN_WINDOW_BOUNDS = Object.freeze({ width: 720, height: 600 });
+const MIN_WINDOW_BOUNDS = Object.freeze({ width: 640, height: 480 });
+const WINDOW_SIZING_REVISION = 1;
 const MAX_WINDOW_DIMENSION = 16_384;
 
 function finiteNumber(value, fallback) {
@@ -34,6 +35,7 @@ function normalizeWindowState(value, displays = []) {
   const saved = value && typeof value === "object" ? value : {};
   const bounds = saved.bounds && typeof saved.bounds === "object" ? saved.bounds : {};
   const state = {
+    sizingRevision: WINDOW_SIZING_REVISION,
     bounds: {
       width: Math.min(
         MAX_WINDOW_DIMENSION,
@@ -48,6 +50,10 @@ function normalizeWindowState(value, displays = []) {
     maximized: false,
     fullscreen: false,
   };
+  if (saved.sizingRevision !== WINDOW_SIZING_REVISION) {
+    state.bounds.width = Math.min(state.bounds.width, DEFAULT_WINDOW_STATE.bounds.width);
+    state.bounds.height = Math.min(state.bounds.height, DEFAULT_WINDOW_STATE.bounds.height);
+  }
   const hasPosition = Number.isFinite(bounds.x) && Number.isFinite(bounds.y);
   const { area, overlaps } = visibleWorkArea({ ...state.bounds, x: bounds.x, y: bounds.y }, displays);
   if (area) {
@@ -80,6 +86,7 @@ function writeWindowState(filePath, state) {
 
 function captureWindowState(window) {
   return {
+    sizingRevision: WINDOW_SIZING_REVISION,
     bounds: window.isMaximized() || window.isFullScreen() ? window.getNormalBounds() : window.getBounds(),
     maximized: window.isMaximized(),
     fullscreen: window.isFullScreen(),
@@ -111,6 +118,7 @@ function trackWindowState(window, filePath, onError) {
 }
 
 module.exports = {
+  WINDOW_SIZING_REVISION,
   DEFAULT_WINDOW_STATE,
   MIN_WINDOW_BOUNDS,
   captureWindowState,

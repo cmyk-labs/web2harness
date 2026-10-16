@@ -1,3 +1,5 @@
+import { setWindowFixtureSize } from "./window-fixture-size.mjs";
+import { installWorkspaceFixture } from "./workspace-fixture.mjs";
 import { chromium } from '../../node_modules/playwright-core/index.mjs';
 import { createServer } from '../node_modules/vite/dist/node/index.js';
 import assert from 'node:assert/strict';
@@ -19,89 +21,7 @@ const errors=[],checks=[];const check=(label,value)=>{assert.ok(value,label);che
 try{
 const context=await browser.newContext({viewport:{width:1440,height:1050},locale:'zh-CN'});
 await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
-await context.addInitScript(()=>{
- const listeners={};const state={version:1,language:'zh-CN',onboardingComplete:true,browserInteractionMode:'automatic',sidebarOpen:true,sidebarWidth:224,mcpGuideStep:0,sessionRefreshReminderAt:null,mcpRuntimeInstalled:false,mcpSetupComplete:false,coreSetupComplete:true,codexCatalogVerified:true,experimentalContextFiles:false,experimentalContextTripleBudget:false,experimentalSkillAttachments:false,experimentalFreshConversationPerTurn:false,useSavedChats:false,keepRunningOnClose:true,showBrowserDuringTurns:true,autoStart:false,zeroRiskProEnabled:false};
- const browser={status:'ready',authenticated:true,visible:false,tabs:[],activeTabId:'idle',maxTabs:5,zoomFactor:1};
- const status={configured:true,mode:'native-tools',interactionMode:'automatic',runtimeStatus:'ready',credentials:{automatic:false,manual:false},capabilities:{solAvailable:true,proAvailable:true,browserInteractionMode:'automatic'}};
- const snapshot={startup:{status:'ready',stage:'ready',elapsedMs:0},profile:'development',profilePaths:{coreHome:'fixture',codexHome:'fixture',userData:'fixture'},state,browser,connectorName:'DEV fixture',connectorNames:{automatic:'DEV fixture',manual:'Manual fixture'},mcpCredentialsConfigured:false,logs:[{at:'2026-09-30T08:30:00Z',event:'runtime.started',level:'info',detail:{mode:'native-tools',status:'ready',port:12345}},{at:'2026-09-30T08:31:00Z',event:'browser.connection_failed',level:'error',detail:{message:'Fixture connection error',retry:false,traceId:'trace-fixture',durationMs:1234,errorDescription:'ERR_CONNECTION_RESET'}}],urls:{github:'https://example.invalid',connectors:'https://example.invalid',tunnels:'https://example.invalid',keys:'https://example.invalid'},platform:'win32',packaged:false,version:'1.0.0',smokePassed:true,operation:null,update:{status:'disabled'}};
- window.__fixture={state,status,snapshot,browser,calls:[],failApply:false,emitStartup:startup=>{snapshot.startup=startup;listeners.onStartupState?.(structuredClone(startup))},emitBrowser:delta=>{Object.assign(browser,delta);listeners.onBrowserState?.(structuredClone(browser))}};
- state.logPageSize=100;
- const boot=new URL(location.href).searchParams;
- state.githubOpened=false;
- snapshot.urls.github='https://github.com/cmyk-labs/web2harness';
- Object.assign(snapshot.urls, {
-  documentation: snapshot.urls.github+'/blob/main/README.md#documentation',
-  documentationZhCN: snapshot.urls.github+'/blob/main/README.zh-CN.md#documentation',
-  license: snapshot.urls.github+'/blob/main/LICENSE',
- });
- // A presentation fixture only: all IPC remains mocked; no installed app is opened.
- if(boot.has('production-ui'))snapshot.profile='production';
- if(boot.has('preparing'))snapshot.startup={status:'preparing',stage:'checking-installation',elapsedMs:0};
- if(boot.has('first-run')){state.language=null;state.onboardingComplete=false}
- const heldSnapshots=[];
- window.__fixture.releaseSnapshots=()=>{window.__fixture.holdSnapshot=false;heldSnapshots.splice(0).forEach(resolve=>resolve())};
- window.__fixture.prematureContent=false;
- if(boot.has('preparing'))new MutationObserver(()=>{
-  if(snapshot.startup.status!=='ready'&&document.querySelector('.app-shell,.onboarding'))window.__fixture.prematureContent=true;
- }).observe(document,{childList:true,subtree:true});
- window.__fixture.emitUpdate=update=>{snapshot.update=update;listeners.onUpdateState?.(structuredClone(update))};
- const patch=delta=>{Object.assign(state,delta);listeners.onStateChanged?.({...state});return {...state}};
- Object.assign(window.__fixture,{patch,emitOperation:operation=>listeners.onOperation?.(operation)});
- const success=()=>{if(window.__fixture.failApply)throw new Error('Fixture setup failed')};
- const license=window.__fixture.license={state:'active',deviceCode:'W2D1-WIN-'+'a'.repeat(64),licenseId:'fixture',expiresAt:null};
- state.requestScheduling={maxConcurrent:4,queueTimeoutMinutes:15,minSendIntervalSeconds:3};state.requestSchedulingRevision=1;
- window.codexWebLauncher=new Proxy({
- queueStatus:async()=>({status:'ready',savedRevision:state.requestSchedulingRevision,settings:state.requestScheduling,scheduler:{settings:state.requestScheduling,configRevision:state.requestSchedulingRevision,active:0,waiting:0,groups:[],pauseReasons:[],pausedReason:null}}),
- queryQueue:async(query)=>({items:[],groups:[],total:0,offset:query.offset??0,limit:query.limit??50,snapshotId:'fixture-queue'}),
- saveQueueSettings:async(value,revision)=>{window.__fixture.calls.push(['saveQueueSettings',value,revision]);if(window.__fixture.holdQueueSave)await new Promise(resolve=>window.__fixture.releaseQueueSave=resolve);if(window.__fixture.failQueueSave)throw new Error('Fixture queue save failed');if(revision!==state.requestSchedulingRevision)throw new Error('Queue settings changed');const saved=patch({requestScheduling:value,requestSchedulingRevision:revision+1});return {state:saved,persistedRevision:revision+1,appliedRevision:window.__fixture.failQueueApply?revision:revision+1,applyState:window.__fixture.failQueueApply?'apply-failed':'applied'}},
- controlQueue:async action=>{window.__fixture.calls.push(['controlQueue',action]);return {}},
- licenseStatus:async()=>({...license}),
- importLicense:async code=>{if(window.__fixture.failLicenseImport)throw new Error('Fixture import unavailable');return code==='fixture-valid'?{...license}:{...license,state:'invalid'}},
- checkUpdate:async()=>{window.__fixture.calls.push(['checkUpdate']);const update={status:'up-to-date',lastCheckedAt:'2026-10-05T01:00:00Z'};window.__fixture.emitUpdate(update);return update},
- snapshot:async()=>{if(window.__fixture.holdSnapshot)await new Promise(resolve=>heldSnapshots.push(resolve));if(window.__fixture.failSnapshot)throw new Error('Fixture snapshot error');return structuredClone(snapshot)},workspaceStatus:async()=>{if(window.__fixture.failStatus)throw new Error('Fixture status unavailable');return structuredClone(status)},windowState:async()=>({fullScreen:false,maximized:false}),
- cancelTurns:async()=>{
-  window.__fixture.calls.push(['cancelTurns']);
-  if(window.__fixture.failCancel)throw new Error('Fixture cancellation failed');
-  if(window.__fixture.holdCancel)await new Promise(resolve=>window.__fixture.releaseCancel=resolve);
-  window.__fixture.emitBrowser({status:'ready',tabs:[]});return {stdout:'Cancelled'};
- },
- uninstallIntegration:async()=>{
-  window.__fixture.calls.push(['uninstallIntegration']);
-  if(window.__fixture.failRemoval)throw new Error('Fixture removal failed');
-  if(!window.__fixture.confirmRemoval)return {cancelled:true};
-  status.configured=false;status.mode=null;status.runtimeStatus='stopped';
-  return {cancelled:false,state:patch({coreSetupComplete:false,codexCatalogVerified:false,mcpSetupComplete:false})};
- },
- queryLogs:async(query={})=>{
-   window.__fixture.calls.push(['queryLogs',query]);
-   if(window.__fixture.expireLogs)return {records:[],total:0,available:{start:null,end:null},partial:false,expired:true};
-   const all=(window.__fixture.logRecords??snapshot.logs).map((record,index)=>({...record,id:String(index),source:record.event.startsWith('browser')?'browser':'runtime'}));
-   const filtered=all.filter(record=>(!query.level||query.level==='all'||record.level===query.level)&&(!query.source||query.source==='all'||record.source===query.source)&&(!query.search||JSON.stringify(record).toLowerCase().includes(query.search.toLowerCase()))&&(!query.before||record.at<=query.before)&&(!query.correlation||record.detail[query.correlation.field]===query.correlation.value)).reverse();
-   const offset=Number(query.cursor??0),limit=query.pageSize??100,records=[];let bytes=0;
-   for(const record of filtered.slice(offset,offset+limit)){const size=new TextEncoder().encode(JSON.stringify(record)+'\n').length;if(records.length&&bytes+size>512*1024)break;records.push(record);bytes+=size}
-   const next=offset+records.length;
-   if(query.cursor===undefined)window.__fixture.logStarts=[0];
-   const starts=window.__fixture.logStarts??=[0];if(!starts.includes(next))starts.push(next);
-   return {records,total:filtered.length,offset,cursor:String(offset),nextCursor:next<filtered.length?String(next):null,previousCursor:offset?String(starts[starts.indexOf(offset)-1]??0):null,available:{start:all[0]?.at??null,end:all.at(-1)?.at??null},partial:false};
- },
- exportLogs:async(range)=>{window.__fixture.calls.push(['exportLogs',range]);if(window.__fixture.failExport)throw new Error('Fixture export error');return window.__fixture.cancelExport?null:{path:'fixture-diagnostics.zip',partial:window.__fixture.partialExport??false,recordCount:2}},
- getLimits:async()=>({...{enabled:true,trackingSince:null,checkedAt:null,plan:null,totalMessages:0,unknownProMessages:0,incomplete:false,gapAt:null,models:["gpt-6-pro","gpt-5.6-pro","gpt-6-sol","gpt-5.6-sol"].map(model=>({model,last24Hours:0,last7Days:0})),windows:[]},...window.__fixture.usage}),
- setLanguage:async language=>patch({language}),setPreference:async(key,value)=>{if(key==='logPageSize'&&window.__fixture.failLogPageSize)throw Error('Fixture preference save failed');return patch({[key]:value})},setContextFiles:async value=>patch({experimentalContextFiles:value,...(!value?{experimentalContextTripleBudget:false}:{})}),setContextTripleBudget:async value=>patch({experimentalContextTripleBudget:value}),setSkillAttachments:async value=>patch({experimentalSkillAttachments:value}),setFreshConversationPerTurn:async value=>patch({experimentalFreshConversationPerTurn:value}),setUseSavedChats:async value=>patch({useSavedChats:value}),
- setupCore:async()=>{window.__fixture.calls.push(['setupCore']);success();status.configured=true;status.mode='native-tools';status.interactionMode='automatic';status.capabilities.browserInteractionMode='automatic';patch({coreSetupComplete:true,mcpSetupComplete:false,codexCatalogVerified:false,browserInteractionMode:'automatic'});return {ok:true,stdout:'',restartRequired:true}},
- smokeTest:async()=>{window.__fixture.calls.push(['smokeTest']);snapshot.smokePassed=true;return {ok:true}},
- setupMcp:async input=>{window.__fixture.calls.push(['setupMcp',input]);success();status.mode='mcp-bridge';status.interactionMode=input.interactionMode;status.capabilities.browserInteractionMode=input.interactionMode;status.credentials[input.interactionMode]=true;patch({coreSetupComplete:true,mcpRuntimeInstalled:true,mcpSetupComplete:false,codexCatalogVerified:false,browserInteractionMode:input.interactionMode});return {ok:true}},
- setToolMode:async(mode,interaction)=>{window.__fixture.calls.push(['setToolMode',mode,interaction]);success();status.mode=mode;status.interactionMode=interaction;status.capabilities.browserInteractionMode=interaction;return {state:patch({coreSetupComplete:true,mcpRuntimeInstalled:mode==='mcp-bridge',mcpSetupComplete:false,codexCatalogVerified:false,browserInteractionMode:interaction}),credentialsRequired:false}},
- doctor:async()=>window.__fixture.doctorReport??({ok:false,checks:[{id:'runtime',status:'error',message:'Fixture failure',detail:'Original fixture diagnostic detail'},{id:'route',status:'warning',message:'Fixture route warning'}]}),
- verifyMcp:async()=>{window.__fixture.calls.push(['verifyMcp',state.browserInteractionMode]);patch({mcpSetupComplete:true});return {ok:true,checks:[{id:state.browserInteractionMode==='manual'?'local-runtime':'connector',status:'ok',message:state.browserInteractionMode==='manual'?'Local fixture ready':'Connected'}]}},
- completeOnboarding:async(language,interaction)=>{
-  window.__fixture.calls.push(['completeOnboarding',language,interaction]);
-  if(window.__fixture.failOnboarding)throw new Error('Fixture onboarding failed');
-  return patch({language,browserInteractionMode:interaction,onboardingComplete:true});
- },
- showBrowser:async()=>browser,setBrowserSurfaceActive:async()=>browser,
- },{get:(target,key)=>key in target?target[key]:String(key).startsWith('on')?fn=>{listeners[key]=fn;return()=>delete listeners[key]}:async(...args)=>{window.__fixture.calls.push([key,...args]);return {}}});
-});
-if(process.env.WORKSPACE_SMOKE_SCOPE==='queue'){
+await context.addInitScript(installWorkspaceFixture);if(process.env.WORKSPACE_SMOKE_SCOPE==='queue'){
  await runQueueSmoke({context,origin,out,check,errors});
  check('Queue renderer has no JavaScript errors',errors.length===0);
  await writeFile(out+'/results.json',JSON.stringify({scope:'queue',passed:checks.length,checks,errors},null,2));
@@ -141,16 +61,16 @@ await page.evaluate(()=>window.__fixture.emitBrowser({status:'signed-out',authen
 check('Waiting for login is neutral, not a fault',await page.locator('.card .value.status-error').count()===0&&await page.locator('.side-status .status-neutral').count()===1);
 await page.evaluate(()=>window.__fixture.emitBrowser({status:'ready',authenticated:true}));
 await page.screenshot({path:out+'/overview-groups-zh.png'});
-await page.setViewportSize({width:390,height:1050});await page.waitForTimeout(350);await page.screenshot({path:out+'/overview-zh-mobile.png',fullPage:true});await page.setViewportSize({width:1440,height:1050});await page.waitForTimeout(350);
+await setWindowFixtureSize(page, {width:390,height:1050});await page.waitForTimeout(350);await page.screenshot({path:out+'/overview-zh-mobile.png',fullPage:true});await setWindowFixtureSize(page, {width:1440,height:1050});await page.waitForTimeout(350);
 const waitLayout=()=>page.waitForFunction(()=>{
   const shell=document.querySelector('.app-shell');
   const sidebar=document.querySelector('.app-sidebar');
   const target=shell.classList.contains('is-sidebar-open')?parseFloat(getComputedStyle(sidebar).getPropertyValue('--sidebar-width')):0;
   const surface=document.querySelector('.surface-transition');
-  return window.matchMedia('(max-width:1000px)').matches===shell.classList.contains('is-compact')&&Math.abs(sidebar.getBoundingClientRect().width-target)<.5&&(!surface||Number(getComputedStyle(surface).opacity)>.99);
+  return !shell.classList.contains('is-compact')&&Math.abs(sidebar.getBoundingClientRect().width-target)<.5&&(!surface||Number(getComputedStyle(surface).opacity)>.99);
 });
-const nav=async name=>{await waitLayout();if(await page.locator('.app-shell.is-compact:not(.is-sidebar-open)').count())await page.locator('.app-titlebar .icon-button').first().click();await page.getByRole('navigation').getByRole('button',{name,exact:true}).click();if(['Overview','概览'].includes(name))await page.getByRole('region',{name,exact:true}).waitFor();else if(!['Browser','浏览器'].includes(name))await page.getByRole('region',{name,exact:true}).waitFor();await waitLayout()};
-const pref=async name=>{await waitLayout();if(await page.locator('.app-shell.is-compact:not(.is-sidebar-open)').count())await page.locator('.app-titlebar .icon-button').first().click();await page.locator('#workspace-sidebar').getByRole('button',{name,exact:true}).click();await page.getByRole('region',{name,exact:true}).waitFor()};
+const nav=async name=>{await waitLayout();if(await page.locator('.app-shell:not(.is-sidebar-open)').count())await page.locator('.app-titlebar .icon-button').first().click();await page.getByRole('navigation').getByRole('button',{name,exact:true}).click();if(['Overview','概览'].includes(name))await page.getByRole('region',{name,exact:true}).waitFor();else if(!['Browser','浏览器'].includes(name))await page.getByRole('region',{name,exact:true}).waitFor();await waitLayout()};
+const pref=async name=>{await waitLayout();if(await page.locator('.app-shell:not(.is-sidebar-open)').count())await page.locator('.app-titlebar .icon-button').first().click();await page.locator('#workspace-sidebar').getByRole('button',{name,exact:true}).click();await page.getByRole('region',{name,exact:true}).waitFor()};
 await nav('连接与模型');
 check('Completed simple steps align actions beside text',await page.locator('.connection-step.is-complete').first().evaluate(el=>{const copy=el.querySelector('.step-heading').getBoundingClientRect(),action=el.querySelector('.step-action').getBoundingClientRect();return action.left>=copy.right&&action.top<el.getBoundingClientRect().bottom}));
 check('Native Tools fixes automatic interaction without a manual selector',await page.getByRole('radio',{name:'手动',exact:true}).count()===0&&await page.locator('.interaction-setting > strong').textContent()==='自动');
@@ -220,11 +140,11 @@ await page.getByText('本地检查通过；远端绑定需人工确认。',{exac
 check('Manual applies separate credentials and performs no automated browser check',await page.evaluate(smokeCount=>{const input=window.__fixture.calls.filter(c=>c[0]==='setupMcp').at(-1)[1];return input.interactionMode==='manual'&&input.tunnelId==='tunnel_'+'b'.repeat(32)&&window.__fixture.status.credentials.automatic&&window.__fixture.status.credentials.manual&&window.__fixture.calls.filter(c=>c[0]==='smokeTest').length===smokeCount},smokeCount));
 check('Manual local checks explicitly do not verify remote binding',await page.getByText('请在网页确认连接器绑定到对应隧道。本地检查通过仅代表本地环境可用，不验证远端绑定。',{exact:true}).count()===1);
 await page.screenshot({path:out+'/connection-mcp-manual-zh.png',fullPage:true});
-await page.setViewportSize({width:390,height:1050});
+await setWindowFixtureSize(page, {width:390,height:1050});
 await page.waitForTimeout(350);
 check('Manual MCP narrow layout has no horizontal overflow',await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
 await page.screenshot({path:out+'/connection-mcp-manual-zh-mobile.png',fullPage:true});
-await page.setViewportSize({width:1440,height:1050});await page.waitForTimeout(350);
+await setWindowFixtureSize(page, {width:1440,height:1050});await page.waitForTimeout(350);
 const beforeNative=await mutations();
 await page.getByRole('radio',{name:/原生工具/}).click();
 check('Selecting Native Tools from manual resets only the draft to automatic',await page.getByRole('radio',{name:'手动',exact:true}).count()===0&&await page.locator('.interaction-setting > strong').textContent()==='自动'&&await page.evaluate(()=>window.__fixture.status.mode==='mcp-bridge'&&window.__fixture.state.browserInteractionMode==='manual')&&await mutations()===beforeNative);
@@ -291,8 +211,8 @@ await page.locator('.language-toggle').click();await page.getByRole('region',{na
 await page.getByLabel('Concurrent Web turns',{exact:true}).selectOption('4');await page.getByRole('button',{name:'Runtime controls',exact:true}).click();await page.getByRole('dialog',{name:'Unsaved changes'}).waitFor();await page.screenshot({path:out+'/unsaved-settings-en.png'});await page.getByRole('button',{name:'Keep editing',exact:true}).click();
 await page.getByLabel('Concurrent Web turns',{exact:true}).selectOption('3');
 await page.screenshot({path:out+'/runtime-parameters-en.png',fullPage:true});await page.locator('.language-toggle').click();
-await page.setViewportSize({width:900,height:700});await page.waitForTimeout(350);await page.screenshot({path:out+'/runtime-parameters-narrow.png',fullPage:true});
-await page.setViewportSize({width:1440,height:1050});await pref('运行控制');await page.getByText('暂无任务',{exact:true}).waitFor();
+await setWindowFixtureSize(page, {width:900,height:700});await page.waitForTimeout(350);await page.screenshot({path:out+'/runtime-parameters-narrow.png',fullPage:true});
+await setWindowFixtureSize(page, {width:1440,height:1050});await pref('运行控制');await page.getByText('暂无任务',{exact:true}).waitFor();
 await page.screenshot({path:out+'/request-queue-zh.png',fullPage:true});
 await pref('偏好设置');
 await page.evaluate(()=>window.__fixture.patch({codexRestartRequired:true,codexCatalogVerified:false}));
@@ -311,7 +231,7 @@ check('Repeated identical success restarts timer without stacking',await page.lo
 await page.locator('.feedback').waitFor({state:'detached',timeout:4000});
 check('Success feedback automatically disappears',await page.locator('.feedback').count()===0);
 await page.getByText('实验功能 · 按需启用',{exact:true}).click();
-check('File transport starts off and budget is hidden',await page.getByRole('switch',{name:'上下文文件传输（实验性）',exact:true}).getAttribute('aria-checked')==='false'&&await page.getByRole('radiogroup',{name:'上下文预算'}).count()===0);
+check('Explicit user opt-out keeps file transport off and budget hidden',await page.getByRole('switch',{name:'上下文文件传输（实验性）',exact:true}).getAttribute('aria-checked')==='false'&&await page.getByRole('radiogroup',{name:'上下文预算'}).count()===0);
 await page.getByRole('switch',{name:'上下文文件传输（实验性）',exact:true}).click();
 check('Enabling file transport uses standard budget',await page.getByRole('radio',{name:'标准预算（默认）',exact:true}).getAttribute('aria-checked')==='true');
 await page.getByRole('radio',{name:'三倍预算（实验性）',exact:true}).click();
@@ -328,12 +248,12 @@ check('Sidebar groups are localized in English',JSON.stringify(await page.locato
 const captureConnection = async name => {
   await page.locator('.content').evaluate(el=>el.scrollTop=0);
   await page.screenshot({path:out+'/'+name+'.png',fullPage:true});
-  await page.setViewportSize({width:390,height:1050});
+  await setWindowFixtureSize(page, {width:390,height:1050});
   await waitLayout();await page.waitForTimeout(250);
   check(name+' narrow mode choices use a readable single column',await page.locator('.mode-list .mode').evaluateAll(nodes=>new Set(nodes.map(el=>Math.round(el.getBoundingClientRect().left))).size===1));
   check(name+' narrow view has no horizontal overflow',await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
   await page.screenshot({path:out+'/'+name+'-mobile.png',fullPage:true});
-  await page.setViewportSize({width:1440,height:1050});await waitLayout();await page.waitForTimeout(250);
+  await setWindowFixtureSize(page, {width:1440,height:1050});await waitLayout();await page.waitForTimeout(250);
 };
 await nav('Overview');await page.screenshot({path:out+'/overview-en.png'});
 await nav('Connection & Models');await captureConnection('connection-native-en');
@@ -402,10 +322,10 @@ check('Usage cards have equal heights and aligned notes outside their borders',a
   });
 }));
 await checkUsageAlignment('English usage with extra model rows keeps equal panels and aligned columns');
-await page.setViewportSize({width:1180,height:1050});
+await setWindowFixtureSize(page, {width:1180,height:1050});
 await checkUsageAlignment('Medium desktop width retains matching table headers and column widths');
 await page.screenshot({path:out+'/usage-en-1180.png',fullPage:true});
-await page.setViewportSize({width:1440,height:1050});
+await setWindowFixtureSize(page, {width:1440,height:1050});
 await page.screenshot({path:out+'/usage-en.png',fullPage:true});
 check('Reference footer shows only check date and reference notice',await page.locator('.official-limits-notes').innerText()==='Checked · 2026-10-05 · For reference only');
 await page.locator('.language-toggle').click();await page.getByRole('region',{name:'用量与诊断',exact:true}).waitFor();
@@ -413,19 +333,19 @@ check('Chinese usage distinguishes local sends and references',await page.getByR
 check('Chinese reference preserves the period and compact footer',(await page.locator('.official-limits').innerText()).includes('2026-10-30 起')&&await page.locator('.official-limits-notes').innerText()==='核对日期 · 2026-10-05 · 仅供参考');
 await checkUsageAlignment('Chinese usage retains matching table headers and column widths');
 await page.screenshot({path:out+'/usage-zh.png',fullPage:true});
-await page.setViewportSize({width:780,height:1050});await waitLayout();
-check('Limited content width stacks panels before controls become crowded',await page.locator('.usagegrid').evaluate(grid=>grid.querySelector('.official-limits').getBoundingClientRect().top>grid.querySelector('.local-usage-notes').getBoundingClientRect().bottom));
+await setWindowFixtureSize(page, {width:780,height:1050});await waitLayout();
+check('Window scaling preserves the usage columns',await page.locator('.usagegrid').evaluate(grid=>Math.abs(grid.querySelector('.official-limits').getBoundingClientRect().top-grid.querySelector('.local-usage').getBoundingClientRect().top)<1));
 await page.screenshot({path:out+'/usage-zh-780.png',fullPage:true});
-await page.setViewportSize({width:1440,height:1050});
+await setWindowFixtureSize(page, {width:1440,height:1050});
 await page.getByRole('combobox',{name:'套餐',exact:true}).click();await page.screenshot({path:out+'/plan-menu-zh.png'});await page.keyboard.press('Escape');
-await page.setViewportSize({width:390,height:1050});await page.waitForTimeout(250);
-check('Chinese usage fits narrow windows with each note immediately below its card',await page.locator('.ui-page').evaluate(el=>{
+await setWindowFixtureSize(page, {width:390,height:1050});await page.waitForTimeout(250);
+check('Chinese usage preserves the two design columns and their notes',await page.locator('.ui-page').evaluate(el=>{
   const boxes=['.local-usage','.local-usage-notes','.official-limits','.official-limits-notes'].map(selector=>el.querySelector(selector).getBoundingClientRect());
-  return el.scrollWidth<=el.clientWidth&&boxes.every((box,index)=>!index||box.top>=boxes[index-1].bottom);
+  return el.scrollWidth<=el.clientWidth&&Math.abs(boxes[0].top-boxes[2].top)<1&&boxes[1].top>=boxes[0].bottom&&boxes[3].top>=boxes[2].bottom;
 }));
 await page.screenshot({path:out+'/usage-zh-mobile.png',fullPage:true});
 await page.locator('.official-limits').scrollIntoViewIfNeeded();await page.screenshot({path:out+'/usage-zh-mobile-policy.png',fullPage:true});
-await page.setViewportSize({width:1440,height:1050});await page.locator('.language-toggle').click();await page.getByRole('region',{name:'Usage & Diagnostics',exact:true}).waitFor();
+await setWindowFixtureSize(page, {width:1440,height:1050});await page.locator('.language-toggle').click();await page.getByRole('region',{name:'Usage & Diagnostics',exact:true}).waitFor();
 await page.getByRole('tab',{name:'Health checks',exact:true}).click();await page.locator('.content button.primary').click();await page.locator('.doctor-check-content > p').filter({hasText:'Fixture failure'}).waitFor();check('All failed doctor checks remain visible',await page.locator('.doctor-check-content > p').filter({hasText:'Fixture route warning'}).isVisible());
 check('Doctor faults are red and warnings remain neutral',await page.locator('.doctor-check .status-error').count()===1&&await page.locator('.doctor-check .status-neutral').count()===1);
 check('Health rows use readable names and distinct failure and warning states',await page.getByRole('heading',{name:'Runtime environment',exact:true}).count()===1&&await page.getByRole('heading',{name:'Codex model route',exact:true}).count()===1&&await page.locator('.doctor-check-status').allTextContents().then(values=>values.join('|')==='Failed|Needs attention'));
@@ -444,10 +364,10 @@ await page.screenshot({path:out+'/health-en.png',fullPage:true});
 await page.locator('.language-toggle').click();await page.getByRole('region',{name:'用量与诊断',exact:true}).waitFor();
 check('Chinese health checks have semantic names explanations and states',await page.getByRole('heading',{name:'开发环境配置',exact:true}).count()===1&&await page.getByRole('heading',{name:'本地连接服务',exact:true}).count()===1&&await page.getByText('当前模式不需要 MCP 隧道',{exact:true}).isVisible()&&await page.locator('.doctor-check-status').allTextContents().then(values=>values.join('|')==='通过|无需使用|通过'));
 await page.screenshot({path:out+'/health-zh.png',fullPage:true});
-await page.setViewportSize({width:390,height:1050});await page.waitForTimeout(250);
+await setWindowFixtureSize(page, {width:390,height:1050});await page.waitForTimeout(250);
 check('Health names and states fit narrow windows',await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth)&&await page.locator('.doctor-check-status').evaluateAll(nodes=>nodes.every(el=>el.getBoundingClientRect().right<=window.innerWidth)));
 await page.screenshot({path:out+'/health-zh-mobile.png',fullPage:true});
-await page.setViewportSize({width:1440,height:1050});await page.locator('.language-toggle').click();await page.getByRole('region',{name:'Usage & Diagnostics',exact:true}).waitFor();
+await setWindowFixtureSize(page, {width:1440,height:1050});await page.locator('.language-toggle').click();await page.getByRole('region',{name:'Usage & Diagnostics',exact:true}).waitFor();
 await page.getByRole('tab',{name:'Logs',exact:true}).click();
 await page.locator('.log-json-record').nth(1).waitFor();
 check('Log page size defaults to 100 with four bounded choices',await page.getByRole('combobox',{name:'Per page',exact:true}).inputValue()==='100'&&JSON.stringify(await page.locator('.log-page-size option').evaluateAll(nodes=>nodes.map(node=>Number(node.value))))==='[25,50,100,200]');
@@ -582,7 +502,7 @@ await page.locator('.language-toggle').click();
 await page.getByRole('tab',{name:'运行日志',exact:true}).waitFor();
 check('Switching to Chinese preserves exact original JSON and UTC timestamps',await page.locator('.log-json-record pre').first().textContent().then(value=>value===rawLog));
 await page.screenshot({path:out+'/logs-zh.png'});
-await page.setViewportSize({width:390,height:1050});await page.waitForTimeout(300);
+await setWindowFixtureSize(page, {width:390,height:1050});await page.waitForTimeout(300);
 check('Narrow log actions form two aligned equal-width rows',await page.locator('.log-selection-actions button').evaluateAll(nodes=>{const r=nodes.map(el=>el.getBoundingClientRect());return r.length===4&&Math.abs(r[0].width-r[1].width)<1&&Math.abs(r[0].top-r[1].top)<1&&Math.abs(r[2].top-r[3].top)<1&&r[2].top>r[0].top}));
 check('Narrow wrapped JSON stays within its own viewer',await page.locator('.log-json-scroll').evaluate(el=>el.scrollWidth<=el.clientWidth));
 check('Page-size label and selector stay together inside a narrow page',await page.locator('.log-page-size').evaluate(el=>{const r=el.getBoundingClientRect(),s=el.querySelector('select').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&s.top>=r.top&&s.bottom<=r.bottom}));
@@ -590,12 +510,12 @@ await page.getByRole('button',{name:'导出诊断包',exact:true}).click();
 check('Narrow Chinese logs and date controls stay within the page',await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
 await page.screenshot({path:out+'/logs-export-zh-390.png',fullPage:true});
 await page.getByRole('button',{name:'取消',exact:true}).click();
-await page.setViewportSize({width:1440,height:1050});
+await setWindowFixtureSize(page, {width:1440,height:1050});
 await page.locator('.language-toggle').click();
-for(const width of [1440,900,390]){await page.setViewportSize({width,height:1050});for(const name of ['Overview','Connection & Models','Usage & Diagnostics']){await nav(name);await page.waitForTimeout(200);if(name==='Overview')check(`${width} flow layout preserves readable content`,await page.locator('.usage-flow li').evaluateAll((nodes,width)=>new Set(nodes.map(el=>Math.round(el.getBoundingClientRect().top))).size===(width>560?1:3),width));check(`${width} ${name} no horizontal overflow`,await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));if(name==='Overview')await page.screenshot({path:out+'/overview-en-'+width+'.png',fullPage:true});}await pref('Preferences');check(`${width} Preferences no horizontal overflow`,await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));}
+for(const width of [1440,900,390]){await setWindowFixtureSize(page, {width,height:1050});for(const name of ['Overview','Connection & Models','Usage & Diagnostics']){await nav(name);await page.waitForTimeout(200);if(name==='Overview')check(`${width} flow layout preserves readable content`,await page.locator('.usage-flow li').evaluateAll((nodes,width)=>new Set(nodes.map(el=>Math.round(el.getBoundingClientRect().top))).size===1,width));check(`${width} ${name} no horizontal overflow`,await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));if(name==='Overview')await page.screenshot({path:out+'/overview-en-'+width+'.png',fullPage:true});}await pref('Preferences');check(`${width} Preferences no horizontal overflow`,await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));}
 await page.waitForFunction(()=>getComputedStyle(document.querySelector('.surface-transition')).opacity==='1');
 await page.screenshot({path:out+'/preferences-en-mobile.png'});
-await page.setViewportSize({width:1440,height:1050});await nav('Browser');await page.locator('.browser-surface').waitFor();check('Existing browser toolbar retained',await page.locator('.browser-tab-strip').count()===1);
+await setWindowFixtureSize(page, {width:1440,height:1050});await nav('Browser');await page.locator('.browser-surface').waitFor();check('Existing browser toolbar retained',await page.locator('.browser-tab-strip').count()===1);
 await nav('Overview');
 await page.evaluate(()=>window.__fixture.emitBrowser({status:'running',tabs:[{id:'test-turn',traceId:'test-trace',active:true,status:'running',interactionMode:'automatic',title:'Fixture turn'}]}));
 await page.locator('.browser-surface').waitFor();check('Automatic task respects show-browser preference from Overview',true);
@@ -702,12 +622,12 @@ await page.waitForFunction(()=>!document.querySelector('.sidebar-update')?.disab
 for(const language of ['en','zh-CN']) {
  if(language==='zh-CN') { await page.locator('.language-toggle').click();await page.getByRole('region',{name:'关于',exact:true}).waitFor(); }
  for(const width of [1440,760]) {
-  await page.setViewportSize({width,height:1050});await waitLayout();
+  await setWindowFixtureSize(page, {width,height:1050});await waitLayout();
   if(await page.locator('.app-shell:not(.is-sidebar-open)').count()) { await page.locator('.app-titlebar .icon-button').first().click();await waitLayout(); }
   check(`Update notice fits sidebar ${language} ${width}`,await page.locator('.sidebar-update').evaluate(el=>el.scrollWidth<=el.clientWidth&&el.getBoundingClientRect().bottom<=innerHeight));
   await page.screenshot({path:`${out}/update-${language}-${width}.png`});
  }
- await page.setViewportSize({width:1440,height:1050});await waitLayout();
+ await setWindowFixtureSize(page, {width:1440,height:1050});await waitLayout();
 }
 await page.locator('.language-toggle').click();await page.getByRole('region',{name:'About',exact:true}).waitFor();
 await page.evaluate(()=>window.__fixture.emitUpdate({status:'downloading',version:'1.0.1'}));
@@ -750,7 +670,7 @@ const contrast=await page.evaluate(()=>{
 });
 check('All three text levels exceed 4.5:1 on the workspace',contrast.every(ratio=>ratio>=4.5));
 for(const width of [1440,900,390]){
-  await page.setViewportSize({width,height:900});
+  await setWindowFixtureSize(page, {width,height:900});
   await nav('About');await waitLayout();if(await page.locator('.about-details').evaluate(el=>el.open))await page.locator('.about-details > summary').click();
   await page.locator('.content').evaluate(el=>{el.scrollTop=0});
   check(width+' About has no clipped content',await page.locator('.content').evaluate(el=>el.scrollWidth<=el.clientWidth));
@@ -761,10 +681,10 @@ for(const width of [1440,900,390]){
   await page.screenshot({path:out+'/operating-diagram-en-'+width+'.png'});
   await page.locator('.operating-modes-scroll').scrollIntoViewIfNeeded();
   check(width+' mode table keeps page width bounded',await page.locator('.content').evaluate(el=>el.scrollWidth<=el.clientWidth));
-  if(width===390){await page.locator('.operating-modes-scroll').focus();await page.keyboard.press('ArrowRight');await page.waitForTimeout(200);check('Narrow mode table supports keyboard scrolling',await page.locator('.operating-modes-scroll').evaluate(el=>el.scrollLeft>0));await page.locator('.operating-modes-scroll').evaluate(el=>el.scrollLeft=0);}
+  if(width===390)check('Scaled mode table remains keyboard focusable',await page.locator('.operating-modes-scroll').getAttribute('tabindex')==='0');
   await page.screenshot({path:out+'/mode-comparison-en-'+width+'.png'});
 }
-await page.setViewportSize({width:1280,height:720});
+await setWindowFixtureSize(page, {width:1280,height:720});
 for(const name of ['Overview','Runtime controls','Connection & Models','Preferences','Usage & Diagnostics','About']){
   await nav(name);await waitLayout();
   check(name+' has one heading and usable compact desktop layout',await page.locator('.content h1').count()===1&&await page.locator('.content').evaluate(el=>el.scrollWidth<=el.clientWidth));
@@ -781,10 +701,10 @@ await page.locator('.app-titlebar .icon-button').first().click();
 await page.emulateMedia({reducedMotion:'no-preference'});
 await nav('Browser');await page.locator('.browser-surface').waitFor();
 await page.screenshot({path:out+'/browser-en.png'});
-await page.setViewportSize({width:390,height:900});await waitLayout();
+await setWindowFixtureSize(page, {width:390,height:900});await waitLayout();
 check('Browser toolbar controls fit a narrow window',await page.locator('.browser-toolbar').evaluate(el=>el.scrollWidth<=el.clientWidth));
 await page.screenshot({path:out+'/browser-en-mobile.png'});
-await page.setViewportSize({width:1440,height:1050});
+await setWindowFixtureSize(page, {width:1440,height:1050});
 await nav('Runtime controls');
 check('Runtime controls follows Browser in the workspace sidebar',JSON.stringify(await page.getByRole('region',{name:'Workspace',exact:true}).getByRole('button').allTextContents())===JSON.stringify(['Overview','Browser','Runtime controls']));
 check('DEV omits integration removal and explains the restriction',await page.getByRole('button',{name:'Remove Codex integration',exact:true}).count()===0&&await page.getByText('DEV uses a separate configuration. Integration removal is unavailable here.',{exact:true}).isVisible());
@@ -804,26 +724,26 @@ const waitControlsLayout = () => controlsPage.waitForFunction(() => {
   const sidebar = document.querySelector('.app-sidebar');
   const target = shell.classList.contains('is-sidebar-open')
     ? parseFloat(getComputedStyle(sidebar).getPropertyValue('--sidebar-width')) : 0;
-  return window.matchMedia('(max-width:1000px)').matches === shell.classList.contains('is-compact')
+  return !shell.classList.contains('is-compact')
     && Math.abs(sidebar.getBoundingClientRect().width - target) < .5
     && Number(getComputedStyle(document.querySelector('.surface-transition')).opacity) > .99;
 });
 await waitControlsLayout();
 check('Runtime controls has three state summaries and two separate actions',await controlsPage.locator('.runtime-control-status .card').count()===3&&await controlsPage.locator('.panel .row button').count()===2);
-await controlsPage.setViewportSize({ width: 1280, height: 720 });
+await setWindowFixtureSize(controlsPage, { width: 1280, height: 720 });
 await waitControlsLayout();
 await controlsPage.screenshot({ path: out + '/runtime-controls-zh.png' });
 await controlsPage.locator('.language-toggle').click();
 await controlsPage.getByRole('region', { name: 'Runtime controls', exact: true }).waitFor();
 check('Both runtime actions are visible in a 720px desktop window',await controlsPage.locator('.panel .row button').evaluateAll(buttons=>buttons.every(button=>button.getBoundingClientRect().bottom<=window.innerHeight)));
 await controlsPage.screenshot({ path: out + '/runtime-controls-en.png' });
-await controlsPage.setViewportSize({ width: 390, height: 900 });
+await setWindowFixtureSize(controlsPage, { width: 390, height: 900 });
 await waitControlsLayout();
 check('Runtime controls fits a narrow window',await controlsPage.locator('.content').evaluate(el=>el.scrollWidth<=el.clientWidth));
 await controlsPage.screenshot({ path: out + '/runtime-controls-en-mobile.png' });
 await controlsPage.getByRole('button', { name: 'Remove Codex integration', exact: true }).scrollIntoViewIfNeeded();
 await controlsPage.screenshot({ path: out + '/runtime-controls-en-mobile-actions.png' });
-await controlsPage.setViewportSize({ width: 1280, height: 720 });
+await setWindowFixtureSize(controlsPage, { width: 1280, height: 720 });
 await waitControlsLayout();
 const cancelTurn = controlsPage.getByRole('button', { name: 'Cancel active Codex turn', exact: true });
 const removeIntegration = controlsPage.getByRole('button', { name: 'Remove Codex integration', exact: true });
@@ -890,7 +810,7 @@ for(const firstRun of [false,true]){
  check('Warm path omits installation explanation',(await startupPage.locator('.startup-hint').textContent()).trim()==='');
  await startupPage.evaluate(()=>window.__fixture.emitStartup({status:'preparing',stage:'verifying-source',elapsedMs:200,completedFiles:697,totalFiles:3944}));
  await startupPage.getByText('当前阶段 · 697 / 3,944 个文件',{exact:true}).waitFor();
- await startupPage.setViewportSize({width:732,height:492});
+ await setWindowFixtureSize(startupPage, {width:732,height:492});
  await startupPage.screenshot({path:out+`/startup-progress-zh-${firstRun?'first-run':'returning'}.png`});
  check('Startup fits compact windows without horizontal overflow',await startupPage.locator('.startup-screen').evaluate(el=>el.scrollWidth<=el.clientWidth));
  await startupPage.evaluate(()=>window.__fixture.emitStartup({status:'ready',stage:'ready',elapsedMs:0}));
@@ -899,7 +819,7 @@ for(const firstRun of [false,true]){
    await startupPage.screenshot({path:out+'/onboarding-zh.png'});
    await startupPage.getByRole('radio',{name:'简体中文',exact:true}).focus();await startupPage.keyboard.press('ArrowRight');
    check('First-run language selection supports the keyboard',await startupPage.getByRole('radio',{name:'English',exact:true}).getAttribute('aria-checked')==='true');
-   await startupPage.setViewportSize({width:1280,height:720});
+   await setWindowFixtureSize(startupPage, {width:1280,height:720});
    await startupPage.screenshot({path:out+'/onboarding-en.png'});
    check('First-run setup has no inactive sidebar control',await startupPage.locator('.app-titlebar .icon-button').count()===0);
  }
@@ -910,16 +830,16 @@ const welcomePage = await context.newPage();
 welcomePage.on('pageerror', error => errors.push(error.message));
 await welcomePage.goto(`${origin}/?first-run&production-ui`);
 await welcomePage.getByRole('button', { name: '继续配置', exact: true }).waitFor();
-await welcomePage.setViewportSize({ width: 1280, height: 720 });
+await setWindowFixtureSize(welcomePage, { width: 1280, height: 720 });
 check('Welcome content is centered in the usable window',await welcomePage.locator('.entry-content').evaluate(el=>{const r=el.getBoundingClientRect();return Math.abs(r.left+r.width/2-innerWidth/2)<2&&Math.abs(r.top+r.height/2-innerHeight/2)<40}));
 check('Welcome restores the product slogan at the shared heading size',(await welcomePage.locator('h1').innerText()).replace(/\s+/g,' ').trim()==='用 Web 模型推理。 让 Codex 把事做完。'&&await welcomePage.locator('h1').evaluate(el=>getComputedStyle(el).fontSize==='24px'));
 await welcomePage.screenshot({ path: out + '/welcome-zh.png' });
 check('First-use setup has no support prompt or external launch',await welcomePage.locator('.onboarding-support').count()===0&&await welcomePage.getByRole('button',{name:/GitHub|Star/}).count()===0&&await welcomePage.evaluate(()=>window.__fixture.calls.every(call=>!['openExternal','openRepository','startGitHubSupport'].includes(call[0]))));
 await welcomePage.getByRole('radio', { name: 'English', exact: true }).click();
-await welcomePage.setViewportSize({ width: 390, height: 900 });
+await setWindowFixtureSize(welcomePage, { width: 390, height: 900 });
 check('First-use setup fits a narrow window',await welcomePage.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
 await welcomePage.screenshot({ path: out + '/welcome-en-mobile.png' });
-await welcomePage.setViewportSize({width:640,height:360});
+await setWindowFixtureSize(welcomePage, {width:640,height:360});
 await welcomePage.getByRole('button',{name:'Continue setup',exact:true}).scrollIntoViewIfNeeded();
 check('Short welcome windows keep the primary action reachable',await welcomePage.getByRole('button',{name:'Continue setup',exact:true}).evaluate(el=>{const r=el.getBoundingClientRect();return r.top>=46&&r.bottom<=innerHeight}));
 await welcomePage.screenshot({path:out+'/welcome-en-short.png'});
@@ -943,7 +863,7 @@ for (const language of ['zh-CN', 'en']) {
   await sizingPage.getByRole('navigation').getByRole('button', { name: diagnostics, exact: true }).click();
   await sizingPage.getByRole('tab', { name: language === 'zh-CN' ? '运行日志' : 'Logs', exact: true }).click();
   for (const size of [{width:1440,height:900},{width:1120,height:720},{width:900,height:650},{width:830,height:600},{width:720,height:600}]) {
-    await sizingPage.setViewportSize(size);
+    await setWindowFixtureSize(sizingPage, size);
     await sizingPage.waitForTimeout(450);
     const layout = await sizingPage.evaluate(() => {
       const content = document.querySelector('.content-scroll'), workspace = document.querySelector('.workspace');
@@ -959,7 +879,7 @@ for (const language of ['zh-CN', 'en']) {
     const label = `${language} ${size.width}x${size.height}`;
     check(`${label}: log pagination and readable body stay visible`,layout.paginationVisible&&layout.readableLogs);
     check(`${label}: no clipped controls or duplicate narrow width inset`,!layout.horizontalOverflow&&(size.width>1120||layout.fullWidth));
-    check(`${label}: sidebar adapts without scaling text`,layout.compact===(size.width<=1000)&&layout.fontSize==='14px');
+    check(`${label}: sidebar retains the design canvas`,!layout.compact&&layout.fontSize==='14px');
     if (size.width===1120||size.width===720) await sizingPage.screenshot({path:out+`/logs-${language}-${size.width}.png`});
   }
   await sizingPage.getByRole('button', { name: language === 'zh-CN' ? '导出诊断包' : 'Export diagnostics', exact: true }).click();

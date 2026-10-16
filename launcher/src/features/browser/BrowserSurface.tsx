@@ -43,6 +43,7 @@ export function BrowserSurface({
 }) {
   const [passkeyContinuationRequested, setPasskeyContinuationRequested] =
     useState(false);
+  const [inputOverridePending, setInputOverridePending] = useState(false);
   const visible = browser?.visible === true;
   const manualInteraction = interactionMode === "manual";
   const passkeyAvailable =
@@ -53,7 +54,8 @@ export function BrowserSurface({
     (tab) => tab.active && tab.interactionMode === "manual",
   );
   const navigationLocked =
-    browser?.status === "running" || browser?.status === "testing";
+    browser?.inputLocked ?? (browser?.status === "running" || browser?.status === "testing");
+  const selectedTab = browser?.tabs.find(tab => tab.active);
   const passkeyWaiting =
     passkeyAvailable &&
     operation?.name === "passkey-login" &&
@@ -96,6 +98,24 @@ export function BrowserSurface({
       await api!.closeBrowserTab(tabId);
     } catch (cause) {
       setError(messageOf(cause));
+    }
+  };
+  const stopTab = async (tabId: string) => {
+    try {
+      await api!.stopBrowserTab(tabId);
+    } catch (cause) {
+      setError(messageOf(cause));
+    }
+  };
+  const toggleInputOverride = async () => {
+    if (!browser || inputOverridePending) return;
+    setInputOverridePending(true);
+    try {
+      await api!.setBrowserInputOverride(browser.activeTabId, !browser.inputOverrideActive);
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setInputOverridePending(false);
     }
   };
   const openPasskeyLogin = () => {
@@ -204,11 +224,13 @@ export function BrowserSurface({
         </div>
         <div className="browser-zoom-controls">
           <IconButton
+            disabled={browser?.zoomLocked}
             icon="minus"
             label={copy.zoomOut}
             onClick={() => void zoom("out")}
           />
           <button
+            disabled={browser?.zoomLocked}
             aria-label={copy.zoomReset}
             className="browser-zoom-reset"
             onClick={() => void zoom("reset")}
@@ -218,15 +240,26 @@ export function BrowserSurface({
             {Math.round((browser?.zoomFactor ?? 1) * 100)}%
           </button>
           <IconButton
+            disabled={browser?.zoomLocked}
             icon="plus"
             label={copy.zoomIn}
             onClick={() => void zoom("in")}
           />
         </div>
+        {browser?.canOverrideInput && (
+          <button className="toolbar-text-button" type="button" disabled={inputOverridePending}
+            onClick={() => void toggleInputOverride()}>
+            {browser.inputOverrideActive ? copy.restoreBrowserReadOnly : copy.allowBrowserInput}
+          </button>
+        )}
+        {selectedTab?.canStop && (
+          <button className="toolbar-text-button" type="button"
+            onClick={() => void stopTab(selectedTab.id)}>{copy.stopBrowserTask}</button>
+        )}
         {passkeyAvailable ? (
           <button
             className="toolbar-text-button"
-            disabled={passkeyWaiting && passkeyContinuationRequested}
+            disabled={browser?.automationBusy || (passkeyWaiting && passkeyContinuationRequested)}
             onClick={() =>
               void (passkeyWaiting
                 ? continuePasskeyLogin()

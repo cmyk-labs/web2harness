@@ -11,6 +11,8 @@ import type { CodexProviderConfig } from "./types";
 import { VERSION } from "./version";
 import { CURRENT_CONFIG_VERSION, migrateRuntimeConfig } from "../launcher/shared/config-migration.cjs";
 
+import { normalizeContextPreferences, type ContextPreferenceSources } from "../launcher/shared/context-preferences.cjs";
+
 export type RuntimeMode = "browser-only" | "native-tools" | "mcp-bridge";
 export type BrowserHostMode = "managed-chrome" | "launcher";
 export type BrowserInteractionMode = "automatic" | "manual";
@@ -86,6 +88,7 @@ export interface AppConfig {
   solAvailable: boolean;
   extraHighAvailable?: boolean;
   proAvailable: boolean;
+  contextPreferenceSources?: ContextPreferenceSources;
   experimentalContextFiles: boolean;
   experimentalContextTripleBudget: boolean;
   experimentalSkillAttachments: boolean;
@@ -219,7 +222,8 @@ export function defaultConfig(mode: RuntimeMode = "native-tools"): AppConfig {
     solAvailable: true,
     extraHighAvailable: false,
     proAvailable: false,
-    experimentalContextFiles: false,
+    experimentalContextFiles: true,
+    contextPreferenceSources: { files: "default", budget: "default" },
     experimentalContextTripleBudget: false,
     experimentalSkillAttachments: false,
     experimentalFreshConversationPerTurn: false,
@@ -526,7 +530,7 @@ function parseConfig(value: unknown, path: string): AppConfig {
   if (browserInteractionMode === "manual" && experimentalSkillAttachments) {
     throw new Error(`Zero Risk does not support Skills as files in ${path}`);
   }
-  // Legacy mode migrates to file transport only; larger budgets always require new consent.
+  // Only explicitly user-owned choices survive default-policy changes.
   const legacy = parsed as typeof parsed & { experimentalBiggerContext?: unknown };
   if (legacy.experimentalBiggerContext !== undefined && typeof legacy.experimentalBiggerContext !== "boolean") {
     throw new Error(`Invalid experimentalBiggerContext in ${path}`);
@@ -534,9 +538,8 @@ function parseConfig(value: unknown, path: string): AppConfig {
   if (parsed.experimentalContextTripleBudget !== undefined && typeof parsed.experimentalContextTripleBudget !== "boolean") {
     throw new Error(`Invalid experimentalContextTripleBudget in ${path}`);
   }
-  const experimentalContextFiles = parsed.experimentalContextFiles === undefined
-    ? legacy.experimentalBiggerContext === true : parsed.experimentalContextFiles === true;
-  const experimentalContextTripleBudget = experimentalContextFiles && parsed.experimentalContextTripleBudget === true;
+  const { experimentalContextFiles, experimentalContextTripleBudget, contextPreferenceSources } =
+    normalizeContextPreferences({ ...parsed, browserInteractionMode, solAvailable });
   delete legacy.experimentalBiggerContext;
   const zeroRiskProEnabled = parsed.zeroRiskProEnabled === true;
   if (browserInteractionMode === "manual" && experimentalContextFiles) {
@@ -559,6 +562,7 @@ function parseConfig(value: unknown, path: string): AppConfig {
     proAvailable,
     experimentalContextFiles,
     experimentalContextTripleBudget,
+    contextPreferenceSources,
     experimentalSkillAttachments,
     experimentalFreshConversationPerTurn,
     useSavedChats,

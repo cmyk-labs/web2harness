@@ -192,19 +192,7 @@ function managedTunnelConnectArgs(config, invocation) {
   ];
 }
 
-function normalizeContextPreferences(config) {
-  for (const key of ["experimentalBiggerContext", "experimentalContextFiles", "experimentalContextTripleBudget"]) {
-    if (config[key] !== undefined && typeof config[key] !== "boolean") {
-      throw new Error(`Runtime configuration has an invalid ${key}`);
-    }
-  }
-  const next = { ...config };
-  next.experimentalContextFiles = config.experimentalContextFiles === undefined
-    ? config.experimentalBiggerContext === true : config.experimentalContextFiles === true;
-  next.experimentalContextTripleBudget = next.experimentalContextFiles && config.experimentalContextTripleBudget === true;
-  delete next.experimentalBiggerContext;
-  return next;
-}
+const { normalizeContextPreferences } = require("../../shared/context-preferences.cjs");
 
 function validateConfig(config, descriptorPath, platform = process.platform, launcherProfile = "production") {
   config = migrateRuntimeConfig(config);

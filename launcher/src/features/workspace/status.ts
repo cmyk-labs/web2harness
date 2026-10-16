@@ -11,6 +11,7 @@ export function workspaceBusy(
 ) {
   return (
     operation?.status === "running" ||
+    browser?.automationBusy === true ||
     browser?.status === "running" ||
     browser?.status === "testing" ||
     !!browser?.tabs.some(

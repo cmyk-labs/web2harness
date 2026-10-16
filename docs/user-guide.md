@@ -44,7 +44,7 @@ Ordinary users may install and use the application on their own workstation. Dev
 
 ## Install and start
 
-The application opens in a normal window, initially 1120×720, and remembers its normal size and position within the current display's available area. It does not restore maximized or fullscreen mode at startup. You can still maximize, restore or minimize it using the window controls. Narrow windows collapse the sidebar and adapt the content layout without scaling text; long pages scroll, and the log viewer keeps its pagination below a separately scrollable log area.
+The application opens in a 900×600 DIP normal window with a 640×480 DIP minimum; a smaller display work area takes precedence. The first sizing migration caps older large bounds at the new default, then subsequent manual sizes and positions are remembered. Startup does not restore maximized or fullscreen mode; native controls still maximize, restore or minimize to the taskbar. The interface scales its 1120×720 design canvas uniformly, including text, controls and spacing, continuing the pane backgrounds through extra space when aspect ratios differ. The titlebar follows the window edges. Resizing or restoring does not close the sidebar; its manual state is saved. Existing long pages and log areas remain scrollable.
 
 ### Select a download
 
@@ -103,7 +103,7 @@ On first use, activate the device license in **License**, choose the interface l
 Browser login, local configuration, and Codex catalog verification are separate checks. Complete them in order:
 
 1. Open **Connection & Models** and select **Native Tools** with **Automatic** interaction.
-2. Select **Open browser** and sign in to ChatGPT there. A login in another browser does not transfer automatically.
+2. Select **Open browser** and sign in to ChatGPT there. A login in another browser does not transfer automatically. If the page is already signed in but the launcher has not recognized it, use **Recheck sign-in**. The step distinguishes not checked, checking, signed out and verification failure; failures keep the retry action available. Only a verified sign-in enables **Check connection**. After an application upgrade, a connection check from an older version must be repeated.
 3. Return to **Connection & Models** and select **Check connection**. Resolve any login dialog or browser check failure before continuing.
 4. Select **Apply configuration**. This prepares the runtime and writes the Codex integration. Selecting a mode alone does not activate it.
 5. Refresh the affected Codex client's model catalog. If it remains stale, finish its tasks, fully quit that client and its associated background process, then reopen it while keeping Web2Harness running.
@@ -118,7 +118,7 @@ Keep Web2Harness running while the integration is active. Native Codex models al
 
 ## Run and continue tasks
 
-Choose the intended project and a **(Web)** model in Codex, then select an effort offered for it. Enter the task normally. During automatic interaction, Web2Harness submits the applicable context to ChatGPT and returns responses to Codex. Leave the task's browser page available; navigating, editing, or closing it can interrupt the turn.
+Choose the intended project and a **(Web)** model in Codex, then select an effort offered for it. Enter the task normally. During automatic interaction, Web2Harness submits the applicable context to ChatGPT and returns responses to Codex. The task's embedded browser page remains available for observation and is protected from manual input.
 
 Review tool approvals in Codex. Tools remain restricted to the active task's tool access, sandbox, and approval policy. Confirm file changes and command output before treating a task as complete. Continue in the same Codex task when its history is relevant; start a new task when previous context or images should be excluded.
 
@@ -133,6 +133,10 @@ Use Codex's task controls for deliberate interruption. **Runtime controls → Ca
 | **Usage & Diagnostics** | Inspect observed usage, run diagnostics, control runtime turns, and export diagnostic bundles. |
 
 The sidebar language control changes the launcher language. It does not change ChatGPT's website language. **Preferences** also controls background operation after window close, showing the browser when tasks start, and launch at system sign-in. DEV starts explicitly and does not offer sign-in autostart.
+
+During automatic execution, the embedded browser is view-only by default. A notice in the selected application language explains why mouse, keyboard, scrolling and drag/drop input are blocked; attempted input highlights that notice. Protection continues while Codex runs tools between Web rounds. Browser navigation and zoom are also restricted. You can still observe the page, switch observation tabs, hide the browser or minimize the launcher. **Stop browser task** stops the selected active Web round; stop the task in Codex to interrupt local tool execution. A failed stop keeps the page protected. Retained automatic conversation tabs stay view-only by default for continuation; the home tab becomes usable once no task or automatic check is using the browser. Close retained tabs before changing the account through the launcher. Manual Zero Risk and idle sign-in keep their human interaction flow.
+
+For deliberate manual intervention, choose **Exit view-only** in the browser toolbar and confirm the warning. This unlocks only the selected page, including navigation; it does not stop Codex, and manual changes can interrupt the task or affect its results. Other pages and global zoom remain protected. **Restore view-only** immediately reapplies protection. The override is temporary: the next automatic round on that page restores protection, and restarting the app clears overrides. If the selected page or task changes while the confirmation is open, confirm again on the current page.
 
 <a id="tool-modes"></a>
 
@@ -202,9 +206,11 @@ Change these settings after active turns finish. Saving a chat and reusing its c
 | **Conversation reuse → Reuse conversation** | Default. Eligible automatic Sol/Pro routes in Native Tools or MCP Bridge retain the browser conversation associated with a verified Codex task. This reduces repeated context; compaction begins a new context epoch. |
 | **Conversation reuse → New each turn** | Off. Eligible automatic Sol/Pro routes create a new browser chat and resend the applicable context each turn. Useful when a connector disappears on follow-up messages, with more transfer and potentially longer waits. Inactive for manual interaction. |
 | **Chat history → Temporary** | Default for new configurations. Select **Save to history** to save tasks in ChatGPT history, where memory and custom instructions may apply. Upgrades preserve an existing explicit choice. |
-| **Context as File (Experimental)** | Off. Sends sufficiently large context as a text attachment and keeps small context inline. Requires automatic interaction and is unavailable for Luna. |
+| **Context as File (Experimental)** | On by default, with the standard budget. Sends sufficiently large context as a text attachment and keeps small context inline. Requires automatic interaction and is unavailable for Luna. |
 | **Context budget → Triple** | Experimental and off. Available with context-file transport; advertises larger context and compaction budgets. Restart the affected Codex client after changing it. It does not increase allowance or guarantee complete model use of the content. |
 | **Skills as files (experimental)** | Off. Uploads explicitly selected Codex skills as named text files during automatic interaction. Other skills load through tools. Skills and images share attachment limits. |
+
+File transport and budget store their preference sources separately. Upgrades preserve only choices explicitly marked `user`; missing or other sources adopt the current defaults. An older off or triple value without a `user` source therefore migrates to files on with the standard budget. Explicit user actions mark the chosen setting; ordinary saves and synchronization do not. Manual mode and Luna retain their support restrictions.
 
 Automatic launcher-hosted saved chats with a Codex thread identity are named after their first completed reply: `YYYY-MM-DD HH:mm · task name · 对话-01`. The short task name comes from the first available human request and remains stable. New dialogue chats increment `对话-02`, `对话-03`; separate summary chats use independent `压缩-01`, `压缩-02` numbers (dialogue / compaction). The timestamp is each chat's creation time in the machine's local timezone. Tool round trips and reconnects keep the title and number. Successful naming happens once, preserving later manual renames. Naming failures are logged without resending the task; an unnamed retained chat can retry naming after a later completed reply. Temporary chats and Zero Risk are not automatically renamed.
 

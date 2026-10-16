@@ -8,7 +8,7 @@ const UNLICENSED_CHANNELS = new Set([
   "launcher:browser-bounds",
   "launcher:limits", "launcher:logs", "launcher:query-logs", "launcher:export-logs",
   "launcher:retry-startup", "launcher:open-external", "launcher:update-check", "launcher:update-install",
-  "launcher:browser-hide", "launcher:browser-tab-close", "launcher:browser-logout",
+  "launcher:browser-hide", "launcher:browser-tab-close", "launcher:browser-tab-stop", "launcher:browser-logout",
   "launcher:cancel-turns", "launcher:uninstall-integration", "launcher:session-reminder-dismiss",
 ]);
 
@@ -16,7 +16,8 @@ function guardLicensedIpc(controller, channel, handler) {
   return async (...args) => {
     const hidingSurface = channel === "launcher:browser-surface-active" && args[1] === false;
     const closePreference = channel === "launcher:set-preference" && args[1] === "keepRunningOnClose";
-    if (!UNLICENSED_CHANNELS.has(channel) && !hidingSurface && !closePreference) await controller.assertActive();
+    const restoringInputProtection = channel === "launcher:browser-input-override" && args[2] === false;
+    if (!UNLICENSED_CHANNELS.has(channel) && !hidingSurface && !closePreference && !restoringInputProtection) await controller.assertActive();
     return handler(...args);
   };
 }

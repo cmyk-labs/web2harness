@@ -71,6 +71,102 @@ function cleaned(fixture, timers, ...surfaces) {
   for (const surface of surfaces) assert.deepEqual(surface.eventNames(), [], "all probe listeners are removed");
 }
 
+test("bounded recheck restores authentication after a same-document interruption without navigating", async t => {
+  const timers = clock(t), page = contents("https://chatgpt.com/"), fixture = host(page), old = deferred();
+  page.executeJavaScript = () => old.promise;
+  const check = fixture.checkAuthentication();
+  assert.equal(fixture.checkAuthentication(), check, "concurrent callers share the same check");
+  await flush();
+  page.emit("did-navigate-in-page", {}, page.url, true);
+  page.executeJavaScript = async () => result(true, page.url);
+  await flush();
+  t.mock.timers.tick(300);
+  assert.equal((await check).authenticationStatus, "authenticated");
+  assert.deepEqual(page.loads, [], "a loaded conversation is inspected in place");
+  old.resolve(result(false));
+  await flush();
+  assert.equal(fixture.state.authenticated, true);
+  cleaned(fixture, timers, page);
+});
+
+test("renderer closure settles the recheck UI and allows a fresh retry", async t => {
+  const timers = clock(t), page = contents(), fixture = host(page);
+  page.executeJavaScript = () => new Promise(() => {});
+  const check = fixture.checkAuthentication();
+  await flush();
+  page.close();
+  assert.equal((await check).authenticationStatus, "error");
+  assert.equal(fixture.authenticationCheck, null);
+  cleaned(fixture, timers, page);
+  const replacement = contents();
+  fixture.view = { webContents: replacement };
+  assert.equal((await fixture.checkAuthentication()).authenticationStatus, "authenticated");
+  cleaned(fixture, timers, replacement);
+});
+
+test("work starting mid-recheck releases the pending UI without claiming sign-in", async t => {
+  const timers = clock(t), page = contents(), fixture = host(page), pending = deferred();
+  page.executeJavaScript = () => pending.promise;
+  const check = fixture.checkAuthentication();
+  await flush();
+  Object.defineProperty(fixture, "activeTraceId", { value: "task-started" });
+  pending.resolve(result(false));
+  assert.equal((await check).authenticationStatus, "unknown");
+  assert.equal(fixture.state.authenticated, false);
+  cleaned(fixture, timers, page);
+});
+
+test("repeated navigation ends in a visible retryable error after three attempts", async t => {
+  const timers = clock(t), page = contents(), fixture = host(page);
+  let attempts = 0;
+  page.executeJavaScript = async () => {
+    attempts += 1;
+    page.emit("did-navigate-in-page", {}, page.url, true);
+    return result(true);
+  };
+  const check = fixture.checkAuthentication();
+  for (let i = 0; i < 3; i += 1) { await flush(); t.mock.timers.tick(300); }
+  const state = await check;
+  assert.equal(attempts, 3);
+  assert.equal(state.authenticated, false);
+  assert.equal(state.authenticationStatus, "error");
+  assert.match(state.authenticationMessage, /interrupted/);
+  cleaned(fixture, timers, page);
+});
+
+test("rechecks respect active work and manual mode; cancellation clears queued retries", async t => {
+  const timers = clock(t), page = contents(), fixture = host(page);
+  Object.defineProperty(fixture, "activeTraceId", { value: "active-task", writable: true });
+  await fixture.checkAuthentication();
+  assert.equal(page.probes, 0);
+  fixture.activeTraceId = null;
+  fixture.interactionModeOverride = "manual";
+  assert.throws(() => fixture.checkAuthentication(), /disabled in Zero Risk/);
+  fixture.queueAuthenticationCheck();
+  assert.equal(timers.size, 0);
+  fixture.interactionModeOverride = "automatic";
+  page.executeJavaScript = () => new Promise(() => {});
+  const check = fixture.checkAuthentication();
+  await flush();
+  page.emit("did-navigate-in-page", {}, page.url, true);
+  await flush();
+  fixture.queueAuthenticationCheck();
+  fixture.cancelAuthenticationCheck();
+  await check;
+  assert.equal(fixture.authenticationCheck, null);
+  assert.equal(fixture.state.authenticationStatus, "unknown");
+  cleaned(fixture, timers, page);
+});
+
+test("opening an already loaded browser rechecks its session", async () => {
+  const page = contents("https://chatgpt.com/"), fixture = host(page);
+  fixture.show = () => {};
+  fixture.selectedTurnTab = () => null;
+  assert.equal((await fixture.reveal()).authenticated, true);
+  assert.equal(page.probes, 1);
+  assert.deepEqual(page.loads, []);
+});
+
 test("a hanging renderer is bounded, shared callers settle, and a fresh probe can succeed", async t => {
   const timers = clock(t);
   const page = contents();

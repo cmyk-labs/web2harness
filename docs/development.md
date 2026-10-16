@@ -135,7 +135,7 @@ Development records under `dev-notes/` remain outside Git. Formal documentation 
 
 Maintain colors, typography, dimensions and motion durations in `launcher/src/tokens.css`. The interface uses graphite surfaces with neutral gray buttons and selection states. Green, orange and red convey healthy, warning and error states. Selection also uses a background, border or marker rather than color alone. Keep page headings, controls and content spacing consistent; place feature-specific styles beside their components.
 
-Welcome and preparation screens share a centered content column with scrolling in short windows. Workspace pages, including Product license, use left-aligned content, 24px page headings, 14px body text, 36px controls and 32px horizontal padding (20px in narrow windows). Keep the Overview usage flow expanded. About and activated license management show concise summaries; additional explanations and renewal inputs open on request. Unlicensed pages remain readable; backend checks also protect actions.
+Welcome and preparation screens share a centered content column with scrolling in short windows. Workspace pages, including Product license, use left-aligned content, 24px page headings, 14px body text, 36px controls and 32px horizontal padding. The native shell uniformly fits a 1120×720 design canvas into its content area; resizing keeps the composition and manual sidebar state. System display scaling and work-area constraints remain native. Keep the Overview usage flow expanded. About and activated license management show concise summaries; additional explanations and renewal inputs open on request. Unlicensed pages remain readable; backend checks also protect actions.
 
 Review both languages, wide and narrow windows, long content, errors and disabled states, as well as keyboard focus, hidden navigation and the system reduced-motion preference. Run `node launcher/scripts/smoke-workspace.mjs` to exercise the UI with an independent browser and mocked IPC; set `WORKSPACE_SMOKE_OUTPUT` to the task's evidence directory. For queue-only display/filter changes, set `WORKSPACE_SMOKE_SCOPE=queue` to run the shared renderer against an isolated real queue host, covering both languages, empty/history/active results, model searches, paging, errors and narrow layout in one flow. Capture screenshots after page and sidebar transitions have settled. These checks do not establish authenticated ChatGPT, native embedded-browser or installer acceptance.
 
@@ -234,6 +234,8 @@ The default layout is:
 
 <a id="standard-isolated-test-procedure"></a>
 
+For focused window and sign-in presentation checks, run `node launcher/scripts/smoke-window-session.mjs` after `bun run launcher:build`. `WINDOW_SESSION_OUTPUT` selects the evidence directory. It launches a task-owned native Electron window with mocked IPC and checks the fixed design canvas, sidebar state, authentication controls, and default budget in both languages. This is presentation evidence, not authenticated DEV or installer acceptance. Ordinary Chromium workspace fixtures emulate the logical viewport after application zoom; their screenshots do not prove native pixel sizing.
+
 ## Standard isolated test procedure
 
 ![DEV and regular operation share code while keeping identities, data, endpoints, and fixtures separate](../assets/diagrams/isolation.svg)
@@ -318,7 +320,7 @@ Only `--simulate` uses `DevChatDriver` and simulated tool receipts. Every simula
 | `/reset yes` | Reset the named simulator chat. |
 | `/help`, `/exit` | Show commands or leave the simulator. |
 
-Configure Context as File, Skills as files, reuse/history preferences, and interaction mode in DEV preferences using the same settings as regular operation. Context as File defaults off; Standard is the default budget, and Triple requires explicit selection. When enabled, a complete serialized context larger than 32 KiB in UTF-8 uses a TXT attachment; smaller contexts stay inline. Every attachment must finish processing before Send. File contents remain part of the existing token budget. Automatic interaction is required and Luna is unsupported. See the [configuration reference](reference.md) for the complete contract.
+Configure Context as File, Skills as files, reuse/history preferences, and interaction mode in DEV preferences using the same settings as regular operation. Context as File defaults on with Standard budget; Triple requires explicit selection. Only preferences marked as a user choice survive default migrations. When enabled, a complete serialized context larger than 32 KiB in UTF-8 uses a TXT attachment; smaller contexts stay inline. Every attachment must finish processing before Send. File contents remain part of the existing token budget. Automatic interaction is required and Luna is unsupported. See the [configuration reference](reference.md) for the complete contract.
 
 DEV setup supports `--context-files` / `--no-context-files` and `--context-triple-budget` / `--standard-context-budget`. Change only the isolated profile and restart its Codex client to refresh the catalog. Browser experiments still consume real account quota.
 

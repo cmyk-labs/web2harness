@@ -40,6 +40,7 @@ import {
 } from "./runtime/service";
 import { connectTunnel, createTunnelConfig, installRuntimeKey, installRuntimeKeyBytes, installTunnelClient, managedRuntimeKeyPath, stopTunnel, waitForTunnelReady } from "./runtime/tunnel";
 import { getTunnelServiceStatus, installTunnelService, restartTunnelService, stopTunnelService, tunnelServiceDefinitionMatches, uninstallTunnelService } from "./runtime/tunnel-service";
+import { normalizeContextPreferences } from "../launcher/shared/context-preferences.cjs";
 import { VERSION } from "./version";
 import { assertDevRuntimeIsolation, canonicalDevPath } from "./dev/isolation";
 
@@ -289,14 +290,19 @@ function baseConfig(
   }
   if (options.experimentalContextFiles !== undefined) {
     config.experimentalContextFiles = options.experimentalContextFiles;
+    config.contextPreferenceSources = { files: "user", budget: config.contextPreferenceSources?.budget ?? "default" };
   }
   if (options.experimentalContextTripleBudget === true && !config.experimentalContextFiles) {
     throw new Error("Enable Context as File before selecting its triple context budget");
   }
   if (options.experimentalContextTripleBudget !== undefined) {
     config.experimentalContextTripleBudget = options.experimentalContextTripleBudget;
+    config.contextPreferenceSources = { files: config.contextPreferenceSources?.files ?? "default", budget: "user" };
   }
-  if (!config.experimentalContextFiles) config.experimentalContextTripleBudget = false;
+  if (!config.experimentalContextFiles) {
+    if (config.experimentalContextTripleBudget) config.contextPreferenceSources = { files: config.contextPreferenceSources?.files ?? "default", budget: "default" };
+    config.experimentalContextTripleBudget = false;
+  }
   if (options.zeroRiskProEnabled !== undefined) {
     if (config.browserInteractionMode !== "manual") {
       throw new Error("Zero Risk Pro can be configured only with --zero-risk-browser-interaction");
@@ -325,6 +331,7 @@ function baseConfig(
     if (config.browserHost !== "launcher") {
       throw new Error("Zero Risk requires the Launcher; pass --browser-host-descriptor from the running Launcher");
     }
+    config.contextPreferenceSources = { files: config.experimentalContextFiles ? "default" : config.contextPreferenceSources?.files ?? "default", budget: config.experimentalContextTripleBudget ? "default" : config.contextPreferenceSources?.budget ?? "default" };
     config.experimentalContextFiles = false;
     config.experimentalContextTripleBudget = false;
     config.experimentalSkillAttachments = false;
@@ -584,6 +591,7 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
   config.solAvailable = solAvailable === true;
   config.extraHighAvailable = config.solAvailable && extraHighAvailable === true;
   config.proAvailable = config.solAvailable && proAvailable === true;
+  Object.assign(config, normalizeContextPreferences(config));
   const explicitTunnelChange = Boolean(options.tunnelId || options.runtimeKeyFile || options.runtimeKeyValue);
   const preliminaryChange = Boolean(existing && (meaningfulRuntimeChange(existing, config) || explicitTunnelChange || options.forceLogin));
   if (beforeService.loaded && preliminaryChange && !options.restartService) {
@@ -717,6 +725,7 @@ export async function setupDevProfile(options: SetupOptions): Promise<DevProfile
     config.proAvailable = capabilities.solAvailable && capabilities.proAvailable;
   }
 
+  Object.assign(config, normalizeContextPreferences(config));
   await configureTunnel(config, existing, options);
   assertDevRuntimeIsolation(config);
   await assertPortAvailable(config.host, config.port);

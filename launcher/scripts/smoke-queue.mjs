@@ -1,3 +1,4 @@
+import { setWindowFixtureSize } from "./window-fixture-size.mjs";
 import { createHash } from 'node:crypto';
 import { mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -95,16 +96,15 @@ export async function runQueueSmoke({context,origin,out,check,errors}) {
     failQueries=false;await panel.getByRole('button',{name:'Refresh',exact:true}).click();
     await panel.locator('td').filter({hasText:/^gpt-5\.6-pro/}).first().waitFor();
     for(const width of [900,390]) {
-      await page.setViewportSize({width,height:850});await page.waitForTimeout(350);
+      await setWindowFixtureSize(page, {width,height:850});await page.waitForTimeout(350);
       check(`Queue at ${width}px keeps horizontal scrolling inside the table`,await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
       await panel.screenshot({path:join(out,`queue-en-${width}.png`)});
     }
     await page.emulateMedia({reducedMotion:'reduce'});
-    if(await page.locator('.app-shell.is-compact:not(.is-sidebar-open)').count())await page.locator('.app-titlebar .icon-button').first().click();
+    if(await page.locator('.app-shell:not(.is-sidebar-open)').count())await page.locator('.app-titlebar .icon-button').first().click();
     await page.locator('.language-toggle').click();await panel.getByLabel('会话',{exact:true}).waitFor();
-    if(await page.locator('.app-shell.is-compact.is-sidebar-open').count())await page.locator('.app-titlebar .icon-button').first().click();
     await page.waitForTimeout(350);
-    check('Narrow screenshot waits until sidebar is fully outside the viewport',await page.locator('#workspace-sidebar').evaluate(el=>el.getBoundingClientRect().right<=0));
+    check('Scaled queue keeps the manually opened sidebar',await page.locator('#workspace-sidebar').getAttribute('inert')===null);
     await panel.screenshot({path:join(out,'queue-zh-390.png')});
     check('Chinese narrow queue remains usable with reduced motion',await panel.getByLabel('会话',{exact:true}).isEnabled());
     await page.close();

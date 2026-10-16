@@ -120,7 +120,7 @@ test("settings and diagnostics remain available while runtime actions fail close
     for (const channel of ["snapshot", "set-language", "logs", "export-logs", "window-state", "set-preference"]) {
       assert.doesNotThrow(() => startup.assertAvailable(`launcher:${channel}`));
     }
-    for (const channel of ["setup-core", "browser-login", "doctor", "uninstall-integration", "new-runtime-operation"]) {
+    for (const channel of ["setup-core", "browser-login", "browser-authentication", "doctor", "uninstall-integration", "new-runtime-operation"]) {
       assert.throws(() => startup.assertAvailable(`launcher:${channel}`), /Workspace/);
     }
   }

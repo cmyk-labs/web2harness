@@ -140,14 +140,14 @@ test("browser interaction mode changes reuse the transactional setup and refresh
   assert.equal(manualResult.mode, "manual");
   assert.equal(manual.invocation().args.includes("--zero-risk-browser-interaction"), true);
   assert.equal(manual.invocation().args.includes("--refresh-account-capabilities"), false);
-  assert.equal(manual.invocation().args.includes("--no-context-files"), true);
+  assert.equal(manual.invocation().args.includes("--no-context-files"), false);
 
   const automatic = hostFor(config);
   const automaticResult = await automatic.host.setBrowserInteractionMode("automatic");
   assert.equal(automaticResult.mode, "automatic");
   assert.equal(automatic.invocation().args.includes("--automatic-browser-interaction"), true);
   assert.equal(automatic.invocation().args.includes("--refresh-account-capabilities"), true);
-  assert.equal(automatic.invocation().args.includes("--context-files"), true);
+  assert.equal(automatic.invocation().args.includes("--context-files"), false);
 });
 
 test("switching back from Zero Risk preserves the saved automatic connector identity", async () => {
@@ -202,7 +202,6 @@ test("Context as File uses the setup transaction and refreshes the production Co
       "--acknowledge-unofficial",
       "--restart-service",
       "--context-files",
-      "--standard-context-budget",
     ],
   });
 });
@@ -222,7 +221,6 @@ test("Context as File updates only the isolated DEV setup transaction", async ()
       "--automatic-browser-interaction",
       "--acknowledge-unofficial",
       "--no-context-files",
-      "--standard-context-budget",
     ],
   });
 });
@@ -247,7 +245,6 @@ test("Zero Risk Pro transaction installs or removes only its explicit model prof
       "/runtime/launcher-browser.json",
       "--zero-risk-browser-interaction",
       "--acknowledge-unofficial",
-      "--no-context-files",
       "--zero-risk-pro",
       "--replace-codex-route",
       "--restart-service",
@@ -1434,11 +1431,12 @@ test("context budget is explicit, disabled with transport, and transaction failu
   const disabled = await fixture.host.setContextFiles(false);
   assert.equal(disabled.experimentalContextTripleBudget, false);
   assert.equal(disabled.budgetChanged, true);
-  assert.ok(fixture.invocation().args.includes("--standard-context-budget"));
+  assert.equal(fixture.invocation().args.includes("--standard-context-budget"), false, "a linked budget reset is not an explicit budget choice");
   const standard = devHostFor({ mode: "native-tools", experimentalContextFiles: true });
   const triple = await standard.host.setContextTripleBudget(true);
   assert.equal(triple.budgetChanged, true);
   assert.ok(standard.invocation().args.includes("--context-triple-budget"));
+  assert.equal(standard.invocation().args.includes("--context-files"), false, "changing budget does not mark the file default as a user choice");
   const enabled = await devHostFor({ mode: "native-tools" }).host.setContextFiles(true);
   assert.equal(enabled.budgetChanged, false);
   assert.equal(enabled.experimentalContextTripleBudget, false);

@@ -1269,7 +1269,7 @@ test("launcher quit remains gated through an active embedded-browser operation",
   const source = fs.readFileSync(require.resolve("../../electron/main.cjs"), "utf8");
   assert.match(
     source,
-    /runtimeHost\?\.currentOperation\(\) \|\| browserHost\?\.currentOperation\(\)/,
+    /runtimeHost\?\.currentOperation\(\) \|\| browserHost\?\.currentOperation\(\{ includeTasks: false \}\)/,
   );
 });
 
@@ -1495,13 +1495,13 @@ test("browser chrome navigation delegates to WebContents navigation history", ()
   assert.throws(() => navigateBrowser(webContents, "unknown"), /Unknown browser navigation action/);
 });
 
-test("browser zoom in, out, and reset are symmetric across owned views", () => {
+test("browser zoom in, out, and reset are symmetric across manual views", () => {
   const home = createContents();
   const turn = createContents();
   const fixture = Object.assign(Object.create(BrowserHost.prototype), {
     state: { zoomFactor: 1 },
     view: { webContents: home.webContents },
-    turnTabs: new Map([["turn", { view: { webContents: turn.webContents } }]]),
+    turnTabs: new Map([["turn", { interactionMode: "manual", view: { webContents: turn.webContents } }]]),
     snapshot() { return { zoomFactor: this.state.zoomFactor }; },
     setState(patch) { this.state = { ...this.state, ...patch }; },
     publishState() {},
@@ -2104,7 +2104,7 @@ test("launcher session refresh resolves persisted authentication before setup ac
     state: { authenticated: false },
     snapshot: () => ({ authenticated: true }),
     setState: (patch) => calls.push(["state", patch]),
-    probeAuthentication: async () => {
+    checkAuthentication: async () => {
       calls.push(["probe"]);
       return { authenticated: true };
     },
@@ -2140,7 +2140,7 @@ test("concurrent launcher session refresh requests share one browser operation",
     state: { authenticated: false },
     snapshot: () => ({ authenticated: true }),
     setState() {},
-    probeAuthentication: async () => await new Promise((resolve) => { finishProbe = resolve; }),
+    checkAuthentication: async () => await new Promise((resolve) => { finishProbe = resolve; }),
     withManualOperation: async (_name, action) => {
       operations += 1;
       return await action();
@@ -2164,6 +2164,9 @@ test("manual browser operations disable background throttling until completion",
   const throttling = [];
   const surfaces = [];
   const fixture = {
+    turnTabs: new Map(),
+    syncInputProtection() {},
+    resetInputOverride: BrowserHost.prototype.resetInputOverride,
     ready: async () => surfaces.push("ready"),
     activeTraceId: null,
     manualOperation: null,
@@ -2189,6 +2192,7 @@ test("manual operations show the home surface without discarding retained task t
   const events = [];
   const taskTab = { id: "tab-ready", status: "ready" };
   const fixture = {
+    focusBrowserSurface: BrowserHost.prototype.focusBrowserSurface,
     selectedTabId: taskTab.id,
     turnTabs: new Map([[taskTab.id, taskTab]]),
     visible: true,
@@ -2234,7 +2238,7 @@ test("selected home surface remains represented while task tabs are retained", (
   assert.equal(snapshot.tabs[0].active, true);
 });
 
-test("selecting a task tab shows and focuses its owned Playwright surface", () => {
+test("selecting an automatic tab observes its surface without giving it human keyboard focus", () => {
   const visibility = [];
   const focused = [];
   const makeView = (id) => ({
@@ -2275,7 +2279,7 @@ test("selecting a task tab shows and focuses its owned Playwright surface", () =
     ["first", true],
     ["second", true],
   ]);
-  assert.deepEqual(focused, ["second"]);
+  assert.deepEqual(focused, []);
   assert.equal(state.activeTabId, second.id);
 });
 
@@ -2298,7 +2302,7 @@ test("a stale helper cannot end a replacement turn with the same trace id", asyn
   );
 });
 
-test("closing a running browser tab reports terminal user cancellation to its helper", async () => {
+test("explicitly stopping a running browser tab reports terminal user cancellation to its helper", async () => {
   const closed = [];
   const tab = {
     id: "tab-running",
@@ -2323,7 +2327,7 @@ test("closing a running browser tab reports terminal user cancellation to its he
     logger: { info() {} },
   });
 
-  await BrowserHost.prototype.closeTab.call(fixture, tab.id);
+  await BrowserHost.prototype.stopTab.call(fixture, tab.id);
 
   assert.deepEqual(closed, ["cancel:trace_running", "view", "contents"]);
   assert.equal(fixture.closedTurnOwners.get("trace_running"), 333);
@@ -2375,7 +2379,7 @@ test("a failed runtime cancellation keeps the running DOM attached", async () =>
   });
 
   await assert.rejects(
-    BrowserHost.prototype.closeTab.call(fixture, tab.id),
+    BrowserHost.prototype.stopTab.call(fixture, tab.id),
     /runtime cancellation unavailable/,
   );
 
