@@ -31,6 +31,7 @@ interface RunMessage {
   turn: {
     traceId: string;
     preparationDeadline?: number;
+    attachmentTimeoutMs?: number;
     queueTicket?: import("../../../browser/request-queue-client").QueueTicket;
     modelId: string;
     reasoning?: string;
@@ -180,6 +181,9 @@ async function run(message: RunMessage): Promise<void> {
   if (message.turn.nativeConnector !== undefined && typeof message.turn.nativeConnector !== "boolean") {
     throw new Error("Browser helper native connector flag is invalid");
   }
+  if (message.turn.attachmentTimeoutMs !== undefined && ![120_000, 180_000, 300_000, 600_000].includes(message.turn.attachmentTimeoutMs)) {
+    throw new Error("Browser helper attachment timeout is invalid");
+  }
   if (message.turn.preparationDeadline !== undefined && (!Number.isSafeInteger(message.turn.preparationDeadline)
     || message.turn.preparationDeadline <= 0)) throw new Error("Browser helper preparation deadline is invalid");
   if (message.turn.retainConversation !== undefined && typeof message.turn.retainConversation !== "boolean") {
@@ -238,6 +242,7 @@ async function run(message: RunMessage): Promise<void> {
   const turn: BrowserTurn = {
     traceId: message.turn.traceId,
     ...(message.turn.preparationDeadline !== undefined ? { preparationDeadline: message.turn.preparationDeadline } : {}),
+    ...(message.turn.attachmentTimeoutMs !== undefined ? { attachmentTimeoutMs: message.turn.attachmentTimeoutMs } : {}),
     ...(message.turn.queueTicket ? { queueTicket: message.turn.queueTicket } : {}),
     modelId: message.turn.modelId,
     reasoning: message.turn.reasoning,
@@ -549,4 +554,4 @@ process.once("SIGTERM", () => {
 });
 
 // Advertise the optional frames this helper understands so the daemon can negotiate them explicitly.
-writeProtocol({ type: "ready", features: ["progress", "tool-boundary-ack", "completion-fence", "browser-reply-fence", "mcp-delivery-observation", "preparation-deadline", "context-file", "skill-attachments", "input-files"] });
+writeProtocol({ type: "ready", features: ["progress", "tool-boundary-ack", "completion-fence", "browser-reply-fence", "mcp-delivery-observation", "preparation-deadline", "context-file", "skill-attachments", "input-files", "attachment-timeout"] });

@@ -16,7 +16,7 @@ contextBridge.exposeInMainWorld("codexWebLauncher", {
   snapshot: () => ipcRenderer.invoke("launcher:snapshot"),
   queueStatus: () => ipcRenderer.invoke("launcher:queue-status"),
   queryQueue: (query) => ipcRenderer.invoke("launcher:queue-query", query),
-  saveQueueSettings: (settings, expectedRevision) => ipcRenderer.invoke("launcher:queue-settings", settings, expectedRevision),
+  saveQueueSettings: (settings, expectedRevision, parameters) => ipcRenderer.invoke("launcher:queue-settings", settings, expectedRevision, parameters),
   controlQueue: (action, id) => ipcRenderer.invoke("launcher:queue-control", action, id),
   getLimits: () => ipcRenderer.invoke("launcher:limits"),
   setupLimits: () => ipcRenderer.invoke("launcher:limits-setup"),

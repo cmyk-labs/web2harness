@@ -1,4 +1,6 @@
 .queue-settings { max-width: 860px; }
+.runtime-advanced > summary { cursor: pointer; padding: 20px; font-weight: 600; }
+.runtime-advanced > summary:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: -2px; }
 .unsaved-dialog { width: min(460px, calc(100vw - 32px)); box-sizing: border-box; padding: 24px; border: 1px solid var(--color-border-heavy); border-radius: var(--radius-sm); background: var(--color-background-elevated); color: var(--color-text-primary); }
 .unsaved-dialog::backdrop { background: #0009; }
 .unsaved-dialog h2 { margin: 0 0 12px; font-size: 18px; }

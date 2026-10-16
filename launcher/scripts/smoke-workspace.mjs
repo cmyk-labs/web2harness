@@ -4,6 +4,7 @@ import { chromium } from '../../node_modules/playwright-core/index.mjs';
 import { createServer } from '../node_modules/vite/dist/node/index.js';
 import assert from 'node:assert/strict';
 import { runQueueSmoke } from './smoke-queue.mjs';
+import { runRuntimeParametersSmoke } from './smoke-runtime-parameters.mjs';
 import { resolve } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer as createHttpServer } from 'node:http';
@@ -26,6 +27,11 @@ await context.addInitScript(installWorkspaceFixture);if(process.env.WORKSPACE_SM
  check('Queue renderer has no JavaScript errors',errors.length===0);
  await writeFile(out+'/results.json',JSON.stringify({scope:'queue',passed:checks.length,checks,errors},null,2));
  console.log(JSON.stringify({scope:'queue',passed:checks.length,errors}));
+}else if(process.env.WORKSPACE_SMOKE_SCOPE==='runtime-parameters'){
+ await runRuntimeParametersSmoke({context,origin,out,check,errors});
+ check('Runtime parameters renderer has no JavaScript errors',errors.length===0);
+ await writeFile(out+'/results.json',JSON.stringify({scope:'runtime-parameters',passed:checks.length,checks,errors},null,2));
+ console.log(JSON.stringify({scope:'runtime-parameters',passed:checks.length,errors}));
 }else{
 const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(origin);await page.getByRole('region',{name:'概览',exact:true}).waitFor();await page.waitForTimeout(600);
 await page.screenshot({path:out+'/overview-zh.png'});
@@ -653,7 +659,7 @@ await page.locator('.content').evaluate(el=>{el.scrollTop=0});
 if(await page.locator('.about-details').evaluate(el=>el.open))await page.locator('.about-details > summary').click();
 await page.screenshot({path:out+'/about-en.png'});
 await page.locator('.language-toggle').click();await page.getByRole('region',{name:'关于',exact:true}).waitFor();
-check('Chinese About describes the product',(await page.locator('.about-product').innerText()).includes('统一管理连接'));
+check('Chinese About describes the product',(await page.locator('.about-product').innerText()).includes('在 Codex 中使用 ChatGPT 网页版模型'));
 check('Chinese About omits resources and repository links',await page.getByText('资源与支持',{exact:true}).count()===0&&await page.getByRole('button',{name:'使用文档',exact:true}).count()===0);
 if(!await page.locator('.about-details').evaluate(el=>el.open))await page.locator('.about-details > summary').click();
 await page.locator('.operating-diagram').scrollIntoViewIfNeeded();

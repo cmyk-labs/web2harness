@@ -42,6 +42,7 @@ import {
 import { chatGptReadOnlyContextWarning, compileChatGptWebPrompt } from "./prompt/compile";
 import { createChatGptStructuredOutputValidator } from "./output-validation";
 import { chatGptWebTurnRetryPolicy } from "./retry-policy";
+import { withLauncherRuntimeParameters } from "../../browser/runtime-parameters";
 import { TurnBroker, type BrokerToolRequest, type BrokerToolResult, type TurnBrokerOwner } from "./tools/turn-broker";
 import { ChatGptTextFeed, ChatGptTraceFeed, chatGptCompactionSourceExecutionKey, chatGptInstructionLineage, chatGptThreadOwnershipKey, chatGptTurnExecutionKey, chatGptTurnRetryKey, chatGptTurnRoundKey, chatGptTurnSessions, type ChatGptBrowserOutcome, type ChatGptTraceEvent, type ChatGptTurnRuntime, type ChatGptTurnSession } from "./tools/turn-execution";
 import { estimateChatGptWebUsage } from "./usage";
@@ -409,6 +410,7 @@ export function createChatGptWebAdapter(
     zeroRiskManualControl?: ChatGptZeroRiskManualControl;
   } = {},
 ): ProviderAdapter {
+  provider = withLauncherRuntimeParameters(provider);
   const worker = ChatGptBrowserWorker.forProvider(provider);
   const broker = dependencies.broker ?? TurnBroker.forSocket(brokerSocketPath(provider));
   const zeroRiskManualControl = dependencies.zeroRiskManualControl ?? launcherZeroRiskManualControl;
@@ -475,7 +477,7 @@ export function createChatGptWebAdapter(
     environment: ReturnType<typeof extractChatGptTurnEnvironment> | undefined,
     traceId: string,
     turnCapabilities: ChatGptWebCapabilities,
-    hooks: { onQueueDispatched?: () => void; onCompactionProgress?: () => void; nativeToolCallCorrection?: string } = {},
+    hooks: { onQueueDispatched?: () => void; onCompactionProgress?: (extraWaitMs?: number) => void; nativeToolCallCorrection?: string } = {},
   ): ChatGptTurnRuntime => {
     const manualRequest = isChatGptWebZeroRiskBackendModel(parsed.modelId);
     if (manualRequest !== manualInteraction) {
@@ -503,6 +505,7 @@ export function createChatGptWebAdapter(
     const retainConversation = conversationKey !== undefined;
     const queueAttempt = chatGptWebTurnRetryPolicy.attempt(`${executionNamespace}:${chatGptTurnRetryKey(parsed)}`);
     const preparationIdentity = {
+      attachmentTimeoutMs: (provider.chatgptWeb?.runtimeParameters?.attachmentMinutes ?? 2) * 60_000,
       preparationKey: createHash("sha256").update(`${executionNamespace}:${chatGptTurnRoundKey(parsed)}`).digest("hex"),
       // A model/error retry must not receive another initialization recovery budget.
       allowPreparationRecovery: queueAttempt === 0 && !parsed._compactionRequest,
@@ -654,7 +657,7 @@ export function createChatGptWebAdapter(
               text: "> **Action required in Zero Risk**\n>\n> Open the launcher, copy and paste the prompt into ChatGPT, add any images yourself because Zero Risk cannot transfer them, select the `Codex Zero Risk` plugin and the model you want, send the prompt, then confirm it was sent in the launcher.",
             });
           }
-          await zeroRiskManualControl.start(retainedLauncherDescriptor, {
+          const manualStart = await zeroRiskManualControl.start(retainedLauncherDescriptor, {
             ...owner,
             prompt: compiled.text,
             ...(resumeCompiled ? { resumePrompt: resumeCompiled.text } : {}),
@@ -662,12 +665,20 @@ export function createChatGptWebAdapter(
             ...(parsed._compactionRequest ? { compaction: true as const } : {}),
           });
           launcherStarted = true;
+          const manualDeadline = manualStart && typeof manualStart === "object" && "deadlineAt" in manualStart
+            && typeof manualStart.deadlineAt === "string" ? Date.parse(manualStart.deadlineAt) : NaN;
+          if (parsed._compactionRequest && Number.isFinite(manualDeadline)) {
+            // Use the owner's actual deadline: changing settings while queued must not
+            // leave the enclosing compaction timer shorter than the manual submission wait.
+            hooks.onCompactionProgress?.(Math.max(0, manualDeadline - Date.now() - 120_000));
+          }
           if (queueTicket) await queueRequest(retainedLauncherDescriptor, "phase", { ...queueTicket, phase: "waiting-user" });
           await zeroRiskManualControl.waitSent(retainedLauncherDescriptor, owner, {
             abortSignal: browserAbort.signal,
           });
           await broker.confirmSafeTurnSent(activeToken, surfaceNonce);
           submission.phase = "accepted";
+          hooks.onCompactionProgress?.();
           if (!parsed._compactionRequest) trace.push({
             kind: "commentary",
             text: "> **Waiting for ChatGPT**\n>\n> The prompt is marked `Sent`. Waiting for `Codex Zero Risk` to bind this turn through the selected ChatGPT connector.",
@@ -1027,7 +1038,7 @@ export function createChatGptWebAdapter(
                   );
                   const handoffDeadline = new AbortController();
                   const handoffTimeoutError = new ChatGptWebAdapterError(
-                    `ChatGPT compaction did not fully settle within ${handoffTimeoutMs}ms`,
+                    "ChatGPT compaction did not fully settle within its allowed waiting period",
                     {
                       status: 409,
                       errorType: "invalid_request_error",
@@ -1036,12 +1047,12 @@ export function createChatGptWebAdapter(
                     },
                   );
                   let handoffTimer: ReturnType<typeof setTimeout> | undefined;
-                  const armHandoffDeadline = (): void => {
+                  const armHandoffDeadline = (extraWaitMs = 0): void => {
                     if (handoffDeadline.signal.aborted) return;
                     if (handoffTimer) clearTimeout(handoffTimer);
                     handoffTimer = setTimeout(
                       () => handoffDeadline.abort(handoffTimeoutError),
-                      handoffTimeoutMs,
+                      handoffTimeoutMs + extraWaitMs,
                     );
                     handoffTimer.unref?.();
                   };
@@ -1654,7 +1665,7 @@ export function createChatGptWebAdapter(
           }
           const turnError = submittedTurnFailure(session, error);
           const handledError = turnError instanceof ChatGptWebAdapterError && turnError.retryable
-            ? chatGptWebTurnRetryPolicy.recordRetryableFailure(retryKey, turnError)
+            ? chatGptWebTurnRetryPolicy.recordRetryableFailure(retryKey, turnError, Date.now(), provider.chatgptWeb?.runtimeParameters?.maxRetries ?? 3)
             : turnError;
           if (!(turnError instanceof ChatGptWebAdapterError && turnError.retryable)) {
             chatGptWebTurnRetryPolicy.clear(retryKey);

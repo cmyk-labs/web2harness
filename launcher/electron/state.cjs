@@ -1,5 +1,6 @@
 const languages = require("./languages.json");
 const { DEFAULT_REQUEST_SCHEDULING, validateRequestScheduling } = require("../shared/request-scheduler.cjs");
+const { normalizeRuntimeParameters } = require("../shared/runtime-parameters.cjs");
 const { defaultPageSize, pageSizes } = require("../shared/log-pagination.json");
 const fs = require("node:fs");
 const { writePrivateFileAtomic } = require("./common/atomic-file.cjs");
@@ -13,6 +14,7 @@ const DEFAULT_STATE = Object.freeze({
   version: 1,
   requestScheduling: DEFAULT_REQUEST_SCHEDULING,
   requestSchedulingRevision: 1,
+  ...normalizeRuntimeParameters(),
   language: null,
   onboardingComplete: false,
   githubOpened: false,
@@ -49,6 +51,7 @@ function readState(filePath) {
     try { state.requestScheduling = validateRequestScheduling(state.requestScheduling); }
     catch { state.requestScheduling = { ...DEFAULT_REQUEST_SCHEDULING }; }
     if (!Number.isSafeInteger(state.requestSchedulingRevision) || state.requestSchedulingRevision < 1) state.requestSchedulingRevision = 1;
+    Object.assign(state, normalizeRuntimeParameters(parsed.runtimeParameters, parsed.runtimeParameterSources));
     delete state.bridgeEnabled;
     delete state.xOpened;
     delete state.experimentalBiggerContext;

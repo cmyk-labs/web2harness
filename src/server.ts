@@ -25,6 +25,7 @@ import { requireLicense } from "./licensing/service";
 import { LicenseError } from "./licensing/schema";
 import type { AppConfig } from "./config";
 import { providerConfig } from "./config";
+import { withLauncherRuntimeParameters } from "./browser/runtime-parameters";
 import { assertDevRuntimeIsolation } from "./dev/isolation";
 import { readLauncherBrowserHostDescriptor } from "./browser/launcher-client";
 import { AsyncEventQueue } from "./event-queue";
@@ -681,7 +682,7 @@ async function responseRequestFromBody(
     parsed.context.messages.push({ role: "user", content: COMPACT_PROMPT, timestamp: Date.now() });
   }
 
-  const provider = providerConfig(config);
+  const provider = withLauncherRuntimeParameters(providerConfig(config));
   let traceId: string | undefined;
   try {
     traceId = chatGptWebTraceId(provider, parsed);

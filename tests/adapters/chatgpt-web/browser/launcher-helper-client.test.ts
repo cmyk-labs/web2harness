@@ -313,7 +313,7 @@ test("launcher helper protocol preserves context file, delivery binding and the 
   };
   const child = {};
   internal.child = child;
-  internal.handleLine(child, JSON.stringify({type:"ready",features:["context-file","mcp-delivery-observation"]}));
+  internal.handleLine(child, JSON.stringify({type:"ready",features:["context-file","mcp-delivery-observation","attachment-timeout"]}));
   internal.ensureChild = async () => {};
   internal.send = async message => {
     sent.push(message);
@@ -340,6 +340,7 @@ test("launcher helper protocol preserves context file, delivery binding and the 
     reasoning: "high",
     capabilities: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: true },
     compaction: true,
+    attachmentTimeoutMs: 600_000,
     prepare: async () => ({
       text: "commit",
       handoffBinding: "a".repeat(64),
@@ -355,6 +356,7 @@ test("launcher helper protocol preserves context file, delivery binding and the 
     type: "run",
     turn: {
       compaction: true,
+      attachmentTimeoutMs: 600_000,
     },
   });
   expect(sent[1]).toMatchObject({
@@ -416,6 +418,19 @@ test("an abort dispatched during run submission cannot overtake the run frame", 
 
   expect(messages).toEqual(["run", "abort"]);
   expect(released).toBe(false);
+});
+
+test("an old helper cannot silently ignore a longer attachment timeout", async () => {
+  const client = new LauncherBrowserHelperClient({ appName: "Codex Native2", browserHost: "launcher",
+    browserHostDescriptorPath: "/durable/fixture.json", storageStatePath: "/durable/state.json", chromeExecutablePath: "/durable/chrome",
+    headed: true, autoApproveToolCalls: false, useSavedChats: false });
+  (client as any).ensureChild = async () => {};
+  let sent = false;
+  (client as any).send = async () => { sent = true; };
+  await expect(client.run({ traceId: "fixture-extended-upload", modelId: "gpt-5.6-sol", attachmentTimeoutMs: 600_000,
+    capabilities: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: false, proAvailable: false },
+    prepare: async () => ({ text: "fixture", images: [], release() {} }), onTextDelta() {} })).rejects.toThrow("attachment waiting settings");
+  expect(sent).toBe(false);
 });
 
 test("structured helper errors preserve the ChatGPT adapter failure contract", async () => {

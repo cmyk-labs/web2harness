@@ -574,8 +574,9 @@ function registerIpc({ logger, stateStore }) {
     return requestQueue.query(query);
   });
   const saveQueueSettings = createQueueSettingsSaver({ stateStore, getQueue: () => requestQueue,
+    applyRuntimeParameters: () => browserHost?.writeDescriptor(),
     publish: state => send("launcher:state-changed", state), assertActive: () => licenseController.assertActive() });
-  handle("launcher:queue-settings", (_event, value, expectedRevision) => saveQueueSettings(value, expectedRevision));
+  handle("launcher:queue-settings", (_event, value, expectedRevision, parameters) => saveQueueSettings(value, expectedRevision, parameters));
   handle("launcher:queue-control", async (_event, action, id) => {
     // Stopping remains available after license expiry. Resume requires a fresh check.
     if (action === "resume" || action === "recover") await licenseController.assertActive();
@@ -1330,6 +1331,7 @@ async function start() {
     showWindow: showMainWindow,
     getBrowserInteractionMode: () => stateStore.read().browserInteractionMode,
     getLanguage: () => stateStore.read().language,
+    getRuntimeParameters: () => stateStore.read().runtimeParameters,
   });
   const updaterRuntimeRoot = runtimeRootProvider();
   updateController = createUpdateController({

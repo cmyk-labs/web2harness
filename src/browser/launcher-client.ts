@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { expandUserPath } from "../config";
 import { processRunning } from "../runtime/process";
+import { validateRuntimeParameters, type RuntimeParameters } from "../../launcher/shared/runtime-parameters.cjs";
 
 export const LAUNCHER_BROWSER_HOST_KIND = "web2harness-launcher";
 export const LAUNCHER_BROWSER_IDLE_URL = "data:text/html;charset=utf-8,%3C!doctype%20html%3E%3Chtml%3E%3Chead%3E%3Cmeta%20charset%3D%22utf-8%22%3E%3Ctitle%3ECodex%20Web%20GPT%3C%2Ftitle%3E%3C%2Fhead%3E%3Cbody%3E%3C%2Fbody%3E%3C%2Fhtml%3E#web2harness-browser-host";
@@ -55,6 +56,7 @@ export interface LauncherBrowserHostDescriptor {
   surfaceId: string;
   surfaceTargets: Record<string, string>;
   createdAt: string;
+  runtimeParameters?: RuntimeParameters;
 }
 
 export interface LauncherBrowserConnection {
@@ -146,6 +148,7 @@ function assertDescriptorShape(value: unknown): LauncherBrowserHostDescriptor {
     surfaceId: descriptor.surfaceId,
     surfaceTargets: targets,
     createdAt: descriptor.createdAt,
+    ...(descriptor.runtimeParameters === undefined ? {} : { runtimeParameters: validateRuntimeParameters(descriptor.runtimeParameters) }),
   };
 }
 

@@ -44,7 +44,7 @@ Ordinary users may install and use the application on their own workstation. Dev
 
 ## Install and start
 
-The application opens in a 900×600 DIP normal window with a 640×480 DIP minimum; a smaller display work area takes precedence. The first sizing migration caps older large bounds at the new default, then subsequent manual sizes and positions are remembered. Startup does not restore maximized or fullscreen mode; native controls still maximize, restore or minimize to the taskbar. The interface scales its 1120×720 design canvas uniformly, including text, controls and spacing, continuing the pane backgrounds through extra space when aspect ratios differ. The titlebar follows the window edges. Resizing or restoring does not close the sidebar; its manual state is saved. Existing long pages and log areas remain scrollable.
+The application opens in a 1000×660 DIP normal window with a 900×600 DIP minimum; a smaller display work area takes precedence. The first sizing migration caps legacy large bounds at the default. Saved windows at the previous 900×600 default grow once to 1000×660; other saved sizes remain subject to the new minimum and screen bounds. Subsequent manual sizes and positions are remembered. Startup does not restore maximized or fullscreen mode; native controls still maximize, restore or minimize to the taskbar. The interface scales its 1120×720 design canvas uniformly, including text, controls and spacing, continuing the pane backgrounds through extra space when aspect ratios differ. The titlebar follows the window edges. Resizing or restoring does not close the sidebar; its manual state is saved. Existing long pages and log areas remain scrollable.
 
 ### Select a download
 
@@ -350,6 +350,8 @@ Local uninstall does not delete ChatGPT history or revoke remote connectors, tun
 ## Manage the request queue
 
 **Runtime parameters** is an independent page. Edit concurrent Web turns, queue timeout and minimum send interval, then save explicitly; defaults are four, 15 minutes and three seconds. The UI reports saved/applied status. Unlicensed users can inspect values but cannot save or resume dispatch. See the [parameter rules](reference.md#request-scheduling).
+
+The page also groups automatic tab cleanup (target five tabs, idle retention 30 minutes) and execution waiting (five minutes without progress; two minutes for automatic attachment processing). Advanced settings lets you lower the retry limit from three to zero. Manual mode instead shows submission waits: 60 seconds for ordinary requests and 120 seconds for compaction. Save explicitly; Restore defaults only edits the draft. Changes apply to new requests or newly retained tabs and do not interrupt existing work. Upload confirmation and protected tool-wait tabs remain enforced.
 
 Leaving an edited form offers **Save and leave**, **Discard changes**, or **Keep editing** (also Escape). Invalid settings cannot be saved; save failures preserve the draft. Automatic browser tasks leave edited settings visible and offer **View task**. Drafts are retained locally in this application profile across renderer/window restarts where storage is available. A draft based on an older saved revision cannot overwrite newer settings; discard and reopen to edit the current values. If saving succeeds but live application fails, the page reports that distinction and stays open. Hiding or closing the window keeps the existing background-task behavior.
 

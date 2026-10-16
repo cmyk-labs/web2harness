@@ -139,6 +139,8 @@ bun run check-version
 
 界面变更须检查中英文、宽窄窗口、长内容、错误和禁用状态，以及键盘焦点、隐藏导航和系统减少动效设置。运行 `node launcher/scripts/smoke-workspace.mjs` 可通过独立浏览器和模拟 IPC 验证界面；用 `WORKSPACE_SMOKE_OUTPUT` 指定本次证据目录。仅队列显示/筛选变更可设置 `WORKSPACE_SMOKE_SCOPE=queue`，由共享界面连接隔离的真实队列宿主，在一次流程中覆盖双语、空列表/历史/活动任务、模型搜索、分页、错误和窄窗口。截图须在页面切换和侧栏动画结束后采集。这类检查不代表真实 ChatGPT、原生嵌入浏览器或安装器验收。
 
+关于页正文预留固定滚动条空间，使展开或收起**工作原理**时介绍宽度和换行保持稳定。使用原生展示夹具核对；无界面浏览器可能无法复现桌面滚动条的占宽。
+
 <a id="automated-checks"></a>
 
 ## 自动检查
@@ -234,7 +236,7 @@ DEV 仅向其独立 Codex home 写入路由和中断 hook，监管相同的 daem
 
 <a id="standard-isolated-test-procedure"></a>
 
-窗口与登录展示的定向检查：先执行`bun run launcher:build`，再运行`node launcher/scripts/smoke-window-session.mjs`；`WINDOW_SESSION_OUTPUT`可指定证据目录。夹具使用自有原生Electron窗口和模拟IPC，检查固定设计画布、侧栏状态、认证控件及中英文默认预算。这是展示证据，不是认证DEV或安装验收。普通Chromium工作区夹具模拟应用缩放后的逻辑视口，其截图不证明原生像素尺寸。
+窗口与登录展示的定向检查：先执行`bun run launcher:build`，再运行`node launcher/scripts/smoke-window-session.mjs`；`WINDOW_SESSION_OUTPUT`可指定证据目录，仅尺寸变更时设置`WINDOW_SESSION_SCOPE=sizing`，只检查中英文原生尺寸、等比布局、侧栏和最大化/还原。夹具使用自有原生Electron窗口和模拟IPC，默认范围还检查认证控件及默认预算。这是展示证据，不是认证DEV或安装验收。普通Chromium工作区夹具模拟应用缩放后的逻辑视口，其截图不证明原生像素尺寸。
 
 ## 标准隔离测试流程
 

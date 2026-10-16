@@ -7,22 +7,32 @@ const {
   normalizeWindowState,
   readWindowState,
   writeWindowState,
+  WINDOW_SIZING_REVISION,
 } = require("../../electron/window-state.cjs");
 
 const displays = [{ workArea: { x: 0, y: 0, width: 1512, height: 982 } }];
 
 test("legacy normal dimensions shrink once and later manual resizing survives", () => {
   const migrated = normalizeWindowState({ bounds: { width: 1440, height: 1000 } }, displays);
-  assert.equal(migrated.bounds.width, 900);
-  assert.equal(migrated.bounds.height, 600);
+  assert.equal(migrated.bounds.width, 1000);
+  assert.equal(migrated.bounds.height, 660);
   const resized = { ...migrated, bounds: { ...migrated.bounds, width: 1200, height: 800 } };
   assert.equal(normalizeWindowState(resized, displays).bounds.width, 1200);
-  assert.deepEqual(normalizeWindowState({ bounds: { width: 680, height: 500 } }).bounds, { width: 680, height: 500 });
+  assert.deepEqual(normalizeWindowState({ bounds: { width: 680, height: 500 } }).bounds, { width: 900, height: 600 });
+});
+
+test("previous default grows once while other saved sizes and later minimum choices survive", () => {
+  const migrated = normalizeWindowState({ sizingRevision: 1, bounds: { x: 20, y: 30, width: 900, height: 600 } }, displays);
+  assert.deepEqual(migrated.bounds, { x: 20, y: 30, width: 1000, height: 660 });
+  assert.equal(migrated.sizingRevision, WINDOW_SIZING_REVISION);
+  assert.deepEqual(normalizeWindowState({ sizingRevision: 1, bounds: { width: 640, height: 480 } }).bounds, { width: 900, height: 600 });
+  assert.deepEqual(normalizeWindowState({ sizingRevision: 1, bounds: { width: 1100, height: 700 } }).bounds, { width: 1100, height: 700 });
+  assert.deepEqual(normalizeWindowState({ ...migrated, bounds: { width: 900, height: 600 } }).bounds, { width: 900, height: 600 });
 });
 
 test("layout scale preserves the design aspect ratio within default, minimum and maximized windows", () => {
   const { windowLayoutScale, DESIGN_WIDTH, DESIGN_HEIGHT } = require("../../electron/window-layout.cjs");
-  for (const [width, height] of [[900, 600], [640, 480], [1920, 1080], [500, 350]]) {
+  for (const [width, height] of [[1000, 660], [900, 600], [1920, 1080], [500, 350]]) {
     const scale = windowLayoutScale(width, height);
     assert.ok(DESIGN_WIDTH * scale <= width + 0.001);
     assert.ok(DESIGN_HEIGHT * scale <= height + 0.001);
@@ -37,7 +47,7 @@ test("startup preserves normal bounds but does not restore maximized or fullscre
     fullscreen: true,
   }, displays), {
     bounds: { x: 120, y: 80, width: 1280, height: 800 },
-    sizingRevision: 1,
+    sizingRevision: WINDOW_SIZING_REVISION,
     maximized: false,
     fullscreen: false,
   });
@@ -47,8 +57,8 @@ test("window state drops off-screen positions and enforces minimum dimensions", 
   assert.deepEqual(normalizeWindowState({ sizingRevision: 1,
     bounds: { x: 9000, y: 9000, width: 200, height: 100 },
   }, displays), {
-    bounds: { x: 436, y: 251, width: 640, height: 480 },
-    sizingRevision: 1,
+    bounds: { x: 306, y: 191, width: 900, height: 600 },
+    sizingRevision: WINDOW_SIZING_REVISION,
     maximized: false,
     fullscreen: false,
   });
@@ -60,12 +70,12 @@ test("window state caps corrupt oversized dimensions", () => {
   }, displays);
   assert.deepEqual(state.bounds, { x: 0, y: 0, width: 1512, height: 982 });
   assert.deepEqual(normalizeWindowState({ sizingRevision: 1, bounds: { width: Infinity, height: NaN } }).bounds,
-    { width: 900, height: 600 });
+    { width: 1000, height: 660 });
 });
 
 test("first launch fits a short display work area and centers without a saved position", () => {
   assert.deepEqual(normalizeWindowState(null, [{ workArea: { x: 40, y: 24, width: 1280, height: 680 } }]).bounds,
-    { x: 230, y: 64, width: 900, height: 600 });
+    { x: 180, y: 34, width: 1000, height: 660 });
 });
 
 test("partially visible oversized windows keep every edge inside the selected work area", () => {
@@ -97,8 +107,8 @@ test("window state is stored atomically with owner-only permissions", () => {
   try {
     const state = {
       bounds: { x: 20, y: 30, width: 1120, height: 720 },
-      sizingRevision: 1,
-    maximized: false,
+      sizingRevision: WINDOW_SIZING_REVISION,
+      maximized: false,
       fullscreen: false,
     };
     writeWindowState(file, state);

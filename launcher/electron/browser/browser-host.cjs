@@ -35,6 +35,8 @@ const IDLE_BROWSER_URL = "data:text/html;charset=utf-8,%3C!doctype%20html%3E%3Ch
 const PRIMARY_VIEW_BOOTSTRAP_TIMEOUT_MS = 10_000;
 const MAX_BROWSER_VIEW_DIMENSION = 16_384;
 const MAX_BROWSER_TABS = 5;
+const { DEFAULT_RUNTIME_PARAMETERS } = require("../../shared/runtime-parameters.cjs");
+function runtimeParametersFor(host) { return host.getRuntimeParameters?.() ?? DEFAULT_RUNTIME_PARAMETERS; }
 // Cached conversations are independent of active Web execution. Waiting parents must not
 // consume active slots or be evicted to make room for their children.
 const MAX_CONVERSATION_TABS = 32;
@@ -450,6 +452,7 @@ class BrowserHost {
     getBrowserInteractionMode = () => "automatic",
     getLanguage = () => "en",
     getUseSavedChats = () => false,
+    getRuntimeParameters = () => DEFAULT_RUNTIME_PARAMETERS,
   }) {
     if (typeof getConnectorName !== "function") {
       throw new Error("Browser host connector-name resolver is unavailable");
@@ -481,6 +484,7 @@ class BrowserHost {
     this.getBrowserInteractionMode = getBrowserInteractionMode;
     this.getLanguage = getLanguage;
     this.getUseSavedChats = getUseSavedChats;
+    this.getRuntimeParameters = getRuntimeParameters;
     this.runBrowserHelperOperation = runBrowserHelperOperation;
     this.verifyConnectorWithBrowserHelper = verifyConnectorWithBrowserHelper;
     this.surfaceId = randomBytes(24).toString("base64url");
@@ -866,7 +870,7 @@ class BrowserHost {
     if (active.length >= MAX_BROWSER_TABS) {
       throw new Error(`ChatGPT Web already has ${MAX_BROWSER_TABS} browser tabs executing; close one before starting another turn to avoid excessive parallel traffic on the ChatGPT account`);
     }
-    if (this.turnTabs.size >= MAX_BROWSER_TABS) BrowserHost.prototype.evictOldestReclaimableTurnTab.call(this);
+    if (this.turnTabs.size >= runtimeParametersFor(this).retainedTabTarget) BrowserHost.prototype.evictOldestReclaimableTurnTab.call(this);
     if (this.turnTabs.size >= MAX_CONVERSATION_TABS) throw new Error("ChatGPT conversation cache is full; finish or close a retained task before starting another");
     const ordinal = Array.from({ length: MAX_CONVERSATION_TABS }, (_unused, index) => index + 1)
       .find(candidate => ![...this.turnTabs.values()].some(tab => tab.ordinal === candidate));
@@ -1582,7 +1586,7 @@ class BrowserHost {
     for (const tab of [...this.turnTabs.values()]) {
       if (tab.interactionMode === "manual") {
         if (tab.status === "ready") {
-          if (now - (tab.lastHeartbeatAt ?? 0) < (tab.awaitingToolResults ? WAITING_TOOL_TAB_TTL_MS : RETAINED_TURN_TAB_TTL_MS)) continue;
+          if (now - (tab.lastHeartbeatAt ?? 0) < (tab.awaitingToolResults ? WAITING_TOOL_TAB_TTL_MS : tab.retainedTtlMs ?? RETAINED_TURN_TAB_TTL_MS)) continue;
           this.logger.info("browser.retained_tab_expired", { tabId: tab.id, traceId: tab.traceId });
           this.removeTurnTab(tab, false);
           continue;
@@ -1600,7 +1604,7 @@ class BrowserHost {
         continue;
       }
       if (tab.status === "ready") {
-        if (now - (tab.lastHeartbeatAt ?? 0) < (tab.awaitingToolResults ? WAITING_TOOL_TAB_TTL_MS : RETAINED_TURN_TAB_TTL_MS)) continue;
+        if (now - (tab.lastHeartbeatAt ?? 0) < (tab.awaitingToolResults ? WAITING_TOOL_TAB_TTL_MS : tab.retainedTtlMs ?? RETAINED_TURN_TAB_TTL_MS)) continue;
         this.logger.info("browser.retained_tab_expired", { tabId: tab.id, traceId: tab.traceId });
         this.removeTurnTab(tab, false);
         continue;
@@ -2291,9 +2295,11 @@ class BrowserHost {
       throw new Error(`Manual resume prompt must contain between 1 and ${MAX_MANUAL_PROMPT_CHARS} characters`);
     }
     if (typeof compaction !== "boolean") throw new Error("Manual compaction flag must be boolean");
-    const manualSubmitTimeoutMs = compaction
-      ? MANUAL_COMPACTION_SUBMIT_TIMEOUT_MS
-      : MANUAL_SUBMIT_TIMEOUT_MS;
+    const previousManualTab = [...this.turnTabs.values()].find(tab => tab.traceId === traceId);
+    const manualParameters = runtimeParametersFor(this);
+    const manualSubmitTimeoutMs = previousManualTab?.manualCompaction === compaction
+      ? previousManualTab.manualSubmitTimeoutMs
+      : (compaction ? manualParameters.manualCompactionSubmitSeconds : manualParameters.manualSubmitSeconds) * 1000;
     const completion = this.manualCompletionSignals.get(traceId);
     if (completion) {
       throw new Error(completion.helperPid === helperPid
@@ -2326,7 +2332,8 @@ class BrowserHost {
         error.code = "manual_turn_owner_lost";
         throw error;
       }
-      if (sameTrace.manualSubmitTimeoutMs !== manualSubmitTimeoutMs) {
+      if ((sameTrace.manualCompaction !== undefined && sameTrace.manualCompaction !== compaction)
+        || sameTrace.manualSubmitTimeoutMs !== manualSubmitTimeoutMs) {
         throw new Error(`Zero Risk turn ${traceId} was retried with a different compaction mode`);
       }
       const retryPrompt = sameTrace.manualConversationReused ? resumePrompt : prompt;
@@ -2392,6 +2399,7 @@ class BrowserHost {
         throw error;
       }
     }
+    tab.manualCompaction = compaction;
     this.armManualTurnDeadline(tab);
     this.selectedTabId = tab.id;
     this.showWindow();
@@ -2555,6 +2563,7 @@ class BrowserHost {
       tab.prompt = null;
       tab.promptDigest = null;
       tab.manualState = "completed";
+      tab.retainedTtlMs = runtimeParametersFor(this).idleTabMinutes * 60_000;
       tab.status = "ready";
       tab.awaitingToolResults = awaitingToolResults;
       tab.message = awaitingToolResults ? "Waiting for tool results" : "Web round completed";
@@ -2786,6 +2795,7 @@ class BrowserHost {
       && (!this.getUseSavedChats?.() || tab.savedConversationId)
       && (!tab.connectorIdentity || connectorBound)) {
       tab.connectorBound = connectorBound === true;
+      tab.retainedTtlMs = runtimeParametersFor(this).idleTabMinutes * 60_000;
       tab.lastHeartbeatAt = Date.now();
       this.syncInputProtection?.();
       if (hideAfterTurn && !this.activeTraceId) this.hide();
@@ -3514,6 +3524,7 @@ class BrowserHost {
       idleUrl: IDLE_BROWSER_URL,
       surfaceId: this.surfaceId,
       surfaceTargets,
+      runtimeParameters: runtimeParametersFor(this),
       createdAt: new Date().toISOString(),
     };
     writePrivateFileAtomic(this.descriptorPath, `${JSON.stringify(descriptor, null, 2)}\n`);

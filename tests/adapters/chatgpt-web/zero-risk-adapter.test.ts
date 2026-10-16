@@ -1,5 +1,5 @@
 import { toolIdentityKey } from "../../../src/types";
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
@@ -542,9 +542,10 @@ test("Zero Risk offers only the new Codex suffix when the launcher reuses its re
   }
 });
 
-test("Zero Risk compaction uses a fresh manual checkpoint without leaking guide text into the summary", async () => {
+test("Zero Risk compaction accommodates extended manual submission without leaking guide text into the summary", async () => {
   const config = await provider("compaction");
   const broker = TurnBroker.forSocket(config.chatgptWeb!.brokerSocketPath!);
+  const timers = spyOn(globalThis, "setTimeout");
   let exactBinding: ReturnType<typeof binding> | undefined;
   let manualCompaction: true | undefined;
   const control: ChatGptZeroRiskManualControl = {
@@ -552,8 +553,12 @@ test("Zero Risk compaction uses a fresh manual checkpoint without leaking guide 
     async start(_path, activity) {
       manualCompaction = activity.compaction;
       exactBinding = binding(activity.prompt);
+      return { deadlineAt: new Date(Date.now() + 600_000).toISOString() };
     },
     async waitSent() {
+      // The real outer watchdog must leave enough room for the owner's ten-minute
+      // submission window, even when the descriptor still has older defaults.
+      expect(timers.mock.calls.some(([, delay]) => typeof delay === "number" && delay > 600_000)).toBeTrue();
       broker.startSafeTurn(exactBinding!.request_id);
     },
     waitTerminal: noManualTerminal,
@@ -584,6 +589,7 @@ test("Zero Risk compaction uses a fresh manual checkpoint without leaking guide 
       .toContain("Zero Risk checkpoint summary\n\nCODEX_LATEST_USER_PROMPT_JSON");
     expect(events.at(-1)).toMatchObject({ type: "done", stopReason: "stop", endTurn: true });
   } finally {
+    timers.mockRestore();
     chatGptTurnSessions.clear();
     await broker.close();
   }

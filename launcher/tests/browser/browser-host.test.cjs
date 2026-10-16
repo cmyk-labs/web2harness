@@ -3016,6 +3016,60 @@ function manualTurnFixture() {
   return { fixture, clipboardWrites };
 }
 
+test("runtime tab target is independent of active capacity and protects tool-wait pages", () => {
+  const defaults = require("../../shared/runtime-parameters.cjs").DEFAULT_RUNTIME_PARAMETERS;
+  const pages = Array.from({ length: 7 }, (_, i) => ({ id: `idle-${i}`, ordinal: i + 1, status: "ready", lastHeartbeatAt: i, awaitingToolResults: i === 0 }));
+  const removed = [];
+  const host = { turnTabs: new Map(pages.map(tab => [tab.id, tab])), getRuntimeParameters: () => ({ ...defaults, retainedTabTarget: 8 }),
+    removeTurnTab(tab) { removed.push(tab.id); this.turnTabs.delete(tab.id); } };
+  BrowserHost.prototype.allocateTurnTabOrdinal.call(host);
+  assert.equal(removed.length, 0);
+  host.turnTabs.set("eighth", { id: "eighth", ordinal: 8, status: "ready", lastHeartbeatAt: 99 });
+  BrowserHost.prototype.allocateTurnTabOrdinal.call(host);
+  assert.deepEqual(removed, ["idle-1"]);
+  host.turnTabs = new Map(Array.from({ length: 5 }, (_, i) => [i, { status: "running" }]));
+  assert.throws(() => BrowserHost.prototype.allocateTurnTabOrdinal.call(host), /executing/);
+});
+
+test("retained deadlines are pinned and do not shorten protected waiting-tool tabs", () => {
+  const now = 100;
+  const idle = { id: "idle", status: "ready", lastHeartbeatAt: now, retainedTtlMs: 5 * 60_000 };
+  const waiting = { id: "waiting", status: "ready", lastHeartbeatAt: now, retainedTtlMs: 5 * 60_000, awaitingToolResults: true };
+  const removed = [];
+  const host = { turnTabs: new Map([idle, waiting].map(tab => [tab.id, tab])), logger: { info() {} },
+    getRuntimeParameters: () => ({ idleTabMinutes: 120 }),
+    removeTurnTab(tab) { removed.push(tab.id); this.turnTabs.delete(tab.id); } };
+  BrowserHost.prototype.reapExpiredTurnTabs.call(host, now + 5 * 60_000 - 1);
+  assert.equal(removed.length, 0);
+  BrowserHost.prototype.reapExpiredTurnTabs.call(host, now + 5 * 60_000);
+  assert.deepEqual(removed, ["idle"]);
+  assert.equal(host.turnTabs.has("waiting"), true);
+});
+
+test("manual settings extend real deadlines and retries retain the original deadline", t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_000_000 });
+  const defaults = require("../../shared/runtime-parameters.cjs").DEFAULT_RUNTIME_PARAMETERS;
+  const { fixture } = manualTurnFixture();
+  let parameters = { ...defaults, manualSubmitSeconds: 300, manualCompactionSubmitSeconds: 600 };
+  fixture.getRuntimeParameters = () => parameters;
+  const ordinary = fixture.beginManualTurn("manual_extended", process.pid, "prompt");
+  const compact = fixture.beginManualTurn("manual_compact_extended", process.pid, "compact", undefined, undefined, true);
+  const ordinaryTab = fixture.turnTabs.get(ordinary.tabId), compactTab = fixture.turnTabs.get(compact.tabId);
+  const deadline = ordinaryTab.manualDeadlineAt;
+  parameters = defaults;
+  fixture.beginManualTurn("manual_extended", process.pid, "prompt");
+  assert.equal(ordinaryTab.manualDeadlineAt, deadline);
+  assert.equal(compactTab.manualSubmitTimeoutMs, 600_000);
+  t.mock.timers.tick(120_001);
+  assert.equal(ordinaryTab.manualState, "awaiting-user");
+  assert.equal(compactTab.manualState, "awaiting-user");
+  t.mock.timers.tick(180_000);
+  assert.equal(ordinaryTab.manualState, "timed-out");
+  assert.equal(compactTab.manualState, "awaiting-user");
+  t.mock.timers.tick(300_000);
+  assert.equal(compactTab.manualState, "timed-out");
+});
+
 test("manual start is idempotent and never exposes its private prompt in snapshots", () => {
   const { fixture, clipboardWrites } = manualTurnFixture();
   const first = fixture.beginManualTurn("manual_trace_1", process.pid, "private prompt", "a".repeat(64));

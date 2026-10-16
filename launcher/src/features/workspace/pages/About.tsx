@@ -29,7 +29,10 @@ export function About({
       </header>
       <section className="about-product" aria-label={t("产品信息", "Product information")}>
         <EntryBrand version={snapshot.version} devProfile={snapshot.profile === "development"} />
-        <p>{t("将 ChatGPT 网页版模型接入 Codex，统一管理连接、工具与运行状态。", "Connect ChatGPT web models to Codex and manage connections, tools and runtime status.")}</p>
+        <p>{t(
+          "在 Codex 中使用 ChatGPT 网页版模型，包括账号有权使用的 Pro，支持原生工具调用、任务上下文、流式响应和图片输入。可选实验性三倍上下文预算。使用网页模型时，将遵循 ChatGPT 的网页端限制，且不会消耗 Codex 的配额。默认采用原生工具模式，无需 MCP 连接器或隧道。",
+          "Use ChatGPT web models, including Pro when available to your account, in Codex with native tool calls, task context, streaming, and image inputs. Optional experimental 3× context budget. Web-model requests follow ChatGPT's web limits without consuming Codex quota. Native Tools is the default; no MCP connector or tunnel required.",
+        )}</p>
         <dl className="about-metadata">
           <div><dt>{t("运行平台", "Platform")}</dt><dd>{platform}</dd></div>
         </dl>

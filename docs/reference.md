@@ -77,6 +77,26 @@ Waiting does not occupy a Web slot; execution deadlines start after admission. P
 
 Launcher redacted receipts live in the application home's `runtime/request-queue.json`, limited to 4096 entries and 24 hours, without prompts, tool arguments or lease secrets. Unfinished work becomes interrupted after restart, without automatic replay. Use runtime logs and diagnostic bundles for longer-term investigation.
 
+<a id="browser-execution-parameters"></a>
+
+### Browser retention and execution parameters
+
+The same **Runtime parameters** form also saves the following Launcher-owned settings. Defaults are unchanged. They share the scheduling form's explicit save, draft recovery, revision conflict checks and saved/applied feedback.
+
+| Setting | Default | Choices | Scope |
+| --- | --- | --- | --- |
+| Tab retention target | 5 tabs | 5, 8, 12, 16 | When a new task needs a tab, reclaim an older eligible idle tab at this target. Running and tool-wait tabs remain protected; this is not an execution concurrency limit or a strict total cap. |
+| Idle tab retention | 30 minutes | 5, 15, 30, 60, 120 | Completed tabs without pending tool results. Time starts from task activity, not viewing or selecting the tab. |
+| Web inactivity timeout | 5 minutes | 2, 5, 10, 15, 30 | Adapter silence watchdog; not the total duration of a task. |
+| Attachment processing timeout | 2 minutes | 2, 3, 5, 10 | Automatic mode only. Upload and processing confirmation, with corresponding extended substep waits. Confirmed upload failures still stop before Send. |
+| Failure retry limit | 3 retries | 0, 1, 2, 3 | Collapsed Advanced settings. Additional attempts after the first, only for explicitly retryable failures. Zero disables those retries; transport reconnects are not new attempts. |
+| Manual request submission timeout | 60 seconds | 60, 120, 300 | Manual mode only; time to paste, send and confirm submission. |
+| Manual compaction submission timeout | 120 seconds | 120, 300, 600 | Manual mode only; the enclosing compaction wait accommodates this submission period. |
+
+Execution values are captured for new requests; an existing retry sequence keeps its original limit. Retention duration is captured when a tab next becomes retained; editing it does not shorten existing deadlines. Manual submission retries keep the original deadline, which ends once submission is confirmed. Waiting-for-tool-result tabs retain their separate 24-hour protection and the total task-tab ceiling remains 32. Reclaiming a tab does not delete ChatGPT history or sign out, but continuation may need to rebuild its page/context.
+
+Values and per-field `user`/`default` sources live in `launcher-state.json`. Only valid values explicitly marked `user` survive default migrations; absent or other sources use current defaults. The private, process-bound Launcher descriptor publishes validated execution settings to the shared runtime for subsequent requests without a service restart. In Launcher mode these controls own the effective `stallTimeoutSec`; standalone managed Chrome retains its existing config/defaults and does not read another Launcher's settings.
+
 <a id="standalone-request-queue"></a>
 
 ### Standalone queue controls

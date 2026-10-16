@@ -2,12 +2,12 @@ const fs = require("node:fs");
 const { writePrivateFileAtomic } = require("./common/atomic-file.cjs");
 
 const DEFAULT_WINDOW_STATE = Object.freeze({
-  bounds: { width: 900, height: 600 },
+  bounds: { width: 1000, height: 660 },
   maximized: false,
   fullscreen: false,
 });
-const MIN_WINDOW_BOUNDS = Object.freeze({ width: 640, height: 480 });
-const WINDOW_SIZING_REVISION = 1;
+const MIN_WINDOW_BOUNDS = Object.freeze({ width: 900, height: 600 });
+const WINDOW_SIZING_REVISION = 2;
 const MAX_WINDOW_DIMENSION = 16_384;
 
 function finiteNumber(value, fallback) {
@@ -50,7 +50,13 @@ function normalizeWindowState(value, displays = []) {
     maximized: false,
     fullscreen: false,
   };
-  if (saved.sizingRevision !== WINDOW_SIZING_REVISION) {
+  if (saved.sizingRevision === 1) {
+    // Promote the previous default once; retain other valid manually saved sizes.
+    if (bounds.width === 900 && bounds.height === 600) {
+      state.bounds.width = DEFAULT_WINDOW_STATE.bounds.width;
+      state.bounds.height = DEFAULT_WINDOW_STATE.bounds.height;
+    }
+  } else if (saved.sizingRevision !== WINDOW_SIZING_REVISION) {
     state.bounds.width = Math.min(state.bounds.width, DEFAULT_WINDOW_STATE.bounds.width);
     state.bounds.height = Math.min(state.bounds.height, DEFAULT_WINDOW_STATE.bounds.height);
   }

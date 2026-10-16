@@ -6,6 +6,8 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { installWorkspaceFixture } from './workspace-fixture.mjs';
 
 const out = resolve(process.env.WINDOW_SESSION_OUTPUT || 'output/window-session');
+const sizingOnly = process.env.WINDOW_SESSION_SCOPE === 'sizing';
+const { DEFAULT_WINDOW_STATE, MIN_WINDOW_BOUNDS } = createRequire(import.meta.url)('../electron/window-state.cjs');
 await mkdir(out, { recursive: true });
 const profile = await mkdtemp(resolve(out, 'window-session-profile-'));
 const env = { ...process.env, WEB2HARNESS_WINDOW_FIXTURE_PROFILE: profile }; delete env.ELECTRON_RUN_AS_NODE;
@@ -42,6 +44,8 @@ try {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(new URL('../dist/index.html', import.meta.url).href);
   await page.locator('.workspace-shell').waitFor();
+  const minimum = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getMinimumSize());
+  check('native minimum matches window policy', minimum[0] === MIN_WINDOW_BOUNDS.width && minimum[1] === MIN_WINDOW_BOUNDS.height);
   const resize = async (width, height) => {
     await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setSize(...size), [width, height]);
     await page.waitForTimeout(250);
@@ -57,6 +61,7 @@ try {
         compact: document.querySelector('.workspace-shell').classList.contains('is-compact'), width: innerWidth, height: innerHeight };
     });
     metrics.push({ native, layout });
+    check(`${width}x${height}: native size matches requested size`, native.bounds.width === width && native.bounds.height === height);
     check(`${width}x${height}: design canvas remains 1120x720`, Math.abs(layout.root.width - 1120) < 0.1 && Math.abs(layout.root.height - 720) < 0.1);
     check(`${width}x${height}: entire canvas fits`, layout.root.x >= -1 && layout.root.y >= -1
       && (layout.root.x + layout.root.width) * native.zoom <= native.content[0] + 2
@@ -74,9 +79,14 @@ try {
     await page.evaluate(language => window.__fixture.patch({ language }), language);
     const connection = language === 'zh-CN' ? '连接与模型' : 'Connection & Models';
     const preferences = language === 'zh-CN' ? '偏好设置' : 'Preferences';
-    for (const [width, height] of [[1120, 720], [900, 600], [640, 480]]) {
+    for (const [width, height] of [[1120, 720], [DEFAULT_WINDOW_STATE.bounds.width, DEFAULT_WINDOW_STATE.bounds.height], [MIN_WINDOW_BOUNDS.width, MIN_WINDOW_BOUNDS.height]]) {
       const layout = await resize(width, height);
       check(`${language}/${width}: sidebar stays open`, layout.sidebarWidth > 200);
+      if (sizingOnly) {
+        await page.locator('.sidebar-nav').getByRole('button', { name: language === 'zh-CN' ? '概览' : 'Overview', exact: true }).click();
+        await capture(`overview-${language}-${width}.png`);
+        continue;
+      }
       await page.locator('.sidebar-nav').getByRole('button', { name: connection, exact: true }).click();
       await page.getByText(language === 'zh-CN' ? '尚未检测' : 'Not checked', { exact: true }).waitFor();
       await capture(`connection-${language}-${width}.png`);
@@ -104,21 +114,23 @@ try {
     await capture(`maximized-${language}.png`);
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].unmaximize());
   }
-  await page.locator('.sidebar-nav').getByRole('button', { name: 'Connection & Models', exact: true }).click();
-  const smoke = page.getByRole('button', { name: 'Check connection', exact: true });
-  check('unauthenticated smoke stays disabled', await smoke.isDisabled());
-  await page.getByRole('button', { name: 'Recheck sign-in', exact: true }).click();
-  await page.getByRole('button', { name: 'Checking sign-in…', exact: true }).waitFor();
-  check('checking sign-in keeps smoke disabled', await smoke.isDisabled());
-  await page.evaluate(() => window.__fixture.completeAuthenticationCheck());
-  await page.getByText('Signed in', { exact: true }).waitFor();
-  check('verified sign-in enables smoke', await smoke.isEnabled());
-  await page.evaluate(() => window.__fixture.emitBrowser({ authenticated: false, authenticationStatus: 'error', authenticationMessage: 'Fixture session timeout' }));
-  await page.getByText('Fixture session timeout', { exact: true }).waitFor();
-  check('failed verification is retryable', await page.getByRole('button', { name: 'Recheck sign-in', exact: true }).isEnabled());
-  check('failure does not enable smoke', await smoke.isDisabled());
+  if (!sizingOnly) {
+    await page.locator('.sidebar-nav').getByRole('button', { name: 'Connection & Models', exact: true }).click();
+    const smoke = page.getByRole('button', { name: 'Check connection', exact: true });
+    check('unauthenticated smoke stays disabled', await smoke.isDisabled());
+    await page.getByRole('button', { name: 'Recheck sign-in', exact: true }).click();
+    await page.getByRole('button', { name: 'Checking sign-in…', exact: true }).waitFor();
+    check('checking sign-in keeps smoke disabled', await smoke.isDisabled());
+    await page.evaluate(() => window.__fixture.completeAuthenticationCheck());
+    await page.getByText('Signed in', { exact: true }).waitFor();
+    check('verified sign-in enables smoke', await smoke.isEnabled());
+    await page.evaluate(() => window.__fixture.emitBrowser({ authenticated: false, authenticationStatus: 'error', authenticationMessage: 'Fixture session timeout' }));
+    await page.getByText('Fixture session timeout', { exact: true }).waitFor();
+    check('failed verification is retryable', await page.getByRole('button', { name: 'Recheck sign-in', exact: true }).isEnabled());
+    check('failure does not enable smoke', await smoke.isDisabled());
+  }
   await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
-  await resize(900, 600);
+  await resize(DEFAULT_WINDOW_STATE.bounds.width, DEFAULT_WINDOW_STATE.bounds.height);
   check('manual sidebar choice survives resize', await page.locator('.app-sidebar').getAttribute('inert') !== null);
   await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].maximize());

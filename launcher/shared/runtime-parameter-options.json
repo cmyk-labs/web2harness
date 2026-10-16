@@ -1,0 +1,20 @@
+{
+  "defaults": {
+    "retainedTabTarget": 5,
+    "idleTabMinutes": 30,
+    "stallMinutes": 5,
+    "attachmentMinutes": 2,
+    "maxRetries": 3,
+    "manualSubmitSeconds": 60,
+    "manualCompactionSubmitSeconds": 120
+  },
+  "choices": {
+    "retainedTabTarget": [5, 8, 12, 16],
+    "idleTabMinutes": [5, 15, 30, 60, 120],
+    "stallMinutes": [2, 5, 10, 15, 30],
+    "attachmentMinutes": [2, 3, 5, 10],
+    "maxRetries": [0, 1, 2, 3],
+    "manualSubmitSeconds": [60, 120, 300],
+    "manualCompactionSubmitSeconds": [120, 300, 600]
+  }
+}

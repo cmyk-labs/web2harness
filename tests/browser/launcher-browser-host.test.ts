@@ -23,6 +23,9 @@ import {
 } from "../../src/browser/launcher-client";
 import type { Browser, BrowserContext, Page } from "playwright-core";
 import { ChatGptBrowserWorker } from "../../src/adapters/chatgpt-web/browser/browser-worker";
+import { withLauncherRuntimeParameters } from "../../src/browser/runtime-parameters";
+import { DEFAULT_RUNTIME_PARAMETERS } from "../../launcher/shared/runtime-parameters.cjs";
+import type { CodexProviderConfig } from "../../src/types";
 
 const roots: string[] = [];
 
@@ -108,6 +111,24 @@ function descriptorFile(
   })}\n`, { mode: 0o600 });
   return path;
 }
+
+test("owned runtime parameter updates apply to new request snapshots without mutating existing ones", () => {
+  const path = descriptorFile(undefined, "development");
+  const descriptor = JSON.parse(readFileSync(path, "utf8"));
+  const provider = { chatgptWeb: { browserHost: "launcher", browserHostDescriptorPath: path } } as CodexProviderConfig;
+  expect(withLauncherRuntimeParameters(provider)).toBe(provider);
+  writeFileSync(path, JSON.stringify({ ...descriptor, runtimeParameters: { ...DEFAULT_RUNTIME_PARAMETERS, stallMinutes: 10, attachmentMinutes: 5 } }));
+  const first = withLauncherRuntimeParameters(provider);
+  expect(first.chatgptWeb?.stallTimeoutSec).toBe(600);
+  expect(first.chatgptWeb?.runtimeParameters?.attachmentMinutes).toBe(5);
+  writeFileSync(path, JSON.stringify({ ...descriptor, runtimeParameters: { ...DEFAULT_RUNTIME_PARAMETERS, stallMinutes: 2 } }));
+  expect(withLauncherRuntimeParameters(provider).chatgptWeb?.stallTimeoutSec).toBe(120);
+  expect(withLauncherRuntimeParameters(first)).toBe(first);
+  expect(first.chatgptWeb?.stallTimeoutSec).toBe(600);
+  expect(provider.chatgptWeb?.runtimeParameters).toBeUndefined();
+  writeFileSync(path, JSON.stringify({ ...descriptor, runtimeParameters: { ...DEFAULT_RUNTIME_PARAMETERS, maxRetries: 99 } }));
+  expect(() => withLauncherRuntimeParameters(provider)).toThrow("Invalid runtime parameter");
+});
 
 test("launcher descriptor is owner-only, loopback-only, and process-bound", () => {
   const path = descriptorFile();

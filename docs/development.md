@@ -139,6 +139,8 @@ Welcome and preparation screens share a centered content column with scrolling i
 
 Review both languages, wide and narrow windows, long content, errors and disabled states, as well as keyboard focus, hidden navigation and the system reduced-motion preference. Run `node launcher/scripts/smoke-workspace.mjs` to exercise the UI with an independent browser and mocked IPC; set `WORKSPACE_SMOKE_OUTPUT` to the task's evidence directory. For queue-only display/filter changes, set `WORKSPACE_SMOKE_SCOPE=queue` to run the shared renderer against an isolated real queue host, covering both languages, empty/history/active results, model searches, paging, errors and narrow layout in one flow. Capture screenshots after page and sidebar transitions have settled. These checks do not establish authenticated ChatGPT, native embedded-browser or installer acceptance.
 
+On About, reserve stable scrollbar space so expanding or collapsing **How it works** preserves the introduction's width and line breaks. Check this in a native presentation fixture, since a headless browser may not reproduce desktop scrollbar width.
+
 <a id="automated-checks"></a>
 
 ## Automated checks
@@ -234,7 +236,7 @@ The default layout is:
 
 <a id="standard-isolated-test-procedure"></a>
 
-For focused window and sign-in presentation checks, run `node launcher/scripts/smoke-window-session.mjs` after `bun run launcher:build`. `WINDOW_SESSION_OUTPUT` selects the evidence directory. It launches a task-owned native Electron window with mocked IPC and checks the fixed design canvas, sidebar state, authentication controls, and default budget in both languages. This is presentation evidence, not authenticated DEV or installer acceptance. Ordinary Chromium workspace fixtures emulate the logical viewport after application zoom; their screenshots do not prove native pixel sizing.
+For focused window and sign-in presentation checks, run `node launcher/scripts/smoke-window-session.mjs` after `bun run launcher:build`. `WINDOW_SESSION_OUTPUT` selects the evidence directory; for size-only changes, `WINDOW_SESSION_SCOPE=sizing` limits checks to native sizing, uniform layout, sidebar state and maximize/restore in both languages. It launches a task-owned native Electron window with mocked IPC; the default scope also checks authentication controls and default budget. This is presentation evidence, not authenticated DEV or installer acceptance. Ordinary Chromium workspace fixtures emulate the logical viewport after application zoom; their screenshots do not prove native pixel sizing.
 
 ## Standard isolated test procedure
 

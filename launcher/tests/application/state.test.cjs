@@ -4,6 +4,21 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const vm = require("node:vm");
+const { normalizeRuntimeParameters } = require("../../shared/runtime-parameters.cjs");
+
+test("runtime parameter values and their user sources survive a store restart", t => {
+  const parent = fs.realpathSync(os.tmpdir());
+  const root = fs.mkdtempSync(path.join(parent, "web2harness-runtime-parameters-")), file = path.join(root, "state.json");
+  t.after(() => { assert.equal(path.dirname(root), parent); assert.match(path.basename(root), /^web2harness-runtime-parameters-/); fs.rmSync(root, { recursive: true }); });
+  const store = createStateStore(file);
+  const state = store.read();
+  store.update({ runtimeParameters: { ...state.runtimeParameters, idleTabMinutes: 120, maxRetries: 0 },
+    runtimeParameterSources: { ...state.runtimeParameterSources, idleTabMinutes: "user", maxRetries: "user" } });
+  const loaded = createStateStore(file).read();
+  assert.equal(loaded.runtimeParameters.idleTabMinutes, 120);
+  assert.equal(loaded.runtimeParameters.maxRetries, 0);
+  assert.equal(loaded.runtimeParameterSources.maxRetries, "user");
+});
 const {
   SESSION_REFRESH_REMINDER_INTERVAL_MS,
   createStateStore,
@@ -43,6 +58,7 @@ test("launcher state persists onboarding, language, and autostart atomically", (
       version: 1,
       requestScheduling: { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3 },
       requestSchedulingRevision: 1,
+      ...normalizeRuntimeParameters(),
       language: null,
       onboardingComplete: false,
       githubOpened: false,
@@ -77,6 +93,7 @@ test("launcher state persists onboarding, language, and autostart atomically", (
       version: 1,
       requestScheduling: { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3 },
       requestSchedulingRevision: 1,
+      ...normalizeRuntimeParameters(),
       language: "zh-CN",
       onboardingComplete: true,
       githubOpened: false,
@@ -184,6 +201,7 @@ test("persisted sidebar corruption is repaired without changing the rest of laun
       version: 1,
       requestScheduling: { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3 },
       requestSchedulingRevision: 1,
+      ...normalizeRuntimeParameters(),
       language: "zh-CN",
       onboardingComplete: false,
       githubOpened: false,

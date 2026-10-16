@@ -1057,6 +1057,7 @@ function withBrowserTurnAbort<T>(promise: Promise<T>, signal?: AbortSignal): Pro
 }
 
 export interface BrowserTurn {
+  attachmentTimeoutMs?: number;
   scheduling?: import("../../../../launcher/shared/request-scheduler.cjs").QueueInput;
   queueTicket?: import("../../../browser/request-queue-client").QueueTicket;
   traceId: string;
@@ -3135,13 +3136,17 @@ export class ChatGptBrowserWorker {
     return { effort: mode.displayLabel, response: CHATGPT_SMOKE_EXPECTED };
   }
 
-  private async attachFiles(page: Page, prompt: CompiledChatGptWebPrompt, abortSignal?: AbortSignal): Promise<void> {
+  private async attachFiles(page: Page, prompt: CompiledChatGptWebPrompt, abortSignal?: AbortSignal, timeoutMs: number = browserStageTimeouts.fileAttachment): Promise<void> {
     const files = chatGptPromptFilePayloads(prompt);
     if (files.length === 0) return;
     const composer = await this.activeComposer(page);
     const composerForm = composer.locator("xpath=ancestor::form[1]");
     const input = page.locator('input[data-testid="upload-photos-input"], form[data-chatgpt-composer] input[type="file"][multiple]:not([accept])');
-    await input.waitFor({ state: "attached", timeout: 20_000 });
+    // Preserve default substep limits; extended budgets also extend each substep.
+    const additionalMs = timeoutMs - browserStageTimeouts.fileAttachment;
+    const deadline = Date.now() + timeoutMs;
+    const remaining = (original: number) => Math.max(1, Math.min(original + additionalMs, deadline - Date.now()));
+    await input.waitFor({ state: "attached", timeout: remaining(20_000) });
     const uploads = await observeChatGptAttachmentUploads(page, files.map(file => file.name));
     try {
       await withBrowserTurnAbort(input.setInputFiles(files), abortSignal);
@@ -3149,7 +3154,7 @@ export class ChatGptBrowserWorker {
         await withBrowserTurnAbort(Promise.all([uploads.wait(abortSignal), ...files.map(file => (
           composerForm.getByRole("group", { name: file.name, exact: true })
             .or(composerForm.locator(`.composer-attachment-surface:is(button, [role="button"])[aria-label=${JSON.stringify(file.name)}]`))
-            .waitFor({ state: "visible", timeout: 60_000 })
+            .waitFor({ state: "visible", timeout: remaining(60_000) })
         ))]), abortSignal);
       } catch (error) {
         uploads.throwIfFailed();
@@ -3164,8 +3169,8 @@ export class ChatGptBrowserWorker {
       }
       uploads.throwIfFailed();
       const send = composerForm.locator(CHATGPT_SEND_BUTTON_SELECTOR);
-      const deadline = Date.now() + 60_000;
-      while (Date.now() < deadline) {
+      const sendDeadline = Date.now() + remaining(60_000);
+      while (Date.now() < sendDeadline) {
         abortSignal?.throwIfAborted();
         if (await send.isEnabled().catch(() => false)) return;
         await new Promise(resolveSleep => setTimeout(resolveSleep, 100));
@@ -3644,8 +3649,9 @@ export class ChatGptBrowserWorker {
         }
       }
       await diagnostics.capture(page, "prompt-attachment-complete");
-      await this.runStage(turn.traceId, "file_attachment", browserStageTimeouts.fileAttachment, (stageSignal) => (
-        this.attachFiles(page, prepared, turn.abortSignal ? AbortSignal.any([stageSignal, turn.abortSignal]) : stageSignal)
+      const attachmentTimeoutMs = turn.attachmentTimeoutMs ?? browserStageTimeouts.fileAttachment;
+      await this.runStage(turn.traceId, "file_attachment", attachmentTimeoutMs, (stageSignal) => (
+        this.attachFiles(page, prepared, turn.abortSignal ? AbortSignal.any([stageSignal, turn.abortSignal]) : stageSignal, attachmentTimeoutMs)
       ));
       await diagnostics.capture(page, "file-attachment-complete");
       const completionTracker = new ChatGptCompletionTracker();

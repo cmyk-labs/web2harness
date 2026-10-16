@@ -16,6 +16,22 @@ async function fixture(run:(browser:Browser,base:string)=>Promise<void>,handler:
 }
 const prompt={text:'original message',images:[{ref:'codex-input-image-1',imageUrl:'data:image/png;base64,'+Buffer.from('test').toString('base64')}]};
 
+for (const timeoutMs of [120_000, 600_000]) test.skipIf(!executable)(`attachment budget ${timeoutMs} reaches the actual DOM substep waits`, async () => {
+ await fixture(async(browser,base)=>{
+  const page=await browser.newPage();await page.goto(base);
+  const worker=Object.create(ChatGptBrowserWorker.prototype) as any;
+  const prototype=Object.getPrototypeOf(page.locator('body'));
+  const original=prototype.waitFor, observed:number[]=[];
+  prototype.waitFor=function(options:any){observed.push(options.timeout);return original.call(this,options);};
+  try { await worker.attachFiles(page,prompt,AbortSignal.timeout(5000),timeoutMs); }
+  finally { prototype.waitFor=original; }
+  const extra=timeoutMs-120_000;
+  expect(observed).toContain(20_000+extra);
+  expect(observed).toContain(60_000+extra);
+  expect(await page.evaluate(()=>(window as any).sends)).toBe(0);
+ },()=>new Response('{"event":"file.processing.completed","file_id":"owned-file"}\n',{headers:{'content-type':'application/x-ndjson'}}));
+},10000);
+
 test.skipIf(!executable)('an enabled send button cannot bypass delayed processing or an HTTP 503',async()=>{
  await fixture(async(browser,base)=>{
   const page=await browser.newPage();await page.goto(base);

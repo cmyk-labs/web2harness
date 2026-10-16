@@ -210,6 +210,10 @@ export class LauncherBrowserHelperClient {
   async run(turn: BrowserTurn): Promise<string> {
     if (turn.abortSignal?.aborted) throw new DOMException("ChatGPT web turn aborted", "AbortError");
     await this.ensureChild();
+    if (turn.attachmentTimeoutMs !== undefined && turn.attachmentTimeoutMs !== 120_000
+      && !this.helperFeatures.has("attachment-timeout")) {
+      throw new Error("Restart the updated browser helper to apply attachment waiting settings");
+    }
     if (turn.abortSignal?.aborted) throw new DOMException("ChatGPT web turn aborted", "AbortError");
     if (turn.preparationDeadline !== undefined && !this.helperFeatures.has("preparation-deadline")) {
       throw new Error("Launcher browser helper does not support the shared preparation deadline; update or restart the launcher");
@@ -279,6 +283,7 @@ export class LauncherBrowserHelperClient {
           turn: {
             traceId: turn.traceId,
             ...(turn.preparationDeadline !== undefined ? { preparationDeadline: turn.preparationDeadline } : {}),
+            ...(turn.attachmentTimeoutMs !== undefined ? { attachmentTimeoutMs: turn.attachmentTimeoutMs } : {}),
             ...(turn.queueTicket ? { queueTicket: turn.queueTicket } : {}),
             modelId: turn.modelId,
             reasoning: turn.reasoning,

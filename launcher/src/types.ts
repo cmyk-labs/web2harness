@@ -2,6 +2,7 @@ import type { ChatGptWebAccountCapabilities } from "../../src/models/chatgpt-web
 import languages from "../electron/languages.json";
 import type { LimitsSnapshot } from "./features/limits/limits-types";
 import type { RequestSchedulingSettings, QueueSnapshot, QueueQuery, QueuePage } from "../shared/request-scheduler.cjs";
+import type { RuntimeParameters, RuntimeParameterSources } from "../shared/runtime-parameters.cjs";
 export type { RequestSchedulingSettings, QueueSnapshot, QueueQuery, QueuePage, QueueRecord } from "../shared/request-scheduler.cjs";
 export interface RequestQueueStatus {
   status: "ready" | "stopped";
@@ -19,6 +20,8 @@ export interface LauncherState {
   version: 1;
   requestScheduling: RequestSchedulingSettings;
   requestSchedulingRevision: number;
+  runtimeParameters: RuntimeParameters;
+  runtimeParameterSources: RuntimeParameterSources;
   language: Language | null;
   onboardingComplete: boolean;
   githubOpened: boolean;
@@ -215,7 +218,7 @@ export interface WorkspaceStatus {
 export interface LauncherApi {
   queueStatus(): Promise<RequestQueueStatus>;
   queryQueue(query?: QueueQuery & { snapshotId?: string }): Promise<QueuePage & { snapshotId: string }>;
-  saveQueueSettings(settings: RequestSchedulingSettings, expectedRevision: number): Promise<{
+  saveQueueSettings(settings: RequestSchedulingSettings, expectedRevision: number, parameters?: RuntimeParameters): Promise<{
     state: LauncherState; persistedRevision: number; appliedRevision: number | null;
     applyState: "applied" | "pending-start" | "apply-failed";
   }>;
