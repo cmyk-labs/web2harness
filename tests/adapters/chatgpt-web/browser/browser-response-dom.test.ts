@@ -95,6 +95,27 @@ async function snapshots(html: string, changes: Array<(document: Document) => vo
   }
 }
 
+test("plain wrappers may merge, split and remount without changing semantic blocks or streamed Markdown", async () => {
+  const body = '<p>Alpha.</p><ul><li>First</li><li>Second</li></ul><blockquote><p>Quote</p></blockquote><pre><code>  code\nnext</code></pre><p>End.</p>';
+  const stages = await snapshots(`<section id="turn"><div class="markdown">${body}</div></section>`, [
+    document => { document.querySelector(".markdown")!.innerHTML = `<div><div>${body}</div></div>`; },
+    document => { document.querySelector(".markdown")!.innerHTML = body; },
+  ]);
+  const buffer = new ChatGptMarkdownBuffer(undefined, 0);
+  let delivered = "";
+  for (const [i, stage] of stages.entries()) {
+    expect(stage.markdownSegments.map(s => s.tag)).toEqual(["p", "ul:item", "ul:item", "blockquote", "pre", "p"]);
+    delivered += buffer.observe(stage.markdownSegments, i);
+    expect(buffer.currentSnapshotIsConsistent()).toBeTrue();
+  }
+  const final = buffer.finish();
+  delivered += final.delta;
+  expect(delivered).toBe(final.markdown);
+  expect(delivered.match(/Alpha/g)).toHaveLength(1);
+  expect(delivered).toContain("  code\nnext");
+  expect(delivered).toContain("> Quote");
+});
+
 test("captured Activity progress is commentary before any assistant answer exists", async () => {
   const progress = await snapshot(powerActivityHtml);
   expect(progress.responsePresent).toBeTrue();
@@ -249,6 +270,22 @@ test("reported code-block containers preserve code while their localized toolbar
       expect(() => buffer.finish()).toThrow("ChatGPT changed a completed text block");
     }
   }
+});
+
+test("a code toolbar before body hydration is not pending answer text", async () => {
+  const html = (body: string) => '<section id="turn"><div class="markdown">'
+    + '<div data-markdown-copy="code-block"><div data-markdown-copy="exclude"><div>codex_tool_calls</div><button>Copy</button></div>'
+    + body + '</div></div></section>';
+  const placeholder = await snapshot(html(''));
+  const buffer = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
+  buffer.observe(placeholder.markdownSegments, 0);
+  expect(buffer.preview()).toBe("");
+  buffer.observe((await snapshot(html('<code>{"calls":[]}</code>'))).markdownSegments, 1000);
+  expect(buffer.finish().markdown).toBe('```codex_tool_calls\n{"calls":[]}\n```');
+  const raw = await snapshot('<section id="turn"><div class="markdown"><pre>raw code without CODE</pre></div></section>');
+  const rawBuffer = new ChatGptMarkdownBuffer(undefined, 0);
+  rawBuffer.observe(raw.markdownSegments, 0);
+  expect(rawBuffer.finish().markdown).toContain('raw code without CODE');
 });
 
 test("writing card controls cannot rewrite delivered content, but edited email text still can", async () => {

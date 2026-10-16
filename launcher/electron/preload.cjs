@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld("codexWebLauncher", {
   stopBrowserTab: (tabId) => ipcRenderer.invoke("launcher:browser-tab-stop", tabId),
   setBrowserInputOverride: (tabId, allowed) => ipcRenderer.invoke("launcher:browser-input-override", tabId, allowed),
   copyManualPrompt: (tabId) => ipcRenderer.invoke("launcher:manual-prompt-copy", tabId),
+  copyFailedAnswer: (tabId) => ipcRenderer.invoke("launcher:failed-answer-copy", tabId),
   confirmManualSent: (tabId) => ipcRenderer.invoke("launcher:manual-prompt-sent", tabId),
   checkAuthentication: () => ipcRenderer.invoke("launcher:browser-authentication"),
   openLogin: () => ipcRenderer.invoke("launcher:browser-login"),

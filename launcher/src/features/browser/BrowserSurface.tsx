@@ -44,6 +44,7 @@ export function BrowserSurface({
   const [passkeyContinuationRequested, setPasskeyContinuationRequested] =
     useState(false);
   const [inputOverridePending, setInputOverridePending] = useState(false);
+  const [failedAnswerCopied, setFailedAnswerCopied] = useState(false);
   const visible = browser?.visible === true;
   const manualInteraction = interactionMode === "manual";
   const passkeyAvailable =
@@ -56,6 +57,7 @@ export function BrowserSurface({
   const navigationLocked =
     browser?.inputLocked ?? (browser?.status === "running" || browser?.status === "testing");
   const selectedTab = browser?.tabs.find(tab => tab.active);
+  useEffect(() => setFailedAnswerCopied(false), [selectedTab?.id]);
   const passkeyWaiting =
     passkeyAvailable &&
     operation?.name === "passkey-login" &&
@@ -252,6 +254,12 @@ export function BrowserSurface({
             {browser.inputOverrideActive ? copy.restoreBrowserReadOnly : copy.allowBrowserInput}
           </button>
         )}
+        {selectedTab?.failureReviewUntil && (
+          <button className="toolbar-text-button" type="button" onClick={() => {
+            void api!.copyFailedAnswer(selectedTab.id).then(() => setFailedAnswerCopied(true))
+              .catch(cause => setError(messageOf(cause)));
+          }}>{copy.copyFailedAnswer}</button>
+        )}
         {selectedTab?.canStop && (
           <button className="toolbar-text-button" type="button"
             onClick={() => void stopTab(selectedTab.id)}>{copy.stopBrowserTask}</button>
@@ -295,6 +303,9 @@ export function BrowserSurface({
           tab={selectedManualTab}
         />
       ) : null}
+      {selectedTab?.failureReviewUntil && <p className="muted" role="status">
+        {failedAnswerCopied ? copy.failedAnswerCopied : copy.failedAnswerNotice}
+      </p>}
       <div className="browser-viewport" ref={browserSlotRef}>
         {!visible ? (
           <div className="browser-empty">

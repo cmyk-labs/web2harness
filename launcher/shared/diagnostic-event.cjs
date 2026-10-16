@@ -6,7 +6,11 @@ const errorReferences = new WeakMap();
 let sequence = 0;
 const SECRET = /authorization|cookie|password|secret|token|credential|runtimekey|license(code)?|privatekey|apikey|storageState/i;
 const CONTENT = /^(prompt|response|content|html|dom|input|output|arguments|result|text|messages|command|patch|script|stdout|stderr|conversationTitles?|chatTitles?|sidebarRows|visibleRows)$/i;
+const MARKDOWN_TAGS = new Set("root inline ol:item ul:item address article aside blockquote div dl fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hr li main nav ol p pre section table ul span code thead tbody tfoot tr th td dt dd math".split(" "));
 const QUEUE_ENUMS = {
+  delivery: new Set(["append", "buffered"]),
+  observedTag: MARKDOWN_TAGS,
+  committedTag: MARKDOWN_TAGS,
   resourceKind: new Set(["document", "script", "stylesheet", "conversation", "other"]),
   networkFailure: new Set(["aborted", "network_changed", "connection", "timeout", "other"]),
   handoffScope: new Set(["top_level", "exec", "catalog", "invalid"]),

@@ -814,6 +814,8 @@ export function createChatGptWebAdapter(
           let attemptText = "";
           const answer = await worker.run({
             ...(mode.nativeTools ? { nativeToolDefinitions: parsed.context.tools ?? [] } : {}),
+            ...(resyncEnabled ? { textDelivery: "buffered" } : {}),
+            uiLanguage: language,
             traceId,
             scheduling: resyncAttempted ? { ...scheduling,
               // Independent of generic retries: the durable receipt also blocks a replay after restart.
@@ -946,6 +948,7 @@ export function createChatGptWebAdapter(
       onReasoningSummary: (text, continuation) => trace.push({ kind: "reasoning", text, ...(continuation ? { continuation: true } : {}) }),
       onCommentary: (text, continuation) => trace.push({ kind: "commentary", text, ...(continuation ? { continuation: true } : {}) }),
       onTextDelta: delta => text.push(delta),
+      uiLanguage: provider.chatgptWeb?.uiLanguage ?? "en",
       externalProgress,
       completionFence: {
         begin: async () => broker.beginCompletionFence(await token.promise),

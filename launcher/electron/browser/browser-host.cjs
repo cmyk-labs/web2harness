@@ -7,6 +7,7 @@ const { savedChatId, validSavedChatTask } = require("../../shared/saved-chat.cjs
 const { SavedChatHistory } = require("./saved-chat-history.cjs");
 const { BrowserInputGuard } = require("./browser-input-guard.cjs");
 const { browserInputCopy } = require("./browser-input-copy.cjs");
+const { CHATGPT_ASSISTANT_TURN_SELECTOR, CHATGPT_ANSWER_ROOT_SELECTOR, readUnverifiedAnswerText } = require("../../shared/chatgpt-answer-dom.cjs");
 const { automaticTabBusy, browserInputPolicy } = require("./browser-input-policy.cjs");
 const {
   runBrowserHelperOperation,
@@ -54,6 +55,7 @@ const TURN_HEARTBEAT_SWEEP_MS = 5_000;
 const TURN_HEARTBEAT_TIMEOUT_MS = 60_000;
 const TURN_TAB_BOOTSTRAP_TIMEOUT_MS = 120_000;
 const RETAINED_TURN_TAB_TTL_MS = 30 * 60 * 1000;
+const FAILED_ANSWER_REVIEW_TTL_MS = 10 * 60 * 1000;
 const WAITING_TOOL_TAB_TTL_MS = 24 * 60 * 60 * 1000;
 const BROWSER_NAVIGATION_TIMEOUT_MS = 60_000;
 const CHATGPT_AUTH_SESSION_TIMEOUT_MS = 5_000;
@@ -669,6 +671,7 @@ class BrowserHost {
       awaitingToolResults: tab.awaitingToolResults === true,
       stopping: tab.stopping === true,
       canStop: automaticTabBusy(tab) && !tab.awaitingToolResults && !tab.stopping,
+      ...(tab.failureReviewUntil ? { failureReviewUntil: new Date(tab.failureReviewUntil).toISOString() } : {}),
     };
     if (tab.interactionMode === "manual") {
       Object.assign(snapshot, {
@@ -888,6 +891,12 @@ class BrowserHost {
   }
 
   evictOldestReclaimableTurnTab() {
+    const failedAnswer = [...this.turnTabs.values()].filter(tab => tab.failureReviewUntil)
+      .sort((a, b) => a.failureReviewUntil - b.failureReviewUntil)[0];
+    if (failedAnswer) {
+      this.removeTurnTab(failedAnswer, false);
+      return true;
+    }
     const terminalManual = [...this.turnTabs.values()]
       .filter(tab => tab.interactionMode === "manual"
         && tab.status === "error"
@@ -1584,6 +1593,13 @@ class BrowserHost {
       return;
     }
     for (const tab of [...this.turnTabs.values()]) {
+      if (tab.failureReviewUntil) {
+        if (now >= tab.failureReviewUntil) {
+          this.logger.info("browser.failed_answer_expired", { tabId: tab.id, traceId: tab.traceId });
+          this.removeTurnTab(tab, false);
+        }
+        continue;
+      }
       if (tab.interactionMode === "manual") {
         if (tab.status === "ready") {
           if (now - (tab.lastHeartbeatAt ?? 0) < (tab.awaitingToolResults ? WAITING_TOOL_TAB_TTL_MS : tab.retainedTtlMs ?? RETAINED_TURN_TAB_TTL_MS)) continue;
@@ -2482,6 +2498,25 @@ class BrowserHost {
     return this.snapshot();
   }
 
+  async copyFailedAnswer(tabId) {
+    const tab = this.turnTabs.get(tabId);
+    const unavailable = () => new Error(this.getLanguage?.() === "zh-CN"
+      ? "失败回答已不可用，请查看当前浏览器标签。" : "The failed answer is no longer available. Check the current browser tabs.");
+    if (!tab?.failureReviewUntil || Date.now() >= tab.failureReviewUntil || tabId !== this.selectedTabId
+      || tab.view.webContents.isDestroyed()) throw unavailable();
+    // User-requested recovery only: plaintext from the failed page, never a verified reply or
+    // a tool instruction. Keep it out of diagnostics, disk, and the Codex execution pipeline.
+    const value = await tab.view.webContents.executeJavaScript(`(${readUnverifiedAnswerText.toString()})(${JSON.stringify({
+      turnSelector: CHATGPT_ASSISTANT_TURN_SELECTOR, answerSelector: CHATGPT_ANSWER_ROOT_SELECTOR,
+    })})`);
+    if (this.turnTabs.get(tabId) !== tab || this.selectedTabId !== tabId
+      || Date.now() >= tab.failureReviewUntil || tab.view.webContents.isDestroyed()) throw unavailable();
+    if (typeof value !== "string" || !value.trim()) throw unavailable();
+    this.clipboard.writeText(value);
+    this.logger.info("browser.failed_answer_copied", { tabId, traceId: tab.traceId });
+    return this.snapshot();
+  }
+
   confirmManualSent(tabId) {
     const tab = this.turnTabs.get(tabId);
     if (!tab || tab.interactionMode !== "manual") throw new Error("Zero Risk tab does not exist");
@@ -2627,6 +2662,7 @@ class BrowserHost {
       throw new BrowserTurnCancelledError(traceId);
     }
     const sameTrace = [...this.turnTabs.values()].find((tab) => tab.traceId === traceId);
+    if (sameTrace?.failureReviewUntil) throw new Error("A failed answer review page cannot resume automatic execution");
     if (sameTrace && sameTrace.interactionMode !== "automatic") {
       throw new Error(`Browser turn ${traceId} already belongs to Zero Risk interaction`);
     }
@@ -2761,6 +2797,7 @@ class BrowserHost {
     retain = false,
     connectorBound = false,
     awaitingToolResults = false,
+    failureCode,
   ) {
     const tab = [...this.turnTabs.values()].find((candidate) => candidate.traceId === traceId);
     if (!tab) {
@@ -2778,6 +2815,12 @@ class BrowserHost {
       );
     }
     const cancelledByUser = this.userCancelledTurnOwners.get(traceId) === helperPid;
+    if (tab.failureReviewUntil) {
+      if (status !== "failed" || failureCode !== "browser_stream_inconsistent") {
+        throw new Error("A failed answer review page cannot change its terminal status");
+      }
+      return { cancelledByUser };
+    }
     tab.status = status === "completed" ? "ready" : status === "aborted" ? "aborted" : "error";
     tab.inputOwnerActive = false;
     this.syncPowerSaveBlocker();
@@ -2787,6 +2830,19 @@ class BrowserHost {
     if (!tab.view.webContents.isDestroyed()) tab.view.webContents.setBackgroundThrottling(true);
     if (status === "completed") {
       this.logger.info("browser.tab_completed", { tabId: tab.id, traceId });
+    }
+    if (status === "failed" && failureCode === "browser_stream_inconsistent"
+      && !cancelledByUser && !tab.stopping && !tab.view.webContents.isDestroyed()) {
+      tab.failureReviewUntil = Date.now() + FAILED_ANSWER_REVIEW_TTL_MS;
+      tab.conversationKey = undefined;
+      tab.connectorIdentity = undefined;
+      tab.connectorBound = false;
+      tab.inputOverride = false;
+      this.syncInputProtection?.();
+      this.logger.info("browser.failed_answer_retained", { tabId: tab.id, traceId });
+      this.publishState?.(this.snapshot());
+      this.writeDescriptor();
+      return { cancelledByUser };
     }
     if (status === "completed"
       && retain

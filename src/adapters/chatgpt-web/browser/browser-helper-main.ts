@@ -30,6 +30,8 @@ interface RunMessage {
     useSavedChats?: boolean;
   };
   turn: {
+    textDelivery?: BrowserTurn["textDelivery"];
+    uiLanguage?: BrowserTurn["uiLanguage"];
     traceId: string;
     preparationDeadline?: number;
     attachmentTimeoutMs?: number;
@@ -207,6 +209,12 @@ async function run(message: RunMessage): Promise<void> {
   if (message.turn.captureLunaCheckpoint !== undefined && typeof message.turn.captureLunaCheckpoint !== "boolean") {
     throw new Error("Browser helper Luna checkpoint flag is invalid");
   }
+  if (message.turn.textDelivery !== undefined && !["append", "buffered"].includes(message.turn.textDelivery)) {
+    throw new Error("Browser helper text delivery strategy is invalid");
+  }
+  if (message.turn.uiLanguage !== undefined && !["en", "zh-CN"].includes(message.turn.uiLanguage)) {
+    throw new Error("Browser helper UI language is invalid");
+  }
   if (message.turn.externalProgress !== undefined && typeof message.turn.externalProgress !== "boolean") {
     throw new Error("Browser helper external progress flag is invalid");
   }
@@ -246,6 +254,8 @@ async function run(message: RunMessage): Promise<void> {
     ...(message.turn.attachmentTimeoutMs !== undefined ? { attachmentTimeoutMs: message.turn.attachmentTimeoutMs } : {}),
     ...(message.turn.queueTicket ? { queueTicket: message.turn.queueTicket } : {}),
     modelId: message.turn.modelId,
+    textDelivery: message.turn.textDelivery,
+    uiLanguage: message.turn.uiLanguage,
     reasoning: message.turn.reasoning,
     usagePurpose: message.turn.usagePurpose,
     ...(message.turn.modelFamily ? { modelFamily: message.turn.modelFamily } : {}),

@@ -1,5 +1,6 @@
 import type { Locator, Page } from "playwright-core";
 import type { ChatGptWebAccountCapabilities } from "../models/chatgpt-web-models";
+export { CHATGPT_ASSISTANT_TURN_SELECTOR } from "../../launcher/shared/chatgpt-answer-dom.cjs";
 
 export const CHATGPT_TEMPORARY_CHAT_URL = "https://chatgpt.com/?temporary-chat=true";
 export const CHATGPT_SAVED_CHAT_URL = "https://chatgpt.com/";
@@ -69,12 +70,6 @@ export const CHATGPT_STOP_BUTTON_SELECTOR = '[data-testid="stop-button"], form[d
 // The new footer is shared with user messages. Response extraction additionally requires
 // this control to FOLLOW the last assistant answer, excluding the user's earlier footer.
 export const CHATGPT_COMPLETION_ACTION_SELECTOR = 'button[data-testid="copy-turn-action-button"], [data-turn-key] .turn-action-controls button';
-export const CHATGPT_ASSISTANT_TURN_SELECTOR = [
-  '[data-testid^="conversation-turn-"][data-turn="assistant"]:not([data-turn-key] *)',
-  '[data-testid^="conversation-turn-"][data-message-author-role="assistant"]:not([data-turn-key] *)',
-  '[data-testid^="conversation-turn-"]:has([data-message-author-role="assistant"]):not([data-turn-key] *)',
-  '[data-turn-key]:has([data-conversation-role="assistant"], [data-chatgpt-agent-turn-start])',
-].join(", ");
 export const CHATGPT_USER_TURN_SELECTOR = [
   '[data-testid^="conversation-turn-"][data-turn="user"]:not([data-turn-key] *)',
   '[data-testid^="conversation-turn-"][data-message-author-role="user"]:not([data-turn-key] *)',

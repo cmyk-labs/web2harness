@@ -259,6 +259,8 @@ describe("native-tools adapter emission", () => {
     const prompts: string[] = [];
     (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
       const execute = async () => {
+        expect(turn.textDelivery).toBe("buffered");
+        expect(turn.uiLanguage).toBe(provider.chatgptWeb?.uiLanguage ?? "en");
         const prepared = await turn.prepare();
         prompts.push(prepared.text);
         const answer = replies.shift() ?? "Done.";

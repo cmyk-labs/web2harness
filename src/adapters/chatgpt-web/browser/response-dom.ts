@@ -5,6 +5,7 @@ import { CHATGPT_COMPLETION_ACTION_SELECTOR } from "../../../browser/session";
 import type { ChatGptMarkdownSegment } from "../markdown";
 import { chatGptBrowserTabClosedError } from "../adapter-error";
 import { CHATGPT_STOPPED_THINKING_LABELS } from "./ui-labels";
+import { CHATGPT_ANSWER_ROOT_SELECTOR } from "../../../../launcher/shared/chatgpt-answer-dom.cjs";
 
 export const CHATGPT_DOM_REVISION_ATTRIBUTES = [
   "aria-hidden",
@@ -14,6 +15,8 @@ export const CHATGPT_DOM_REVISION_ATTRIBUTES = [
   "aria-expanded",
   "class",
   "data-item-anchor",
+  "data-start",
+  "data-end",
   "data-is-last-node",
   "data-message-author-role",
   "data-state",
@@ -31,6 +34,7 @@ export const CHATGPT_DOM_REVISION_ATTRIBUTES = [
   "data-markdown-text-tone",
   "disabled",
   "hidden",
+  "href",
   "inert",
   "open",
   "role",
@@ -223,7 +227,7 @@ export async function readChatGptResponseDom(
     // ChatGPT's DIL renderer has no .markdown class (#538). Read its response root within the
     // assistant-owned PUIK container; the CSS module hash is build-specific. Both renderers
     // feed the same content serializer and completion checks below, without reading UI text.
-    const answerRootSelector = '.markdown, [data-message-author-role="assistant"] .puik-root.not-markdown > [class*="_DilResponseRoot"], [data-markdown-text-style="assistant-message"]';
+    const answerRootSelector = options.answerRootSelector;
     // In the Activity renderer, the agent-start marker owns the progress block
     // before an assistant search unit exists. Final answers have their own unit.
     const activityContainers = [...root.querySelectorAll<HTMLElement>("[data-chatgpt-agent-turn-start]")]
@@ -366,6 +370,12 @@ export async function readChatGptResponseDom(
       for (const block of Array.from(content.querySelectorAll(codeBlockSelector))) {
         if (block.parentElement?.closest(codeBlockSelector)) continue;
         const codes = block.querySelectorAll("code");
+        // A streaming code renderer can expose its language toolbar before CODE hydrates.
+        // The toolbar is never answer content, including while the body is still absent.
+        if (codes.length === 0) {
+          for (const toolbar of Array.from(block.querySelectorAll('[data-markdown-copy="exclude"]'))) toolbar.remove();
+          continue;
+        }
         if (codes.length !== 1) continue;
         const code = codes[0]!.cloneNode(true) as HTMLElement;
         // The power renderer keeps unknown fence languages only in its toolbar.
@@ -474,6 +484,19 @@ export async function readChatGptResponseDom(
     };
     const appendBlockSegment = (child: HTMLElement) => {
       const tag = child.tagName.toLowerCase();
+      // Presentation-only wrappers may be merged/remounted at completion. Flatten only plain
+      // divs containing block children; semantic containers (lists, tables, quotes, code, math)
+      // remain indivisible. Mixed inline content keeps its original whitespace/ordering.
+      if (tag === "div" && !sourceRange(child) && !child.hasAttribute("data-markdown-copy")
+        && !child.hasAttribute("data-markdown-copy-content")
+        && !child.hasAttribute("role") && !child.hasAttribute("contenteditable")
+        && child.childNodes.length > 0 && [...child.childNodes].every(node => (
+          node.nodeType === Node.TEXT_NODE ? !node.textContent?.trim()
+            : node instanceof HTMLElement && blockMarkdownTags.has(node.tagName.toLowerCase())
+        )) && child.children.length > 0) {
+        [...child.children].forEach(element => appendBlockSegment(element as HTMLElement));
+        return;
+      }
       const childRange = sourceRange(child);
       const listItems = tag === "ol" || tag === "ul"
         ? [...child.children].filter(candidate => candidate.tagName === "LI") as HTMLElement[]
@@ -732,6 +755,7 @@ export async function readChatGptResponseDom(
     };
   }, {
     completionActionSelector: CHATGPT_COMPLETION_ACTION_SELECTOR,
+    answerRootSelector: CHATGPT_ANSWER_ROOT_SELECTOR,
     stoppedThinkingLabels: [...CHATGPT_STOPPED_THINKING_LABELS],
     knownKey: cache?.key,
     attributeFilter: [...CHATGPT_DOM_REVISION_ATTRIBUTES],

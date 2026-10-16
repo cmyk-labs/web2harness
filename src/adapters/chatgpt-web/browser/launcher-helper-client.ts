@@ -278,6 +278,8 @@ export class LauncherBrowserHelperClient {
           },
           turn: {
             traceId: turn.traceId,
+            ...(turn.textDelivery ? { textDelivery: turn.textDelivery } : {}),
+            ...(turn.uiLanguage ? { uiLanguage: turn.uiLanguage } : {}),
             ...(turn.preparationDeadline !== undefined ? { preparationDeadline: turn.preparationDeadline } : {}),
             ...(turn.attachmentTimeoutMs !== undefined ? { attachmentTimeoutMs: turn.attachmentTimeoutMs } : {}),
             ...(turn.queueTicket ? { queueTicket: turn.queueTicket } : {}),

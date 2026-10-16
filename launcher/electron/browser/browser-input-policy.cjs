@@ -17,18 +17,18 @@ function browserInputPolicy(host, tabId = host.selectedTabId) {
   const operation = automaticOperation(host);
   let reason = null;
   if (tab && tab.interactionMode !== "manual") {
-    reason = tab.stopping ? "stopping" : tab.awaitingToolResults ? "waiting-tools"
+    reason = tab.failureReviewUntil ? "failed-answer" : tab.stopping ? "stopping" : tab.awaitingToolResults ? "waiting-tools"
       : automaticTabBusy(tab) ? "running" : "retained";
   } else if (!tab) {
     reason = busy.some(candidate => candidate.stopping) ? "stopping"
       : busy.some(candidate => candidate.status === "running" || candidate.inputOwnerActive) ? "running"
       : busy.length ? "waiting-tools" : operation ? "checking" : null;
   }
-  const override = tab ? tab.inputOverride : host.homeInputOverride;
+  const override = tab?.failureReviewUntil ? false : tab ? tab.inputOverride : host.homeInputOverride;
   return {
     inputLocked: reason !== null && override !== true,
     inputOverrideActive: reason !== null && override === true,
-    canOverrideInput: reason !== null,
+    canOverrideInput: reason !== null && !tab?.failureReviewUntil,
     inputLockReason: reason,
     automationBusy: busy.length > 0 || operation,
     // Browser zoom changes every surface, including retained automatic conversations.

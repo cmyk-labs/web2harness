@@ -22,6 +22,13 @@ export class ChatGptWebAdapterError extends Error {
   }
 }
 
+export function chatGptMarkdownFailure(language: "en" | "zh-CN" = "en", cause?: unknown): ChatGptWebAdapterError {
+  return new ChatGptWebAdapterError(language === "zh-CN"
+    ? "网页回答的最终内容无法与已读取内容可靠对齐，结果未能完整交付。若浏览器中仍有失败页面，可使用“复制回答”保存未经验证的可见文本。"
+    : "The final Web answer could not be reliably aligned with the observed content, so delivery could not be completed. If the failed page is still available, use Copy answer to save its unverified visible text.",
+  { status: 502, errorType: "server_error", code: "browser_stream_inconsistent", retryable: false, cause });
+}
+
 // Fixed, payload-free causes survive the broker/helper boundaries. An accepted Web request is
 // never safe to resend merely because its response could not be observed or validated.
 const responseFailureMessages = {

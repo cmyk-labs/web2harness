@@ -11,6 +11,28 @@ test("completion diagnostics retain only validated content-independent reference
   expect(JSON.stringify(redacted)).not.toContain("PRIVATE");
 });
 
+test("Markdown metadata survives the real logging pipeline without allowing arbitrary content", async () => {
+  const records = await capture(async () => {
+    diagnosticEvent("error", "browser.markdown_conflict", { delivery: "buffered", emittedChars: 0,
+      conflict: { reason: "missing_pending_content", observedTag: "div", committedTag: "p", observedSegments: 2 },
+      prompt: "PRIVATE_PROMPT", content: "PRIVATE_ANSWER", cookie: "PRIVATE_COOKIE" });
+    diagnosticEvent("info", "browser.markdown_rebuilt", { delivery: "append", rebuilt: true });
+    diagnosticEvent("error", "browser.markdown_conflict", { delivery: "PRIVATE_DELIVERY",
+      conflict: { observedTag: "PRIVATE_TAG", committedTag: "<p>PRIVATE_BODY</p>" } });
+    for (const tag of ["root", "inline", "ol:item", "ul:item"]) {
+      diagnosticEvent("error", "browser.markdown_conflict", { conflict: { observedTag: tag, committedTag: tag } });
+    }
+  });
+  expect(records[0]!.detail).toMatchObject({ delivery: "buffered", emittedChars: 0,
+    conflict: { reason: "missing_pending_content", observedTag: "div", committedTag: "p", observedSegments: 2 } });
+  expect(records[1]!.detail).toMatchObject({ delivery: "append", rebuilt: true });
+  expect(JSON.stringify(records)).not.toContain("PRIVATE");
+  expect(records[2]!.detail.delivery).toBe("[text removed]");
+  expect(records.slice(3).map(record => record.detail.conflict)).toEqual(
+    ["root", "inline", "ol:item", "ul:item"].map(tag => ({ observedTag: tag, committedTag: tag })),
+  );
+});
+
 test("handoff comparison logs only declared identities, including for identifier-shaped private input", () => {
   const tools = [{ name: "apply_patch", namespace: "functions", description: "Patch", parameters: {}, freeform: true }];
   const diagnostic = safeDetail(handoffRejectionDiagnostics(tools, [

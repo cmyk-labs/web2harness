@@ -402,6 +402,7 @@ export type LauncherTurnActivity =
       retain?: boolean;
       connectorBound?: boolean;
       awaitingToolResults?: boolean;
+      failureCode?: "browser_stream_inconsistent";
     };
 
 // Startup must outlast the launcher's ten-second idle bootstrap. This is not a model-turn budget.

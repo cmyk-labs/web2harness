@@ -636,6 +636,7 @@ function registerIpc({ logger, stateStore }) {
     host: browserHost, window: mainWindow, dialog, language: stateStore.read().language, tabId, allowed,
   }));
   handle("launcher:manual-prompt-copy", (_event, tabId) => browserHost.copyManualPrompt(tabId));
+  handle("launcher:failed-answer-copy", (_event, tabId) => browserHost.copyFailedAnswer(tabId));
   handle("launcher:manual-prompt-sent", (_event, tabId) => browserHost.confirmManualSent(tabId));
   handle("launcher:browser-authentication", () => browserHost.refreshAuthentication());
   handle("launcher:browser-login", async () => {

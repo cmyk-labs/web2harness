@@ -260,6 +260,16 @@ If preparation still fails, inspect the exact error and the owned ChatGPT page. 
 
 **Verify:** a complete answer and expected tool results return to Codex. Identify any partial file changes from a failed attempt before requesting the same operation again.
 
+### The Web answer exists but Codex reports `browser_stream_inconsistent`
+
+**Check:** the final page structure could not be aligned with the observed answer. This is an answer-extraction failure; it does not by itself establish a network interruption. Native Tools buffers raw answer text until completion and tool-call validation, so this error does not imply that Codex already received the report.
+
+**Recovery:** plain layout wrappers are normalized into semantic blocks. For an un-emitted native reply, a stable, completed snapshot of the same answer may replace the private buffer only if it preserves the complete known Markdown projection, including its pending tail, in order. This does not resend the prompt or execute tools again. Missing content, changed links, ambiguous ordering, or changes to already-delivered text still fail safely.
+
+The normal completion path also checks that pending blocks remain covered. A temporarily missing tail gets up to five seconds of fresh observation after completion becomes visible. If coverage cannot be established, the request fails instead of returning a truncated answer or appending stale text.
+
+**Action:** for this error, the built-in browser keeps the failed page read-only for up to ten minutes; it can be closed manually or reclaimed earlier when tab space is needed. **Copy answer** copies the last visible assistant answer as unverified plain text. Check it before use: it is not automatically delivered to Codex. The failed page holds no execution slot or continuation entitlement, and cancellation and other errors still release their pages normally. If the page has already gone, the error does not promise recovery. Export diagnostics before retrying: `browser.markdown_conflict` records payload-free block/coverage and delivery metadata, and `browser.markdown_rebuilt` records a successful buffered recovery. Verify that Codex receives the complete answer once, with no missing or duplicated sections.
+
 ### Web compaction reports `context_length_exceeded`
 
 **Check:** the complete compaction input exceeds the inline browser transport budget. Web2Harness preserves the original context and reports a non-retryable error; reconnecting the same request replays that error without another browser submission.

@@ -121,6 +121,139 @@ test("preserving plan markers does not rewrite mentions or literal code", () => 
   ].join("\n"));
 });
 
+test("buffered replies recover an equivalent final wrapper without emitting partial or duplicate text", () => {
+  const parts = ["Alpha.", "Beta.", "Gamma."].map((text, i) => ({
+    key: `old:${i}`, tag: "p", html: `<p>${text}</p>`, text, streamable: i < 2,
+  }));
+  const merged = [{ key: "new", tag: "div", html: `<div>${parts.map(p => p.html).join("")}</div>`,
+    text: "Alpha.\nBeta.\nGamma.", streamable: false }];
+  const privateBuffer = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
+  expect(privateBuffer.observe(parts, 0)).toBe("");
+  expect(privateBuffer.observe(merged, 1)).toBe("");
+  expect(privateBuffer.currentSnapshotIsConsistent()).toBeFalse();
+  expect(privateBuffer.finish()).toEqual({ markdown: "Alpha.\n\nBeta.\n\nGamma.", delta: "Alpha.\n\nBeta.\n\nGamma." });
+  expect(privateBuffer.finish().delta).toBe("");
+  expect(privateBuffer.deliveryState().rebuilt).toBeTrue();
+  const liveBuffer = new ChatGptMarkdownBuffer(undefined, 0);
+  expect(liveBuffer.observe(parts, 0)).toBe("Alpha.\n\nBeta.");
+  liveBuffer.observe(merged, 1);
+  expect(() => liveBuffer.finish()).toThrow("could not be aligned");
+});
+
+test("buffered recovery rejects lost prefixes, pending tails, changed links, reorder and duplicate output", () => {
+  const parts = [
+    { key: "a", tag: "p", html: '<p><a href="https://example.com/a">Alpha</a></p>', text: "Alpha", linkTargets: ["https://example.com/a"], streamable: true },
+    { key: "b", tag: "p", html: "<p>Beta.</p>", text: "Beta.", streamable: true },
+    { key: "c", tag: "p", html: "<p>Gamma.</p>", text: "Gamma.", streamable: false },
+  ];
+  const html = parts.map(p => p.html).join("");
+  for (const changed of [
+    parts.slice(1).map(p => p.html).join(""),
+    parts.slice(0, 2).map(p => p.html).join(""),
+    html.replace("example.com/a", "example.com/b"),
+    parts.toReversed().map(p => p.html).join(""),
+    parts[0]!.html + html,
+  ]) {
+    const buffer = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
+    expect(buffer.observe(parts, 0)).toBe("");
+    buffer.observe([{ key: "new", tag: "div", html: `<div>${changed}</div>`, text: "remounted", streamable: false }], 1);
+    expect(() => buffer.finish()).toThrow("could not be aligned");
+    expect(buffer.deliveryState().emittedChars).toBe(0);
+  }
+});
+
+test("missing pending blocks never become a successful truncated answer in either delivery mode", () => {
+  const block = (key: string, text: string, streamable = false) => ({ key, tag: "p", text, html: `<p>${text}</p>`, streamable });
+  const a = block("a", "First", true), b = block("b", "Pending"), c = block("c", "Last");
+  for (const delivery of ["append", "buffered"] as const) {
+    for (const missing of [[a], [], [a, c], [a, block("b", ""), c]]) {
+      const buffer = new ChatGptMarkdownBuffer(undefined, 0, delivery);
+      buffer.observe([a, b, c], 0);
+      buffer.observe(missing, 1);
+      expect(buffer.needsCoverageRecovery()).toBeTrue();
+      expect(() => buffer.finish()).toThrow("missing previously observed pending content");
+      buffer.observe(missing, 2);
+      expect(() => buffer.finish()).toThrow();
+      buffer.observe([a, block("b", "Rewritten pending"), block("c", "Last expanded")], 3);
+      expect(buffer.needsCoverageRecovery()).toBeFalse();
+      expect(buffer.finish().markdown).toBe("First\n\nRewritten pending\n\nLast expanded");
+      expect(buffer.finish().delta).toBe("");
+    }
+  }
+});
+
+test("uncommitted answers can grow, rewrite and replace equivalent wrappers without losing coverage", () => {
+  const block = (key: string, text: string) => ({ key, tag: "p", text, html: `<p>${text}</p>`, streamable: false });
+  const buffer = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
+  buffer.observe([block("a", "Draft"), block("b", "Tail")], 0);
+  buffer.observe([block("a", "New draft"), block("b", "Expanded tail")], 1);
+  const html = "<div><p>New draft</p><p>Expanded tail</p></div>";
+  buffer.observe([{ key: "merged", tag: "div", text: "New draftExpanded tail", html, streamable: false }], 2);
+  expect(buffer.finish().markdown).toBe("New draft\n\nExpanded tail");
+});
+
+test("a fully pending answer cannot disappear, and committed prefix virtualization still preserves its tail", () => {
+  const b = { key: "b", tag: "p", text: "Pending", html: "<p>Pending</p>", streamable: false };
+  const buffer = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
+  buffer.observe([b], 0); buffer.observe([], 1);
+  expect(() => buffer.finish()).toThrow("missing previously observed pending content");
+  buffer.observe([b], 2);
+  expect(buffer.finish().markdown).toBe("Pending");
+});
+
+test("buffered output keeps a virtualized prefix using its verified ledger and still rejects actual edits", () => {
+  const segment = (key: string, text: string, streamable: boolean) => ({ key, tag: "p", text, html: `<p>${text}</p>`, streamable });
+  const buffer = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
+  buffer.observe([segment("a", "Alpha", true), segment("b", "Beta", false)], 0);
+  buffer.observe([segment("b", "Beta", false)], 1);
+  expect(buffer.finish()).toEqual({ markdown: "Alpha\n\nBeta", delta: "Alpha\n\nBeta" });
+  const changed = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
+  changed.observe([segment("a", "Alpha", true), segment("b", "Beta", false)], 0);
+  changed.observe([segment("a", "Changed", true), segment("b", "Beta", false)], 1);
+  expect(() => changed.finish()).toThrow("changed a completed text block");
+});
+
+test("pending token spans remount into inline Markdown without losing required blocks", () => {
+  const segment = (key: string, html: string, text: string) => ({ key, tag: "p", html, text, streamable: false });
+  const first = segment("first", '<p><span>Read </span><code>input.txt</code><span>.</span></p>', 'Read input.txt.');
+  const tail = segment("tail", '<p>Output `ASSERT_CO</p>', 'Output `ASSERT_CO');
+  const finalFirst = segment("remounted-first", '<p>Read <code>input.txt</code>.</p>', 'Read input.txt.');
+  const finalTail = segment("remounted-tail", '<p>Output <span data-markdown-copy="inline-code">ASSERT_COVERAGE</span>.</p>', 'Output ASSERT_COVERAGE.');
+  for (const delivery of ["append", "buffered"] as const) {
+    const buffer = new ChatGptMarkdownBuffer(undefined, 750, delivery);
+    buffer.observe([first, tail], 0);buffer.observe([finalFirst, finalTail], 500);
+    expect(buffer.finish().markdown).toBe('Read `input.txt`.\n\nOutput `ASSERT_COVERAGE`.');
+    for (const changed of [[finalFirst], [finalFirst, segment("other", '<p>Output <code>DIFFERENT</code>.</p>', 'Output DIFFERENT.')]]) {
+      const missing = new ChatGptMarkdownBuffer(undefined, 750, delivery);
+      missing.observe([first, tail], 0);missing.observe(changed, 500);
+      expect(() => missing.finish()).toThrow("missing previously observed pending content");
+    }
+    const literal = new ChatGptMarkdownBuffer(undefined, 750, delivery);
+    literal.observe([segment("old", '<p>Literal <code>a\\_b</code></p>', 'Literal a\\_b')], 0);
+    literal.observe([segment("new", '<p>Literal <code>a_b</code></p>', 'Literal a_b')], 500);
+    expect(() => literal.finish()).toThrow("missing previously observed pending content");
+  }
+});
+
+test("pending code remounts can grow without synthetic closing fences hiding missing content", () => {
+  const code = (key: string, text: string, language = "json") => ({ key, tag: "div", text,
+    html: `<div><pre><code class="language-${language}">${text}</code></pre></div>`, streamable: false });
+  const tail = { key: "tail", tag: "p", text: "Required tail", html: "<p>Required tail</p>", streamable: false };
+  for (const delivery of ["append", "buffered"] as const) {
+    const buffer = new ChatGptMarkdownBuffer(undefined, 0, delivery);
+    buffer.observe([code("a", '{"calls":[')], 0);
+    buffer.observe([code("remounted", '{"calls":[]}')], 1);
+    expect(buffer.finish().markdown).toBe('```json\n{"calls":[]}\n```');
+    for (const changed of [[code("b", '{"calls":[]}')], [code("b", '{"other":[]}'), tail],
+      [code("b", '{"calls":[]}', "text"), tail]]) {
+      const missing = new ChatGptMarkdownBuffer(undefined, 0, delivery);
+      missing.observe([code("a", '{"calls":['), tail], 0);
+      missing.observe(changed, 1);
+      expect(() => missing.finish()).toThrow("missing previously observed pending content");
+    }
+  }
+});
+
 function katex(source: string, display = false): string {
   const escaped = source.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   const math = '<span class="katex"><span class="katex-mathml"><math><semantics>'

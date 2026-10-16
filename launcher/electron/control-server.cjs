@@ -218,6 +218,10 @@ class BrowserControlServer {
       if (body.retain !== undefined && typeof body.retain !== "boolean") {
         throw new Error("retain is invalid");
       }
+      if (body.failureCode !== undefined && (request.url !== "/v1/turn/end"
+        || body.status !== "failed" || body.failureCode !== "browser_stream_inconsistent")) {
+        throw new Error("failureCode is invalid");
+      }
       if (body.awaitingToolResults !== undefined && typeof body.awaitingToolResults !== "boolean") {
         throw new Error("awaitingToolResults is invalid");
       }
@@ -398,6 +402,7 @@ class BrowserControlServer {
           body.retain === true,
           body.connectorBound === true,
           body.awaitingToolResults === true,
+          body.failureCode,
         );
         this.logger.info("browser.turn_ended", { traceId: body.traceId, status: body.status });
         writeJson(response, 200, { ok: true, ...release });

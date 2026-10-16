@@ -1,4 +1,5 @@
 import { diagnosticContext, diagnosticEvent, diagnosticError } from "../../../diagnostics";
+import { chatGptMarkdownFailure } from "../adapter-error";
 import { chatGptWebQueueModel } from "../../../models/chatgpt-web-queue-model";
 import { CompletionFenceWait, type CompletionFenceState, type CompletionFenceCommit } from "../tools/completion-fence";
 import { observeMcpCompletion } from "./mcp-call-observation";
@@ -1057,6 +1058,9 @@ function withBrowserTurnAbort<T>(promise: Promise<T>, signal?: AbortSignal): Pro
 }
 
 export interface BrowserTurn {
+  /** Buffered native replies are private until the complete answer is validated. */
+  textDelivery?: "append" | "buffered";
+  uiLanguage?: "en" | "zh-CN";
   attachmentTimeoutMs?: number;
   scheduling?: import("../../../../launcher/shared/request-scheduler.cjs").QueueInput;
   queueTicket?: import("../../../browser/request-queue-client").QueueTicket;
@@ -3285,6 +3289,9 @@ export class ChatGptBrowserWorker {
           helperPid: process.pid,
           status: terminal,
           ...(terminalMessage ? { message: terminalMessage } : {}),
+          ...(terminal === "failed" && originalError instanceof ChatGptWebAdapterError
+            && originalError.code === "browser_stream_inconsistent"
+            ? { failureCode: "browser_stream_inconsistent" as const } : {}),
           ...(terminal === "completed" && turn.retainConversation ? { retain: true } : {}),
           ...(terminal === "completed" && turn.retainConversation && awaitingToolResults ? { awaitingToolResults: true } : {}),
           ...(terminal === "completed" && (turn.nativeConnector || turn.capabilities.localToolsEnabled)
@@ -3340,6 +3347,9 @@ export class ChatGptBrowserWorker {
     }
     if (turn.captureLunaCheckpoint && turn.modelId !== CHATGPT_WEB_LUNA_MODEL_ID) {
       throw new Error("Private rolling checkpoint capture is valid only for ChatGPT Luna");
+    }
+    if (turn.textDelivery === "buffered" && (turn.completionFence || turn.captureLunaCheckpoint)) {
+      throw new Error("Buffered Markdown delivery is only supported for private native replies");
     }
     const browserCapabilities = turn.nativeConnector
       ? { ...turn.capabilities, localToolsEnabled: true }
@@ -3732,7 +3742,7 @@ export class ChatGptBrowserWorker {
       let capturedResponse = false;
       const sentAt = Date.now();
       const visibleTrace = new ChatGptVisibleTraceTracker();
-      const markdownBuffer = new ChatGptMarkdownBuffer();
+      const markdownBuffer = new ChatGptMarkdownBuffer(undefined, 750, turn.textDelivery);
       const checkpointStream = turn.captureLunaCheckpoint
         ? new ChatGptLunaCheckpointStream()
         : undefined;
@@ -3742,17 +3752,10 @@ export class ChatGptBrowserWorker {
       };
       const throwMarkdownConsistencyError = (error: unknown): never => {
         if (!(error instanceof ChatGptMarkdownConsistencyError)) throw error;
-        if (error.diagnostic) {
-          console.error(
-            `[chatgpt-web] browser turn ${turn.traceId} Markdown conflict: ${JSON.stringify(error.diagnostic)}`,
-          );
-        }
-        throw new ChatGptWebAdapterError(error.message, {
-          status: 502,
-          errorType: "server_error",
-          code: "browser_stream_inconsistent",
-          retryable: false,
+        diagnosticEvent("error", "browser.markdown_conflict", {
+          ...markdownBuffer.deliveryState(), conflict: error.diagnostic,
         });
+        throw chatGptMarkdownFailure(turn.uiLanguage, error);
       };
       const domHealthTracker = new ChatGptTurnDomHealthTracker();
       const responseDomCache: ChatGptResponseDomCache = {};
@@ -3760,6 +3763,7 @@ export class ChatGptBrowserWorker {
       let internalObservationFaults = 0;
       let observedThisIteration = false;
       let completionFenceRevision: number | undefined;
+      let markdownCoverageDeadline: number | undefined;
       const completionFenceWait = new CompletionFenceWait();
       for (;;) {
         // The heartbeat is a consumer callback, so it stays outside the observation-fault region:
@@ -3910,6 +3914,19 @@ export class ChatGptBrowserWorker {
             completionFenceWait.reset();
           }
           if (completionReady) {
+            if (markdownBuffer.needsCoverageRecovery()) {
+              markdownCoverageDeadline ??= Date.now() + 5_000;
+              if (Date.now() < markdownCoverageDeadline) {
+                responseDomCache.key = undefined;
+                responseDomCache.snapshot = undefined;
+                await new Promise(resolveSleep => setTimeout(resolveSleep, 250));
+                continue;
+              }
+              // preview throws the original coverage error before any completion fence commits.
+              try { markdownBuffer.preview(); } catch (error) { throwMarkdownConsistencyError(error); }
+            } else {
+              markdownCoverageDeadline = undefined;
+            }
             if (turn.completionFence) {
               if (completionFenceRevision === undefined) {
                 const fence = observeMcpCompletion(await turn.completionFence.begin(), streamEvidence.mcp.snapshot(),
@@ -3956,6 +3973,9 @@ export class ChatGptBrowserWorker {
                 return throwMarkdownConsistencyError(error);
               }
             })();
+            if (markdownBuffer.deliveryState().rebuilt) {
+              diagnosticEvent("info", "browser.markdown_rebuilt", markdownBuffer.deliveryState());
+            }
             if (!final.markdown && snapshot.visibleText) {
               throw new Error("ChatGPT completed with visible text that could not be serialized as Markdown");
             }

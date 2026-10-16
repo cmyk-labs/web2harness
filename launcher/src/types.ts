@@ -69,7 +69,7 @@ export interface BrowserState {
   maxTabs: number;
   tabs: BrowserTabState[];
   inputLocked?: boolean;
-  inputLockReason?: "running" | "waiting-tools" | "stopping" | "retained" | "checking" | null;
+  inputLockReason?: "running" | "waiting-tools" | "stopping" | "retained" | "checking" | "failed-answer" | null;
   automationBusy?: boolean;
   zoomLocked?: boolean;
   canOverrideInput?: boolean;
@@ -92,6 +92,7 @@ export interface BrowserTabState {
   manualState?: "awaiting-finish" | "awaiting-user" | "sent" | "running" | "completed" | "timed-out" | "cancelled" | "failed";
   manualDeadlineAt?: string;
   canCopyPrompt?: boolean;
+  failureReviewUntil?: string;
   canConfirmSent?: boolean;
 }
 
@@ -247,6 +248,7 @@ export interface LauncherApi {
   stopBrowserTab(tabId: string): Promise<BrowserState>;
   setBrowserInputOverride(tabId: string, allowed: boolean): Promise<BrowserState>;
   copyManualPrompt(tabId: string): Promise<BrowserState>;
+  copyFailedAnswer(tabId: string): Promise<BrowserState>;
   confirmManualSent(tabId: string): Promise<BrowserState>;
   checkAuthentication(): Promise<BrowserState>;
   openLogin(): Promise<BrowserState>;

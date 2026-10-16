@@ -26,8 +26,31 @@ import { ChatGptBrowserWorker } from "../../src/adapters/chatgpt-web/browser/bro
 import { withLauncherRuntimeParameters } from "../../src/browser/runtime-parameters";
 import { DEFAULT_RUNTIME_PARAMETERS } from "../../launcher/shared/runtime-parameters.cjs";
 import type { CodexProviderConfig } from "../../src/types";
+import { chatGptMarkdownFailure, ChatGptWebAdapterError } from "../../src/adapters/chatgpt-web/adapter-error";
 
 const roots: string[] = [];
+
+test("only a Markdown failure requests a failed-page review lease, without reporting success", async () => {
+  const events: any[] = [];
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
+    const body = await req.json() as any; events.push(body);
+    return Response.json(body.phase === "start" ? { surfaceId: "a".repeat(32), reused: false, connectorBound: false } : { cancelledByUser: false });
+  } });
+  try {
+    const descriptor = descriptorFile(`http://127.0.0.1:${server.port}`);
+    for (const failure of [chatGptMarkdownFailure("zh-CN"), new Error("other failure"), new DOMException("cancelled", "AbortError")]) {
+      const worker = Object.assign(Object.create(ChatGptBrowserWorker.prototype), {
+        config: { browserHost: "launcher", browserHostDescriptorPath: descriptor },
+        runBrowserTurn: async () => { throw failure; },
+      });
+      await expect(worker.runExclusive({ traceId: "review-case", capabilities: { localToolsEnabled: false } })).rejects.toBe(failure);
+      const end = events.at(-1);
+      expect(end.status).toBe(failure.name === "AbortError" ? "aborted" : "failed");
+      expect(end.failureCode).toBe(failure instanceof ChatGptWebAdapterError ? "browser_stream_inconsistent" : undefined);
+      expect(end.retain).toBeUndefined();
+    }
+  } finally { server.stop(true); }
+});
 
 test("a blocked sign-in replaces an opaque navigation abort with a non-retryable session error", async () => {
   let needsSignIn: unknown = true;

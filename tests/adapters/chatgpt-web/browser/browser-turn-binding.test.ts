@@ -2,6 +2,75 @@ import { expect, test } from "bun:test";
 import { chromium, type Locator, type Page } from "playwright-core";
 import { ChatGptBrowserObservationTimeoutError, ChatGptBrowserWorker, chatGptTurnIsComplete } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { readFileSync } from "node:fs";
+import { ChatGptMarkdownBuffer } from "../../../../src/adapters/chatgpt-web/markdown";
+import { CHATGPT_ASSISTANT_TURN_SELECTOR, CHATGPT_ANSWER_ROOT_SELECTOR, readUnverifiedAnswerText } from "../../../../launcher/shared/chatgpt-answer-dom.cjs";
+
+test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)("a buffered final report survives wrapper replacement and cached link/range updates stay observable", async () => {
+  const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
+  try {
+    const page = await browser.newPage();
+    const paragraphs = Array.from({ length: 180 }, (_, i) => `<p>Report paragraph ${i}.</p>`).join("");
+    await page.setContent(`<section id="turn"><div class="markdown">${paragraphs}</div><button data-testid="copy-turn-action-button">Copy</button></section>`);
+    const worker = Object.create(ChatGptBrowserWorker.prototype) as any;
+    const root = page.locator("#turn"), cache = {};
+    const buffer = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
+    const initial = await worker.responseDomSnapshot(root, cache);
+    expect(buffer.observe(initial.markdownSegments, 0)).toBe("");
+    // A semantic container is intentionally not flattened; the buffered fallback must prove
+    // complete Markdown coverage rather than depending on node keys or paragraph counts.
+    await page.locator(".markdown").evaluate((node, body) => { node.innerHTML = `<div role="group">${body}</div>`; }, paragraphs);
+    const final = await worker.responseDomSnapshot(root, cache);
+    expect(final.completionActionVisible).toBeTrue();
+    expect(buffer.observe(final.markdownSegments, 1)).toBe("");
+    const answer = buffer.finish();
+    expect(answer.delta).toBe(answer.markdown);
+    expect(answer.markdown).toBe(Array.from({ length: 180 }, (_, i) => `Report paragraph ${i}.`).join("\n\n"));
+    expect(buffer.deliveryState().rebuilt).toBeTrue();
+    expect(buffer.finish().delta).toBe("");
+    await page.locator(".markdown").evaluate(node => { node.innerHTML = '<p data-start="0" data-end="20"><a href="https://example.com/a">Link</a></p><p>End</p>'; });
+    const linked = await worker.responseDomSnapshot(root, cache);
+    expect(linked.markdownSegments[0].linkTargets).toEqual(["https://example.com/a"]);
+    await page.locator("a").evaluate(node => node.setAttribute("href", "https://example.com/b"));
+    const changedLink = await worker.responseDomSnapshot(root, cache);
+    expect(changedLink.markdownSegments[0].linkTargets).toEqual(["https://example.com/b"]);
+    await page.locator("p").first().evaluate(node => { node.setAttribute("data-start", "3"); node.setAttribute("data-end", "22"); });
+    expect((await worker.responseDomSnapshot(root, cache)).markdownSegments[0]).toMatchObject({ sourceStart: 3, sourceEnd: 22 });
+    await page.locator(".markdown").evaluate(node => { node.innerHTML = '<p>First</p><p>Pending tail</p>'; });
+    const coverage = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
+    coverage.observe((await worker.responseDomSnapshot(root, cache)).markdownSegments, 0);
+    await page.locator(".markdown p").last().evaluate(node => node.remove());
+    coverage.observe((await worker.responseDomSnapshot(root, cache)).markdownSegments, 1);
+    expect(coverage.needsCoverageRecovery()).toBeTrue();
+    expect(() => coverage.finish()).toThrow("missing previously observed pending content");
+    await page.locator(".markdown").evaluate(node => node.insertAdjacentHTML('beforeend', '<p>Pending tail</p>'));
+    coverage.observe((await worker.responseDomSnapshot(root, cache)).markdownSegments, 2);
+    expect(coverage.finish().markdown).toBe("First\n\nPending tail");
+    const codeBuffer = new ChatGptMarkdownBuffer(undefined, 750, "buffered");
+    for (const [i, value] of [undefined, '{"calls":[', '{"calls":[]}'].entries()) {
+      await page.locator('.markdown').evaluate((node, value) => {
+        node.innerHTML = '<div><div data-markdown-copy="code-block"><div data-markdown-copy="exclude"><div>codex_tool_calls</div><button>Copy</button></div>'
+          + (value === undefined ? '' : `<code>${value}</code>`) + '</div></div>';
+      }, value);
+      codeBuffer.observe((await worker.responseDomSnapshot(root, cache)).markdownSegments, i * 100);
+      expect(codeBuffer.currentSnapshotIsConsistent()).toBeTrue();
+    }
+    expect(codeBuffer.finish().markdown).toBe('```codex_tool_calls\n{"calls":[]}\n```');
+    await page.locator('.markdown').evaluate(node => { node.innerHTML = '<p><span>Read </span><code>input.txt</code><span>.</span></p><p>Output `ASSERT_CO</p>'; });
+    const formatting = new ChatGptMarkdownBuffer(undefined, 750, "buffered");
+    formatting.observe((await worker.responseDomSnapshot(root, cache)).markdownSegments, 0);
+    await page.locator('.markdown').evaluate(node => { node.innerHTML = '<p>Read <span data-markdown-copy="inline-code">input.txt</span>.</p><p>Output <span data-markdown-copy="inline-code">ASSERT_COVERAGE</span>.</p>'; });
+    formatting.observe((await worker.responseDomSnapshot(root, cache)).markdownSegments, 500);
+    expect(formatting.finish().markdown).toBe('Read `input.txt`.\n\nOutput `ASSERT_COVERAGE`.');
+    for (const html of [
+      '<section data-testid="conversation-turn-1" data-turn="assistant"><div class="markdown">Unverified answer</div><button>Copy</button></section>',
+      '<section data-turn-key="current"><div data-user-message-bubble>PRIVATE USER</div><div><i data-chatgpt-agent-turn-start></i><div data-markdown-text-style="assistant-message">Activity</div></div><div data-content-search-unit-key="answer"><i data-conversation-role="assistant"></i><div data-markdown-text-style="assistant-message">Unverified answer</div></div></section>',
+    ]) {
+      await page.setContent(html);
+      expect(await page.evaluate(readUnverifiedAnswerText, { turnSelector: CHATGPT_ASSISTANT_TURN_SELECTOR,
+        answerSelector: CHATGPT_ANSWER_ROOT_SELECTOR })).toBe("Unverified answer");
+    }
+  } finally { await browser.close(); }
+}, 15_000);
 
 test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)("a whole historical group remounted after Send cannot become the accepted answer", async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });

@@ -66,10 +66,17 @@ turndown.addRule("preserveKatexSource", {
   },
 });
 
-function preserveKatexSource(html: string): string | HTMLElement {
-  if (!html.includes("katex")) return html;
+function preserveSemanticMarkup(html: string): string | HTMLElement {
+  if (!html.includes("katex") && !html.includes("inline-code")) return html;
   const root = createDocument().createElement("div");
   root.innerHTML = html;
+  // Activity renders inline code as a SPAN. Preserve the same code semantics as CODE,
+  // including literal backslashes and fence characters, when token spans finish hydrating.
+  for (const span of Array.from(root.querySelectorAll('span[data-markdown-copy="inline-code"]'))) {
+    const code = root.ownerDocument.createElement("code");
+    code.textContent = span.textContent;
+    span.parentNode!.replaceChild(code, span);
+  }
   for (const math of Array.from(root.querySelectorAll(".katex"))) {
     if (math.closest("pre, code")) continue;
     const sources = math.querySelectorAll('annotation[encoding="application/x-tex"]');
@@ -181,7 +188,7 @@ function linkObsidianWikiLinks(markdown: string): string {
 
 export function chatGptHtmlToMarkdown(html: string): string {
   if (!html.trim()) return "";
-  return linkObsidianWikiLinks(turndown.turndown(preserveKatexSource(html))).trim();
+  return linkObsidianWikiLinks(turndown.turndown(preserveSemanticMarkup(html))).trim();
 }
 
 export interface ChatGptMarkdownSegment {
@@ -212,7 +219,7 @@ interface CommittedChatGptMarkdownSegment {
 
 export class ChatGptMarkdownConsistencyError extends Error {
   constructor(message: string, readonly diagnostic?: {
-    reason: "text_changed" | "link_target_changed" | "block_order_changed" | "source_range_overlap";
+    reason: "text_changed" | "link_target_changed" | "block_order_changed" | "source_range_overlap" | "unanchored_snapshot" | "missing_pending_content";
     observedStart?: number;
     observedEnd?: number;
     committedStart?: number;
@@ -223,6 +230,8 @@ export class ChatGptMarkdownConsistencyError extends Error {
     committedTag?: string;
     observedIndex: number;
     committedIndex: number;
+    observedSegments?: number;
+    committedSegments?: number;
   }) {
     super(message);
     this.name = "ChatGptMarkdownConsistencyError";
@@ -246,10 +255,14 @@ export class ChatGptMarkdownBuffer {
   private markdown = "";
   private lastGroup: string | undefined;
   private consistencyError: ChatGptMarkdownConsistencyError | undefined;
+  private observed: ChatGptMarkdownSegment[] = [];
+  private emittedChars = 0;
+  private rebuilt = false;
 
   constructor(
     private readonly transform: (markdown: string) => string = markdown => markdown,
     private readonly stabilityMs = 750,
+    private readonly delivery: "append" | "buffered" = "append",
   ) {
     if (!Number.isFinite(stabilityMs) || stabilityMs < 0) {
       throw new Error("ChatGPT Markdown stability window must be a non-negative finite number");
@@ -257,9 +270,21 @@ export class ChatGptMarkdownBuffer {
   }
 
   observe(segments: ChatGptMarkdownSegment[], now = Date.now()): string {
+    this.observed = segments.map(segment => ({ ...segment }));
     const reconciled = this.reconcile(segments);
     if (reconciled instanceof ChatGptMarkdownConsistencyError) {
       this.consistencyError = reconciled;
+      return "";
+    }
+    // A disappearing pending block is not proof that the model removed it. Keep the last
+    // covered projection until the same blocks return (possibly edited), or an equivalent
+    // complete projection proves coverage. Never commit stale pending text as a fallback.
+    if (!this.coversPending(reconciled)) {
+      this.consistencyError = new ChatGptMarkdownConsistencyError("ChatGPT final DOM is missing previously observed pending content", {
+        reason: "missing_pending_content", observedTextChars: segments.reduce((n, s) => n + s.text.length, 0),
+        committedTextChars: this.markdown.length, observedIndex: -1, committedIndex: -1,
+        observedSegments: segments.length, committedSegments: this.committed.length,
+      });
       return "";
     }
     this.consistencyError = undefined;
@@ -310,29 +335,122 @@ export class ChatGptMarkdownBuffer {
       committedCount += 1;
     }
     this.latest = this.latest.slice(committedCount);
+    if (this.delivery === "buffered") return "";
+    this.emittedChars += delta.length;
     return delta;
   }
 
   /** Read the complete current projection without committing unstable tail blocks. */
   preview(): string {
     if (this.consistencyError) throw this.consistencyError;
+    return this.projectPending();
+  }
+
+  private projectPending(pending = this.latest): string {
     const copy = new ChatGptMarkdownBuffer(this.transform, this.stabilityMs);
     copy.markdown = this.markdown;
     copy.lastGroup = this.lastGroup;
-    for (const segment of this.latest) copy.commit(segment);
+    for (const segment of pending) copy.commit(segment);
     return copy.markdown;
   }
 
+  private coversPending(pending: ChatGptMarkdownSegment[]): boolean {
+    if (!this.observed.length && (this.markdown || this.projectPending())) return false;
+    let after = -1;
+    for (const previous of this.latest) {
+      if (!chatGptHtmlToMarkdown(previous.html)) continue;
+      const index = pending.findIndex((next, i) => i > after && (
+        (!!chatGptHtmlToMarkdown(next.html) && next.tag === previous.tag
+          && (next.sourceStart !== undefined && previous.sourceStart !== undefined
+            ? next.sourceStart === previous.sourceStart
+            : next.key === previous.key || (next.text === previous.text && next.html === previous.html)))
+        || this.extendsPendingContent(previous, next)
+      ));
+      if (index < 0) {
+        // Equivalent pending wrappers can merge/split without stable node identities.
+        const known = this.projectPending();
+        return !!known && this.projectPending(pending).startsWith(known);
+      }
+      after = index;
+    }
+    return true;
+  }
+
+  private extendsPendingContent(previous: ChatGptMarkdownSegment, next: ChatGptMarkdownSegment): boolean {
+    if (previous.sourceStart !== undefined && next.sourceStart !== undefined && previous.sourceStart !== next.sourceStart) return false;
+    const known = chatGptHtmlToMarkdown(previous.html), observed = chatGptHtmlToMarkdown(next.html);
+    if (!known) return false;
+    const before = known.match(/^(`{3,})([^\n]*)\n([\s\S]*)\n\1$/);
+    if (before) {
+      // Generated closing fences are not a content prefix; code and language are.
+      const after = observed.match(/^(`{3,})([^\n]*)\n([\s\S]*)\n\1$/);
+      return !!after && !!before[3] && before[2] === after[2] && after[3]!.startsWith(before[3]!);
+    }
+    // Token spans can remount as formatted Markdown while the last block is still growing.
+    // Require its entire Markdown prefix, allowing only serializer escapes on literal Markdown
+    // punctuation to hydrate into syntax. Never drop characters or apply this to committed text.
+    if (observed.startsWith(known)) return true;
+    let hydrated = "", inlineFence = 0;
+    for (let i = 0; i < known.length; i += 1) {
+      const character = known[i]!;
+      if (character === "\\" && !inlineFence && /[`*_\[\]#>!+.-]/.test(known[i + 1] ?? "")) {
+        hydrated += known[++i];
+      } else if (character === "`") {
+        let length = 1;
+        while (known[i + length] === "`") length += 1;
+        if (!inlineFence) inlineFence = length;
+        else if (inlineFence === length) inlineFence = 0;
+        hydrated += "`".repeat(length);i += length - 1;
+      } else hydrated += character;
+    }
+    return hydrated !== known && observed.startsWith(hydrated);
+  }
+
+  needsCoverageRecovery(): boolean {
+    return this.consistencyError?.diagnostic?.reason === "missing_pending_content";
+  }
+
   finish(): { markdown: string; delta: string } {
-    if (this.consistencyError) throw this.consistencyError;
-    let delta = "";
+    if (this.consistencyError) {
+      // Only a private, un-emitted answer can be rebuilt. A complete same-answer snapshot must
+      // retain the *entire* known Markdown projection (including the uncommitted tail), byte for
+      // byte and in order. This is not substring/length matching: missing virtualized prefixes,
+      // changed URLs, reordered content and missing tails cannot satisfy this coverage check.
+      if (this.delivery !== "buffered" || this.emittedChars !== 0
+        || this.consistencyError.diagnostic?.reason !== "unanchored_snapshot") throw this.consistencyError;
+      const known = this.projectPending();
+      const candidate = new ChatGptMarkdownBuffer(this.transform, this.stabilityMs);
+      let previousStart: number | undefined;
+      for (const segment of this.observed) {
+        if (segment.sourceStart !== undefined) {
+          if (previousStart !== undefined && segment.sourceStart <= previousStart) throw this.consistencyError;
+          previousStart = segment.sourceStart;
+        }
+        candidate.commit(segment);
+      }
+      if (!known || !candidate.markdown.startsWith(known)) throw this.consistencyError;
+      this.markdown = candidate.markdown;
+      this.lastGroup = candidate.lastGroup;
+      this.committed.splice(0, this.committed.length, ...this.observed.map(segment => this.committedSegment(segment)));
+      this.latest = [];
+      this.consistencyError = undefined;
+      this.rebuilt = true;
+    }
     for (const segment of this.latest) {
-      delta += this.commit(segment);
+      this.commit(segment);
       this.committed.push(this.committedSegment(segment));
     }
     this.candidates.clear();
     this.latest = [];
+    const delta = this.markdown.slice(this.emittedChars);
+    this.emittedChars = this.markdown.length;
     return { markdown: this.markdown, delta };
+  }
+
+  /** Payload-free state for diagnostics; buffered output is emitted only once at finish. */
+  deliveryState() {
+    return { delivery: this.delivery, emittedChars: this.emittedChars, committedSegments: this.committed.length,
+      observedSegments: this.observed.length, rebuilt: this.rebuilt };
   }
 
   currentSnapshotIsConsistent(): boolean {
@@ -403,7 +521,11 @@ export class ChatGptMarkdownBuffer {
       // committed tail. Earlier committed blocks are still checked above for edits/reordering.
       if (!followsVisibleCommittedTail && !sawPending && !this.matchesLatestPending(segment)) {
         return new ChatGptMarkdownConsistencyError(
-          "ChatGPT final DOM could not be aligned with text already streamed to Codex",
+          "ChatGPT final DOM could not be aligned with the response buffer",
+          { reason: "unanchored_snapshot", observedTextChars: segment.text.length,
+            committedTextChars: this.markdown.length, observedTag: segment.tag,
+            observedIndex, committedIndex: highestCommittedIndex,
+            observedSegments: segments.length, committedSegments: this.committed.length },
         );
       }
       sawPending = true;
@@ -441,7 +563,7 @@ export class ChatGptMarkdownBuffer {
     if (remaining.length === 1) return remaining[0]!.index;
     if (remaining.length > 1) {
       if (afterIndex >= 0 && remaining[0]!.index === afterIndex + 1) return remaining[0]!.index;
-      return new ChatGptMarkdownConsistencyError("ChatGPT final DOM has ambiguous repeated text already streamed to Codex");
+      return new ChatGptMarkdownConsistencyError("ChatGPT final DOM has ambiguous repeated text in the response buffer");
     }
     // A known pending tail can survive removal of its committed prefix. Without
     // that evidence, an unseen earlier occurrence is a reorder, not new text.
@@ -490,7 +612,7 @@ export class ChatGptMarkdownBuffer {
     committedIndex: number,
   ): ChatGptMarkdownConsistencyError {
     return new ChatGptMarkdownConsistencyError(
-      "ChatGPT changed a completed text block that was already streamed to Codex",
+      "ChatGPT changed a completed text block in the response buffer",
       {
         reason,
         observedStart: observed.sourceStart,
