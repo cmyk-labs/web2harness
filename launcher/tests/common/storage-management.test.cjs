@@ -7,7 +7,7 @@ const { createStorageManager } = require("../../electron/storage-management.cjs"
 const { RequestQueue } = require("../../electron/runtime/request-queue.cjs");
 
 function fixture(t, whileIdle) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "w2h-storage-"));
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "w2h-storage-"));
   t.after(() => { assert.match(path.basename(root), /^w2h-storage-/); fs.rmSync(root, { recursive: true, force: true }); });
   const profile = path.join(root, "profile"), coreHome = path.join(root, "core");
   for (const file of ["Cache/data", "Code Cache/code", "Cookies", "Local Storage/data", "IndexedDB/data"]) {

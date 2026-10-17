@@ -41,9 +41,9 @@ test("relaunch waits for spawn and forwards asynchronous errors with their origi
 });
 
 test("worker logs asynchronous relaunch failure, attempts recovery and retains evidence", async t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "w2h-relaunch-fixture-"));
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "w2h-relaunch-fixture-"));
   t.after(() => {
-    assert.equal(path.dirname(root), os.tmpdir());
+    assert.equal(path.dirname(root), fs.realpathSync(os.tmpdir()));
     assert.match(path.basename(root), /^w2h-relaunch-fixture-/);
     fs.rmSync(root, { recursive: true, force: true });
   });

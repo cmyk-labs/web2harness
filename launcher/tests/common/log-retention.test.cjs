@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { appendBoundedLog, maintainLogDirectory, pruneLogDirectory, managedLogFiles, MAX_LOG_BYTES } = require("../../shared/log-retention.cjs");
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "w2h-log-retention-"));
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "w2h-log-retention-"));
   t.after(() => { assert.match(path.basename(root), /^w2h-log-retention-/); fs.rmSync(root, { recursive: true, force: true }); });
   return root;
 }

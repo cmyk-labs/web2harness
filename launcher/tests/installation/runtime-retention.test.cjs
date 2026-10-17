@@ -7,7 +7,7 @@ const { createHash } = require("node:crypto");
 const { collectRuntimeVersions } = require("../../electron/installation/runtime-retention.cjs");
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "w2h-retention-"));
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "w2h-retention-"));
   t.after(() => { assert.ok(path.basename(root).startsWith("w2h-retention-")); fs.rmSync(root, { recursive: true, force: true }); });
   const options = { coreHome: path.join(root, "core"), codexHome: path.join(root, "codex"), appData: path.join(root, "appData") };
   const roots = [];

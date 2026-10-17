@@ -173,7 +173,7 @@ test("preview and draft releases stay hidden until promoted, regardless of the v
 
 for (const arch of ["x64", "arm64"]) {
   test(`verified Linux ${arch} update is handed to one detached worker`, async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "launcher-update-test-"));
+    const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "launcher-update-test-"));
     const oldAppImage = path.join(root, "versions", "1.1.4", "Web2Harness.AppImage");
     const wrapper = path.join(root, "bin", "web2harness-desktop");
     fs.mkdirSync(path.dirname(oldAppImage), { recursive: true });
@@ -245,7 +245,7 @@ for (const arch of ["x64", "arm64"]) {
 test("detached worker replaces an installed Linux AppImage and removes the old version", {
   skip: process.platform === "win32" ? "Linux AppImage execution is not meaningful on Windows" : false,
 }, () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "launcher-worker-test-"));
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "launcher-worker-test-"));
   const jobRoot = path.join(root, "job");
   const versionsRoot = path.join(root, "versions");
   const oldTarget = path.join(versionsRoot, "1.1.4", "Web2Harness.AppImage");
@@ -303,9 +303,9 @@ function checkedState(state) {
 }
 
 test("download progress keeps checks from racing and async checksum failure never starts installation", async t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "w2h-update-progress-"));
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "w2h-update-progress-"));
   t.after(() => {
-    assert.equal(path.dirname(root), os.tmpdir());
+    assert.equal(path.dirname(root), fs.realpathSync(os.tmpdir()));
     assert.match(path.basename(root), /^w2h-update-progress-/);
     fs.rmSync(root, { recursive: true, force: true });
   });
