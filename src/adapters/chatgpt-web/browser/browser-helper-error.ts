@@ -1,5 +1,6 @@
 import { diagnosticError, diagnosticEvent } from "../../../diagnostics";
 import { adapterErrorEvent } from "../../../lib/errors";
+import { validMcpRemoteFailure, type McpRemoteFailure } from "../../../../launcher/shared/mcp-remote-error.cjs";
 
 export interface BrowserHelperError {
   type: "error";
@@ -11,11 +12,13 @@ export interface BrowserHelperError {
   code?: string;
   retryable?: boolean;
   diagnosticRef?: string;
+  mcpRemote?: McpRemoteFailure;
 }
 
 /** Root causes stay in helper diagnostics; only an opaque reference crosses IPC. */
 export function browserHelperError(id: string, error: unknown, traceId?: string): BrowserHelperError {
   const event = adapterErrorEvent(error);
+  const remote = error && typeof error === "object" && "mcpRemote" in error ? error.mcpRemote : undefined;
   const evidence = diagnosticError(error);
   diagnosticEvent(event.status === 499 ? "info" : "error", "browser.helper_failed", {
     requestId: id, traceId, ...evidence,
@@ -27,5 +30,6 @@ export function browserHelperError(id: string, error: unknown, traceId?: string)
     name: error instanceof Error && /^[A-Za-z0-9_.-]{1,128}$/.test(error.name) ? error.name : "Error",
     ...(structured ? { status: event.status, errorType: event.errorType, code: event.code, retryable: event.retryable } : {}),
     diagnosticRef: evidence.errorRef,
+    ...(validMcpRemoteFailure(remote) ? { mcpRemote: remote } : {}),
   };
 }

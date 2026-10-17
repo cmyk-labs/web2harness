@@ -3,7 +3,8 @@ import { StringDecoder } from "node:string_decoder";
 import { withChatGptBrowserObservationTimeout } from "./turn-observation";
 import { ChatGptMcpCallObservation } from "./mcp-call-observation";
 
-/** Bounded SSE projection: never retains message bodies, tool arguments, or hidden reasoning. */
+/** Bounded SSE facts. Only a transient connector-result buffer is inspected for fixed errors;
+ * no bodies, tool arguments or hidden reasoning are returned in telemetry. */
 export class ChatGptStreamProjection {
   private readonly decoder = new StringDecoder("utf8");
   private buffer = "";
@@ -13,6 +14,7 @@ export class ChatGptStreamProjection {
   private contentType?: string;
   private deltaPath = "";
   private currentMessage?: { id: unknown; author: unknown; recipient: unknown };
+  private toolResult?: { metadata: { parent_id?: string }; content: { content_type: "text"; parts: string[] } };
   constructor(private readonly mcp?: ChatGptMcpCallObservation) {}
   readonly facts = { frames: 0, done: false, errorEvents: 0, assistantMessageSeen: false,
     unclassifiedMessageSeen: false,
@@ -41,8 +43,16 @@ export class ChatGptStreamProjection {
     const v = value as Record<string, any>;
     if (v.error || v.type === "error") this.facts.errorEvents += 1;
     if (v.author && v.content) {
-      this.currentMessage = { id: v.id, author: { role: v.author.role }, recipient: v.recipient };
-      this.mcp?.observe({ ...this.currentMessage, metadata: v.metadata });
+      this.currentMessage = { id: v.id, author: { role: v.author.role, name: v.author.name }, recipient: v.recipient };
+      this.deltaPath = "";
+      this.toolResult = v.author.role === "tool" && v.author.name === "api_tool.call_tool"
+        && v.content.content_type === "text" && Array.isArray(v.content.parts) && v.content.parts.length <= 16
+        && v.content.parts.every((part: unknown) => typeof part === "string")
+        && v.content.parts.join("").length <= 16_384
+        ? { metadata: { parent_id: typeof v.metadata?.parent_id === "string" ? v.metadata.parent_id : undefined },
+          content: { content_type: "text", parts: [...v.content.parts] } } : undefined;
+      this.mcp?.observe({ ...this.currentMessage, metadata: v.metadata,
+        ...(v.author.role === "tool" ? { content: v.content } : {}) });
       this.role = ["assistant", "tool", "user"].includes(v.author.role) ? v.author.role : undefined;
       this.channel = ["final", "commentary", "analysis"].includes(v.channel) ? v.channel : undefined;
       this.contentType = ["text", "code"].includes(v.content.content_type) ? v.content.content_type : undefined;
@@ -60,10 +70,21 @@ export class ChatGptStreamProjection {
     if (typeof v.p === "string") this.deltaPath = v.p;
     if (this.currentMessage) {
       if (this.deltaPath === "/message/metadata" && v.v && typeof v.v === "object" && !Array.isArray(v.v)) {
+        if (this.toolResult) this.toolResult.metadata = { parent_id: typeof v.v.parent_id === "string" ? v.v.parent_id : undefined };
         this.mcp?.observe({ ...this.currentMessage, metadata: v.v });
       } else if (this.deltaPath === "/message/metadata/connector_tool_payload" && v.o !== "append") {
         this.mcp?.observe({ ...this.currentMessage, metadata: { connector_tool_payload: v.v } });
       }
+      if (this.toolResult && typeof v.v === "string") {
+        const part = /^\/message\/content\/parts\/(\d+)$/.exec(this.deltaPath);
+        if (this.deltaPath === "/message/metadata/parent_id") this.toolResult.metadata.parent_id = v.v;
+        if (part) {
+          const index = Number(part[1]);
+          if (index >= 16 || v.v.length + this.toolResult.content.parts.join("").length > 16_384) this.toolResult = undefined;
+          else this.toolResult.content.parts[index] = v.o === "append" ? (this.toolResult.content.parts[index] ?? "") + v.v : v.v;
+        }
+      }
+      if (this.toolResult) this.mcp?.observe({ ...this.currentMessage, ...this.toolResult });
     }
     if (typeof v.v === "string") {
       if (this.deltaPath === "/message/channel") this.channel = ["final", "commentary", "analysis"].includes(v.v) ? v.v : undefined;

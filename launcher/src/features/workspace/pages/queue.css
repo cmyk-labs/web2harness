@@ -54,5 +54,8 @@
 .context-budget-table tbody p { font-weight: 400; }
 .context-window-number { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .context-window-number span { white-space: nowrap; color: var(--color-text-secondary); font-size: var(--text-sm); }
-.context-budget-input input { width: 160px; }
+.context-window-number output { font-size: var(--text-base); font-variant-numeric: tabular-nums; }
 .context-budget-notes { padding: 12px 0 20px; }
+
+.queue-mcp-status, .queue-mcp-status > div { display: grid; gap: 6px; overflow-wrap: anywhere; }
+.queue-mcp-status > div { margin-top: 8px; }

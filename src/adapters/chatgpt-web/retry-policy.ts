@@ -8,21 +8,25 @@ interface RetryBudgetEntry {
   retries: number;
   maxRetries: number;
   updatedAt: number;
+  terminal?: boolean;
   lastError: {
     message: string;
     status: number;
     errorType: string;
     code: string;
+    mcpRemote?: ChatGptWebAdapterError["mcpRemote"];
   };
 }
 
 function exhaustedError(entry: RetryBudgetEntry): ChatGptWebAdapterError {
   return new ChatGptWebAdapterError(
-    `${entry.lastError.message} ${entry.maxRetries === 0 ? "Automatic retries are disabled." : "The configured Web retry limit was reached."}`,
+    entry.terminal ? entry.lastError.message
+      : `${entry.lastError.message} ${entry.maxRetries === 0 ? "Automatic retries are disabled." : "The configured Web retry limit was reached."}`,
     {
       status: entry.lastError.status,
       errorType: entry.lastError.errorType,
       code: entry.lastError.code,
+      mcpRemote: entry.lastError.mcpRemote,
       retryable: false,
     },
   );
@@ -43,13 +47,14 @@ export class ChatGptWebTurnRetryPolicy {
     const previous = this.entries.get(key);
     const entry: RetryBudgetEntry = {
       retries: (previous?.retries ?? 0) + 1,
-      maxRetries: previous?.maxRetries ?? maxRetries,
+      maxRetries: error.mcpRemote ? Math.min(previous?.maxRetries ?? maxRetries, 2) : previous?.maxRetries ?? maxRetries,
       updatedAt: now,
       lastError: {
         message: error.message,
         status: error.status,
         errorType: error.errorType,
         code: error.code,
+        mcpRemote: error.mcpRemote,
       },
     };
     this.entries.set(key, entry);
@@ -59,7 +64,17 @@ export class ChatGptWebTurnRetryPolicy {
   exhaustedError(key: string, now = Date.now()): ChatGptWebAdapterError | undefined {
     this.prune(now);
     const entry = this.entries.get(key);
-    return entry && entry.retries > entry.maxRetries ? exhaustedError(entry) : undefined;
+    return entry && (entry.terminal || entry.retries > entry.maxRetries) ? exhaustedError(entry) : undefined;
+  }
+
+  /** A permanent remote failure remains terminal for this native turn, even when the client
+   * adds partially delivered prose to its reconnect body and changes the browser-round hash. */
+  recordTerminalFailure(key: string, error: ChatGptWebAdapterError, now = Date.now()): void {
+    this.prune(now);
+    const previous = this.entries.get(key);
+    this.entries.set(key, { retries: previous?.retries ?? 0, maxRetries: previous?.maxRetries ?? 0,
+      updatedAt: now, terminal: true, lastError: { message: error.message, status: error.status,
+        errorType: error.errorType, code: error.code, mcpRemote: error.mcpRemote } });
   }
 
   /** Advances only after an explicitly retryable failure, never on a transport reconnect. */

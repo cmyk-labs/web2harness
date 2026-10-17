@@ -45,6 +45,37 @@ const labels: Record<string, [string, string]> = {
 };
 const sessionLabel = (id: string) => /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id) ? `${id.slice(0, 8)}…${id.slice(-8)}` : id;
 const duration = (value: number | null) => value === null ? "-" : `${Math.floor(value / 60000)}:${String(Math.floor(value / 1000) % 60).padStart(2, "0")}`;
+const remoteLabels: Record<string, [string, string]> = {
+  rate_limit: ["远端限流", "Remote rate limit"], authentication: ["远端认证失败", "Remote authentication failed"],
+  permission: ["远端权限不足", "Remote permission denied"], quota: ["远端额度耗尽", "Remote allowance exhausted"],
+  unavailable: ["远端服务不可用", "Remote service unavailable"], other: ["远端连接错误", "Remote connection error"],
+};
+export function McpHistory({ api, t }: { api: LauncherApi; t: Translate }) {
+  const { status, error } = useQueueStatus(api);
+  const entries = status?.scheduler?.mcpStatus ?? [];
+  return <details className="panel queue-mcp-status"><summary>{t("MCP 调用历史", "MCP call history")}</summary>
+    {error && <span role="alert">{t("无法读取历史记录", "Unable to read history")}</span>}
+    {!entries.length && <span>{t("MCP 远端尚无调用验证记录", "No MCP remote call verification recorded")}</span>}
+    {entries.map(entry => <div key={entry.scope}>
+      <strong>{entry.connectorName}</strong>
+      <span>{t("最近远端接收验证", "Last verified remote receipt")}: {entry.lastVerifiedAt ? new Date(entry.lastVerifiedAt).toLocaleString() : t("尚未验证", "Not verified")}</span>
+      {entry.lastFailure && <span>{(entry.lastVerifiedAt ?? 0) > (entry.lastFailureAt ?? 0) ? t("历史失败（之后已验证接收）", "Past failure (receipt verified since)") : t("最近失败", "Last failure")}: {t(...remoteLabels[entry.lastFailure.kind])} · HTTP {entry.lastFailure.status} · {new Date(entry.lastFailureAt!).toLocaleString()}</span>}
+      {(entry.cooldownUntil ?? 0) > Date.now() && <span>{t("该隧道冷却中，剩余", "Tunnel cooling down, remaining")} {Math.ceil((entry.cooldownUntil! - Date.now()) / 1000)}s</span>}
+    </div>)}
+    <span className="muted">{t("接收验证仅证明远端已收到调用，不代表工具执行完成。", "A verified receipt confirms delivery, not completed tool execution.")}</span>
+  </details>;
+}
+function McpStatus({ status, t, onDetails }: { status: RequestQueueStatus | null; t: Translate; onDetails: () => void }) {
+  const entry = status?.currentMcpScope && status.scheduler?.mcpStatus?.find(item => item.scope === status.currentMcpScope);
+  if (!entry) return null;
+  const cooling = (entry.cooldownUntil ?? 0) > Date.now();
+  const failed = entry.lastFailure && (entry.lastFailureAt ?? 0) > (entry.lastVerifiedAt ?? 0);
+  if (!cooling && !failed) return null;
+  return <div className="queue-feedback queue-mcp-status" role="status">
+    <span>{entry.connectorName} · {cooling ? `${t("冷却等待", "Cooldown")} ${Math.ceil((entry.cooldownUntil! - Date.now()) / 1000)}s` : t(...remoteLabels[entry.lastFailure!.kind])}</span>
+    <Button onClick={onDetails}>{t("查看诊断", "View diagnostics")}</Button>
+  </div>;
+}
 
 export function RequestQueue({ api, snapshot, navigate }: WorkspaceProps) {
   const t = translate(snapshot.state.language ?? "en");
@@ -103,6 +134,7 @@ export function RequestQueue({ api, snapshot, navigate }: WorkspaceProps) {
         <Button disabled={!available || working || !status?.scheduler?.waiting} onClick={() => setConfirmWaiting(true)}>{t("取消全部等待", "Cancel waiting")}</Button>
         <Button onClick={() => navigate("runtime-parameters")}>{t("运行参数", "Runtime parameters")}</Button>
       </div></div>
+      <McpStatus status={status} t={t} onDetails={() => navigate("diagnostics")} />
       {needsRecovery && <div className="queue-feedback" role="alert">{t("异常暂停", "Dispatch suspended")}: {status?.scheduler?.pausedReason} · <Button disabled={!licensed || working || !!status?.scheduler?.active} onClick={() => setConfirmRecovery(true)}>{t("确认恢复", "Confirm recovery")}</Button></div>}
       {confirmRecovery && <div className="queue-feedback queue-actions"><span>{t("请确认账号限流已解除、网页已停止。恢复只派发等待任务，不重发旧请求。", "Confirm the account is available and browser work has stopped. Recovery dispatches waiting tasks; old requests are never resent.")}</span><Button onClick={() => void control("recover")}>{t("恢复派发", "Resume dispatch")}</Button><Button onClick={() => setConfirmRecovery(false)}>{t("返回", "Back")}</Button></div>}
       <form className="queue-filters" onSubmit={event => { event.preventDefault(); changeQuery({ search }); }}>
@@ -113,7 +145,7 @@ export function RequestQueue({ api, snapshot, navigate }: WorkspaceProps) {
       </form>
       <div className="queue-feedback" role="status">{confirmWaiting ? <div className="queue-actions"><span>{t("取消全部排队任务？正在执行的任务不受影响。", "Cancel all waiting tasks? Running tasks will continue.")}</span><Button onClick={() => void control("cancel-waiting")}>{t("确认取消", "Confirm")}</Button><Button onClick={() => setConfirmWaiting(false)}>{t("返回", "Back")}</Button></div> : error || loadError || notice}</div>
       <div className="queue-table-scroll"><table className="queue-table"><thead><tr>{[t("状态", "State"), t("会话／任务", "Session / task"), t("模型", "Model"), t("等待时长", "Wait"), t("执行时长", "Run"), t("操作", "Action")].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>
-        {available && !loadError && page?.items.map(item => <tr key={item.id}><td>{t(...labels[item.state])}</td><td title={item.groupId}>{sessionLabel(item.groupId)}<small className="muted" title={item.id}>{item.id.slice(0, 12)}{item.reason ? ` · ${item.reason}` : ""}</small></td><td>{item.model}<small className="muted">{item.effort || "-"}</small></td><td>{duration(item.waitMs)}</td><td>{duration(item.runMs)}</td><td><Button onClick={() => { openRequestLogs(item.id); navigate("diagnostics"); }}>{t("日志", "Logs")}</Button>{["queued", "preparing", "running", "waiting-user", "waiting-tools"].includes(item.state) ? <Button disabled={working} onClick={() => void control("cancel", item.id)}>{item.state === "queued" ? t("取消", "Cancel") : t("停止", "Stop")}</Button> : "-"}</td></tr>)}
+        {available && !loadError && page?.items.map(item => <tr key={item.id}><td>{t(...labels[item.state])}{item.retryAttempt !== undefined && <small className="muted">{t("恢复尝试", "Recovery attempt")} {item.retryAttempt}</small>}{(item.cooldownUntil ?? 0) > Date.now() && <small>{t("冷却等待", "Cooldown")} {Math.ceil((item.cooldownUntil! - Date.now()) / 1000)}s</small>}</td><td title={item.groupId}>{sessionLabel(item.groupId)}<small className="muted" title={item.id}>{item.id.slice(0, 12)}{item.reason ? ` · ${item.reason}` : ""}</small></td><td>{item.model}<small className="muted">{item.effort || "-"}</small></td><td>{duration(item.waitMs)}</td><td>{duration(item.runMs)}</td><td><Button onClick={() => { openRequestLogs(item.id); navigate("diagnostics"); }}>{t("日志", "Logs")}</Button>{["queued", "preparing", "running", "waiting-user", "waiting-tools"].includes(item.state) ? <Button disabled={working} onClick={() => void control("cancel", item.id)}>{item.state === "queued" ? t("取消", "Cancel") : t("停止", "Stop")}</Button> : "-"}</td></tr>)}
         {(!available || !page || loadError || page.items.length === 0) && <tr><td colSpan={6}>{error || loadError ? t("无法读取任务，请刷新重试。", "Unable to read tasks. Refresh to retry.") : !available ? summary(status, error, t) : !page ? t("正在读取…", "Loading…") : query.search || query.groupId ? t("没有符合筛选条件的任务", "No tasks match these filters") : t("暂无任务", "No tasks")}</td></tr>}
       </tbody></table></div>
       <div className="queue-pagination"><label>{t("每页", "Per page")} <select aria-label={t("每页", "Per page")} value={query.limit} onChange={event => changeQuery({ limit: Number(event.target.value) as 25 | 50 | 100 })}>{[25, 50, 100].map(value => <option key={value}>{value}</option>)}</select></label><span>{page ? `${page.offset + (page.items.length ? 1 : 0)}–${page.offset + page.items.length} / ${page.total}` : "-"}</span><Button disabled={!page || page.offset === 0} onClick={() => changeQuery({ offset: Math.max(0, (query.offset ?? 0) - (query.limit ?? 50)) }, false)}>{t("上一页", "Previous")}</Button><Button disabled={!page || page.offset + page.limit >= page.total} onClick={() => changeQuery({ offset: (query.offset ?? 0) + (query.limit ?? 50) }, false)}>{t("下一页", "Next")}</Button></div>

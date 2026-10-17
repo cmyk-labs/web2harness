@@ -5,6 +5,7 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { writePrivateFileAtomic } = require("../common/atomic-file.cjs");
 const { redactText } = require("../logging.cjs");
+const { probeTunnelTransport } = require("../../shared/tunnel-transport-health.cjs");
 const {
   DETACH_OWNED_CHILD,
   processRunning,
@@ -27,7 +28,6 @@ const TUNNEL_START_TIMEOUT_MS = 120_000;
 const TUNNEL_HEALTH_POLL_INTERVAL_MS = 1_000;
 const TUNNEL_MONITOR_INTERVAL_MS = 10_000;
 const TUNNEL_MONITOR_FAILURE_THRESHOLD = 3;
-const TUNNEL_MCP_FAILURE_RECENCY_MS = 2 * 60_000;
 const BOOT_TIME_CLOCK_TOLERANCE_MS = 5_000;
 const CURRENT_BOOT_STARTED_AT_MS = Date.now() - (os.uptime() * 1_000);
 
@@ -760,60 +760,7 @@ class RuntimeSupervisor {
   }
 
   async probeTunnelMcpTransport(timeoutMs = 2_000) {
-    if (!this.tunnelHealthBaseUrl) {
-      return { observed: false, ok: false, fatal: false, detail: "local tunnel MCP diagnostics URL is not known" };
-    }
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(`${this.tunnelHealthBaseUrl}/api/logs?limit=100`, {
-        method: "GET",
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        return {
-          observed: false,
-          ok: false,
-          fatal: false,
-          detail: `MCP transport diagnostics returned HTTP ${response.status}`,
-        };
-      }
-      const body = await response.json();
-      if (!body || typeof body !== "object" || !Array.isArray(body.events)) {
-        throw new Error("response has no events array");
-      }
-      const cutoff = Date.now() - TUNNEL_MCP_FAILURE_RECENCY_MS;
-      const failure = body.events.findLast(event => {
-        if (!event || typeof event !== "object") return false;
-        const attrs = event.attrs && typeof event.attrs === "object" ? event.attrs : {};
-        const occurredAt = Date.parse(event.time);
-        return Number.isFinite(occurredAt)
-          && occurredAt >= cutoff
-          && event.message === "dispatcher received MCP upstream error; posted error response to control plane"
-          && attrs.failure_source === "client_internal"
-          && attrs.status_code === 502
-          && attrs.upstream_response_received === false
-          && ["initialize", "tools/call"].includes(attrs.rpc_method);
-      });
-      if (!failure) {
-        return { observed: true, ok: true, fatal: false, detail: "MCP transport has no recent internal failures" };
-      }
-      return {
-        observed: true,
-        ok: false,
-        fatal: true,
-        detail: `MCP transport returned internal HTTP 502 for ${failure.attrs.rpc_method} at ${failure.time}`,
-      };
-    } catch (error) {
-      return {
-        observed: false,
-        ok: false,
-        fatal: false,
-        detail: `MCP transport diagnostics could not be observed: ${errorMessage(error)}`,
-      };
-    } finally {
-      clearTimeout(timeout);
-    }
+    return probeTunnelTransport(this.tunnelHealthBaseUrl, timeoutMs);
   }
 
   async discoverTunnelHealthBaseUrl(config) {
@@ -851,7 +798,7 @@ class RuntimeSupervisor {
     return baseUrl;
   }
 
-  async waitForTunnelMcpTransport(config, timeoutMs = 10_000) {
+  async waitForTunnelMcpTransport(config, timeoutMs = TUNNEL_START_TIMEOUT_MS) {
     if (!this.tunnelHealthBaseUrl) await this.discoverTunnelHealthBaseUrl(config);
     const deadline = Date.now() + timeoutMs;
     let health;
@@ -859,7 +806,8 @@ class RuntimeSupervisor {
       health = await this.probeTunnelMcpTransport();
       if (health.observed && health.ok) return health;
       if (health.fatal) {
-        throw new Error(`Tunnel MCP transport is unhealthy: ${health.detail}`);
+        throw Object.assign(new Error(`Tunnel MCP transport is unhealthy: ${health.detail}`),
+          { retryable: health.retryable });
       }
       if (Date.now() >= deadline) break;
       await sleep(TUNNEL_HEALTH_POLL_INTERVAL_MS);
@@ -903,6 +851,7 @@ class RuntimeSupervisor {
         absent: false,
         statusKnown: false,
         fatal: mcp.fatal === true,
+        retryable: mcp.retryable,
         detail: `${healthz.detail}; ${readyz.detail}; ${mcp.detail}`,
       };
     }
@@ -916,6 +865,7 @@ class RuntimeSupervisor {
       absent: false,
       statusKnown: true,
       fatal: mcp.fatal === true,
+      retryable: mcp.retryable,
       detail: `${healthz.detail}; ${readyz.detail}; ${mcp.detail}`,
     };
   }
@@ -1064,7 +1014,9 @@ class RuntimeSupervisor {
         cleanupError = caught;
       }
       if (cleanupError) {
-        throw new Error(appendFailure(errorMessage(error), "tunnel startup cleanup failed", cleanupError));
+        throw Object.assign(new AggregateError([error, cleanupError],
+          appendFailure(errorMessage(error), "tunnel startup cleanup failed", cleanupError), { cause: error }),
+        { retryable: error?.retryable });
       }
       throw error;
     }
@@ -1093,7 +1045,7 @@ class RuntimeSupervisor {
     this.tunnelMonitorFailures = 0;
     this.tunnelMonitorObservationUnavailable = false;
     const generation = this.tunnelMonitorGeneration;
-    const recordFailure = (message, immediate = false) => {
+    const recordFailure = (message, immediate = false, retryable = true) => {
       if (this.stopping || generation !== this.tunnelMonitorGeneration) return;
       if (immediate) this.tunnelMonitorFailures = TUNNEL_MONITOR_FAILURE_THRESHOLD - 1;
       this.tunnelMonitorFailures += 1;
@@ -1103,8 +1055,15 @@ class RuntimeSupervisor {
       });
       if (this.tunnelMonitorFailures < TUNNEL_MONITOR_FAILURE_THRESHOLD) return;
       this.lastChildFailure.tunnel = message;
-      this.tunnel = null;
       this.stopTunnelMonitor();
+      if (!retryable) {
+        // Retain process ownership for an explicit reconnect/stop. A fresh process
+        // cannot repair a revoked key or missing permission.
+        this.tryWriteState("failed", message);
+        this.publishOperation?.({ name: "runtime-recovery", status: "failed", message });
+        return;
+      }
+      this.tunnel = null;
       if (!this.tryWriteState("degraded", message)) return;
       this.publishOperation?.({ name: "runtime-recovery", status: "running", message });
       this.scheduleRecovery("tunnel");
@@ -1145,7 +1104,7 @@ class RuntimeSupervisor {
           }
           return;
         }
-        recordFailure(`Tunnel runtime lost readiness: ${health.detail}`, health.fatal === true);
+        recordFailure(`Tunnel runtime lost readiness: ${health.detail}`, health.fatal === true, health.retryable !== false);
       }).catch((error) => {
         recordFailure(`Tunnel health probe failed: ${errorMessage(error)}`);
       }).finally(() => {
@@ -1345,7 +1304,7 @@ class RuntimeSupervisor {
       const recovery = this.recover(name).catch((error) => {
         const message = errorMessage(error);
         this.logger.error(`runtime.${name}_recovery_failed`, { message });
-        if (this.tryWriteState("failed", message)) this.scheduleRecovery(name);
+        if (this.tryWriteState("failed", message) && error?.retryable !== false) this.scheduleRecovery(name);
       });
       this.recoveryTasks.add(recovery);
       void recovery.finally(() => this.recoveryTasks.delete(recovery));
@@ -1368,6 +1327,12 @@ class RuntimeSupervisor {
     await this.waitForProxy(config);
     if (config.mode === "mcp-bridge") {
       await this.waitForTunnel(config, TUNNEL_START_TIMEOUT_MS, "runtime-recovery");
+      // Daemon recovery must not overwrite a retained tunnel authentication failure
+      // with the local startup gate's ready flag. Verify transport before resuming.
+      if (name !== "tunnel") {
+        await this.waitForTunnelMcpTransport(config);
+        this.startTunnelMonitor(config);
+      }
     }
     if (!this.tryWriteState("ready")) {
       let cleanupError;

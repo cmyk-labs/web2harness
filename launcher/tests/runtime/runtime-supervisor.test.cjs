@@ -27,10 +27,78 @@ async function freePort() {
   });
 }
 
+function recoveryFixture() {
+  return new RuntimeSupervisor({ app: { getVersion: () => "fixture", isPackaged: false },
+    logger: { info() {}, warn() {}, error() {} }, sourceRoot: __dirname, coreHome: __dirname,
+    browserDescriptorPath: path.join(__dirname, "unused-fixture-descriptor.json") });
+}
+
+for (const status of [401, 403]) test(`daemon recovery cannot bypass a retained tunnel HTTP ${status} failure`, async () => {
+  const supervisor = recoveryFixture(), config = { mode: "mcp-bridge" };
+  supervisor.readConfig = () => config;
+  supervisor.tunnel = { pid: null, managed: true };
+  supervisor.tunnelHealthBaseUrl = "http://127.0.0.1:1";
+  supervisor.lastChildFailure.tunnel = `Fixture HTTP ${status}`;
+  supervisor.startDaemon = async () => { supervisor.daemon = { pid: 424242 }; };
+  supervisor.waitForProxy = async () => {};
+  supervisor.readTunnelHealth = async () => ({ ready: true, pid: null });
+  let checks = 0, monitorStarts = 0;
+  supervisor.probeTunnelMcpTransport = async () => { checks++; return { observed: true, ok: false, fatal: true, retryable: false, detail: `HTTP ${status}` }; };
+  const states = [], operations = [];
+  supervisor.tryWriteState = state => { states.push(state); return true; };
+  supervisor.publishOperation = operation => operations.push(operation.status);
+  supervisor.startTunnelMonitor = () => { monitorStarts++; };
+  await assert.rejects(supervisor.recover("daemon"), error => error.retryable === false && error.message.includes(String(status)));
+  assert.equal(checks, 1);
+  assert.equal(monitorStarts, 0);
+  assert.deepEqual(states, []);
+  assert.equal(operations.includes("completed"), false);
+  supervisor.probeTunnelMcpTransport = async () => ({ observed: true, ok: true });
+  await supervisor.recover("daemon");
+  assert.equal(monitorStarts, 1);
+  assert.deepEqual(states, ["ready"]);
+  assert.equal(operations.at(-1), "completed");
+});
+
+test("tunnel cleanup failure retains nonretryable authentication and stops scheduled recovery", async t => {
+  const supervisor = recoveryFixture(), config = { mode: "mcp-bridge" };
+  const cause = Object.assign(new Error("Fixture polling HTTP 401"), { retryable: false });
+  supervisor.assertTunnelClientReady = () => {};
+  supervisor.waitForKnownTunnelStatus = async () => ({ ready: true, pid: null });
+  supervisor.waitForTunnelMcpTransport = async () => { throw cause; };
+  supervisor.runTunnelStopCommand = async () => ({ code: 1, output: "Fixture stop failed" });
+  let wrapped;
+  await assert.rejects(supervisor.startTunnel(config), error => {
+    wrapped = error;
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.cause, cause);
+    assert.equal(error.errors[0], cause);
+    assert.match(error.errors[1].message, /Fixture stop failed/);
+    return error.retryable === false;
+  });
+  const states = [];
+  let attempts = 0;
+  supervisor.recover = async () => { attempts++; throw wrapped; };
+  supervisor.tryWriteState = state => { states.push(state); return true; };
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    supervisor.scheduleRecovery("tunnel");
+    t.mock.timers.tick(1000);
+    await Promise.all([...supervisor.recoveryTasks]);
+    t.mock.timers.tick(10000);
+    assert.equal(attempts, 1);
+    assert.deepEqual(states, ["failed"]);
+    assert.equal(supervisor.restartTimers.tunnel, null);
+  } finally { t.mock.timers.reset(); }
+});
+
 async function localHealthServer(statusForPath = () => 200, bodyForPath = () => "ok") {
   const server = http.createServer((request, response) => {
     response.writeHead(statusForPath(request.url || "/"));
-    response.end(bodyForPath(request.url || "/"));
+    const body = bodyForPath(request.url || "/");
+    response.end(request.url === "/metrics" && body === "ok"
+      ? `commands_poll_last_successful_timestamp_seconds ${Math.floor(Date.now() / 1000)}\n`
+      : body);
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -673,6 +741,45 @@ test("ready inventory cannot replace missing MCP evidence, and local evidence re
     assert.equal(absent.statusKnown, true);
     assert.equal(absent.state, "stopped");
   } finally {
+    await health.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("invalid tunnel authentication overrides green probes and disables monitor recovery without losing ownership", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web2harness-tunnel-auth-"));
+  const health = await localHealthServer(() => 200, route => route.startsWith("/api/logs")
+    ? JSON.stringify({ events: [{ time: new Date().toISOString(), message: "poll failed; backing off",
+      attrs: { status_code: 401, error_code: "token_invalidated", error_message: "sk-mustnotappearintheoutput" } }] })
+    : route === "/metrics" ? "commands_poll_last_successful_timestamp_seconds 0\n" : "ok");
+  const supervisor = new RuntimeSupervisor({ app: { getVersion: () => "0.2.0", isPackaged: false },
+    logger: { info() {}, warn() {}, error() {} }, sourceRoot: root, coreHome: root,
+    browserDescriptorPath: path.join(root, "launcher.json") });
+  supervisor.tunnelHealthBaseUrl = health.baseUrl;
+  const owned = supervisor.tunnel = { pid: process.pid, managed: true };
+  try {
+    const observation = await supervisor.readLocalTunnelHealth();
+    assert.equal(observation.ready, false);
+    assert.equal(observation.retryable, false);
+    assert.equal(observation.fatal, true);
+    assert.match(observation.detail, /401.*token_invalidated/);
+    assert.doesNotMatch(observation.detail, /sk-mustnot/);
+    await assert.rejects(supervisor.waitForTunnelMcpTransport({}), error => error.retryable === false);
+    supervisor.observeTunnelForMonitor = async () => observation;
+    const states = [], recoveries = [];
+    supervisor.tryWriteState = state => { states.push(state); return true; };
+    supervisor.scheduleRecovery = name => recoveries.push(name);
+    t.mock.timers.enable({ apis: ["setInterval"] });
+    supervisor.startTunnelMonitor({});
+    t.mock.timers.tick(10_000);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(states, ["failed"]);
+    assert.deepEqual(recoveries, []);
+    assert.equal(supervisor.tunnel, owned);
+    assert.equal(supervisor.tunnelMonitorTimer, null);
+  } finally {
+    supervisor.stopTunnelMonitor();
+    t.mock.timers.reset();
     await health.close();
     fs.rmSync(root, { recursive: true, force: true });
   }

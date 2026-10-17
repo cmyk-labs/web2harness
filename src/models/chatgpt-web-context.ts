@@ -70,7 +70,7 @@ export function resolveChatGptWebContextLimits(
     throw new Error(`ChatGPT Plus context limit is not defined for unavailable effort: ${effort}`);
   }
   const group = backendModel === CHATGPT_WEB_BACKEND_MODEL && effort === "low" ? "fast" : "standard";
-  const window = capabilities.contextWindows?.[group] ?? budgetOptions.defaults[group];
+  const window = budgetOptions.defaults[group];
   const { contextWindow, effectiveContextWindowPercent, autoCompactTokenLimit } = contextBudgetValues(window, backendModel === CHATGPT_WEB_BACKEND_MODEL
     && capabilities.experimentalContextFiles === true && capabilities.experimentalContextTripleBudget === true);
   return { contextWindow, effectiveContextWindowPercent, autoCompactTokenLimit };

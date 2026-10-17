@@ -4,7 +4,7 @@ import { tunnelStatus, type TunnelRuntimeStatus } from "../runtime/tunnel";
 import { DEV_CONFIG_PURPOSE } from "./constants";
 
 interface DevTransportDependencies {
-  status?: (config: AppConfig) => TunnelRuntimeStatus;
+  status?: (config: AppConfig) => TunnelRuntimeStatus | Promise<TunnelRuntimeStatus>;
 }
 
 export interface DevChatTransport {
@@ -33,7 +33,7 @@ export async function startDevChatTransport(
 ): Promise<DevChatTransport> {
   assertDevTransportConfig(config);
   const inspect = dependencies.status ?? tunnelStatus;
-  const runtime = inspect(config);
+  const runtime = await inspect(config);
   if (!runtime.ok || !runtime.ready) {
     throw new Error(
       `The launcher-owned DEV MCP tunnel is not ready: ${runtime.detail}. Open the DEV launcher and complete MCP setup first`,

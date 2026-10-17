@@ -68,7 +68,7 @@ describe("fixed ChatGPT Web model routes", () => {
       .toThrow("Pro is not available for this account");
   });
 
-  test("keeps Fast separate across transport modes and equal configured windows", () => {
+  test("keeps Fast separate across transport modes and ignores legacy custom windows", () => {
     for (const capabilities of [plus, pro]) {
       for (const experimentalContextFiles of [false, true]) {
         for (const experimentalContextTripleBudget of [false, true]) {

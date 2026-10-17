@@ -3,6 +3,7 @@
 // Resource-owner scheduler. No Electron, browser, model or approval policy lives here.
 // The host must acknowledge physical settlement before returning an execution lease.
 const { randomUUID } = require("node:crypto");
+const { validMcpRemoteFailure, mcpRemoteErrorInfo } = require("./mcp-remote-error.cjs");
 
 const DEFAULT_REQUEST_SCHEDULING = Object.freeze({
   maxConcurrent: 4,
@@ -46,6 +47,8 @@ class RequestScheduler {
       if (!Number.isSafeInteger(value) || value < 1) throw new Error("Invalid scheduler resource budget");
     }
     this.jobs = new Map();
+    this.mcpScopes = new Map();
+    this.random = options.random ?? Math.random;
     this.lastServed = new Map();
     this.serviceOrder = 0;
     this.pauseReasons = new Set();
@@ -71,7 +74,8 @@ class RequestScheduler {
       const liveGroups = new Set([...this.jobs.values()].map(job => job.groupId));
       for (const group of this.lastServed.keys()) if (!liveGroups.has(group)) this.lastServed.delete(group);
       while (!this.closed && !this.pausedReason && this.active().length < this.settings.maxConcurrent) {
-        const candidates = this.waiting();
+        const candidates = this.waiting().filter(job => !this.mcpWait(job)
+          && !(this.mcpScopes.get(job.mcpScope)?.cooldownUntil && this.active().some(active => active.mcpScope === job.mcpScope)));
         if (!candidates.length) break;
         // A task waiting for 60s may take the next free slot ahead of round-robin.
         const aged = candidates.find(job => now - job.queuedMonotonic >= 60_000);
@@ -108,9 +112,12 @@ class RequestScheduler {
       throw new Error("Invalid queue effort");
     }
     if (!Number.isSafeInteger(input.bytes) || input.bytes < 0) throw new Error("Invalid queue payload size");
+    if (input.mcpScope !== undefined && (!/^[a-f0-9]{64}$/.test(input.mcpScope) || input.mode !== "mcp-bridge"
+      || typeof input.connectorName !== "string" || !input.connectorName.trim() || input.connectorName.length > 256
+      || !Number.isInteger(input.retryAttempt) || input.retryAttempt < 0 || input.retryAttempt > 2)) throw new Error("Invalid MCP queue scope");
     const existing = this.jobs.get(input.id);
     if (existing) {
-      if (["groupId", "model", "mode", "bytes", "effort"].some(key => existing[key] !== input[key])) {
+      if (["groupId", "model", "mode", "bytes", "effort", "mcpScope", "connectorName", "retryAttempt"].some(key => existing[key] !== input[key])) {
         throw schedulingError("queue_identity_conflict", "Queued request identity conflicts with its original request");
       }
       return this.view(existing);
@@ -126,6 +133,7 @@ class RequestScheduler {
     const job = {
       id: input.id, groupId: input.groupId, model: input.model, mode: input.mode,
       bytes: input.bytes, ...(input.effort === undefined ? {} : { effort: input.effort }),
+      ...(input.mcpScope ? { mcpScope: input.mcpScope, connectorName: input.connectorName, retryAttempt: input.retryAttempt } : {}),
       state: "queued", queuedAt, queuedMonotonic,
       deadlineAt: queuedAt + timeoutMs, deadlineMonotonic: queuedMonotonic + timeoutMs,
       configRevision: this.configRevision,
@@ -167,6 +175,8 @@ class RequestScheduler {
     this.tick();
     const job = this.owned(id, lease);
     if (job.state === "stopping") throw schedulingError("queue_cancelled", "Task is stopping");
+    const mcpWait = this.mcpWait(job);
+    if (mcpWait) return { allowed: false, reason: "mcp_cooldown", retryAfterMs: mcpWait };
     if (this.sendOwner) return { allowed: false, reason: "send_in_progress" };
     if (this.pausedReason && this.pausedReason !== "user") return { allowed: false, reason: this.pausedReason };
     const interval = this.settings.minSendIntervalSeconds * 1000;
@@ -208,12 +218,14 @@ class RequestScheduler {
     return this.view(job);
   }
 
-  settle(id, lease, outcome, reason) {
+  settle(id, lease, outcome, reason, remote) {
     if (!["succeeded", "failed", "cancelled"].includes(outcome)) throw new Error("Invalid terminal outcome");
     const job = this.jobs.get(id);
     // Idempotent acknowledgement of the same lease, not a different job or generation.
     if (job?.lease === lease && lease && TERMINAL.has(job.state)) return this.view(job);
     this.owned(id, lease);
+    // Record before dispatching another job, and only after host-confirmed physical release.
+    if (job.mcpScope && job.state !== "stopping" && outcome !== "cancelled") this.recordMcp(job, outcome, remote);
     if (this.sendOwner?.id === id) {
       this.sendOwner = null;
       this.lastSendAt = this.monotonicNow();
@@ -222,6 +234,58 @@ class RequestScheduler {
     this.terminal(job, job.state === "stopping" ? "cancelled" : outcome, reason ?? job.reason);
     this.tick();
     return this.view(job);
+  }
+
+  mcpWait(job) {
+    return Math.max(0, (this.mcpScopes.get(job.mcpScope)?.cooldownMonotonic ?? 0) - this.monotonicNow());
+  }
+
+  recordMcp(job, outcome, remote) {
+    if (!remote) return;
+    if (remote.failure !== undefined && !validMcpRemoteFailure(remote.failure)) throw new Error("Invalid MCP outcome");
+    if (!remote.failure && !(outcome === "succeeded" && remote.verified === true)) return;
+    const previous = this.mcpScopes.get(job.mcpScope);
+    const status = { ...previous, scope: job.mcpScope, connectorName: job.connectorName };
+    if (remote.failure) {
+      status.lastFailure = { ...remote.failure };
+      status.lastFailureAt = this.now();
+      status.retryAttempt = job.retryAttempt;
+      if (mcpRemoteErrorInfo(remote.failure).retryCandidate) {
+        const wait = remote.failure.retryAfterMs ?? (job.retryAttempt === 0 ? 30_000 : 60_000) + Math.floor(this.random() * 5000);
+        status.cooldownUntil = Math.max(previous?.cooldownUntil ?? 0, this.now() + wait);
+        status.cooldownMonotonic = Math.max(previous?.cooldownMonotonic ?? 0, this.monotonicNow() + wait);
+      }
+    } else {
+      status.lastVerifiedAt = this.now();
+      delete status.cooldownUntil;
+      delete status.cooldownMonotonic;
+    }
+    this.mcpScopes.delete(job.mcpScope);
+    this.mcpScopes.set(job.mcpScope, status);
+    // Never evict a live cooldown. Bounded by the existing queue receipt budget.
+    for (const [scope, value] of this.mcpScopes) {
+      if (this.mcpScopes.size <= this.maxRecords) break;
+      if ((value.cooldownMonotonic ?? 0) <= this.monotonicNow()) this.mcpScopes.delete(scope);
+    }
+    this.event("queue.mcp_status_changed", job);
+  }
+
+  mcpStatus() {
+    return [...this.mcpScopes.values()].map(({ cooldownMonotonic, ...status }) => ({ ...status }));
+  }
+
+  restoreMcpStatus(values = []) {
+    if (!Array.isArray(values) || values.length > this.maxRecords) throw new Error("Invalid saved MCP status");
+    for (const value of values) {
+      if (!value || !/^[a-f0-9]{64}$/.test(value.scope) || typeof value.connectorName !== "string" || value.connectorName.length > 256
+        || value.lastFailure !== undefined && !validMcpRemoteFailure(value.lastFailure)
+        || [value.lastFailureAt, value.lastVerifiedAt, value.cooldownUntil].some(at => at !== undefined && (!Number.isSafeInteger(at) || at < 0))
+        || value.retryAttempt !== undefined && ![0, 1, 2].includes(value.retryAttempt)) throw new Error("Invalid saved MCP status");
+      this.mcpScopes.set(value.scope, { scope: value.scope, connectorName: value.connectorName,
+        lastFailure: value.lastFailure, lastFailureAt: value.lastFailureAt, lastVerifiedAt: value.lastVerifiedAt,
+        retryAttempt: value.retryAttempt, cooldownUntil: value.cooldownUntil,
+        cooldownMonotonic: this.monotonicNow() + Math.max(0, (value.cooldownUntil ?? 0) - this.now()) });
+    }
   }
 
   terminal(job, state, reason) {
@@ -265,6 +329,8 @@ class RequestScheduler {
     const end = job.endedMonotonic ?? this.monotonicNow();
     return {
       id: job.id, groupId: job.groupId, model: job.model, mode: job.mode, effort: job.effort,
+      ...(job.mcpScope ? { mcpScope: job.mcpScope, connectorName: job.connectorName, retryAttempt: job.retryAttempt,
+        cooldownUntil: !TERMINAL.has(job.state) && this.mcpWait(job) ? this.now() + this.mcpWait(job) : undefined } : {}),
       state: job.state, reason: job.reason, configRevision: job.configRevision,
       queuedAt: job.queuedAt, deadlineAt: job.deadlineAt, startedAt: job.startedAt, endedAt: job.endedAt,
       sendAttemptedAt: job.sendAttemptedAt, sendConfirmedAt: job.sendConfirmedAt,
@@ -280,6 +346,7 @@ class RequestScheduler {
     return {
       settings: { ...this.settings }, configRevision: this.configRevision, pausedReason: this.pausedReason,
       pauseReasons: [...this.pauseReasons],
+      mcpStatus: this.mcpStatus(),
       active: this.active().length, waiting: this.waiting().length,
       waitingBytes: this.waiting().reduce((sum, job) => sum + job.bytes, 0), closed: this.closed,
     };

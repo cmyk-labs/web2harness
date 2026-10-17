@@ -7,6 +7,7 @@ import { validateToolCallBatch } from "./tools/tool-call-policy";
 import { requireLicense } from "../../licensing/service";
 import { LicenseError } from "../../licensing/schema";
 import { createHash, randomBytes } from "node:crypto";
+import { mcpScope } from "../../../launcher/shared/mcp-scope.cjs";
 import { resolve, dirname, join } from "node:path";
 import { isChatGptWebZeroRiskBackendModel } from "../../models/chatgpt-web-models";
 import { defaultBrokerEndpoint, expandUserPath, resolveBrokerEndpoint } from "../../config";
@@ -526,6 +527,10 @@ export function createChatGptWebAdapter(
       mode: manualRequest ? "manual" : mode.localTools ? "mcp-bridge" : mode.nativeTools ? "native-tools" : "browser-only",
       ...(parsed.options.reasoning ? { effort: parsed.options.reasoning } : {}),
       bytes: Buffer.byteLength(JSON.stringify(parsed)),
+      ...(!manualRequest && mode.localTools ? {
+        mcpScope: mcpScope(provider.chatgptWeb?.mcpTunnelId ?? executionNamespace, provider.chatgptWeb?.appName),
+        connectorName: provider.chatgptWeb?.appName ?? "MCP Bridge", retryAttempt: Math.min(2, queueAttempt),
+      } : {}),
     };
     const releaseRetainedConversation = conversationKey && retainedLauncherDescriptor
       ? async () => {
@@ -963,6 +968,17 @@ export function createChatGptWebAdapter(
       completionFence: {
         begin: async () => broker.beginCompletionFence(await token.promise),
         commit: async (revision, browserReply) => broker.commitCompletionFence(await token.promise, revision, browserReply),
+      },
+      authorizeMcpRecovery: async () => {
+        // The worker calls this only after physical cleanup. Our deliberate retirement must
+        // not be mistaken for an external cancellation before the queue records its failure.
+        browserOwnerSettled = true;
+        return !!activeToken && !!await broker.retireUnreceivedHandoff?.(activeToken);
+      },
+      mcpRemoteVerified: async () => {
+        if (!activeToken) return false;
+        const state = await broker.beginCompletionFence(activeToken);
+        return "revision" in state && state.revision > 0;
       },
     }).then(async answer => {
       // worker.run resolves after owned browser cleanup (including the queue receipt).
@@ -1757,10 +1773,13 @@ export function createChatGptWebAdapter(
           }
           const turnError = submittedTurnFailure(session, error);
           const handledError = turnError instanceof ChatGptWebAdapterError && turnError.retryable
-            ? chatGptWebTurnRetryPolicy.recordRetryableFailure(retryKey, turnError, Date.now(), provider.chatgptWeb?.runtimeParameters?.maxRetries ?? 3)
+            ? chatGptWebTurnRetryPolicy.recordRetryableFailure(retryKey, turnError, Date.now(),
+              Math.min(turnError.mcpRemote ? 2 : 3, provider.chatgptWeb?.runtimeParameters?.maxRetries ?? 3))
             : turnError;
           if (!(turnError instanceof ChatGptWebAdapterError && turnError.retryable)) {
-            chatGptWebTurnRetryPolicy.clear(retryKey);
+            if (turnError instanceof ChatGptWebAdapterError && (turnError.mcpRemote || !manualRequest && mode.localTools)) {
+              chatGptWebTurnRetryPolicy.recordTerminalFailure(retryKey, turnError);
+            } else chatGptWebTurnRetryPolicy.clear(retryKey);
           }
           if (handledError instanceof ChatGptWebAdapterError && !handledError.retryable) {
             // A deterministic request failure remains replayable so a native reconnect cannot burn

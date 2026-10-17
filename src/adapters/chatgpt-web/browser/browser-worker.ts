@@ -1054,6 +1054,9 @@ export interface BrowserTurn {
   attachmentTimeoutMs?: number;
   scheduling?: import("../../../../launcher/shared/request-scheduler.cjs").QueueInput;
   queueTicket?: import("../../../browser/request-queue-client").QueueTicket;
+  /** Daemon-only authority: atomically retire a binding with no past or current tool activity. */
+  authorizeMcpRecovery?: () => Promise<boolean>;
+  mcpRemoteVerified?: () => Promise<boolean>;
   traceId: string;
   modelId: string;
   /** Stable native-round identity, independent of stream reconnects and generic retries. */
@@ -1372,10 +1375,23 @@ export class ChatGptBrowserWorker {
               id: createHash("sha256").update(`${scheduling.id}:preparation:${budget.recoveries}`).digest("hex") };
             return await withQueuedRequest({ descriptorPath: await this.requestQueueTarget(), job,
               traceId: turn.traceId, signal: turn.abortSignal,
-              execute: (queueTicket, signal) => {
+              remoteVerified: turn.mcpRemoteVerified,
+              execute: async (queueTicket, signal) => {
                 const preparationDeadline = budget.start();
                 if (Date.now() >= preparationDeadline) throw preparationError("chatgpt_preparation_timeout");
-                return execute({ ...queuedTurn, queueTicket, abortSignal: signal, preparationDeadline });
+                try { return await execute({ ...queuedTurn, queueTicket, abortSignal: signal, preparationDeadline }); }
+                catch (error) {
+                  // execute has physically settled the old browser. Only the broker can authorize
+                  // recovery; the remote error itself confers no tool or replay permissions.
+                  if (error instanceof ChatGptWebAdapterError && error.mcpRemote
+                    && ["rate_limit", "unavailable"].includes(error.mcpRemote.kind)
+                    && (error.mcpRemote.retryAfterMs ?? 0) <= 120_000 && !signal.aborted && !turn.compaction
+                    && await turn.authorizeMcpRecovery?.() && !signal.aborted) {
+                    throw new ChatGptWebAdapterError(error.message, { status: error.status, errorType: error.errorType,
+                      code: error.code, retryable: true, mcpRemote: error.mcpRemote, cause: error });
+                  }
+                  throw error;
+                }
               },
             });
           } catch (error) {

@@ -2,6 +2,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { QueueInput, QueueRecord } from "../../launcher/shared/request-scheduler.cjs";
 import { readLauncherBrowserHostDescriptor } from "./launcher-client";
 import { ChatGptWebAdapterError } from "../adapters/chatgpt-web/adapter-error";
+import { validMcpRemoteFailure } from "../../launcher/shared/mcp-remote-error.cjs";
 
 export interface QueueTicket { id: string; secret: string }
 /** Launcher transport or the in-process owner of a standalone browser profile. */
@@ -33,6 +34,7 @@ function terminalError(record: QueueRecord): Error {
 export async function withQueuedRequest<T>(options: {
   descriptorPath: RequestQueueTarget; job: QueueInput; traceId: string; signal?: AbortSignal;
   onQueued?: () => void; execute: (ticket: QueueTicket, signal: AbortSignal) => Promise<T>;
+  remoteVerified?: () => Promise<boolean>;
 }): Promise<T> {
   options.signal?.throwIfAborted();
   const admitted = await queueRequest<{ record: QueueRecord; secret: string }>(options.descriptorPath, "enqueue", {
@@ -44,6 +46,7 @@ export async function withQueuedRequest<T>(options: {
   let timer: ReturnType<typeof setInterval> | undefined;
   let pollPending = false, outcome: "succeeded" | "failed" | "cancelled" = "failed";
   let executionError: unknown;
+  let verified = false;
   let queueInterruption: { error: unknown; outcome: "failed" | "cancelled" } | undefined;
   const interruptFromQueue = (error: unknown, outcome: "failed" | "cancelled") => {
     if (abort.signal.aborted) return;
@@ -69,6 +72,7 @@ export async function withQueuedRequest<T>(options: {
       }).catch(error => interruptFromQueue(error, "failed")).finally(() => { pollPending = false; });
     }, 2000);
     const result = await options.execute(ticket, signal);
+    verified = await options.remoteVerified?.().catch(() => false) ?? false;
     signal.throwIfAborted();
     outcome = "succeeded";
     return result;
@@ -86,7 +90,9 @@ export async function withQueuedRequest<T>(options: {
     // execute must settle only once its physical browser owner has released resources.
     const code = executionError && typeof executionError === "object" && "code" in executionError ? executionError.code : undefined;
     const reason = typeof code === "string" && /^[a-z0-9_]{1,80}$/.test(code) ? code : undefined;
-    try { await queueRequest(options.descriptorPath, "settle", { ...ticket, outcome, reason }); }
+    const failure = executionError instanceof ChatGptWebAdapterError && validMcpRemoteFailure(executionError.mcpRemote) ? executionError.mcpRemote : undefined;
+    try { await queueRequest(options.descriptorPath, "settle", { ...ticket, outcome, reason,
+      ...(failure || verified ? { remote: { failure, verified } } : {}) }); }
     catch (cleanupError) {
       if (executionError) throw new AggregateError([executionError, cleanupError],
         `${executionError instanceof Error ? executionError.message : String(executionError)}; queue resource release was not acknowledged`);
@@ -100,7 +106,7 @@ export async function waitForSendPermit(descriptorPath: RequestQueueTarget, tick
     signal?.throwIfAborted();
     const result = await queueRequest<{ allowed: boolean; permit?: string; reason?: string; retryAfterMs?: number }>(descriptorPath, "send-begin", ticket);
     if (result.allowed && result.permit) return result.permit;
-    if (result.reason !== "send_interval" && result.reason !== "send_in_progress") {
+    if (result.reason !== "send_interval" && result.reason !== "send_in_progress" && result.reason !== "mcp_cooldown") {
       throw new ChatGptWebAdapterError(`Web sending paused: ${result.reason ?? "queue_send_paused"}`, {
         status: 503, errorType: "server_error", code: result.reason ?? "queue_send_paused", retryable: false,
       });

@@ -11,7 +11,7 @@ import type { CodexProviderConfig } from "../../../src/types";
 for (const family of ["5.6", "6"] as const) for (const effort of ["low", "medium", "high", "xhigh", "max"]) {
   const label = `gpt-${family}-${effort === "max" ? "pro" : "sol"}`;
   test(`public route admission and search preserve ${label}/${effort}`, async () => {
-    const parsed = parseRequest({ model: `chatgpt-web/${label}`, input: [{ type: "message", role: "user",
+    const parsed = parseRequest({ model: `chatgpt-web/${label}${effort === "low" ? "-instant" : ""}`, input: [{ type: "message", role: "user",
       content: [{ type: "input_text", text: "Queue metadata fixture" }],
       internal_chat_message_metadata_passthrough: { turn_id: `turn-${effort}` } }], reasoning: { effort },
       client_metadata: { "x-codex-turn-metadata": JSON.stringify({ thread_id: `queue-${label}`, turn_id: `turn-${effort}` }) } });

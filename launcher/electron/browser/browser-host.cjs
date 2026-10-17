@@ -926,6 +926,7 @@ class BrowserHost {
   bindShellZoomShortcuts(contents) {
     if (!contents || contents.isDestroyed() || this.shellZoomShortcutBindings.has(contents)) return;
     const policyFor = () => {
+      if (contents === this.authView?.webContents) return browserInputPolicy(this);
       const tab = [...this.turnTabs.values()].find(candidate => candidate.view?.webContents === contents);
       return browserInputPolicy(this, tab?.id || "home");
     };
@@ -1836,6 +1837,7 @@ class BrowserHost {
     this.inputProtectionRevision = (this.inputProtectionRevision || 0) + 1;
     this.homeInputOverride = false;
     if (tab) tab.inputOverride = false;
+    if (this.authView) this.authView.inputOverride = false;
   }
 
   inputOverrideContext(tabId) {
@@ -1848,7 +1850,8 @@ class BrowserHost {
     if (typeof allowed !== "boolean" || this.inputOverrideContext(tabId) !== expectedRevision) {
       this.rejectProtectedInput("changed");
     }
-    if (tabId === "home") this.homeInputOverride = allowed;
+    if (this.authView) this.authView.inputOverride = allowed;
+    else if (tabId === "home") this.homeInputOverride = allowed;
     else this.turnTabs.get(tabId).inputOverride = allowed;
     this.syncInputProtection();
     if (this.visible && this.surfaceActive) this.focusBrowserSurface();
@@ -1981,6 +1984,7 @@ class BrowserHost {
     this.closeAuthView(this.authView, true);
     const authView = new WebContentsView({ webContents: options.webContents });
     this.authView = authView;
+    this.resetInputOverride(this.selectedTurnTab());
     this.authNavigationError = null;
     this.window.contentView.addChildView(authView);
     authView.setBounds(this.bounds);
@@ -2109,6 +2113,7 @@ class BrowserHost {
       authView.navigationTimeout = null;
     }
     this.authView = null;
+    this.resetInputOverride(this.selectedTurnTab());
     try { this.window.contentView.removeChildView(authView); } catch {}
     const contents = authView.webContents;
     if (closeContents && contents && !contents.isDestroyed()) contents.close();

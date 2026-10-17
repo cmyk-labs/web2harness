@@ -7,6 +7,7 @@ import type { BrowserSurfaceActiveRequest, BrowserSurfaceActiveResult } from "..
 export type { RequestSchedulingSettings, QueueSnapshot, QueueQuery, QueuePage, QueueRecord } from "../shared/request-scheduler.cjs";
 export interface RequestQueueStatus {
   status: "ready" | "stopped";
+  currentMcpScope: string | null;
   settings: RequestSchedulingSettings;
   savedRevision: number;
   scheduler: (QueueSnapshot & { groups: string[] }) | null;
@@ -71,7 +72,7 @@ export interface BrowserState {
   maxTabs: number;
   tabs: BrowserTabState[];
   inputLocked?: boolean;
-  inputLockReason?: "running" | "waiting-tools" | "stopping" | "retained" | "checking" | "failed-answer" | null;
+  inputLockReason?: "running" | "waiting-tools" | "stopping" | "retained" | "checking" | "failed-answer" | "protected" | "sign-in" | "manual" | null;
   automationBusy?: boolean;
   zoomLocked?: boolean;
   canOverrideInput?: boolean;
@@ -275,7 +276,7 @@ export interface LauncherApi {
   setAutostart(enabled: boolean): Promise<{ state: LauncherState; supported: boolean; enabled: boolean }>;
   setContextFiles(enabled: boolean): Promise<LauncherState>;
   setContextTripleBudget(enabled: boolean): Promise<LauncherState>;
-  setContextWindows(edits?: import("../shared/context-budgets.cjs").ContextWindowEdits, tripleBudget?: boolean): Promise<LauncherState>;
+  setContextBudget(tripleBudget: boolean): Promise<LauncherState>;
   setSkillAttachments(enabled: boolean): Promise<LauncherState>;
   setFreshConversationPerTurn(enabled: boolean): Promise<LauncherState>;
   setUseSavedChats(enabled: boolean): Promise<LauncherState>;

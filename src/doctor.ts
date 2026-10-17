@@ -205,7 +205,7 @@ export async function runDoctor(): Promise<DoctorReport> {
         ? { id: "tunnel-service", status: "ok", message: "macOS tunnel service is installed, loaded, and running" }
         : { id: "tunnel-service", status: "error", message: "macOS tunnel service is not fully running", detail: JSON.stringify(tunnelService) });
     }
-    const runtime = tunnelStatus(config);
+    const runtime = await tunnelStatus(config);
     checks.push(runtime.ok
       ? { id: "tunnel-runtime", status: "ok", message: "Tunnel runtime reports healthy and ready" }
       : { id: "tunnel-runtime", status: "error", message: "Tunnel runtime is not ready", detail: runtime.detail });

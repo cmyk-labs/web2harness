@@ -15,6 +15,7 @@ import { StandaloneRequestQueue } from "../../../../src/browser/standalone-reque
 import { bridgeToResponsesSSE } from "../../../../src/responses/stream";
 import type { AdapterEvent } from "../../../../src/types";
 import { ChatGptStreamProjection } from "../../../../src/adapters/chatgpt-web/browser/stream-evidence";
+import { ChatGptBrowserObservationTimeoutError } from "../../../../src/adapters/chatgpt-web/browser/turn-observation";
 
 test("bounded SSE projection distinguishes visible prose, tool messages and DONE without retaining bodies", () => {
   const projection = new ChatGptStreamProjection();
@@ -60,6 +61,33 @@ test("readiness waits for editable hydration and gives explicit auth/challenge e
   const abort = new AbortController(); abort.abort();
   await rejects(waitForChatGptReadiness(page, { ...options, signal: abort.signal, read: async () => { throw new Error("read after cancel"); } }),
     { name: "AbortError" });
+});
+
+test("readiness retries observation timeouts only within the original deadline and retains their cause", async () => {
+  const error = new ChatGptBrowserObservationTimeoutError(5_000);
+  let now = 0;
+  let reads = 0;
+  await rejects(waitForChatGptReadiness({} as Page, {
+    deadline: 250, now: () => now, sleep: async ms => { now += ms; },
+    read: async () => { reads++; throw error; },
+  }), failure => {
+    expect(failure).toMatchObject({ code: "chatgpt_composer_unavailable", status: 502, retryable: false });
+    expect((failure as Error).cause).toBe(error);
+    return true;
+  });
+  expect(now).toBe(250);
+  expect(reads).toBe(3);
+});
+
+test("readiness cancellation during observation recovery stops further reads", async () => {
+  const abort = new AbortController();
+  let reads = 0;
+  await rejects(waitForChatGptReadiness({} as Page, {
+    deadline: 1_000, now: () => 0, signal: abort.signal,
+    sleep: async () => { abort.abort(); },
+    read: async () => { reads++; throw new ChatGptBrowserObservationTimeoutError(5_000); },
+  }), { name: "AbortError" });
+  expect(reads).toBe(1);
 });
 
 test("prepared alone never authorizes recovery; missing or positive submission evidence denies it", () => {

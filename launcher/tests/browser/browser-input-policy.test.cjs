@@ -24,7 +24,29 @@ function host(tabs = []) {
 const tab = (id, status, extra = {}) => ({ id, status, traceId: `trace_${id}`, helperPid: 12,
   interactionMode: "automatic", ...extra });
 
-test("home is locked throughout tools/continuation but cached conversations only lock their own pages", () => {
+test("idle protection requires explicit recovery and authentication has a separate override", () => {
+  const h = host();
+  assert.equal(browserInputPolicy(h).inputLocked, true);
+  assert.equal(browserInputPolicy(h).canOverrideInput, true);
+  h.setInputOverride("home", true, h.inputOverrideContext("home"));
+  assert.equal(browserInputPolicy(h).inputLocked, false);
+  const stale = h.inputOverrideContext("home");
+  h.authView = {};
+  h.resetInputOverride();
+  assert.equal(browserInputPolicy(h).inputLockReason, "sign-in");
+  assert.equal(browserInputPolicy(h).inputLocked, true);
+  assert.throws(() => h.setInputOverride("home", true, stale), /changed/);
+  h.setInputOverride("home", true, h.inputOverrideContext("home"));
+  assert.equal(h.authView.inputOverride, true);
+  assert.equal(h.homeInputOverride, false);
+  assert.equal(browserInputPolicy(h).inputLocked, false);
+  h.authView = null;
+  h.resetInputOverride();
+  assert.equal(browserInputPolicy(h).inputLocked, true);
+  assert.equal(browserInputPolicy(host()).inputLocked, true, "a new host never inherits an override");
+});
+
+test("home stays protected after tools and retained conversations settle", () => {
   const first = tab("first", "running");
   const h = host([first]);
   assert.equal(browserInputPolicy(h).inputLockReason, "running");
@@ -37,10 +59,12 @@ test("home is locked throughout tools/continuation but cached conversations only
   first.awaitingToolResults = false;
   assert.equal(browserInputPolicy(h).automationBusy, false);
   assert.equal(h.currentOperation(), null);
-  assert.equal(browserInputPolicy(h).inputLocked, false);
+  assert.equal(browserInputPolicy(h).inputLocked, true);
   assert.equal(browserInputPolicy(h, first.id).inputLockReason, "retained");
   assert.equal(browserInputPolicy(h).zoomLocked, true);
   h.turnTabs.clear();
+  assert.equal(browserInputPolicy(h).zoomLocked, true);
+  h.setInputOverride("home", true, h.inputOverrideContext("home"));
   assert.equal(browserInputPolicy(h).zoomLocked, false);
 });
 
@@ -53,14 +77,17 @@ test("another automatic owner keeps home protected when one concurrent turn ends
   assert.equal(browserInputPolicy(h).inputLocked, true, "a presentation error is not owner settlement");
 });
 
-test("manual interaction and sign-in remain human-operated; automatic checks are protected", () => {
+test("manual pages and sign-in require explicit interaction recovery; automatic checks are protected", () => {
   const h = host([tab("manual", "running", {interactionMode:"manual"})]);
   h.selectedTabId = "manual";
+  assert.equal(browserInputPolicy(h).inputLocked, true);
+  h.setInputOverride("manual", true, h.inputOverrideContext("manual"));
   assert.equal(browserInputPolicy(h).inputLocked, false);
   h.selectedTabId = "home";
   for (const name of ["ChatGPT login", "ChatGPT passkey login"]) {
     h.manualOperation = name;
-    assert.equal(browserInputPolicy(h).inputLocked, false);
+    assert.equal(browserInputPolicy(h).inputLocked, true);
+    assert.equal(browserInputPolicy(h).canOverrideInput, true);
   }
   for (const name of ["browser smoke test", "connector verification", "session inspection", "session refresh"]) {
     h.manualOperation = name;
@@ -135,7 +162,7 @@ test("explicit override affects only the selected page, preserves ownership and 
 
 test("override dialog follows the selected language, cancels safely and rechecks ownership", async () => {
   const a = tab("a", "running"), h = host([a]);h.selectedTabId = a.id;
-  for (const [language, cancel, allow] of [["zh-CN", "保持只读", "取消只读"], ["en", "Keep view-only", "Exit view-only"]]) {
+  for (const [language, cancel, allow] of [["zh-CN", "保持禁止", "恢复操作"], ["en", "Keep blocked", "Enable interaction"]]) {
     await requestBrowserInputOverride({host:h,language,tabId:a.id,allowed:true,dialog:{async showMessageBox(_, options) {
       assert.deepEqual(options.buttons,[cancel,allow]);assert.equal(options.defaultId,0);assert.equal(options.cancelId,0);
       return {response:0};

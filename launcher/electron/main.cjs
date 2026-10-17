@@ -23,6 +23,7 @@ const { BrowserHost, navigationErrorForLog } = require("./browser/browser-host.c
 const { requestBrowserInputOverride } = require("./browser/browser-input-override.cjs");
 const { BrowserControlServer } = require("./control-server.cjs");
 const { RequestQueue } = require("./runtime/request-queue.cjs");
+const { currentMcpScope } = require("../shared/mcp-scope.cjs");
 const { createQueueSettingsSaver } = require("./runtime/queue-settings.cjs");
 const { BROWSER_SURFACE_ACTIVE_CHANNEL, validateBrowserSurfaceActive } = require("../shared/browser-surface-ipc.cjs");
 let requestQueue = null;
@@ -566,12 +567,18 @@ function registerIpc({ logger, stateStore }) {
     });
   });
 
-  handle("launcher:queue-status", () => ({
-    status: requestQueue ? "ready" : "stopped",
-    settings: stateStore.read().requestScheduling,
-    savedRevision: stateStore.read().requestSchedulingRevision,
-    scheduler: requestQueue?.snapshot() ?? null,
-  }));
+  handle("launcher:queue-status", () => {
+    let scope = null;
+    // A broken runtime config must not hide the local queue or prevent cancellation.
+    try { scope = currentMcpScope(runtimeHost?.runtimeConfigSnapshot().config); } catch {}
+    return {
+      status: requestQueue ? "ready" : "stopped",
+      currentMcpScope: scope,
+      settings: stateStore.read().requestScheduling,
+      savedRevision: stateStore.read().requestSchedulingRevision,
+      scheduler: requestQueue?.snapshot() ?? null,
+    };
+  });
   handle("launcher:queue-query", (_event, query) => {
     if (!requestQueue) throw new Error("Request scheduler is not running");
     return requestQueue.query(query);
@@ -943,14 +950,17 @@ function registerIpc({ logger, stateStore }) {
       return state;
     });
   }
-  handle("launcher:context-windows", async (_event, edits, tripleBudget) => {
+  handle("launcher:context-windows", () => {
+    throw new Error("Context windows are fixed; select standard or triple budget / 上下文窗口为固定值，只能选择标准或三倍预算");
+  });
+  handle("launcher:context-budget", async (_event, tripleBudget) => {
     await licenseController.assertActive();
     const queue = requestQueue?.snapshot();
     if (browserHost.activeTraceId || browserHost.currentOperation() || runtimeHost.currentOperation()
       || queue?.active || queue?.waiting) {
       throw new Error("Save context budgets when tasks are idle / 请等待执行与排队任务结束后保存上下文预算");
     }
-    const apply = () => runtimeHost.setContextWindows(edits, tripleBudget);
+    const apply = () => runtimeHost.setContextBudget(tripleBudget);
     const result = requestQueue ? await requestQueue.whileIdle(apply) : await apply();
     const state = stateStore.update({ contextWindows: result.contextWindows, contextWindowSources: result.contextWindowSources,
       contextPreferenceSources: result.contextPreferenceSources, experimentalContextTripleBudget: result.experimentalContextTripleBudget,

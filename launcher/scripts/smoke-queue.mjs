@@ -23,8 +23,16 @@ export async function runQueueSmoke({context,origin,out,check,errors}) {
   };
   try {
     await finish(await add('old','launcher-smoke','gpt-5.6-sol'));
+    const remoteId=createHash('sha256').update('remote-fixture').digest('hex'),remoteScope=createHash('sha256').update('fixture-tunnel').digest('hex');
+    const remote=await queue.request('enqueue',{job:{id:remoteId,groupId:'launcher-smoke',model:'gpt-6-sol',mode:'mcp-bridge',bytes:0,mcpScope:remoteScope,connectorName:'Fixture DEV',retryAttempt:0},pid:process.pid,traceId:'queue_remote_fixture'});
+    await queue.request('settle',{id:remoteId,secret:remote.secret,outcome:'failed',reason:'mcp_remote_rate_limited',remote:{failure:{kind:'rate_limit',source:'probe',status:429,retryAfterMs:120000}}});
     await context.exposeBinding('__queueQuery',(_,query)=>{calls.push(query);if(failQueries)throw Error('Fixture query unavailable');return queue.query(query)});
-    await context.exposeBinding('__queueStatus',()=>({status:'ready',savedRevision:1,settings:queue.snapshot().settings,scheduler:queue.snapshot()}));
+    let currentScope=null, recovered=false;
+    await context.exposeBinding('__queueStatus',()=>{
+      const scheduler=queue.snapshot();
+      if(recovered) scheduler.mcpStatus=scheduler.mcpStatus.map(entry=>({...entry,lastVerifiedAt:Date.now(),cooldownUntil:undefined}));
+      return {status:'ready',currentMcpScope:currentScope,savedRevision:1,settings:scheduler.settings,scheduler};
+    });
     await context.addInitScript(()=>{
       window.codexWebLauncher.queryQueue=query=>window.__queueQuery(query);
       window.codexWebLauncher.queueStatus=()=>window.__queueStatus();
@@ -42,6 +50,23 @@ export async function runQueueSmoke({context,origin,out,check,errors}) {
     });
     check('Queue typography matches surrounding DEV explanatory text',JSON.stringify(typography.queue)===JSON.stringify(typography.note));
     await panel.screenshot({path:join(out,'queue-empty-zh.png')});
+    check('Native mode hides historical MCP failures', await panel.locator('.queue-mcp-status').count()===0);
+    currentScope='b'.repeat(64);await page.waitForTimeout(2200);
+    check('Unrelated tunnel history is hidden', await panel.locator('.queue-mcp-status').count()===0);
+    currentScope=remoteScope;
+    await panel.locator('.queue-mcp-status').waitFor();
+    check('Current tunnel cooldown has a compact summary', (await panel.locator('.queue-mcp-status').innerText()).includes('冷却等待') && !(await panel.locator('.queue-mcp-status').innerText()).includes('HTTP'));
+    recovered=true;await panel.locator('.queue-mcp-status').waitFor({state:'detached'});
+    check('A newer verified receipt clears the old runtime warning', await panel.locator('.queue-mcp-status').count()===0);
+    await page.getByRole('navigation').getByRole('button',{name:'用量与诊断',exact:true}).click();
+    await page.getByRole('tab',{name:'健康检查',exact:true}).click();
+    await page.getByText('MCP 调用历史',{exact:true}).click();
+    const history=page.locator('.queue-mcp-status');
+    await history.getByText(/历史失败（之后已验证接收）/).waitFor();
+    check('Diagnostics preserves the dated historical failure', (await history.innerText()).includes('HTTP 429') && (await history.innerText()).includes('不代表工具执行完成'));
+    await history.screenshot({path:join(out,'mcp-history-zh.png')});
+    await page.getByRole('navigation').getByRole('button',{name:'运行控制',exact:true}).click();
+    recovered=false;await panel.locator('.queue-mcp-status').waitFor();
     const group='01a1399b-1ca2-77f2-8b2b-ddc39f2fa796';
     const first=await add('active',group);
     await panel.locator('td').filter({hasText:/^gpt-6-sol/}).first().waitFor();

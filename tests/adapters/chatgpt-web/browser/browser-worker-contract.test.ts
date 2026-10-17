@@ -620,11 +620,21 @@ test("Luna turns without a retained conversation never send connector identity a
 
 test("chat preparation preserves page-read and composer errors instead of reporting an expired login", async () => {
   const prepare = (ChatGptBrowserWorker.prototype as unknown as {
-    prepareChatSurface(page: unknown): Promise<unknown>;
+    prepareChatSurface(page: unknown, capture: undefined, useSavedChats: false,
+      readiness: { deadline: number }): Promise<unknown>;
   }).prepareChatSurface;
   for (const error of [new ChatGptBrowserObservationTimeoutError(5_000), new Error("ChatGPT composer is unavailable")]) {
     const page = { url: () => "https://chatgpt.com/?temporary-chat=true", evaluate: async () => { throw error; } };
-    await expect(prepare.call({}, page)).rejects.toBe(error);
+    // Observation timeouts can recover within the shared preparation budget. Once
+    // it expires, preserve the original cause rather than misclassifying login.
+    const preparation = prepare.call({}, page, undefined, false, { deadline: Date.now() + 100 });
+    if (error instanceof ChatGptBrowserObservationTimeoutError) {
+      await expect(preparation).rejects.toMatchObject({
+        code: "chatgpt_composer_unavailable", status: 502, retryable: false, cause: error,
+      });
+    } else {
+      await expect(preparation).rejects.toBe(error);
+    }
   }
 });
 
@@ -3204,8 +3214,8 @@ test("browser preflight separates model context from one-message transport limit
   }
 
   expect(() => assertChatGptWebInputWithinLimits(40_999, 32_807, "gpt-5.6-sol", "low", plus)).not.toThrow();
-  expect(() => assertChatGptWebInputWithinLimits(272_000, 32_808, "gpt-5.6-sol", "low", plus)).toThrow(
-    "272,000-token context window",
+  expect(() => assertChatGptWebInputWithinLimits(80_000, 32_808, "gpt-5.6-sol", "low", plus)).toThrow(
+    "80,000-token context window",
   );
   expect(() => assertChatGptWebInputWithinLimits(89_999, 81_807, "gpt-5.6-sol", "medium", plus)).not.toThrow();
   expect(() => assertChatGptWebInputWithinLimits(89_999, 81_807, "gpt-5.6-sol", "high", plus)).not.toThrow();
@@ -3295,6 +3305,27 @@ test("browser preflight separates model context from one-message transport limit
     expect(() => assertChatGptWebInputWithinLimits(
       75_000 + 8_192, 75_000, "gpt-5.6-sol", effort, pro, 520_000,
     )).toThrow("500,000-character ChatGPT composer boundary");
+  }
+});
+
+test("browser preflight uses fixed Fast and standard windows even with legacy custom values", () => {
+  for (const contextWindows of [undefined, { fast: 96_000, standard: 300_000 }]) {
+    for (const triple of [false, true]) {
+      const capabilities = { localToolsEnabled: false, solAvailable: true, extraHighAvailable: true,
+        proAvailable: true, contextWindows, experimentalContextFiles: true, experimentalContextTripleBudget: triple };
+      for (const [model, effort, window] of [
+        ["gpt-5.6-sol", "low", 80_000],
+        ["gpt-5.6-luna", "low", 272_000],
+        ["gpt-5.6-sol", "medium", 272_000],
+        ["gpt-5.6-sol", "max", 272_000],
+      ] as const) {
+        const limit = window * (triple && model === "gpt-5.6-sol" ? 3 : 1);
+        // Keep the new message small to isolate total context from transport limits.
+        expect(() => assertChatGptWebInputWithinLimits(limit - 1, 1, model, effort, capabilities)).not.toThrow();
+        expect(() => assertChatGptWebInputWithinLimits(limit, 1, model, effort, capabilities))
+          .toThrow(`${limit.toLocaleString("en-US")}-token context window`);
+      }
+    }
   }
 });
 

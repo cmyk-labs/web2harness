@@ -39,7 +39,7 @@ test("failed extraction releases execution ownership, stays read-only, and canno
   assert.equal(tab.connectorBound, false);
   assert.deepEqual(browserInputPolicy(host), { inputLocked: true, inputOverrideActive: false,
     canOverrideInput: false, inputLockReason: "failed-answer", automationBusy: false, zoomLocked: true });
-  assert.equal(browserInputPolicy(host, "home").inputLocked, false);
+  assert.equal(browserInputPolicy(host, "home").inputLocked, true);
   assert.equal(host.tabSnapshot(tab).closable, true);
   assert.equal(host.tabSnapshot(tab).canStop, false);
   assert.equal(host.allocateTurnTabOrdinal(), 2);

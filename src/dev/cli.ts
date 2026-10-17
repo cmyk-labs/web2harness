@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline/promises";
-import { contextWindowOptions } from "../context-window-options";
+import { rejectContextWindowOptions } from "../context-window-options";
 import { requireLicense } from "../licensing/service";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -70,8 +70,6 @@ Simulator interactive commands:
   /exit                Exit
 
 Context budget setup options:
-  --fast-context-window N      Fast standard tokens (or default)
-  --standard-context-window N  Non-Fast/Pro standard tokens (or default)
   --context-triple-budget      Multiply windows and derived thresholds by 3
   --standard-context-budget    Use standard windows
 
@@ -346,7 +344,7 @@ export async function runDevCommand(args: string[]): Promise<void> {
         const loaded = loadConfig();
         config = { configured: true, mode: loaded.mode, purpose: loaded.purpose };
         if (loaded.mode === "mcp-bridge") {
-          const inspected = tunnelStatus(loaded);
+          const inspected = await tunnelStatus(loaded);
           mcpRuntime = { required: true, ready: inspected.ok && inspected.ready, detail: inspected.detail };
         }
       } catch (error) {
@@ -421,7 +419,7 @@ export async function runDevCommand(args: string[]): Promise<void> {
     const standardBudget = takeFlag(args, "--standard-context-budget");
     if (contextFiles && inlineContext) throw new Error("Choose --context-files or --no-context-files");
     if (tripleBudget && standardBudget) throw new Error("Choose --context-triple-budget or --standard-context-budget");
-    const contextWindowEdits = contextWindowOptions(takeOption(args, "--fast-context-window"), takeOption(args, "--standard-context-window"));
+    rejectContextWindowOptions(takeOption(args, "--fast-context-window"), takeOption(args, "--standard-context-window"));
     if (args.length > 0) throw new Error(`Unknown DEV setup arguments: ${args.join(" ")}`);
     const result = await setupDevProfile({
       mode: mcpBridge ? "mcp-bridge" : browserOnly ? "browser-only" : "native-tools",
@@ -434,7 +432,6 @@ export async function runDevCommand(args: string[]): Promise<void> {
         : {}),
       ...(contextFiles || inlineContext ? { experimentalContextFiles: contextFiles } : {}),
       ...(tripleBudget || standardBudget ? { experimentalContextTripleBudget: tripleBudget } : {}),
-      ...(contextWindowEdits ? { contextWindowEdits } : {}),
       ...(skillAttachments || inlineSkills ? { experimentalSkillAttachments: skillAttachments } : {}),
       ...(freshConversation || retainedConversation ? { experimentalFreshConversationPerTurn: freshConversation } : {}),
       ...(savedChats || temporaryChats ? { useSavedChats: savedChats } : {}),

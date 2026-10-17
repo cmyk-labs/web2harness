@@ -117,6 +117,11 @@ function readState(filePath) {
     const preferences = normalizeContextPreferences({ ...state, contextPreferenceSources: parsed.contextPreferenceSources,
       contextWindows: parsed.contextWindows, contextWindowSources: parsed.contextWindowSources });
     for (const key of ["experimentalContextFiles", "experimentalContextTripleBudget", "contextPreferenceSources", "contextWindows", "contextWindowSources"]) state[key] = preferences[key];
+    if (state.coreSetupComplete && ["fast", "standard"].some(key =>
+      parsed.contextWindows?.[key] !== undefined && parsed.contextWindows[key] !== state.contextWindows[key])) {
+      state.codexCatalogVerified = false;
+      state.codexRestartRequired = true;
+    }
     return state;
   } catch {
     return { ...DEFAULT_STATE };

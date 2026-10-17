@@ -42,7 +42,7 @@ import {
 import { connectTunnel, createTunnelConfig, installRuntimeKey, installRuntimeKeyBytes, installTunnelClient, managedRuntimeKeyPath, stopTunnel, waitForTunnelReady } from "./runtime/tunnel";
 import { getTunnelServiceStatus, installTunnelService, restartTunnelService, stopTunnelService, tunnelServiceDefinitionMatches, uninstallTunnelService } from "./runtime/tunnel-service";
 import { normalizeContextPreferences } from "../launcher/shared/context-preferences.cjs";
-import { applyContextWindowEdits, type ContextWindowEdits } from "../launcher/shared/context-budgets.cjs";
+import { rejectContextWindowEdits } from "../launcher/shared/context-budgets.cjs";
 import { VERSION } from "./version";
 import { assertDevRuntimeIsolation, canonicalDevPath } from "./dev/isolation";
 
@@ -58,7 +58,8 @@ export interface SetupOptions {
   autoApproveToolCalls?: boolean;
   experimentalContextFiles?: boolean;
   experimentalContextTripleBudget?: boolean;
-  contextWindowEdits?: ContextWindowEdits;
+  /** Retired input, retained only to reject stale callers explicitly. */
+  contextWindowEdits?: unknown;
   experimentalSkillAttachments?: boolean;
   experimentalFreshConversationPerTurn?: boolean;
   useSavedChats?: boolean;
@@ -305,7 +306,7 @@ function baseConfig(
     config.experimentalContextTripleBudget = options.experimentalContextTripleBudget;
     config.contextPreferenceSources = { files: config.contextPreferenceSources?.files ?? "default", budget: "user" };
   }
-  if (options.contextWindowEdits !== undefined) Object.assign(config, applyContextWindowEdits(config, options.contextWindowEdits));
+  rejectContextWindowEdits(options.contextWindowEdits);
   if (!config.experimentalContextFiles) {
     if (config.experimentalContextTripleBudget) config.contextPreferenceSources = { files: config.contextPreferenceSources?.files ?? "default", budget: "default" };
     config.experimentalContextTripleBudget = false;

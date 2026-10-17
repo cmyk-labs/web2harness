@@ -58,6 +58,7 @@ test("closing a released authentication view clears its ownership without refres
   const authView = {};
   const host = Object.assign(Object.create(BrowserHost.prototype), {
     authView, view: {}, manualOperation: "ChatGPT login",
+    turnTabs: new Map(), selectedTabId: "home",
     window: { contentView: { removeChildView() {} } },
     syncViewVisibility() {}, logger: { info() {} },
   });
@@ -1495,13 +1496,14 @@ test("browser chrome navigation delegates to WebContents navigation history", ()
   assert.throws(() => navigateBrowser(webContents, "unknown"), /Unknown browser navigation action/);
 });
 
-test("browser zoom in, out, and reset are symmetric across manual views", () => {
+test("browser zoom in, out, and reset are symmetric across explicitly unlocked manual views", () => {
   const home = createContents();
   const turn = createContents();
   const fixture = Object.assign(Object.create(BrowserHost.prototype), {
     state: { zoomFactor: 1 },
     view: { webContents: home.webContents },
     turnTabs: new Map([["turn", { interactionMode: "manual", view: { webContents: turn.webContents } }]]),
+    selectedTabId: "home", homeInputOverride: true,
     snapshot() { return { zoomFactor: this.state.zoomFactor }; },
     setState(patch) { this.state = { ...this.state, ...patch }; },
     publishState() {},
@@ -1539,6 +1541,7 @@ test("Command zoom changes only the launcher shell while browser zoom stays inde
   const fixture = Object.assign(Object.create(BrowserHost.prototype), {
     state: { zoomFactor: 1 },
     bounds: originalBounds,
+    homeInputOverride: true,
     window: { webContents: shellContents },
     shellZoomShortcutBindings: new Map(),
     logger: { error() {} },
@@ -2198,6 +2201,7 @@ test("manual operations show the home surface without discarding retained task t
     visible: true,
     surfaceActive: true,
     activeView: () => ({ webContents: { focus: () => events.push("focus") } }),
+    inputGuard: { focus: () => events.push("guard-focus") },
     syncViewVisibility: () => events.push("visibility"),
     snapshot: () => ({ activeTabId: "home" }),
     publishState: () => events.push("publish"),
@@ -2208,7 +2212,7 @@ test("manual operations show the home surface without discarding retained task t
 
   assert.equal(fixture.selectedTabId, "home");
   assert.equal(fixture.turnTabs.size, 1);
-  assert.deepEqual(events, ["visibility", "focus", "publish", "descriptor"]);
+  assert.deepEqual(events, ["visibility", "guard-focus", "publish", "descriptor"]);
 });
 
 test("selected home surface remains represented while task tabs are retained", () => {

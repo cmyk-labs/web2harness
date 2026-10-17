@@ -621,6 +621,7 @@ export function providerConfig(config: AppConfig): CodexProviderConfig {
     noReasoningModels: [],
     chatgptWeb: {
       appName: manual ? config.manualAppName : config.automaticAppName,
+      ...(config.mode === "mcp-bridge" && config.tunnel ? { mcpTunnelId: config.tunnel.tunnelId } : {}),
       browserInteractionMode: config.browserInteractionMode,
       browserHost: config.browserHost,
       browserHostDescriptorPath: config.browserHostDescriptorPath,
@@ -637,7 +638,7 @@ export function providerConfig(config: AppConfig): CodexProviderConfig {
       proAvailable: manual ? false : config.proAvailable,
       experimentalContextFiles: manual ? false : config.experimentalContextFiles,
       experimentalContextTripleBudget: !manual && config.experimentalContextFiles && config.experimentalContextTripleBudget,
-      contextWindows: config.contextWindows,
+      contextWindows: normalizeContextWindows(config).contextWindows,
       experimentalSkillAttachments: manual ? false : config.experimentalSkillAttachments,
       experimentalFreshConversationPerTurn: !manual && config.experimentalFreshConversationPerTurn === true,
       useSavedChats: config.useSavedChats === true,

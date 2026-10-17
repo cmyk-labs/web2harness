@@ -535,15 +535,11 @@ describe("ChatGPT outer-native harness v4", () => {
       expect(browserStarts).toBe(1);
 
       const replayEvents: AdapterEvent[] = [];
-      // Cancelled native turns are rejected before admission to the session's event journal.
-      await rejects(adapter.runTurn!(request, { headers: new Headers() }, event => replayEvents.push(event)), {
-        name: "ChatGptWebAdapterError",
-        status: 499,
-        errorType: "client_closed_request",
-        code: "client_cancelled",
-        retryable: false,
-      });
-      expect(replayEvents.filter(event => event.type !== "heartbeat")).toEqual([]);
+      // Reconnect reports the terminal cancellation without starting browser work again.
+      await adapter.runTurn!(request, { headers: new Headers() }, event => replayEvents.push(event));
+      expect(replayEvents.filter(event => event.type !== "heartbeat")).toEqual([
+        expect.objectContaining({ type: "error", code: "client_cancelled", retryable: false }),
+      ]);
       expect(browserStarts).toBe(1);
     } finally {
       (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = originalRun;
@@ -1870,7 +1866,8 @@ describe("ChatGPT outer-native harness v4", () => {
     expect(buffer.observe([first], 0)).toBe("");
     expect(buffer.observe([first], 100)).toBe("First");
     expect(buffer.observe([], 150)).toBe("");
-    expect(buffer.currentSnapshotIsConsistent()).toBe(true);
+    expect(buffer.currentSnapshotIsConsistent()).toBe(false);
+    expect(() => buffer.finish()).toThrow();
     expect(buffer.observe([first, second], 200)).toBe("");
     expect(buffer.currentSnapshotIsConsistent()).toBe(true);
     expect(buffer.finish()).toEqual({ markdown: "First\n\nSecond", delta: "\n\nSecond" });

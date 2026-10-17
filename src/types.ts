@@ -289,6 +289,8 @@ export interface CodexProviderConfig {
   chatgptWeb?: {
     /** ChatGPT custom connector attached to tool-capable temporary chats. */
     appName?: string;
+    /** Runtime-only tunnel identity used to scope MCP recovery; never sent in prompts. */
+    mcpTunnelId?: string;
     /** Whether ChatGPT DOM interaction is automatic or explicitly driven by the user. */
     browserInteractionMode?: "automatic" | "manual";
     /** Explicit browser owner. Launcher mode attaches to the embedded Electron ChatGPT surface. */

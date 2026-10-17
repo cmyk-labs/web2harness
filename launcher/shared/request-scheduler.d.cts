@@ -1,3 +1,14 @@
+import type { McpRemoteFailure } from "./mcp-remote-error.cjs";
+export interface McpQueueStatus {
+  scope: string;
+  connectorName: string;
+  lastFailure?: McpRemoteFailure;
+  lastFailureAt?: number;
+  lastVerifiedAt?: number;
+  cooldownUntil?: number;
+  retryAttempt?: number;
+}
+export interface McpQueueOutcome { failure?: McpRemoteFailure; verified?: boolean }
 export interface RequestSchedulingSettings {
   maxConcurrent: number;
   queueTimeoutMinutes: number;
@@ -16,9 +27,13 @@ export interface QueueInput {
   mode: string;
   effort?: string;
   bytes: number;
+  mcpScope?: string;
+  connectorName?: string;
+  retryAttempt?: number;
 }
 export interface QueueRecord extends Omit<QueueInput, "bytes"> {
   state: QueueState;
+  cooldownUntil?: number;
   reason?: string;
   configRevision: number;
   queuedAt: number;
@@ -39,6 +54,7 @@ export interface QueueSnapshot {
   waiting: number;
   waitingBytes: number;
   closed: boolean;
+  mcpStatus: McpQueueStatus[];
 }
 export interface QueueQuery {
   state?: "active" | "queued" | "running" | "ended" | "succeeded" | "failed" | "cancelled" | "timed-out";
@@ -52,6 +68,7 @@ export class RequestScheduler {
   constructor(options?: {
     settings?: RequestSchedulingSettings;
     now?: () => number;
+    random?: () => number;
     monotonicNow?: () => number;
     onEvent?: (event: string, fields: Partial<QueueRecord> & { configRevision: number; pausedReason: QueuePauseReason | null }) => void;
     maxWaiting?: number;
@@ -67,7 +84,9 @@ export class RequestScheduler {
   beginSend(id: string, lease: string): { allowed: true; permit: string } | { allowed: false; reason: string; retryAfterMs?: number };
   endSend(id: string, lease: string, permit: string, outcome: "confirmed" | "not-sent" | "unknown"): void;
   cancel(id: string): QueueRecord | null;
-  settle(id: string, lease: string, outcome: "succeeded" | "failed" | "cancelled", reason?: string): QueueRecord;
+  settle(id: string, lease: string, outcome: "succeeded" | "failed" | "cancelled", reason?: string, remote?: McpQueueOutcome): QueueRecord;
+  mcpStatus(): McpQueueStatus[];
+  restoreMcpStatus(values?: McpQueueStatus[]): void;
   updateSettings(settings: RequestSchedulingSettings): { settings: RequestSchedulingSettings; configRevision: number };
   pause(reason?: QueuePauseReason): void;
   resume(expectedReason?: QueuePauseReason): void;

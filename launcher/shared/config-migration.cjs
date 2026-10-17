@@ -31,7 +31,10 @@ function migrateRuntimeConfig(value, { forSetup = false } = {}) {
 }
 
 function needsRuntimeConfigMigration(value) {
-  return migrateRuntimeConfig(value, { forSetup: true }) !== value;
+  const windows = require("./context-budget-options.json").defaults;
+  return migrateRuntimeConfig(value, { forSetup: true }) !== value
+    || Object.keys(windows).some(key => value?.contextWindows?.[key] !== undefined
+      && value.contextWindows[key] !== windows[key]);
 }
 
 module.exports = { CURRENT_CONFIG_VERSION, migrateRuntimeConfig, needsRuntimeConfigMigration };

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { adapterErrorEvent, httpStatusFromTerminalError } from "../src/lib/errors";
 import { diagnosticContext, diagnosticError } from "../src/diagnostics";
 import { parseDiagnosticLine, PREFIX, createDiagnosticRecord, safeDetail, type DiagnosticRecord } from "../launcher/shared/diagnostic-event.cjs";
-import { chatGptTurnSupersededError } from "../src/adapters/chatgpt-web/adapter-error";
+import { chatGptTurnSupersededError, ChatGptWebAdapterError } from "../src/adapters/chatgpt-web/adapter-error";
 import { browserHelperError } from "../src/adapters/chatgpt-web/browser/browser-helper-error";
 import { LauncherBrowserHelperClient } from "../src/adapters/chatgpt-web/browser/launcher-helper-client";
 import { LAUNCHER_BROWSER_HOST_KIND, LAUNCHER_BROWSER_IDLE_URL, notifyLauncherTurn } from "../src/browser/launcher-client";
@@ -258,4 +258,12 @@ test("aggregate diagnostics have finite depth, width, size and cycle handling", 
   let chain: Error = new Error("deep");
   for (let i = 0; i < 20; i++) chain = new Error("wrapper", { cause: chain });
   expect(JSON.stringify(diagnosticError(chain))).toContain('"causeOmitted":true');
+});
+
+test("helper carries only classified remote MCP metadata across JSON IPC", () => {
+  captureDiagnostics();
+  const remote = { kind: "rate_limit", source: "probe", status: 429, retryAfterMs: 45000 } as const;
+  const original = new ChatGptWebAdapterError("Remote MCP rate limited", { status: 502, errorType: "server_error", code: "mcp_remote_rate_limited", retryable: false, mcpRemote: remote });
+  const received = receiveHelperError(browserHelperError("remote-fixture", original));
+  expect(received).toMatchObject({ code: "mcp_remote_rate_limited", retryable: false, mcpRemote: remote });
 });

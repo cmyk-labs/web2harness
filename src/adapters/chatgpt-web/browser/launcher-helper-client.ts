@@ -9,6 +9,7 @@ import { notifyLauncherTurn, readLauncherBrowserHostDescriptor } from "../../../
 import { ChatGptCompactionHandoffAccepted, ChatGptWebAdapterError } from "../adapter-error";
 import { diagnosticError, diagnosticEvent } from "../../../diagnostics";
 import type { BrowserHelperError } from "./browser-helper-error";
+import { validMcpRemoteFailure } from "../../../../launcher/shared/mcp-remote-error.cjs";
 import type { CompiledChatGptWebPrompt } from "../prompt/compile";
 import type { BrowserTurn, ResolvedBrowserConfig } from "./browser-worker";
 import {
@@ -142,6 +143,7 @@ function parseHelperMessage(line: string): HelperMessage {
       || code !== undefined
       || retryable !== undefined;
     if (typeof errorMessage !== "string"
+      || (message.mcpRemote !== undefined && !validMcpRemoteFailure(message.mcpRemote))
       || (errorName !== undefined && typeof errorName !== "string")
       || (message.diagnosticRef !== undefined && (typeof message.diagnosticRef !== "string"
         || !/^diag-[a-f0-9]{24}$/.test(message.diagnosticRef)))
@@ -161,6 +163,7 @@ function parseHelperMessage(line: string): HelperMessage {
       type: "error",
       id: message.id,
       message: errorMessage,
+      ...(validMcpRemoteFailure(message.mcpRemote) ? { mcpRemote: message.mcpRemote } : {}),
       ...(typeof message.diagnosticRef === "string" ? { diagnosticRef: message.diagnosticRef } : {}),
       ...(errorName !== undefined ? { name: errorName as string } : {}),
       ...(structured ? {
@@ -568,6 +571,7 @@ export class LauncherBrowserHelperClient {
           errorType: message.errorType!,
           code: message.code!,
           retryable: message.retryable!,
+          mcpRemote: message.mcpRemote,
         })
         : message.name === "AbortError"
           ? new DOMException(message.message, "AbortError")

@@ -34,14 +34,12 @@ export const installWorkspaceFixture = ()=>{
  state.runtimeParameterSources=Object.fromEntries(Object.keys(state.runtimeParameters).map(key=>[key,'default']));
  state.contextWindows={fast:80000,standard:272000};state.contextWindowSources={fast:'default',standard:'default'};
  window.codexWebLauncher=new Proxy({
- setContextWindows:async(edits,tripleBudget)=>{
-  window.__fixture.calls.push(['setContextWindows',edits,tripleBudget]);
+ setContextBudget:async(tripleBudget)=>{
+  window.__fixture.calls.push(['setContextBudget',tripleBudget]);
   if(window.__fixture.failBudgetSave)throw new Error('Fixture budget save failed');
-  const contextWindows={...state.contextWindows},contextWindowSources={...state.contextWindowSources};
-  for(const [key,value] of Object.entries(edits??{})){contextWindows[key]=value==='default'?{fast:80000,standard:272000}[key]:value;contextWindowSources[key]=value==='default'?'default':'user';}
-  return patch({contextWindows,contextWindowSources,...(tripleBudget===undefined?{}:{experimentalContextTripleBudget:tripleBudget})});
+  return patch({contextWindows:{fast:80000,standard:272000},contextWindowSources:{fast:'default',standard:'default'},experimentalContextTripleBudget:tripleBudget});
  },
- queueStatus:async()=>({status:'ready',savedRevision:state.requestSchedulingRevision,settings:state.requestScheduling,scheduler:{settings:state.requestScheduling,configRevision:state.requestSchedulingRevision,active:0,waiting:0,groups:[],pauseReasons:[],pausedReason:null}}),
+ queueStatus:async()=>({status:'ready',currentMcpScope:null,savedRevision:state.requestSchedulingRevision,settings:state.requestScheduling,scheduler:{settings:state.requestScheduling,configRevision:state.requestSchedulingRevision,active:0,waiting:0,groups:[],pauseReasons:[],pausedReason:null}}),
  queryQueue:async(query)=>({items:[],groups:[],total:0,offset:query.offset??0,limit:query.limit??50,snapshotId:'fixture-queue'}),
  saveQueueSettings:async(value,revision,parameters,parameterEdits)=>{window.__fixture.calls.push(['saveQueueSettings',value,revision,parameters,parameterEdits]);if(window.__fixture.holdQueueSave)await new Promise(resolve=>window.__fixture.releaseQueueSave=resolve);if(window.__fixture.failQueueSave)throw new Error('Fixture queue save failed');if(revision!==state.requestSchedulingRevision)throw new Error('Queue settings changed');const saved=patch({requestScheduling:value,requestSchedulingRevision:revision+1,...(parameters?{runtimeParameters:parameters,runtimeParameterSources:{...state.runtimeParameterSources,...parameterEdits}}:{})});return {state:saved,persistedRevision:revision+1,appliedRevision:window.__fixture.failQueueApply?revision:revision+1,applyState:window.__fixture.failQueueApply?'apply-failed':'applied'}},
  controlQueue:async action=>{window.__fixture.calls.push(['controlQueue',action]);return {}},

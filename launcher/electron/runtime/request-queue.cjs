@@ -32,6 +32,7 @@ class RequestQueue {
     try {
       const saved = JSON.parse(await fs.readFile(this.file, "utf8"));
       if (saved.version !== 1 || !Array.isArray(saved.records) || saved.records.length > 4096) throw new Error("Invalid queue receipts");
+      this.core.restoreMcpStatus(saved.mcpStatus);
       for (const reason of saved.pauseReasons ?? []) this.core.pause(reason);
       if (saved.pendingSend === true) this.core.pause("send_outcome_unknown");
       if (Number.isFinite(saved.lastSendAt)) this.core.lastSendAt = performance.now() - Math.max(0, Date.now() - saved.lastSendAt);
@@ -93,6 +94,7 @@ class RequestQueue {
   async persist() {
     if (!this.dirty) return;
     const text = JSON.stringify({ version: 1, pauseReasons: [...this.core.pauseReasons], pendingSend: Boolean(this.core.sendOwner),
+      mcpStatus: this.core.mcpStatus(),
       lastSendAt: this.core.lastSendAt === undefined ? undefined : Date.now() - (performance.now() - this.core.lastSendAt),
       records: [...this.core.jobs.values()].map(job => this.core.view(job)) });
     this.dirty = false;
@@ -134,7 +136,7 @@ class RequestQueue {
       else if (action === "settle") {
         if (this.hasResource(owner.traceId)) throw new Error("Browser resources have not been released");
         if (input.reason === "rate_limit_exceeded") this.core.pause("account_rate_limited");
-        result = lease ? this.core.settle(input.id, lease, input.outcome, input.reason) : this.core.cancel(input.id);
+        result = lease ? this.core.settle(input.id, lease, input.outcome, input.reason, input.remote) : this.core.cancel(input.id);
       } else throw new Error("Unknown queue action");
     }
     await this.persist();

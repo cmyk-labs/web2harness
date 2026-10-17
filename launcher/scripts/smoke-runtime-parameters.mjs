@@ -9,30 +9,29 @@ export async function runRuntimeParametersSmoke({ context, origin, out, check, e
   await page.getByRole('region', { name: '运行参数', exact: true }).waitFor();
   const select = name => page.getByLabel(name, { exact: true });
   const save = () => page.getByRole('button', { name: '保存设置', exact: true });
-  check('Context windows use k with one shared percentage explanation',
-    await select('Fast 上下文窗口').inputValue() === '80' && await select('非Fast上下文窗口').inputValue() === '272'
-    && await page.locator('.context-budget-settings output').count() === 0
+  const budget = name => select(name).textContent();
+  check('Context windows are fixed read-only outputs',
+    await budget('Fast 上下文窗口') === '80' && await budget('非Fast上下文窗口') === '272'
+    && await page.locator('.context-budget-settings input').count() === 0
     && (await page.locator('.context-budget-notes').innerText()).includes('95%')
     && (await page.locator('.context-budget-notes').innerText()).includes('90%'));
   await page.locator('.context-budget-settings').screenshot({path:out+'/budget-zh.png'});
-  await select('Fast 上下文窗口').fill('16.383');
-  check('k input retains the existing lower token bound', !await save().isEnabled());
-  await select('Fast 上下文窗口').fill('96.001');
-  check('Fractional k is valid without saving core values', await save().isEnabled()
-    && await page.evaluate(() => window.__fixture.state.contextWindows.fast === 80000));
-  await page.evaluate(() => { window.__fixture.failBudgetSave = true; });
-  await save().click();await page.getByRole('alert').filter({hasText:'Fixture budget save failed'}).waitFor();
-  check('Failed budget transaction preserves the editable draft', await select('Fast 上下文窗口').inputValue() === '96.001');
-  await page.evaluate(() => { window.__fixture.failBudgetSave = false; });
-  await save().click();await page.getByText('已保存。请重启对应 Codex，使上下文容量和压缩阈值生效。',{exact:true}).waitFor();
-  check('Window saves retain explicit user provenance', await page.evaluate(() => window.__fixture.state.contextWindows.fast === 96001 && window.__fixture.state.contextWindowSources.fast === 'user' && window.__fixture.state.contextWindows.standard === 272000));
   await page.evaluate(() => window.__fixture.patch({experimentalContextFiles:true}));
   await page.getByRole('radio',{name:'三倍预算（实验性）',exact:true}).click();
-  check('Triple choice keeps standard k inputs and explains the multiplier', await select('Fast 上下文窗口').inputValue() === '96.001'
-    && (await page.locator('.context-budget-notes').innerText()).includes('×3'));
+  check('Triple preview uses 240k and 816k without changing persisted choice', await budget('Fast 上下文窗口') === '240'
+    && await budget('非Fast上下文窗口') === '816' && await page.evaluate(() => !window.__fixture.state.experimentalContextTripleBudget));
+  await page.evaluate(() => { window.__fixture.failBudgetSave = true; });
+  await save().click();await page.getByRole('alert').filter({hasText:'Fixture budget save failed'}).waitFor();
+  check('Failed budget transaction preserves the selected mode', await budget('Fast 上下文窗口') === '240');
+  await page.evaluate(() => { window.__fixture.failBudgetSave = false; });
+  await save().click();await page.getByText('已保存。请重启对应 Codex，使上下文容量和压缩阈值生效。',{exact:true}).waitFor();
+  check('Budget saves send only the mode and retain fixed windows', await page.evaluate(() => {
+    const call=window.__fixture.calls.filter(c=>c[0]==='setContextBudget').at(-1);
+    return call.length===2 && call[1]===true && window.__fixture.state.contextWindows.fast===80000 && window.__fixture.state.contextWindows.standard===272000;
+  }));
   await page.getByRole('radio',{name:'标准预算',exact:true}).click();
-  await select('Fast 上下文窗口').fill('80');await save().click();
-  await page.getByText('已保存。请重启对应 Codex，使上下文容量和压缩阈值生效。',{exact:true}).waitFor();
+  check('Standard selection restores 80k and 272k preview', await budget('Fast 上下文窗口') === '80' && await budget('非Fast上下文窗口') === '272');
+  await save().click();await page.getByText('已保存。请重启对应 Codex，使上下文容量和压缩阈值生效。',{exact:true}).waitFor();
   check('Current execution defaults remain visible', await select('标签页保留数量').inputValue() === '5'
     && await select('空闲标签保留时间').inputValue() === '30' && await select('网页无进展超时').inputValue() === '5'
     && await select('附件上传与处理等待时间').inputValue() === '2');

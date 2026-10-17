@@ -264,6 +264,7 @@ export interface TurnBrokerOwner {
   commitCompletionFence(token: string, revision: number, browserReply?: string): CompletionFenceCommit | Promise<CompletionFenceCommit>;
   waitForRetirement(token: string, signal?: AbortSignal): Promise<void>;
   revoke(token: string, reason?: Error): void | Promise<void>;
+  retireUnreceivedHandoff?(token: string): boolean | Promise<boolean>;
 }
 
 /**
@@ -545,6 +546,16 @@ export class TurnBroker implements TurnBrokerOwner {
     channel.invocations.delete(callId);
     diagnosticEvent(result.isError ? "warning" : "info", "tool.returned", { traceId: channel.traceId, toolEventId: diagnosticReference(callId), toolName: invocation.request.wireName, outcome: result.isError ? "tool-error" : "returned", isError: result.isError === true, durationMs: Math.round(performance.now() - invocation.startedAt), pending: channel.invocations.size });
     invocation.resolve(result);
+  }
+
+  /** Atomically close an untouched binding. A late claim cannot race a recovery. */
+  retireUnreceivedHandoff(token: string): boolean {
+    this.prune();
+    const channel = this.channels.get(token);
+    if (!channel?.handoff || channel.safe || channel.completionCommitted || channel.activityRevision !== 0
+      || channel.activities.size || channel.invocations.size || channel.handoff.canFinishWebRound) return false;
+    this.revoke(token);
+    return true;
   }
 
   beginCompletionFence(token: string): CompletionFenceState {

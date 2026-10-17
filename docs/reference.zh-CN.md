@@ -348,13 +348,13 @@ Sol/Pro的单次可见文本规划预算独立于总上下文：无图片时，�
 
 ### Context as File 与分组上下文预算
 
-在 **运行参数** 中统一编辑 **Fast上下文窗口** 和 **非Fast上下文窗口**。`contextWindows.fast/standard` 默认 `80000/272000`；`contextWindowSources.fast/standard` 分别记录来源，仅 `user` 来源保留数值，缺失或 `default` 来源随当前默认值更新。恢复默认只改草稿，显式保存后生效。窗口保存通过配置事务同步 runtime 与模型目录，任务忙碌时拒绝，不中断任务；随后重启对应 Codex。95%可用容量和90%压缩阈值不可单独编辑。 界面使用小写k（1k = 1,000 tokens），接受16.384–1,000k，精度0.001k；实际保存的token数仍为16,384–1,000,000范围内的整数。这是产品配置范围，不是实测模型容量，也不保证该范围内的输入可被网页接受或完整召回。32 KiB完整序列化上下文的文件传输阈值独立，不保证实际网页容量或完整召回。
+在 **运行参数 → 上下文预算** 中只选择**标准预算**或**三倍预算**。Fast（Instant/low）与非Fast（medium/high/xhigh/Pro）的标准窗口固定为80k/272k，三倍固定为240k/816k（1k = 1,000 tokens），数值只读。95%可用容量和90%自动压缩阈值自动派生，不可编辑。三倍仍须开启上下文文件传输并符合模式及账户能力。旧自定义窗口统一归一到固定值，保留有效的标准/三倍选择；旧目录需要重新应用配置并重启对应 Codex。恢复默认只改草稿；任务忙碌或排队时拒绝保存，空闲保存通过配置事务同步运行时和目录。32 KiB文件传输阈值独立；预算不保证实际网页容量或完整召回。
 
-CLI 的 `setup` 与 `dev setup` 支持 `--fast-context-window N|default` 和 `--standard-context-window N|default`。`N` 为上述范围内的整数，保存该组窗口并标记 `user` 来源；`default` 恢复当前默认值及 `default` 来源。省略参数保留该组的现有来源规则。两组可同时指定，例如 `--fast-context-window 96000 --standard-context-window 300000`；恢复默认使用 `--fast-context-window default --standard-context-window default`。这些参数更新配置，不证明对应模型的实际容量。
+CLI 的 `setup` 与 `dev setup` 通过 `--standard-context-budget` 或 `--context-triple-budget` 选择模式。已停用的 `--fast-context-window` 和 `--standard-context-window` 参数会明确报错，包括数值和 `default` 输入。配置、模型目录与浏览器预检统一采用固定窗口。
 
 开启上下文文件传输后，完整序列化上下文不超过32 KiB（32768个UTF-8字节）时仍内联发送，超过时作为一个带完整性校验的TXT附件发送。大小包含JSON转义、角色、工具和结果，并非只计算最新用户正文。发送前须确认全部本回合附件处理完成；失败会停止发送，不回退为全文输入。上传阈值只改变传输方式，所选窗口及压缩阈值不变。
 
-文件与预算分别记录contextPreferenceSources.files/budget；仅保留明确user选择，否则采用文件开启＋标准预算（受模式支持限制）。用户操作才记录user，普通同步不修改来源。三倍将各组配置的标准窗口乘三：Fast/非Fast默认240000/816000，可用与压缩仍为95%/90%；关闭文件则清除三倍及其来源。手动模式和Luna不支持文件传输。
+文件与预算分别记录contextPreferenceSources.files/budget；仅保留明确user选择，否则采用文件开启＋标准预算（受模式支持限制）。用户操作才记录user，普通同步不修改来源。三倍将固定标准窗口乘三：Fast/非Fast为240000/816000，可用与压缩仍为95%/90%；关闭文件则清除三倍及其来源。手动模式和Luna不支持文件传输。
 
 <a id="luna-continuity"></a>
 

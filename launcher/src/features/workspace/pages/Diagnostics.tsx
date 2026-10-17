@@ -16,6 +16,7 @@ import { Report } from "../Report";
 import { workspaceBusy } from "../status";
 import type { WorkspaceProps } from "../types";
 import { useFeedback } from "../useFeedback";
+import { McpHistory } from "../RequestQueue";
 
 export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
   const {
@@ -122,6 +123,7 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
         )}
         {tab === "health" && (
           <>
+            <McpHistory api={api} t={t} />
             <div className="flex between wrap" style={{ marginBottom: 18 }}>
               <p style={{ fontSize: 12 }}>
                 {t(

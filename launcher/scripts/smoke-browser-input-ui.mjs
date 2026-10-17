@@ -37,14 +37,14 @@ try {
   }
   check(`${language}: close unavailable while owned`,await page.getByRole('button',{name:z?'关闭标签页':'Close tab',exact:true}).count()===0);
   check(`${language}: no duplicate toolbar status`,await page.locator('.browser-toolbar [role="status"]').count()===0);
-  await page.getByRole('button',{name:z?'取消只读':'Exit view-only',exact:true}).click();
-  await page.getByRole('button',{name:z?'恢复只读':'Restore view-only',exact:true}).waitFor();
+  await page.getByRole('button',{name:z?'恢复操作':'Enable interaction',exact:true}).click();
+  await page.getByRole('button',{name:z?'禁止操作':'Block interaction',exact:true}).waitFor();
   check(`${language}: override enables navigation while automation remains active`,await page.getByRole('button',{name:z?'重新加载':'Reload',exact:true}).isEnabled());
   check(`${language}: override leaves global zoom protected`,await page.getByRole('button',{name:z?'放大':'Zoom in',exact:true}).isDisabled());
   await page.screenshot({path:resolve(out,`override-${language}.png`)});
   check(`${language}: toolbar stays inside browser pane`,await page.locator('.browser-toolbar').evaluate(el=>el.scrollWidth<=el.clientWidth));
-  await page.getByRole('button',{name:z?'恢复只读':'Restore view-only',exact:true}).click();
-  await page.getByRole('button',{name:z?'取消只读':'Exit view-only',exact:true}).waitFor();
+  await page.getByRole('button',{name:z?'禁止操作':'Block interaction',exact:true}).click();
+  await page.getByRole('button',{name:z?'恢复操作':'Enable interaction',exact:true}).waitFor();
   check(`${language}: restoring read-only disables navigation`,await page.getByRole('button',{name:z?'重新加载':'Reload',exact:true}).isDisabled());
   await page.getByRole('button',{name:z?'停止网页任务':'Stop browser task',exact:true}).click();
   check(`${language}: stop uses explicit IPC`,await page.evaluate(()=>window.__fixture.calls.some(c=>c[0]==='stopBrowserTab'&&c[1]==='auto')));
@@ -53,10 +53,11 @@ try {
   check(`${language}: waiting gap keeps zoom blocked`,await page.getByRole('button',{name:z?'放大':'Zoom in',exact:true}).isDisabled());
   check(`${language}: waiting does not claim it can stop Codex tools`,await page.getByRole('button',{name:z?'停止网页任务':'Stop browser task',exact:true}).count()===0);
   await page.screenshot({path:resolve(out,`waiting-${language}.png`)});
-  await page.evaluate(()=>{const f=window.__fixture;f.emitBrowser({status:'ready',inputLocked:false,inputLockReason:null,automationBusy:false,zoomLocked:false,canOverrideInput:false,inputOverrideActive:false,activeTabId:'home',tabs:[{id:'home',title:'ChatGPT',status:'ready',active:true,closable:false}]});});
-  await page.waitForFunction(()=>!document.querySelector('.browser-zoom-controls button').disabled);
-  check(`${language}: idle navigation returns`,await page.getByRole('button',{name:z?'重新加载':'Reload',exact:true}).isEnabled());
-  check(`${language}: idle zoom returns`,await page.getByRole('button',{name:z?'放大':'Zoom in',exact:true}).isEnabled());
+  await page.evaluate(()=>{const f=window.__fixture;f.emitBrowser({status:'ready',inputLocked:true,inputLockReason:'protected',automationBusy:false,zoomLocked:true,canOverrideInput:true,inputOverrideActive:false,activeTabId:'home',tabs:[{id:'home',title:'ChatGPT',status:'ready',active:true,closable:false}]});});
+  check(`${language}: idle navigation remains blocked`,await page.getByRole('button',{name:z?'重新加载':'Reload',exact:true}).isDisabled());
+  check(`${language}: idle zoom remains blocked`,await page.getByRole('button',{name:z?'放大':'Zoom in',exact:true}).isDisabled());
+  await page.getByRole('button',{name:z?'恢复操作':'Enable interaction',exact:true}).click();
+  check(`${language}: idle interaction can be explicitly enabled`,await page.getByRole('button',{name:z?'重新加载':'Reload',exact:true}).isEnabled());
  }
  check('no renderer errors',errors.length===0);
  await writeFile(resolve(out,'result.json'),JSON.stringify({passed:checks.length,checks,errors},null,2));console.log(JSON.stringify({passed:checks.length}));

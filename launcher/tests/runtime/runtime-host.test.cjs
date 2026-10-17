@@ -186,16 +186,16 @@ test("DEV core setup configures only the isolated harness contract", async () =>
   assert.equal(fixture.invocation().args.includes("--restart-service"), false);
 });
 
-test("window budgets use the setup transaction with per-field provenance and preserve mode", async () => {
+test("fixed budget choices use the setup transaction and preserve mode", async () => {
   for (const factory of [hostFor, devHostFor]) {
     const config = { mode: "native-tools", experimentalContextFiles: true };
     const fixture = factory(config);
-    await fixture.host.setContextWindows({ fast: "default", standard: 300000 }, true);
+    await fixture.host.setContextBudget(true);
     const { args, name } = fixture.invocation();
     assert.equal(name, "context-budgets");
     assert.ok(args.includes("--native-tools"));
-    assert.equal(args[args.indexOf("--fast-context-window") + 1], "default");
-    assert.equal(args[args.indexOf("--standard-context-window") + 1], "300000");
+    assert.equal(args.includes("--fast-context-window"), false);
+    assert.equal(args.includes("--standard-context-window"), false);
     assert.ok(args.includes("--context-triple-budget"));
     assert.equal(args.includes("--context-files"), false);
     assert.equal(args.includes("--replace-codex-route"), factory === hostFor);
@@ -203,9 +203,9 @@ test("window budgets use the setup transaction with per-field provenance and pre
   }
   const fixture = devHostFor({ mode: "native-tools", experimentalContextFiles: true });
   fixture.host.runDevSetup = async () => { throw new Error("budget setup failed"); };
-  await assert.rejects(fixture.host.setContextWindows({ fast: 90000 }), /budget setup failed/);
-  await assert.rejects(fixture.host.setContextWindows({ fast: 0 }), /Invalid context window/);
-  await assert.rejects(devHostFor({ mode: "native-tools", experimentalContextFiles: false }).host.setContextWindows(undefined, true), /Enable Context as File/);
+  await assert.rejects(fixture.host.setContextBudget(false), /budget setup failed/);
+  await assert.rejects(fixture.host.setContextBudget(0), /Invalid context budget/);
+  await assert.rejects(devHostFor({ mode: "native-tools", experimentalContextFiles: false }).host.setContextBudget(true), /Enable Context as File/);
 });
 
 test("Context as File uses the setup transaction and refreshes the production Codex catalog", async () => {

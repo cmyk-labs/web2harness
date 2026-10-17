@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { zipSync } from "fflate";
 import * as config from "../../src/config";
 import * as commands from "../../src/runtime/process";
-import { TUNNEL_VERSION, installTunnelClient, parseTunnelStatus, stopTunnel, tunnelClientInstallAction, tunnelCommandOutput, tunnelConnectLaunchError } from "../../src/runtime/tunnel";
+import { TUNNEL_VERSION, installTunnelClient, parseTunnelStatus, stopTunnel, tunnelClientInstallAction, tunnelCommandOutput, tunnelConnectLaunchError, tunnelStatus, waitForTunnelReady } from "../../src/runtime/tunnel";
 
 test("a failed tunnel stop trusts OS exit evidence, never the inventory's cleared PID", () => {
   const appConfig = { mode: "mcp-bridge", tunnel: { binaryPath: process.execPath, alias: "ours" } } as config.AppConfig;
@@ -154,6 +154,38 @@ test("pins the fixed tunnel-client and migrates only the previously shipped vers
 });
 
 describe("tunnel status boundary", () => {
+  test("CLI readiness verifies the configured profile and rejects invalidated credentials without waiting or exposing keys", async () => {
+    const root = fs.mkdtempSync(join(tmpdir(), "tunnel-poll-health-"));
+    const healthFile = join(root, "health.url");
+    fs.writeFileSync(healthFile, "http://127.0.0.1:45819\n");
+    const settings = { binaryPath: process.execPath, alias: "ours", profileDir: root, profileName: "ours", tunnelId: "tunnel_owned" };
+    const appConfig = { mode: "mcp-bridge", tunnel: settings } as config.AppConfig;
+    let matching = true, succeeds = false;
+    const command = spyOn(commands, "runCommand").mockImplementation((_binary, args) => ({ status: 0, stderr: "", stdout: JSON.stringify(
+      args[1] === "cleanup" ? { entries: [{ alias: "ours", runtime_state: "ready" }] }
+        : { aliases: [{ alias: "ours", profile_dir: root, profile_name: "ours", tunnel_id: matching ? settings.tunnelId : "another", health_url_file: healthFile }] },
+    ) }));
+    const request = spyOn(globalThis, "fetch").mockImplementation((async (url: RequestInfo | URL) => new Response(String(url).includes("/metrics")
+      ? `commands_poll_last_successful_timestamp_seconds ${succeeds ? Math.floor(Date.now() / 1000) : 0}\n`
+      : JSON.stringify({ events: succeeds ? [] : [{ time: new Date().toISOString(), message: "poll failed; backing off",
+        attrs: { status_code: 401, error_code: "token_invalidated", error_message: "sk-never-show-this" } }] }))) as typeof fetch);
+    try {
+      const failed = await waitForTunnelReady(appConfig);
+      expect(failed).toMatchObject({ ok: false, ready: false, retryable: false });
+      expect(failed.detail).toContain("401 (token_invalidated)");
+      expect(failed.detail).not.toContain("sk-never");
+      expect(command).toHaveBeenCalledTimes(2);
+      succeeds = true;
+      expect(await tunnelStatus(appConfig)).toMatchObject({ ok: true, ready: true });
+      matching = false;request.mockClear();
+      expect(await tunnelStatus(appConfig)).toMatchObject({ ok: false, ready: false });
+      expect(request).not.toHaveBeenCalled();
+    } finally {
+      request.mockRestore();command.mockRestore();
+      fs.rmSync(healthFile);fs.rmdirSync(root);
+    }
+  });
+
   test("requires the exact alias to have a locally verified ready runtime", () => {
     expect(parseTunnelStatus(JSON.stringify({
       entries: [{ alias: "ours", runtime_state: "ready" }],

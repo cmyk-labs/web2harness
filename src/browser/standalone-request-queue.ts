@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import {
   DEFAULT_REQUEST_SCHEDULING, RequestScheduler, validateRequestScheduling,
   type QueueInput, type QueuePhase, type QueueRecord, type QueuePauseReason,
-  type RequestSchedulingSettings,
+  type RequestSchedulingSettings, type McpQueueStatus, type McpQueueOutcome,
 } from "../../launcher/shared/request-scheduler.cjs";
 import { ChatGptWebAdapterError } from "../adapters/chatgpt-web/adapter-error";
 import type { QueueTicket, RequestQueueTransport } from "./request-queue-client";
@@ -25,6 +25,7 @@ interface Receipts {
   lastSendAt?: number;
   pendingSend: boolean;
   records: QueueRecord[];
+  mcpStatus?: McpQueueStatus[];
 }
 
 function failure(code: string, message: string): Error {
@@ -125,6 +126,7 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
         this.records.set(fields.id, record as QueueRecord);
       }
     } });
+    this.core.restoreMcpStatus(saved.mcpStatus);
     for (const reason of saved.pauseReasons) this.core.pause(reason);
     if (saved.pendingSend) this.core.pause("send_outcome_unknown");
   }
@@ -198,6 +200,7 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
     try {
       await atomicJson(join(this.directory, "receipts.json"), {
         version: 1, settings: snapshot.settings, pauseReasons: snapshot.pauseReasons,
+        mcpStatus: snapshot.mcpStatus,
         lastSendAt: this.lastSendAt, pendingSend: this.pendingSend, records: [...this.records.values()],
       } satisfies Receipts);
       this.dirty = this.mutationVersion !== version;
@@ -230,7 +233,7 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
   request<T>(action: string, body: unknown, peer?: StandaloneQueuePeer): Promise<T> { return this.serial(async () => {
     if (this.closed || !body || typeof body !== "object") throw failure("queue_unavailable", "Standalone queue is unavailable");
     const input = body as QueueTicket & { job: QueueInput; pid: number; traceId: string; phase: QueuePhase;
-      permit: string; outcome: Outcome | "confirmed" | "not-sent" | "unknown"; reason?: string; resourcesReleased?: boolean };
+      permit: string; outcome: Outcome | "confirmed" | "not-sent" | "unknown"; reason?: string; resourcesReleased?: boolean; remote?: McpQueueOutcome };
     let result: unknown;
     if (action === "cancel-client" && peer) {
       for (const [id, owner] of this.tickets) if (owner.clientId === peer.clientId && owner.pid === peer.pid) this.core.cancel(id);
@@ -281,7 +284,7 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
         if (this.pendingSend && this.core.get(input.id)?.sendAttemptedAt && !this.core.get(input.id)?.sendConfirmedAt) {
           this.lastSendAt = Date.now(); this.lastSendMonotonic = performance.now();
         }
-        result = lease ? this.core.settle(input.id, lease, input.outcome as Outcome, input.reason) : this.core.cancel(input.id);
+        result = lease ? this.core.settle(input.id, lease, input.outcome as Outcome, input.reason, input.remote) : this.core.cancel(input.id);
         // If settlement found an unacknowledged send, keep the durable uncertainty marker.
         this.resources.delete(input.id);
       } else throw new Error("Unknown standalone queue action");

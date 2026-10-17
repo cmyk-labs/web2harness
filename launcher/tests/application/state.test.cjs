@@ -6,6 +6,26 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { normalizeRuntimeParameters } = require("../../shared/runtime-parameters.cjs");
 
+test("legacy custom windows normalize and invalidate the catalog while preserving explicit budget choice", t => {
+  const parent = fs.realpathSync(os.tmpdir());
+  const root = fs.mkdtempSync(path.join(parent, "web2harness-budget-migration-"));
+  t.after(() => { assert.equal(path.dirname(root), parent); assert.match(path.basename(root), /^web2harness-budget-migration-/); fs.rmSync(root, { recursive: true }); });
+  const file = path.join(root, "state.json");
+  for (const triple of [false, true]) {
+    fs.writeFileSync(file, JSON.stringify({ version: 1, coreSetupComplete: true, language: "zh-CN",
+      contextWindows: { fast: 96000, standard: 300000 }, contextWindowSources: { fast: "user", standard: "user" },
+      experimentalContextFiles: true, experimentalContextTripleBudget: triple,
+      contextPreferenceSources: { files: "user", budget: "user" }, codexCatalogVerified: true }));
+    const state = createStateStore(file).read();
+    assert.deepEqual(state.contextWindows, { fast: 80000, standard: 272000 });
+    assert.equal(state.experimentalContextTripleBudget, triple);
+    assert.equal(state.language, "zh-CN");
+    assert.equal(state.codexCatalogVerified, false);
+    assert.equal(state.codexRestartRequired, true);
+    assert.equal(require("../../shared/config-migration.cjs").needsRuntimeConfigMigration({ version: 5, contextWindows: { fast: 96000, standard: 300000 } }), true);
+  }
+});
+
 test("runtime parameter values and their user sources survive a store restart", t => {
   const parent = fs.realpathSync(os.tmpdir());
   const root = fs.mkdtempSync(path.join(parent, "web2harness-runtime-parameters-")), file = path.join(root, "state.json");
@@ -59,6 +79,8 @@ test("launcher state persists onboarding, language, and autostart atomically", (
       requestScheduling: { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3 },
       requestSchedulingRevision: 1,
       ...normalizeRuntimeParameters(),
+      contextWindows: { fast: 80000, standard: 272000 },
+      contextWindowSources: { fast: "default", standard: "default" },
       language: null,
       onboardingComplete: false,
       githubOpened: false,
@@ -94,6 +116,8 @@ test("launcher state persists onboarding, language, and autostart atomically", (
       requestScheduling: { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3 },
       requestSchedulingRevision: 1,
       ...normalizeRuntimeParameters(),
+      contextWindows: { fast: 80000, standard: 272000 },
+      contextWindowSources: { fast: "default", standard: "default" },
       language: "zh-CN",
       onboardingComplete: true,
       githubOpened: false,
@@ -202,6 +226,8 @@ test("persisted sidebar corruption is repaired without changing the rest of laun
       requestScheduling: { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3 },
       requestSchedulingRevision: 1,
       ...normalizeRuntimeParameters(),
+      contextWindows: { fast: 80000, standard: 272000 },
+      contextWindowSources: { fast: "default", standard: "default" },
       language: "zh-CN",
       onboardingComplete: false,
       githubOpened: false,

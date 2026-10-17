@@ -58,7 +58,7 @@ try {
   await shield.getByText('等待工具结果，仅供查看',{exact:true}).waitFor();
   check('tools gap stays locked',await owned(()=>global.inputFixture.host.snapshot().inputLocked));
   await owned(()=>{const {host,tab}=global.inputFixture;tab.awaitingToolResults=false;host.selectTab('home');});
-  check('idle home unlocks while retained task page stays protected',await owned(()=>!global.inputFixture.host.inputGuard.visible));
+  check('idle home and retained task page both stay protected',await owned(()=>global.inputFixture.host.inputGuard.visible));
   await owned(()=>{const {host,tab}=global.inputFixture;host.selectTab(tab.id);});
   await shield.getByText('会话已保留，仅供查看',{exact:true}).waitFor();
   await shield.screenshot({path:resolve(out,'notice-zh-CN.png')});
@@ -75,7 +75,19 @@ try {
   check('real beginTurn reinstates protection for retained conversation',await owned(()=>global.inputFixture.host.inputGuard.visible&&!global.inputFixture.host.snapshot().inputOverrideActive));
   await owned(async()=>{const {host,tab}=global.inputFixture;await host.endTurn(tab.traceId,tab.helperPid,'completed',false,'',true);});
   await owned(async()=>{const {host,tab}=global.inputFixture;await host.closeTab(tab.id);});
-  check('release restores empty browser input state',await owned(()=>!global.inputFixture.host.snapshot().inputLocked&&!global.inputFixture.host.snapshot().zoomLocked));
+  check('empty home remains protected after release',await owned(()=>global.inputFixture.host.snapshot().inputLocked&&global.inputFixture.host.snapshot().zoomLocked&&global.inputFixture.host.inputGuard.visible));
+  await owned(()=>{const {host}=global.inputFixture;host.setInputOverride('home',true,host.inputOverrideContext('home'));});
+  check('idle home unlocks only on explicit recovery',await owned(()=>!global.inputFixture.host.snapshot().inputLocked&&!global.inputFixture.host.snapshot().zoomLocked));
+  await owned(async({webContents})=>{const {host,html}=global.inputFixture;const auth=host.createAuthView({webContents:webContents.create({session:host.view.webContents.session})});await auth.loadURL('data:text/html,'+encodeURIComponent(html)+'#auth');host.syncViewVisibility();});
+  check('new authentication view does not inherit home override',await owned(()=>global.inputFixture.host.snapshot().inputLocked&&global.inputFixture.host.inputGuard.visible));
+  const authPage=app.context().pages().find(p=>p.url().endsWith('#auth'));
+  await authPage.locator('#input').fill('AUTO');await authPage.locator('#input').focus();
+  await owned(()=>{const c=global.inputFixture.host.authView.webContents;c.sendInputEvent({type:'keyDown',keyCode:'Q'});c.sendInputEvent({type:'char',keyCode:'Q'});c.sendInputEvent({type:'keyUp',keyCode:'Q'});});await wait(100);
+  check('authentication native keyboard is blocked while CDP remains usable',await authPage.locator('#input').inputValue()==='AUTO');
+  await owned(()=>{const {host}=global.inputFixture;host.setInputOverride('home',true,host.inputOverrideContext('home'));});
+  check('authentication unlock is confined to the authentication view',await owned(()=>{const {host}=global.inputFixture;return host.authView.inputOverride&&!host.homeInputOverride&&!host.inputGuard.visible;}));
+  await owned(()=>{const {host}=global.inputFixture;host.closeAuthView(host.authView,true);});
+  check('closing authentication returns to protected home',await owned(()=>global.inputFixture.host.snapshot().inputLocked&&global.inputFixture.host.inputGuard.visible));
   await writeFile(resolve(out,'result.json'),JSON.stringify({passed:checks.length,checks,physical:process.env.BROWSER_INPUT_PHYSICAL==='1'},null,2));
   console.log(JSON.stringify({passed:checks.length,physical:process.env.BROWSER_INPUT_PHYSICAL==='1'}));
 }catch(error){await writeFile(resolve(out,'failure.json'),JSON.stringify({checks,error:String(error)},null,2));throw error;}

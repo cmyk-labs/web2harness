@@ -42,6 +42,7 @@ The maintainer reviews completed checks, unresolved failures and unexecuted item
 ## Version and source preparation
 
 1. Choose the version and synchronize root/launcher manifests, `src/version.ts`, installer defaults, and other fields enforced by `scripts/check-version.ts`. A release tag must equal `v` plus the root package version.
+   For README release maintenance, add only the new entry to the release-history table in both languages. Do not rewrite the introductory release paragraph or add detailed context-window capacities for each release. Change other README content only when the documented product content itself changes.
 2. Use the pinned Bun `1.4.0` and both frozen lockfiles. Record the source revision and keep candidate builds separate from unrelated local changes.
 3. Run `bun run verify` and inspect every stage. It stops at the first failure; later stages are unexecuted until run separately.
 4. Confirm the intended repository identity in launcher metadata. The release workflow passes its repository to packaging. Installer scripts require an explicit `WEB2HARNESS_REPOSITORY` and reject missing/invalid configuration before installation work.

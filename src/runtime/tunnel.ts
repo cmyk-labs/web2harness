@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { probeTunnelTransport } from "../../launcher/shared/tunnel-transport-health.cjs";
 import { unzipSync } from "fflate";
 import type { AppConfig, BrowserInteractionMode, TunnelConfig } from "../config";
 import { atomicWriteFile, getConfigDir } from "../config";
@@ -341,6 +342,7 @@ export interface TunnelRuntimeStatus {
   ready: boolean;
   state?: string;
   detail: string;
+  retryable?: boolean;
 }
 
 export function tunnelCommandOutput(result: {
@@ -442,7 +444,7 @@ export function parseTunnelStatus(output: string, alias: string, exitStatus = 0)
   }
 }
 
-export function tunnelStatus(config: AppConfig): TunnelRuntimeStatus {
+export async function tunnelStatus(config: AppConfig): Promise<TunnelRuntimeStatus> {
   const settings = tunnel(config);
   if (!existsSync(settings.binaryPath)) {
     return { ok: false, processRunning: false, healthy: false, ready: false, detail: `Missing ${settings.binaryPath}` };
@@ -452,7 +454,25 @@ export function tunnelStatus(config: AppConfig): TunnelRuntimeStatus {
     ["runtimes", "cleanup", "--json"],
     { timeout: 10_000 },
   );
-  return parseTunnelStatus(tunnelCommandOutput(result), settings.alias, result.status);
+  const local = parseTunnelStatus(tunnelCommandOutput(result), settings.alias, result.status);
+  if (!local.ok) return local;
+  try {
+    const inventory = runCommand(settings.binaryPath, ["runtimes", "list", "--json"], { timeout: 5_000 });
+    if (inventory.status !== 0) throw new Error("local inventory is unavailable");
+    const parsed = JSON.parse(inventory.stdout);
+    const aliases = Array.isArray(parsed?.aliases) ? parsed.aliases.filter((entry: { alias?: string }) => entry?.alias === settings.alias) : [];
+    const owned = aliases.length === 1 ? aliases[0] : undefined;
+    if (!owned || owned.tunnel_id !== settings.tunnelId || owned.profile_name !== settings.profileName
+      || typeof owned.profile_dir !== "string" || resolve(owned.profile_dir) !== resolve(settings.profileDir)
+      || typeof owned.health_url_file !== "string" || !isAbsolute(owned.health_url_file)) {
+      throw new Error("local inventory has no matching tunnel profile");
+    }
+    const transport = await probeTunnelTransport(readFileSync(owned.health_url_file, "utf8").trim());
+    return { ...local, ok: transport.ok, ready: transport.ok, retryable: transport.retryable,
+      state: transport.ok ? local.state : "degraded", detail: `${local.detail}; ${transport.detail}` };
+  } catch {
+    return { ...local, ok: false, ready: false, state: "unknown", detail: "Tunnel transport diagnostics could not be verified for the configured profile" };
+  }
 }
 
 export async function waitForTunnelReady(
@@ -460,10 +480,10 @@ export async function waitForTunnelReady(
   timeoutMs = TUNNEL_READY_TIMEOUT_MS,
 ): Promise<TunnelRuntimeStatus> {
   const deadline = Date.now() + timeoutMs;
-  let status = tunnelStatus(config);
-  while (!status.ok && Date.now() < deadline) {
+  let status = await tunnelStatus(config);
+  while (!status.ok && status.retryable !== false && Date.now() < deadline) {
     await new Promise(resolveWait => setTimeout(resolveWait, TUNNEL_STATUS_POLL_INTERVAL_MS));
-    status = tunnelStatus(config);
+    status = await tunnelStatus(config);
   }
   return status;
 }
