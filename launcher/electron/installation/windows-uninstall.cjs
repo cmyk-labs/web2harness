@@ -88,6 +88,7 @@ async function prepareUninstall(options, services) {
   await services.assertLauncherClosed(executable);
   let record = loadInstallation(options);
   if (!record) {
+    if (purge) throw new Error("Installation record is missing. Reinstall to repair it, or keep data by clearing the data-cleanup checkbox. / 安装记录缺失，请重新安装修复，或取消勾选清理数据以保留数据卸载。");
     // Older packages used these exact defaults. Custom profiles require their persisted record.
     record = registerInstallation({ ...options, profile: {
       coreHome: path.join(homeDir, ".web2harness"), userData: path.join(appData, "Web2Harness"),

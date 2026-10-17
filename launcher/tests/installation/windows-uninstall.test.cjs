@@ -123,18 +123,86 @@ for (const stage of ["assertLauncherClosed", "preflightIntegration", "stopRuntim
   });
 }
 
-test("unknown data blocks purge before any integration or file mutations", async t => {
+test("full cleanup accepts new feature and Chromium directories without a name allowlist", async t => {
   const f = fixture(t);
-  fs.writeFileSync(path.join(f.profile.userData, "user-project.txt"), "keep");
-  await assert.rejects(prepareUninstall({ ...f.options, purge: true }, f.services), /Unrecognized data/);
-  assert.deepEqual(f.calls, ["assertLauncherClosed"]);
-  assert.ok(fs.existsSync(path.join(f.profile.coreHome, "config.json")));
+  for (const [root, name] of [[f.profile.coreHome, "licensing"], [f.profile.coreHome, "future-feature"],
+    [f.profile.userData, "shared_proto_db"], [f.record.installerCache, "future-cache"]]) {
+    fs.mkdirSync(path.join(root, name, "nested"), { recursive: true });
+    fs.writeFileSync(path.join(root, name, "nested", "data"), "owned fixture");
+  }
+  fs.writeFileSync(path.join(f.profile.userData, "lockfile"), "fixture");
+  fs.writeFileSync(path.join(f.record.installerCache, "extra-cache.bin"), "fixture");
+  await prepareUninstall({ ...f.options, purge: true }, f.services);
+  finishUninstall(f.options);
+  for (const root of [f.profile.coreHome, f.profile.userData, f.record.installerCache]) assert.equal(fs.existsSync(root), false);
+  assert.equal(fs.readFileSync(path.join(f.profile.codexHome, "auth.json"), "utf8"), "private-fixture-auth");
 });
 
-test("unknown installer cache files block all cleanup before configuration changes", async t => {
+test("missing owner markers at persisted default roots allow full cleanup without recreating them", async t => {
   const f = fixture(t);
-  fs.writeFileSync(path.join(f.record.installerCache, "user-export.txt"), "keep");
-  await assert.rejects(prepareUninstall({ ...f.options, purge: true }, f.services), /Unrecognized data/);
+  const roots = [f.profile.coreHome, f.profile.userData, f.record.installerCache];
+  for (const root of roots) fs.unlinkSync(path.join(root, OWNER_FILE));
+  assert.deepEqual(cleanupTargets(f.record, f.options), roots);
+  for (const root of roots) assert.equal(fs.existsSync(path.join(root, OWNER_FILE)), false);
+  await prepareUninstall({ ...f.options, purge: true }, f.services);
+  finishUninstall(f.options);
+  for (const root of roots) assert.equal(fs.existsSync(root), false);
+});
+
+test("missing owner at a custom root blocks purge but permits preserving data", async t => {
+  const f = fixture(t);
+  const profilePath = recordPaths(f.options.appData, f.options.installRoot).profile;
+  const custom = path.join(f.root, "custom-core");
+  fs.renameSync(f.profile.coreHome, custom);
+  fs.unlinkSync(path.join(custom, OWNER_FILE));
+  fs.writeFileSync(profilePath, JSON.stringify({ ...f.record, coreHome: custom }));
+  await assert.rejects(prepareUninstall({ ...f.options, purge: true }, f.services), /ownership.*missing.*keep.*data/i);
+  assert.deepEqual(f.calls, ["assertLauncherClosed"]);
+  assert.ok(fs.existsSync(path.join(custom, "config.json")));
+  await prepareUninstall(f.options, f.services);
+  finishUninstall(f.options);
+  assert.ok(fs.existsSync(path.join(custom, "config.uninstalled.json")));
+});
+
+for (const content of ["{", "null", JSON.stringify({ appId: "other", id: "other" })]) {
+  test(`invalid owner is not treated as a missing marker: ${content}`, async t => {
+    const f = fixture(t);
+    fs.writeFileSync(path.join(f.profile.userData, OWNER_FILE), content);
+    await assert.rejects(prepareUninstall({ ...f.options, purge: true }, f.services), /ownership.*keep.*data/i);
+    assert.deepEqual(f.calls, ["assertLauncherClosed"]);
+    assert.ok(fs.existsSync(path.join(f.profile.coreHome, "config.json")));
+    await prepareUninstall(f.options, f.services);
+    finishUninstall(f.options);
+    assert.equal(fs.readFileSync(path.join(f.profile.userData, OWNER_FILE), "utf8"), content);
+  });
+}
+
+test("missing installation record cannot silently claim existing roots for purge", async t => {
+  const f = fixture(t);
+  const profilePath = recordPaths(f.options.appData, f.options.installRoot).profile;
+  fs.unlinkSync(profilePath);
+  for (const root of [f.profile.coreHome, f.profile.userData, f.record.installerCache]) fs.unlinkSync(path.join(root, OWNER_FILE));
+  await assert.rejects(prepareUninstall({ ...f.options, purge: true }, f.services), /record.*missing.*keep.*data/i);
+  assert.equal(fs.existsSync(profilePath), false);
+  assert.ok(fs.existsSync(path.join(f.profile.coreHome, "config.json")));
+  assert.deepEqual(f.calls, ["assertLauncherClosed"]);
+});
+
+test("an in-memory record cannot substitute for persisted ownership evidence", t => {
+  const f = fixture(t);
+  fs.unlinkSync(path.join(f.profile.coreHome, OWNER_FILE));
+  const changed = { ...f.record, id: "00000000-0000-0000-0000-000000000000" };
+  assert.throws(() => cleanupTargets(changed, f.options), /ownership/);
+  fs.unlinkSync(recordPaths(f.options.appData, f.options.installRoot).profile);
+  assert.throws(() => cleanupTargets(f.record, f.options), /ownership/);
+});
+
+test("new feature directories still reject nested junctions before any data removal", async t => {
+  const f = fixture(t);
+  const feature = path.join(f.record.installerCache, "future-cache");
+  fs.mkdirSync(feature);
+  fs.symlinkSync(f.profile.codexHome, path.join(feature, "outside"), process.platform === "win32" ? "junction" : "dir");
+  await assert.rejects(prepareUninstall({ ...f.options, purge: true }, f.services), /link/);
   assert.deepEqual(f.calls, ["assertLauncherClosed"]);
   assert.ok(fs.existsSync(path.join(f.profile.coreHome, "config.json")));
 });
@@ -194,12 +262,85 @@ test("interrupted first registration retains its identity for the next startup",
   assert.equal(JSON.parse(fs.readFileSync(path.join(registered.userData, OWNER_FILE))).id, registered.id);
 });
 
+test("unchanged registration keeps the profile bytes and timestamp while repairing missing markers", t => {
+  const f = fixture(t);
+  const file = recordPaths(f.options.appData, f.options.installRoot).profile;
+  // An equivalent record with a different formatting/order must also stay untouched.
+  fs.writeFileSync(file, JSON.stringify(Object.fromEntries(Object.entries(f.record).reverse())));
+  fs.utimesSync(file, new Date("2000-01-01T00:00:00Z"), new Date("2000-01-01T00:00:00Z"));
+  const bytes = fs.readFileSync(file), before = fs.statSync(file).mtimeMs;
+  registerInstallation({ ...f.options, profile: f.profile });
+  assert.equal(fs.statSync(file).mtimeMs, before);
+  assert.deepEqual(fs.readFileSync(file), bytes);
+  fs.unlinkSync(path.join(f.profile.userData, OWNER_FILE));
+  registerInstallation({ ...f.options, profile: f.profile });
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.profile.userData, OWNER_FILE))).id, f.record.id);
+  assert.equal(fs.statSync(file).mtimeMs, before);
+  assert.deepEqual(fs.readFileSync(file), bytes);
+});
+
+test("registration still rejects conflicts without rewriting any installation evidence", t => {
+  const f = fixture(t);
+  const file = recordPaths(f.options.appData, f.options.installRoot).profile;
+  const bytes = fs.readFileSync(file);
+  fs.writeFileSync(path.join(f.record.installerCache, OWNER_FILE), JSON.stringify({ appId: "other", id: "other" }));
+  assert.throws(() => registerInstallation({ ...f.options, profile: f.profile }), /another installation/);
+  assert.deepEqual(fs.readFileSync(file), bytes);
+});
+
 test("repeated preparation tolerates already detached integration and missing data", async t => {
   const f = fixture(t);
   await prepareUninstall({ ...f.options, purge: true }, f.services);
   await prepareUninstall({ ...f.options, purge: true }, f.services);
   finishUninstall(f.options);
   assert.equal(fs.existsSync(f.profile.codexHome), true);
+});
+
+test("manually removed data roots count as already cleaned and are not recreated", async t => {
+  const f = fixture(t);
+  const roots = [f.profile.coreHome, f.profile.userData, f.record.installerCache];
+  for (const root of roots) {
+    assert.ok(path.relative(f.root, fs.realpathSync(root)).split(path.sep)[0] !== "..");
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  await prepareUninstall({ ...f.options, purge: true }, f.services);
+  finishUninstall(f.options);
+  for (const root of roots) assert.equal(fs.existsSync(root), false);
+  assert.ok(fs.existsSync(path.join(f.profile.codexHome, "auth.json")));
+});
+
+test("missing markers still reject a redirected default root", async t => {
+  const f = fixture(t);
+  const original = path.join(f.root, "original-core");
+  fs.renameSync(f.profile.coreHome, original);
+  fs.symlinkSync(f.profile.codexHome, f.profile.coreHome, process.platform === "win32" ? "junction" : "dir");
+  await assert.rejects(prepareUninstall({ ...f.options, purge: true }, f.services), /redirected/);
+  assert.deepEqual(f.calls, ["assertLauncherClosed"]);
+  assert.ok(fs.existsSync(path.join(original, "config.json")));
+  assert.equal(fs.readFileSync(path.join(f.profile.codexHome, "auth.json"), "utf8"), "private-fixture-auth");
+});
+
+test("partial cleanup after manual marker removal can retry using the persisted record", async t => {
+  const f = fixture(t);
+  for (const root of [f.profile.coreHome, f.profile.userData, f.record.installerCache]) fs.unlinkSync(path.join(root, OWNER_FILE));
+  const locked = path.join(f.profile.userData, "future-cache");
+  fs.mkdirSync(locked);
+  fs.writeFileSync(path.join(locked, "data"), "fixture");
+  const remove = fs.rmSync;
+  fs.rmSync = (target, options) => {
+    if (target === locked) throw Object.assign(new Error("fixture locked file"), { code: "EPERM" });
+    return remove(target, options);
+  };
+  try { await assert.rejects(prepareUninstall({ ...f.options, purge: true }, f.services), /locked file/); }
+  finally { fs.rmSync = remove; }
+  assert.equal(fs.existsSync(f.profile.coreHome), false);
+  assert.ok(fs.existsSync(locked));
+  assert.equal(loadInstallation(f.options).id, f.record.id);
+  assert.equal(uninstallInProgress(f.options.appData, f.options.installRoot), false);
+  await prepareUninstall({ ...f.options, purge: true }, f.services);
+  finishUninstall(f.options);
+  assert.equal(fs.existsSync(f.profile.userData), false);
+  assert.ok(fs.existsSync(path.join(f.profile.codexHome, "auth.json")));
 });
 
 test("observed Electron dictionaries and tunnel profiles are included in owned cleanup", async t => {

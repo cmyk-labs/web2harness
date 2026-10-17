@@ -5,9 +5,9 @@
 **Web2Harness** — 在 Codex 中使用 ChatGPT 网页版模型，包括账号有权使用的 Pro，支持原生工具调用、任务上下文、流式响应和图片输入。可选实验性三倍上下文预算。使用网页模型时，将遵循 ChatGPT 的网页端限制，且不会消耗 Codex 的配额。默认采用原生工具模式，无需 MCP 连接器或隧道。
 
 <p align="center">
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.3.0/web2harness-2.3.0-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 最新正式版"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.3.0/web2harness-2.3.0-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 最新正式版"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.3.0/web2harness-2.3.0-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 最新正式版"></a>
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.3.1/web2harness-2.3.1-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 最新正式版"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.3.1/web2harness-2.3.1-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 最新正式版"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.3.1/web2harness-2.3.1-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 最新正式版"></a>
 </p>
 
 <p align="center">
@@ -150,6 +150,7 @@ bun run dev:launcher
 
 | 版本 | 日期 | 更新内容 |
 | --- | --- | --- |
+| 2.3.1 | 2026-10-17 | 修复新增应用目录导致无法彻底卸载的问题；完善默认目录归属标记缺失、目录已删除及清理失败重试；避免重复写入无变化的安装记录；下载按钮直达对应平台安装包。 |
 | 2.3.0 | 2026-10-17 | 浏览器空闲、登录及手动页面默认禁止操作；固定标准／三倍上下文预算；新增MCP冷却调度与传输健康恢复；改进网页回复完整性、原生工具交付和当前／历史诊断展示。 |
 | 2.2.0 | 2026-10-16 | 优化窗口尺寸、登录恢复和关于页展示；新增浏览器输入保护及确认后手动解除、可配置运行参数与原生工具上下文重同步。统一上下文默认值和偏好来源保存，改进错误原因、工具控制、JSON/SSE终态、配置持久化及更新进程启动检查。 |
 | 2.1.0 | 2026-10-16 | 新增全局网页请求队列及并发、排队超时和发送间隔设置；改进多代理工具交接、保留会话输入准备与模型目录恢复；支持完整长上下文TXT附件并改进请求诊断。 |

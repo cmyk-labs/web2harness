@@ -1,29 +1,12 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { createHash, randomUUID } = require("node:crypto");
+const { isDeepStrictEqual } = require("node:util");
 const { writePrivateFileAtomic } = require("../common/atomic-file.cjs");
 const { processRunning } = require("../common/process-tree.cjs");
 
 const APP_ID = "dev.web2harness.launcher";
 const OWNER_FILE = ".web2harness-owner.json";
-const INSTALLER_CACHE_ENTRIES = new Set([OWNER_FILE, "installer.exe"]);
-const CORE_ENTRIES = new Set([
-  OWNER_FILE, "config.json", "config.uninstalled.json", "responses-state.json",
-  "versions", "runtime", "codex", "browser", "bin", "secrets", "tunnel", "logs", "diagnostics",
-]);
-const DESKTOP_ENTRIES = new Set([
-  OWNER_FILE, "launcher-state.json", "window-state.json", "limits.json", "logs",
-  // RuntimeHost stages MCP credentials and passkey transfers under desktop userData.
-  "secrets", "passkey-login",
-  "Partitions", "Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache", "DawnWebGPUCache",
-  "Local Storage", "Session Storage", "IndexedDB", "Service Worker", "Network", "blob_storage",
-  "Preferences", "Local State", "Cookies", "Cookies-journal", "Network Persistent State",
-  "TransportSecurity", "Trust Tokens", "Trust Tokens-journal", "SharedStorage", "SharedStorage-wal",
-  "Shared Dictionary", "WebStorage", "VideoDecodeStats", "media_device_salt", "DIPS", "DIPS-wal",
-  "Crashpad", "Crash Reports", "BrowserMetrics", "component_crx_cache", "extensions_crx_cache",
-  "first-party-sets-preloaded", "Variations", "SingletonCookie", "SingletonLock", "SingletonSocket",
-  "Dictionaries", "DevToolsActivePort",
-]);
 
 function identity(value) {
   const resolved = path.resolve(value);
@@ -117,7 +100,9 @@ function registerInstallation(options) {
     if (owner && (owner.id !== record.id || owner.appId !== APP_ID)) throw new Error(`Data belongs to another installation: ${root}`);
   }
   // Persist the identity before creating markers so interrupted registration is retryable.
-  writePrivateFileAtomic(recordPaths(appData, installRoot).profile, `${JSON.stringify(record, null, 2)}\n`);
+  if (!isDeepStrictEqual(previous, record)) {
+    writePrivateFileAtomic(recordPaths(appData, installRoot).profile, `${JSON.stringify(record, null, 2)}\n`);
+  }
   for (const root of roots) {
     const marker = path.join(root, OWNER_FILE);
     if (!fs.existsSync(marker)) writePrivateFileAtomic(marker, JSON.stringify({ appId: APP_ID, id: record.id }));
@@ -138,15 +123,36 @@ function checkOwnedTree(root) {
 function cleanupTargets(record, options) {
   validateRecord(record, options);
   const targets = [];
-  for (const [root, allowed] of [[record.coreHome, CORE_ENTRIES], [record.userData, DESKTOP_ENTRIES],
-    [record.installerCache, INSTALLER_CACHE_ENTRIES]]) {
+  const defaults = {
+    coreHome: path.join(options.homeDir, ".web2harness"),
+    userData: path.join(options.appData, "Web2Harness"),
+    installerCache: path.join(options.localAppData, "web2harness-launcher-updater"),
+  };
+  for (const [key, defaultRoot] of Object.entries(defaults)) {
+    const root = record[key];
     if (!fs.existsSync(root)) continue;
-    const owner = readJson(path.join(root, OWNER_FILE));
-    if (owner?.appId !== APP_ID || owner.id !== record.id) throw new Error(`Data ownership cannot be verified: ${root}`);
-    for (const entry of fs.readdirSync(root)) {
-      const spellcheckDictionary = allowed === DESKTOP_ENTRIES && /^[a-z]{2,3}(?:-[A-Za-z]{2,4})?-\d+-\d+\.bdic$/.test(entry);
-      if (!allowed.has(entry) && !spellcheckDictionary) throw new Error(`Unrecognized data was preserved; move it before full cleanup: ${path.join(root, entry)}`);
+    const marker = path.join(root, OWNER_FILE);
+    const recovery = "Restore the installation record/marker, or keep data by clearing the data-cleanup checkbox. / 请恢复安装记录或归属标记，或取消勾选清理数据以保留数据卸载。";
+    let owner;
+    try { owner = readJson(marker); }
+    catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      throw new Error(`Data ownership marker is damaged / 数据归属标记损坏: ${root}. ${recovery}`);
     }
+    if (owner === null && !fs.existsSync(marker)) {
+      // Manual cleanup can remove the marker before uninstall. Only an existing,
+      // matching installation record plus an exact dedicated default path may replace it.
+      const persisted = loadInstallation(options);
+      const matches = persisted?.id === record.id && ["installRoot", "coreHome", "userData", "codexHome", "installerCache"]
+        .every(field => identity(persisted[field]) === identity(record[field]));
+      if (!matches || identity(root) !== identity(defaultRoot)) {
+        throw new Error(`Data ownership marker is missing / 数据归属标记缺失: ${root}. ${recovery}`);
+      }
+    } else if (owner?.appId !== APP_ID || owner.id !== record.id) {
+      throw new Error(`Data ownership marker is invalid or belongs to another installation / 数据归属标记无效或属于其他安装: ${root}. ${recovery}`);
+    }
+    // Full cleanup covers every ordinary entry in this dedicated root, including
+    // data introduced by future features or Chromium. Links still stop all cleanup.
     checkOwnedTree(root);
     targets.push(root);
   }
@@ -163,7 +169,7 @@ function removeOwnedData(record, options) {
       if (!within(root, target)) throw new Error("Cleanup path escaped its data root");
       fs.rmSync(target, { recursive: true, force: true });
     }
-    fs.unlinkSync(path.join(root, OWNER_FILE));
+    fs.rmSync(path.join(root, OWNER_FILE), { force: true });
     try { fs.rmdirSync(root); }
     catch (error) {
       // Keep retry evidence if a concurrent writer left a file or removal was denied.
