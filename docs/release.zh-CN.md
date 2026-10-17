@@ -42,7 +42,7 @@
 ## 版本与源码准备
 
 1. 确定版本，同步根目录/启动器清单、`src/version.ts`、安装脚本默认值及 `scripts/check-version.ts` 检查的其他字段。发布 tag 必须等于 `v` 加根包版本。
-   README 的常规发布维护仅在中英文版本更新表中增加新记录，不随每次发布改写头部更新说明，也不添加具体上下文窗口容量。只有所说明的产品内容确实变化时，才修改 README 的其他段落。
+   README 的常规发布维护仅在中英文版本更新表中增加新记录；正式版成功发布后，另按下文同步下载按钮的地址。不随每次发布改写头部更新说明，也不添加具体上下文窗口容量。只有所说明的产品内容确实变化时，才修改 README 的其他段落。
 2. 使用固定的 Bun `1.4.0` 和两份冻结锁文件，记录源码 revision，并将候选构建与无关本地修改分开。
 3. 执行 `bun run verify` 并检查每个阶段。它遇到首个失败即停止；后续阶段在单独执行前仍算未执行。
 4. 核对启动器元数据中的目标仓库身份。发布工作流把当前仓库传给打包流程。安装脚本要求显式 `WEB2HARNESS_REPOSITORY`，缺失或无效时在安装前拒绝继续。
@@ -61,6 +61,8 @@ bun run app:package
 `build` 输出 `dist/runtime`。`app:package` 重建启动器和内嵌运行时、准备平台 helper，最终将分发包写入 `launcher/artifacts`。它不发布工件；封装脚本向 electron-builder 传入 `--publish never`。包清单中名义上的 `release` 输出目录被封装脚本的临时构建目录覆盖。
 
 需要独立的仅构建候选包时，可在候选分支或提交上手动运行 Release 工作流。它使用与标签构建相同的五个原生构建任务和正式公钥清单，上传 `candidate-assets`（七个包与 `checksums.txt`）及 `candidate-source`（源码身份）。手动运行不能进入 publish 任务，即使选择的是标签。此入口按需要使用，不是额外必跑的验收批次。维护者授权后推送 `v*` 标签，执行正常构建及制品检查后发布；后续运行若重建制品，再核对源码身份和制品校验值。
+
+正式版发布成功后，工作流检出默认分支，使用 GitHub 最新正式版已上传的制品，仅更新两份 README 中各三个下载按钮的地址。按钮分别下载 Windows x64 EXE、macOS Apple silicon DMG 和 Linux x64 AppImage；预览版不会修改它们。保留版本化包名及 README 正文、样式。若文档同步步骤失败（例如分支并发更新或保护规则阻止推送），版本仍已发布：在最新的默认分支检出中执行 `bun run scripts/update-readme-downloads.ts`，检查仅含 README 链接的差异后正常提交、推送。不要为了修复下载链接而替换正式版。
 
 <a id="native-target-matrix"></a>
 

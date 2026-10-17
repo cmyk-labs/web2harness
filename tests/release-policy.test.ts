@@ -58,3 +58,19 @@ test("candidate artifacts are assembled and checksummed before either handoff or
   expect(steps.find((step: any) => step.with?.name === "candidate-source").with.path).toBe("candidate-source.json");
   expect(workflow.jobs.publish.steps.find((step: any) => step.uses?.startsWith("actions/download-artifact")).with.name).toBe("candidate-assets");
 });
+
+test("download links update only after stable publication and only on the default branch", () => {
+  const workflow = Bun.YAML.parse(readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8")) as any;
+  const steps = workflow.jobs.publish.steps;
+  const published = steps.findIndex((step: any) => step.run?.includes("--draft=false"));
+  const checkout = steps.findIndex((step: any) => step.name === "Check out default branch for download links");
+  const update = steps.findIndex((step: any) => step.name === "Update latest stable download buttons");
+  expect(checkout).toBeGreaterThan(published);
+  expect(update).toBeGreaterThan(checkout);
+  expect(steps[checkout].if).toBe("steps.publication.outputs.prerelease == 'false'");
+  expect(steps[update].if).toBe(steps[checkout].if);
+  expect(steps[checkout].with.ref).toBe("${{ github.event.repository.default_branch }}");
+  expect(steps[checkout].with.path).toBe(steps[update]["working-directory"]);
+  expect(steps[update].run).toContain("git add -- README.md README.zh-CN.md");
+  expect(steps[update].run).not.toMatch(/--force|git push[^\n]*--tags/);
+});

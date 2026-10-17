@@ -42,7 +42,7 @@ The maintainer reviews completed checks, unresolved failures and unexecuted item
 ## Version and source preparation
 
 1. Choose the version and synchronize root/launcher manifests, `src/version.ts`, installer defaults, and other fields enforced by `scripts/check-version.ts`. A release tag must equal `v` plus the root package version.
-   For README release maintenance, add only the new entry to the release-history table in both languages. Do not rewrite the introductory release paragraph or add detailed context-window capacities for each release. Change other README content only when the documented product content itself changes.
+   For README release maintenance, add only the new entry to the release-history table in both languages; after successful stable publication, also synchronize the download-button URLs as described below. Do not rewrite the introductory release paragraph or add detailed context-window capacities for each release. Change other README content only when the documented product content itself changes.
 2. Use the pinned Bun `1.4.0` and both frozen lockfiles. Record the source revision and keep candidate builds separate from unrelated local changes.
 3. Run `bun run verify` and inspect every stage. It stops at the first failure; later stages are unexecuted until run separately.
 4. Confirm the intended repository identity in launcher metadata. The release workflow passes its repository to packaging. Installer scripts require an explicit `WEB2HARNESS_REPOSITORY` and reject missing/invalid configuration before installation work.
@@ -61,6 +61,8 @@ bun run app:package
 `build` writes `dist/runtime`. `app:package` rebuilds the launcher and its embedded runtime, prepares platform helpers, then creates distributables in `launcher/artifacts`. It does not publish them; the wrapper passes `--publish never` to electron-builder. The package manifest's nominal `release` output directory is overridden by the wrapper's temporary staging directory.
 
 For an optional build-only candidate, run the Release workflow manually on the candidate branch or commit. It uses the same five native build jobs and production public-key manifest as a tag build, then uploads `candidate-assets` (seven packages and `checksums.txt`) and `candidate-source` (source identity). Manual runs cannot enter the publish job, including when the selected ref is a tag. Use this path when a separate candidate build is needed; it is not an additional mandatory acceptance run. Publication follows maintainer authorization and a `v*` tag push, with the normal build and artifact checks. Compare source identity and artifact checksums whenever a later run rebuilds the packages.
+
+After publishing a stable release, the workflow checks out the default branch and updates only the three download-button URLs in each README, using the uploaded assets of GitHub's latest stable release. The buttons download the Windows x64 EXE, macOS Apple silicon DMG and Linux x64 AppImage. Preview releases do not change them. Keep versioned asset names and leave README prose and styling intact. If this documentation step fails (for example, a concurrent branch update or branch protection blocks the push), the release remains published: run `bun run scripts/update-readme-downloads.ts` from an up-to-date default-branch checkout, review the README-only diff and commit/push it normally. Do not replace the stable release to repair its download links.
 
 <a id="native-target-matrix"></a>
 

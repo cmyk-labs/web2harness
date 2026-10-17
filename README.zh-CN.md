@@ -5,9 +5,9 @@
 **Web2Harness** — 在 Codex 中使用 ChatGPT 网页版模型，包括账号有权使用的 Pro，支持原生工具调用、任务上下文、流式响应和图片输入。可选实验性三倍上下文预算。使用网页模型时，将遵循 ChatGPT 的网页端限制，且不会消耗 Codex 的配额。默认采用原生工具模式，无需 MCP 连接器或隧道。
 
 <p align="center">
-  <a href="https://github.com/cmyk-labs/web2harness/releases/latest"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 最新正式版"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/latest"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 最新正式版"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/latest"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 最新正式版"></a>
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.3.0/web2harness-2.3.0-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 最新正式版"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.3.0/web2harness-2.3.0-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 最新正式版"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.3.0/web2harness-2.3.0-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 最新正式版"></a>
 </p>
 
 <p align="center">

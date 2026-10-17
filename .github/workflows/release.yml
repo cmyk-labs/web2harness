@@ -288,3 +288,24 @@ jobs:
           if [ "$IS_PRERELEASE" = true ]; then latest=false; fi
           gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
             --draft=false --prerelease="$IS_PRERELEASE" --latest="$latest"
+      - name: Check out default branch for download links
+        if: steps.publication.outputs.prerelease == 'false'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: readme-downloads
+      - name: Update latest stable download buttons
+        if: steps.publication.outputs.prerelease == 'false'
+        working-directory: readme-downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          bun "$GITHUB_WORKSPACE/scripts/update-readme-downloads.ts"
+          git diff --check
+          git add -- README.md README.zh-CN.md
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs: update latest stable installer links"
+          git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"

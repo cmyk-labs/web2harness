@@ -5,9 +5,9 @@
 **Web2Harness** — Use ChatGPT web models, including Pro when available to your account, in Codex with native tool calls, task context, streaming, and image inputs. Optional experimental 3× context budget. Web-model requests follow ChatGPT's web limits without consuming Codex quota. Native Tools is the default; no MCP connector or tunnel required.
 
 <p align="center">
-  <a href="https://github.com/cmyk-labs/web2harness/releases/latest"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · Latest stable release"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/latest"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · Latest stable release"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/latest"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · Latest stable release"></a>
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.3.0/web2harness-2.3.0-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · Latest stable release"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.3.0/web2harness-2.3.0-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · Latest stable release"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.3.0/web2harness-2.3.0-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · Latest stable release"></a>
 </p>
 
 <p align="center">
