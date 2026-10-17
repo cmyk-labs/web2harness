@@ -378,6 +378,22 @@ export class ChatGptMarkdownBuffer {
 
   private extendsPendingContent(previous: ChatGptMarkdownSegment, next: ChatGptMarkdownSegment): boolean {
     if (previous.sourceStart !== undefined && next.sourceStart !== undefined && previous.sourceStart !== next.sourceStart) return false;
+    // An unfinished underline/list marker can temporarily render a P as H1/H2
+    // and back again. Normalize only those pending wrappers for comparison;
+    // retain inline markup, links and literal content. Delivery keeps the actual
+    // observed wrapper, and committed blocks never take this path.
+    if (previous.tag !== next.tag && [previous.tag, next.tag].every(tag => tag && ["p", "h1", "h2"].includes(tag))) {
+      const paragraphs = [previous, next].map(segment => {
+        const root = createDocument().createElement("div");
+        root.innerHTML = segment.html;
+        const block = root.firstElementChild;
+        if (root.childNodes.length !== 1 || !block || block.tagName.toLowerCase() !== segment.tag) return undefined;
+        const paragraph = root.ownerDocument.createElement("p");
+        while (block.firstChild) paragraph.appendChild(block.firstChild);
+        return { ...segment, tag: "p", html: paragraph.outerHTML };
+      });
+      if (paragraphs[0] && paragraphs[1]) return this.extendsPendingContent(paragraphs[0], paragraphs[1]);
+    }
     const known = chatGptHtmlToMarkdown(previous.html), observed = chatGptHtmlToMarkdown(next.html);
     if (!known) return false;
     const before = known.match(/^(`{3,})([^\n]*)\n([\s\S]*)\n\1$/);
@@ -403,7 +419,57 @@ export class ChatGptMarkdownBuffer {
         hydrated += "`".repeat(length);i += length - 1;
       } else hydrated += character;
     }
-    return hydrated !== known && observed.startsWith(hydrated);
+    return (hydrated !== known && observed.startsWith(hydrated))
+      || this.extendsPendingInlineTail(previous.html, observed)
+      || this.hydratesPendingInlineCode(known, next.html);
+  }
+
+  private hydratesPendingInlineCode(known: string, html: string): boolean {
+    // Before the closing backtick arrives, token spans are ordinary text and
+    // Turndown escapes their backslashes/punctuation. A hydrated CODE preserves
+    // those characters literally. Recreate the raw spelling in a detached copy
+    // and serialize it with the same rules; never unescape the actual code text.
+    const delimiters = [...new Set([...known.matchAll(/(?:\\`)+/g)].map(match => "`".repeat(match[0].length / 2)))];
+    if (!delimiters.length) return false;
+    const root = createDocument().createElement("div");
+    root.innerHTML = html;
+    for (const code of Array.from(root.querySelectorAll('code, span[data-markdown-copy="inline-code"]'))) {
+      if (code.closest("pre")) continue;
+      const parent = code.parentNode!;
+      const raw = root.ownerDocument.createTextNode("");
+      parent.replaceChild(raw, code);
+      for (const delimiter of delimiters) {
+        raw.textContent = `${delimiter}${code.textContent ?? ""}${delimiter}`;
+        if (chatGptHtmlToMarkdown(root.innerHTML).startsWith(known)) return true;
+      }
+      parent.replaceChild(code, raw);
+    }
+    return false;
+  }
+
+  private extendsPendingInlineTail(html: string, observed: string): boolean {
+    // A streaming <strong>Par</strong> already serializes as **Par**. Remounting
+    // it as <strong>Paragraph</strong> preserves the text, but not that synthetic
+    // closing delimiter. Locate the last text boundary through the same serializer;
+    // only generated inline-format closers may follow it. URLs, file-link targets,
+    // literal punctuation and other content may never be discarded by this check.
+    const root = createDocument().createElement("div");
+    root.innerHTML = html;
+    const walker = root.ownerDocument.createTreeWalker(root, 4); // SHOW_TEXT
+    let lastText: Node | undefined;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.textContent?.trim()) lastText = node;
+    }
+    if (!lastText) return false;
+    let marker = "WEB2HARNESSPENDINGTEXTBOUNDARY";
+    while (html.includes(marker)) marker += "X";
+    lastText.textContent += marker;
+    const marked = chatGptHtmlToMarkdown(root.innerHTML);
+    const boundary = marked.indexOf(marker);
+    if (boundary <= 0 || marked.indexOf(marker, boundary + marker.length) !== -1) return false;
+    const suffix = marked.slice(boundary + marker.length);
+    return /^[`*_]+$/.test(suffix.trim())
+      && observed.startsWith(marked.slice(0, boundary));
   }
 
   needsCoverageRecovery(): boolean {

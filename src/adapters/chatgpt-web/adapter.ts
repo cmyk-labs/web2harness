@@ -533,6 +533,15 @@ export function createChatGptWebAdapter(
         await releaseLauncherRetainedConversation(retainedLauncherDescriptor, conversationKey);
       }
       : undefined;
+    const releaseRetainedTurn = conversationKey && retainedLauncherDescriptor
+      ? async () => {
+        if (!conversationKey) return;
+        const released = await releaseLauncherRetainedConversation(
+          retainedLauncherDescriptor, conversationKey, undefined, traceId,
+        );
+        if (released > 0) forgetRetainedConversationSource(conversationKey);
+      }
+      : undefined;
     const compileOptionsFor = () => {
       if (manualRequest) return {};
       return {
@@ -780,7 +789,7 @@ export function createChatGptWebAdapter(
         usageInput: parsed,
         manualControl: { surfaceNonce },
         ...(conversationKey ? { conversationKey } : {}),
-        ...(releaseRetainedConversation ? { releaseRetainedConversation } : {}),
+        ...(releaseRetainedConversation ? { releaseRetainedConversation, releaseRetainedTurn } : {}),
         retireCapability: async () => {
           if (activeToken) await broker.revoke(activeToken);
         },
@@ -891,7 +900,7 @@ export function createChatGptWebAdapter(
         get conversationKey() { return conversationKey; },
         get contextResyncAttempted() { return resyncAttempted; },
         get contextResyncProgress() { return resyncAttempted ? contextResyncProgress(language) : undefined; },
-        ...(releaseRetainedConversation ? { releaseRetainedConversation } : {}),
+        ...(releaseRetainedConversation ? { releaseRetainedConversation, releaseRetainedTurn } : {}),
         cancel: browserTurn.cancel,
       };
     }
@@ -976,7 +985,7 @@ export function createChatGptWebAdapter(
       text,
       usageInput: parsed,
       ...(conversationKey ? { conversationKey } : {}),
-      ...(releaseRetainedConversation ? { releaseRetainedConversation } : {}),
+      ...(releaseRetainedConversation ? { releaseRetainedConversation, releaseRetainedTurn } : {}),
       retireCapability: async () => {
         if (activeToken) await broker.revoke(activeToken);
       },
@@ -1381,6 +1390,11 @@ export function createChatGptWebAdapter(
           nativeTurnId,
           nativeIdentity.threadId,
           chatGptInstructionLineage(parsed),
+          configuredCapabilities.nativeToolsEnabled && !manualRequest ? {
+            key: !parsed._compactionRequest && !freshConversationPerTurn
+              && parsed.modelId !== CHATGPT_WEB_LUNA_MODEL_ID && retainedLauncherDescriptor
+              ? chatGptConversationKey(parsed, executionNamespace) : undefined,
+          } : undefined,
         );
         const roundKey = nativeRoundKey ?? chatGptTurnRoundKey(parsed);
         const emitRoundEvents = (events: readonly AdapterEvent[]): void => {
@@ -1433,7 +1447,7 @@ export function createChatGptWebAdapter(
             const requests = parsedReply.calls.map(nativeBrokerRequest);
             validateToolCallBatch(parsed, requests);
             if (parsedReply.visibleText.length > 0) {
-              emitRoundBatch(buffer => emitTextDeltas([parsedReply.visibleText], buffer));
+              emitRoundEvent({ type: "text_delta", text: parsedReply.visibleText, phase: "commentary" });
             }
             emitRoundBatch(buffer => emitToolBatch(
               requests,

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -98,21 +99,62 @@ test("Interrupt hook command is absolute, quoted, and bound to the exact applica
     "'/Applications/Web2Harness.app/runtime/bun' '/Applications/Web2Harness.app/app/cli.js'"
       + " '--home' '/Users/test/Application Support/Web2Harness' 'hook' 'interrupt'",
   );
-  expect(codexInterruptHookCommand(
+  const windows = codexInterruptHookCommand(
     { runtimeCommand: ["C:\\Program Files\\Web2Harness\\bun.exe", "C:\\Program Files\\Web2Harness\\cli.js"] },
     "C:\\Users\\test\\Web2Harness",
     "win32",
-  )).toBe(
-    '"C:\\Program Files\\Web2Harness\\bun.exe" "C:\\Program Files\\Web2Harness\\cli.js"'
-      + ' "--home" "C:\\Users\\test\\Web2Harness" "hook" "interrupt"',
+  );
+  expect(windows).toBe(
+    'cmd.exe /d /s /c ^""C:\\Program Files\\Web2Harness\\bun.exe" "C:\\Program Files\\Web2Harness\\cli.js"'
+      + ' "--home" "C:\\Users\\test\\Web2Harness" "hook" "interrupt"^"',
   );
 });
+
+test.skipIf(process.platform !== "win32")("Windows cmd executes the installed hook with quoted paths and intact stdin", () => {
+  const directory = mkdtempSync(join(tmpdir(), "codex-interrupt-command-"));
+  const script = join(directory, "hook args & capture.ts");
+  const home = join(directory, "profile with spaces & 100% user's symbols");
+  writeFileSync(script, 'console.log(JSON.stringify({args:Bun.argv.slice(2),input:await Bun.stdin.text()}));');
+  try {
+    const command = codexInterruptHookCommand({ runtimeCommand: [process.execPath, script] }, home, "win32");
+    const input = JSON.stringify({ hook_event_name: "Interrupt", session_id: "owned-thread", turn_id: "owned-turn", text: "中文内容" });
+    // Match native Codex's outer command quoting, not Node's argument escaping.
+    const child = spawnSync("cmd.exe", ["/e:ON", "/v:OFF", "/d", "/c", `"${command}"`], {
+      windowsVerbatimArguments: true, windowsHide: true, encoding: "utf8", input, timeout: 10_000,
+    });
+    expect(child.error).toBeUndefined();
+    expect(child.stderr).toBe("");
+    expect(child.status).toBe(0);
+    expect(JSON.parse(child.stdout)).toEqual({ args: ["--home", home, "hook", "interrupt"], input });
+  } finally {
+    // Individually remove only this fixture's known file and now-empty owned directory.
+    rmSync(script);
+    rmdirSync(directory);
+  }
+}, 15_000);
 
 test("Interrupt hook trust hash is deterministic and changes with its exact command", () => {
   const first = codexInterruptHookHash("'runtime' 'hook' 'interrupt'");
   expect(first).toMatch(/^sha256:[a-f0-9]{64}$/);
   expect(codexInterruptHookHash("'runtime' 'hook' 'interrupt'")).toBe(first);
   expect(codexInterruptHookHash("'other-runtime' 'hook' 'interrupt'")).not.toBe(first);
+});
+
+test("restores legacy quoted hooks before installing the explicit Windows shell without changing the deadline", () => {
+  const original = 'model = "example"\n';
+  const old = installCodexInterruptHookCommand(original, "/fixture/config.toml", '"C:\\Bridge\\bun.exe" "hook" "interrupt"');
+  expect(old.text).toContain("timeout = 3");
+  verifyCodexInterruptHook(old.text, old.installed);
+  const baseline = restoreCodexInterruptHook(old.text, old.installed);
+  expect(baseline).toBe(original);
+  const command = codexInterruptHookCommand({ runtimeCommand: ["C:\\Bridge\\bun.exe"] }, "C:\\Bridge data", "win32");
+  const current = installCodexInterruptHookCommand(baseline, "/fixture/config.toml", command);
+  expect(current.text).toContain("timeout = 3");
+  expect(current.installed.trustedHash).not.toBe(old.installed.trustedHash);
+  verifyCodexInterruptHook(current.text, current.installed);
+  expect(restoreCodexInterruptHook(current.text, current.installed)).toBe(original);
+  expect(() => verifyCodexInterruptHook(current.text.replace("timeout = 3", "timeout = 5"), current.installed))
+    .toThrow("changed after setup");
 });
 
 test("refuses to remove a modified or duplicated managed hook", () => {

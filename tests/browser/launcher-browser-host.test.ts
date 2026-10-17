@@ -275,6 +275,8 @@ test("launcher retained-conversation release uses its authenticated exact-key en
       authorization: "Bearer launcher-control-token-0123456789abcdefghijklmnop",
       body: { conversationKey: "b".repeat(64) },
     });
+    await releaseLauncherRetainedConversation(path, "b".repeat(64), undefined, "exact-response");
+    expect(received.body).toEqual({ conversationKey: "b".repeat(64), traceId: "exact-response" });
     await expect(releaseLauncherRetainedConversation(path, "not-a-key"))
       .rejects.toThrow("retained conversation key is invalid");
   } finally {

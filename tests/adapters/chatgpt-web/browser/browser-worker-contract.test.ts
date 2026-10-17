@@ -2954,6 +2954,7 @@ test("effort selection stops as soon as ChatGPT reports an expired session", asy
 
 test("effort menu waiting stops when ChatGPT reports an expired session", async () => {
   const neverVisible = new Promise<void>(() => {});
+  let waitingForSliderInput = false;
   const effortControl = {
     filter() { return this; },
     last() { return this; },
@@ -2972,8 +2973,11 @@ test("effort menu waiting stops when ChatGPT reports an expired session", async 
   const effortSlider = {
     filter() { return this; },
     last() { return this; },
-    locator() { return this; },
-    waitFor: async () => await neverVisible,
+    // The menu's structural container is visible, but its semantic slider has
+    // not hydrated. Session expiry must win that input wait, not become a menu error.
+    isVisible: async () => true,
+    locator: () => ({ waitFor: async () => { waitingForSliderInput = true; await neverVisible; } }),
+    waitFor: async () => {},
   };
   const sessionAlert = {
     filter() { return this; },
@@ -3017,6 +3021,7 @@ test("effort menu waiting stops when ChatGPT reports an expired session", async 
     new Promise(resolve => setTimeout(() => resolve("still waiting"), 400)),
   ]);
 
+  expect(waitingForSliderInput).toBeTrue();
   expect(result).toMatchObject({
     name: "ChatGptWebAdapterError",
     status: 401,
@@ -3185,7 +3190,7 @@ test("browser preflight separates model context from one-message transport limit
   const luna = { localToolsEnabled: false, solAvailable: false, extraHighAvailable: false, proAvailable: false };
 
   try {
-    assertChatGptWebInputWithinLimits(90_000, 81_808, "gpt-5.6-sol", "medium", plus);
+    assertChatGptWebInputWithinLimits(272_000, 81_808, "gpt-5.6-sol", "medium", plus);
     throw new Error("expected context-window preflight to fail");
   } catch (error) {
     expect(error).toMatchObject({
@@ -3199,20 +3204,20 @@ test("browser preflight separates model context from one-message transport limit
   }
 
   expect(() => assertChatGptWebInputWithinLimits(40_999, 32_807, "gpt-5.6-sol", "low", plus)).not.toThrow();
-  expect(() => assertChatGptWebInputWithinLimits(41_000, 32_808, "gpt-5.6-sol", "low", plus)).toThrow(
-    "41,000-token context window",
+  expect(() => assertChatGptWebInputWithinLimits(272_000, 32_808, "gpt-5.6-sol", "low", plus)).toThrow(
+    "272,000-token context window",
   );
   expect(() => assertChatGptWebInputWithinLimits(89_999, 81_807, "gpt-5.6-sol", "medium", plus)).not.toThrow();
   expect(() => assertChatGptWebInputWithinLimits(89_999, 81_807, "gpt-5.6-sol", "high", plus)).not.toThrow();
-  expect(() => assertChatGptWebInputWithinLimits(90_000, 81_808, "gpt-5.6-sol", "high", plus)).toThrow(
-    "90,000-token context window",
+  expect(() => assertChatGptWebInputWithinLimits(272_000, 81_808, "gpt-5.6-sol", "high", plus)).toThrow(
+    "272,000-token context window",
   );
   expect(() => assertChatGptWebInputWithinLimits(100_000, 100_000, "gpt-5.6-sol", "xhigh", pro)).not.toThrow();
   expect(() => assertChatGptWebInputWithinLimits(100_000, 100_000, "gpt-5.6-sol", "max", pro)).not.toThrow();
   expect(() => assertChatGptWebInputWithinLimits(27_999, 19_807, "gpt-5.6-luna", "low", luna)).not.toThrow();
-  expect(() => assertChatGptWebInputWithinLimits(28_000, 19_808, "gpt-5.6-luna", "low", luna)).toThrow("28,000-token context window");
-  expect(() => assertChatGptWebInputWithinLimits(28_001, 19_809, "gpt-5.6-luna", "low", luna)).toThrow(
-    "ChatGPT Free browser transport budget",
+  expect(() => assertChatGptWebInputWithinLimits(272_000, 19_808, "gpt-5.6-luna", "low", luna)).toThrow("272,000-token context window");
+  expect(() => assertChatGptWebInputWithinLimits(272_001, 19_809, "gpt-5.6-luna", "low", luna)).toThrow(
+    "272,000-token context window",
   );
 
   expect(() => assertChatGptWebInputWithinLimits(

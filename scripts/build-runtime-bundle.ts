@@ -82,6 +82,19 @@ if (!build.success) {
   throw new Error(`Runtime bundle failed: ${build.logs.map(log => log.message).join("; ")}`);
 }
 
+const interruptBuild = await Bun.build({
+  entrypoints: [join(root, "src", "codex", "interrupt-hook-main.ts")],
+  target: "bun",
+  define: licenseDefine,
+  minify: true,
+  packages: "external",
+  outdir: appDir,
+  naming: "interrupt-hook.js",
+});
+if (!interruptBuild.success) {
+  throw new Error(`Interrupt hook bundle failed: ${interruptBuild.logs.map(log => log.message).join("; ")}`);
+}
+
 const browserHelperBuild = await Bun.build({
   entrypoints: [join(root, "src", "adapters", "chatgpt-web", "browser", "browser-helper-main.ts")],
   target: "node",

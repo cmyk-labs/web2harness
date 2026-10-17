@@ -1,6 +1,7 @@
-function releaseRetainedConversation(host, conversationKey) {
+function releaseRetainedConversation(host, conversationKey, traceId) {
   const retained = [...host.turnTabs.values()].filter((tab) => (
     tab.status === "ready" && tab.conversationKey === conversationKey
+    && (traceId === undefined || tab.traceId === traceId)
   ));
   for (const tab of retained) {
     host.removeTurnTab(tab, false);

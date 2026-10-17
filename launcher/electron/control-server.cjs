@@ -178,7 +178,10 @@ class BrowserControlServer {
         if (typeof body?.conversationKey !== "string" || !/^[a-f0-9]{64}$/.test(body.conversationKey)) {
           throw new Error("conversationKey is invalid");
         }
-        const released = releaseRetainedConversation(host, body.conversationKey);
+        if (body.traceId !== undefined && (typeof body.traceId !== "string" || !/^[A-Za-z0-9_-]{6,128}$/.test(body.traceId))) {
+          throw new Error("traceId is invalid");
+        }
+        const released = releaseRetainedConversation(host, body.conversationKey, body.traceId);
         this.logger.info("browser.retained_conversation_released", { released });
         writeJson(response, 200, { ok: true, released });
         return;

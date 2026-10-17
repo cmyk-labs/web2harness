@@ -155,6 +155,8 @@ interface ChatGptTurnRuntimeBase {
   usageInput?: CodexParsedRequest;
   conversationKey?: string;
   releaseRetainedConversation?: () => Promise<void>;
+  /** Release only this response's terminal page, never a newer owner of the same conversation. */
+  releaseRetainedTurn?: () => Promise<void>;
   /** Idempotently retire the turn-bound MCP capability after browser and observer settlement. */
   retireCapability?: () => void | Promise<void>;
   submission?: { phase: "prepared" | "send_activated" | "accepted" };
@@ -571,6 +573,7 @@ export class ChatGptTurnSessions {
     nativeTurnId?: string,
     nativeThreadId?: string,
     instruction?: ChatGptInstructionLineage,
+    nextConversation?: { key?: string },
   ): Promise<ChatGptTurnSession> {
     for (;;) {
       if (signal?.aborted) throw new DOMException("ChatGPT web turn aborted", "AbortError");
@@ -609,6 +612,30 @@ export class ChatGptTurnSessions {
         // waits for that cleanup; preemption requires a proven newer canonical instruction.
         await awaitWithAbort(ownedSession.physicalSettlement, signal);
         continue;
+      }
+      if (nextConversation) {
+        const stale = [...this.entries.values()].filter(session => session.ownerKey === ownerKey
+          && session.conversationKey() !== undefined
+          && session.conversationKey() !== nextConversation.key);
+        if (stale.length) {
+          // Native rounds have request keys, not a single turn key. Compaction, revised history
+          // or a model switch can start a different page while the old tool page is retained.
+          // Keep response receipts replayable, but release the superseded physical surfaces.
+          const retirement = Promise.all(stale.map(async session => {
+            await session.physicalSettlement;
+            await session.runtime.releaseRetainedTurn?.();
+            const key = session.conversationKey();
+            if (key) session.detachConversation(key);
+            this.forgetConversationHead(session);
+          })).then(() => undefined);
+          this.ownerRetirements.set(ownerKey, retirement);
+          const forget = () => {
+            if (this.ownerRetirements.get(ownerKey) === retirement) this.ownerRetirements.delete(ownerKey);
+          };
+          void retirement.then(forget, forget);
+          await awaitWithAbort(retirement, signal);
+          continue;
+        }
       }
       if (signal?.aborted) throw new DOMException("ChatGPT web turn aborted", "AbortError");
       return this.getOrCreate(key, start, traceId, ownerKey, nativeTurnId, nativeThreadId, instruction?.current);
@@ -880,9 +907,9 @@ export class ChatGptTurnSessions {
     }
     for (const [key, session] of this.entries) {
       if (session.isActive() || session.lastUsedAt() >= cutoff) continue;
-      session.cancel();
       this.entries.delete(key);
       this.forgetConversationHead(session);
+      this.beginRetirement(key, session);
     }
   }
 
@@ -895,22 +922,26 @@ export class ChatGptTurnSessions {
     if (existing) return existing;
     const conversationKey = session.conversationKey();
     session.cancel(reason);
-    const retirement = session.physicalSettlement;
-    this.retirements.set(key, retirement);
-    void retirement.then(() => {
-      if (this.retirements.get(key) === retirement) this.retirements.delete(key);
+    const retirement = session.physicalSettlement.then(async () => {
+      await session.runtime.releaseRetainedTurn?.();
     });
+    this.retirements.set(key, retirement);
+    const forgetRetirement = () => {
+      if (this.retirements.get(key) === retirement) this.retirements.delete(key);
+    };
+    void retirement.then(forgetRetirement, forgetRetirement);
     if (session.ownerKey) {
       const previous = this.ownerRetirements.get(session.ownerKey);
       const ownerRetirement = previous
         ? Promise.all([previous, retirement]).then(() => undefined)
         : retirement;
       this.ownerRetirements.set(session.ownerKey, ownerRetirement);
-      void ownerRetirement.then(() => {
+      const forgetOwner = () => {
         if (this.ownerRetirements.get(session.ownerKey!) === ownerRetirement) {
           this.ownerRetirements.delete(session.ownerKey!);
         }
-      });
+      };
+      void ownerRetirement.then(forgetOwner, forgetOwner);
     }
     if (conversationKey) {
       const previous = this.conversationRetirements.get(conversationKey);

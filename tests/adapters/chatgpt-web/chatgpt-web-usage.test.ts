@@ -39,8 +39,8 @@ test("context files preserve whole records and use one physical message", () => 
   }
 }, 30_000);
 
-test("file transfer alone keeps the standard total context ceiling; explicit triple budget changes only that ceiling", () => {
-  const parsed = request("word ".repeat(120_000));
+test("file transport preserves content while triple budget expands only the total ceiling", () => {
+  const parsed = request("word ".repeat(280_000));
   const normal = { ...capabilities, experimentalContextFiles: true, experimentalContextTripleBudget: false };
   const triple = { ...normal, experimentalContextTripleBudget: true };
   const compiled = compileChatGptWebPrompt(parsed, normal, undefined, { experimentalContextFiles: true });

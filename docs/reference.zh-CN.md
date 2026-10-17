@@ -54,7 +54,7 @@ CLI 的 `setup` 解析器在未传入模式参数时始终采用原生工具，�
 | `subagentProtocol` | `compatibility-v1` | `compatibility-v1`：对任务中的原生与 Web 模型目录条目使用 V1 协作协议，保留原生明确禁用的能力。`native`：遵循原生模型目录的协作协议。切换协议后需要重启 Codex 和启动器。 |
 | `browserHost` | `managed-chrome` | `managed-chrome`：使用配置的 Chrome 可执行文件与已保存会话。`launcher`：通过描述文件连接启动器拥有的浏览器。 |
 | `autoApproveToolCalls` | `false` | 布尔值。允许自动点击浏览器中的 **Allow once** 提示，不替代 Codex 沙箱或审批策略。 |
-| `zeroRiskProEnabled` | `false` | 布尔值。在手动模式中额外发布使用 Pro 预算的模型条目。用户必须在每个回合选择 ChatGPT Pro，启动器不能验证该选择。 |
+| `zeroRiskProEnabled` | `false` | 布尔值。在手动模式中额外发布Pro专用模型条目。用户必须在每个回合选择 ChatGPT Pro，启动器不能验证该选择。 |
 
 自动和手动 MCP 配置使用不同的隧道 ID 与连接器身份。常规自动交互连接器为 `Codex Native2`，DEV 自动交互连接器为 `Codex Native2 DEV`，手动交互连接器为 `Codex Zero Risk`。当前 `appName` 和 `tunnel` 必须与所选交互方式一致。一条交互路径验证成功，不代表另一条也已验证。
 
@@ -143,10 +143,10 @@ CLI 读取所选应用目录的运行配置并输出 JSON。下列命令拒绝 L
 | `useSavedChats` | `false` | 任务会话默认使用临时聊天；`true` 保存到 ChatGPT 历史记录。加载配置时保留已有明确选择。此设置与会话是否复用相互独立。 |
 | `experimentalFreshConversationPerTurn` | `false` | `false` 允许原生工具或 MCP Bridge 复用启动器宿主上符合条件的 Sol／Pro 会话；`true` 为每个自动回合新建浏览器会话。仅浏览器与 Luna 使用其他连续性机制。手动配置流程拒绝显式启用。参见[对话状态](architecture.zh-CN.md#conversation-state-and-compaction)。 |
 | `experimentalContextFiles` | 支持的自动模式下为 `true` | 对较大上下文启用实验性的 Context as File 文件传输，较小输入仍可内联发送。手动模式不可用。 |
-| `experimentalContextTripleBudget` | `false` | Context as File 开启后，将适用的自动 Sol／Pro 模型目录上下文与压缩预算乘以三。不增加单条浏览器消息限制、账户额度或底层模型容量。关闭 Context as File 会清除此设置。 |
+| `experimentalContextTripleBudget` | `false` | 文件传输开启时可选。将标准窗口、可用容量、压缩阈值各乘三：816000/775200/734400。单次消息与账号限制不变，关闭文件清除该设置。 |
 | `experimentalSkillAttachments` | `false` | 将选中的 skill 内容作为文本附件发送。手动模式不可用。 |
 
-文件传输与更大上下文预算是两项独立选择。未启用文件传输就请求更大预算会导致配置失败。切换到手动模式会清除文件传输、更大预算和 skill 附件设置。手动模式配置流程拒绝 `--login`、账户能力刷新，以及显式启用上述不支持功能的请求。
+文件传输只改变发送方式，不改变统一预算。切换到手动模式清除文件传输与skill附件；手动模式仍拒绝登录探测及不支持功能。
 
 <a id="endpoint-and-browser"></a>
 
@@ -228,19 +228,19 @@ Web2Harness 在经过身份验证的原生 Codex 目录中追加账户允许的 
 
 ### 自动模式模型目录
 
-启动器从已认证浏览器记录 `solAvailable`、`extraHighAvailable` 和 `proAvailable`，模型解析器据此构建目录。`solAvailable: false` 选择仅 Luna 的目录；`proAvailable: true` 选择 Pro 账户预算策略并启用 Pro 条目。Extra High 必须有独立的正向能力观察结果。
+启动器从已认证浏览器记录 `solAvailable`、`extraHighAvailable` 和 `proAvailable`，模型解析器据此构建目录。`solAvailable: false` 选择仅 Luna 的目录；`proAvailable: true` 启用 Pro 条目。Extra High 必须有独立的正向能力观察结果。
 
 | 模型 ID | 显示名称 | 目录条件 | 强度与默认值 |
 | --- | --- | --- | --- |
 | `chatgpt-web/gpt-5.6-luna` | GPT-5.6 Luna · Ordinary / Think (Web) | `solAvailable: false` | `low` 为 Ordinary，`medium` 为 Think；默认 `low` |
-| `chatgpt-web/gpt-5.6-sol-instant` | GPT-5.6 Sol · Instant (Web) | Sol 可用，且 Instant 不能与 Sol 条目共用上下文预算 | 固定 `low` |
-| `chatgpt-web/gpt-5.6-sol` | GPT-5.6 Sol (Web) | Sol 可用 | `medium`、`high`；探测可用时提供 `xhigh`；预算相同时提供 `low`；默认 `high` |
+| `chatgpt-web/gpt-5.6-sol-instant` | GPT-5.6 Sol · Instant (Web) | Sol可用；兼容隐藏条目 | 固定 `low` |
+| `chatgpt-web/gpt-5.6-sol` | GPT-5.6 Sol (Web) | Sol 可用 | `medium`、`high`；探测可用时提供 `xhigh`；提供 `low`；默认 `high` |
 | `chatgpt-web/gpt-5.6-pro` | GPT-5.6 Sol Pro (Web) | Sol 与 Pro 可用 | 固定 `max` |
-| `chatgpt-web/gpt-6-sol-instant` | GPT-6 · Instant (Web) | Sol 可用，且 Instant 不能与 GPT-6 条目共用上下文预算 | 固定 `low` |
-| `chatgpt-web/gpt-6-sol` | GPT-6 (Web) | Sol 可用 | `medium`、`high`；探测可用时提供 `xhigh`；预算相同时提供 `low`；默认 `high` |
+| `chatgpt-web/gpt-6-sol-instant` | GPT-6 · Instant (Web) | Sol可用；兼容隐藏条目 | 固定 `low` |
+| `chatgpt-web/gpt-6-sol` | GPT-6 (Web) | Sol 可用 | `medium`、`high`；探测可用时提供 `xhigh`；提供 `low`；默认 `high` |
 | `chatgpt-web/gpt-6-pro` | GPT-6 Pro (Web) | Sol 与 Pro 可用 | 固定 `max` |
 
-GPT-5.6 Sol 与 GPT-6 按下述账户和预算规则提供 Instant、Medium、High、Extra High；两个 Pro 条目固定为 `max`。GPT-6 沿用 GPT-5.6 的本地账户／档位预算策略，包括可选的三倍预算，其完整浏览器容量尚未独立标定。模型选择器兼容 `6` 与 `GPT-6` 标签，并在发送前通过活动标题及滑块提示验证实际家族。 新版中文网页的“停止”按钮也作为正在生成的证据，避免 Pro 在助手节点尚未出现时被误判为无响应。
+GPT-5.6 Sol 与 GPT-6 按下述账户和预算规则提供 Instant、Medium、High、Extra High；两个 Pro 条目固定为 `max`。GPT-6 沿用 GPT-5.6 的本地账户／档位预算策略，采用统一272000窗口与244800阈值。模型选择器兼容 `6` 与 `GPT-6` 标签，并在发送前通过活动标题及滑块提示验证实际家族。 新版中文网页的“停止”按钮也作为正在生成的证据，避免 Pro 在助手节点尚未出现时被误判为无响应。
 
 模型目录判断记录的是通用 Sol／Extra High／Pro 能力，不是每个模型家族各自的可用性标记。在提交具有明确家族名称的自动路由前，适配器会选择并验证浏览器家族和推理强度。只有一个通用 Pro 标签不足以通过验证。无法验证目标家族时返回 `model_version_unavailable`，待发送消息不会提交，也不会静默换用其他家族。
 
@@ -248,16 +248,7 @@ GPT-5.6 Sol 与 GPT-6 按下述账户和预算规则提供 Instant、Medium、Hi
 
 #### Instant 的分组规则
 
-一个 Codex 模型目录条目只有一套上下文约定：窗口、有效窗口百分比及自动压缩阈值。只有三项完全一致，多个推理强度才能合并到同一条目。
-
-| 账户策略 | Instant 行为 |
-| --- | --- |
-| 已观察到 Pro 能力 | Instant 与普通 Sol 思考档位均使用 `111193` 窗口和 `95000` 压缩阈值；`low` 显示在 `chatgpt-web/gpt-5.6-sol` 和 `chatgpt-web/gpt-6-sol` 内。独立 Instant ID 仍可解析已保存任务，但在普通选择器中隐藏。 |
-| Sol 可用但未观察到 Pro 能力 | Instant 使用 `41000` / `32000`，Medium 和 High 使用 `90000` / `80000`。目录单独显示 Instant，主 Sol 条目不提供 `low`。 |
-
-这些分组规则及 Sol／Pro 预算策略同时适用于 GPT-5.6 和 GPT-6。统一乘三不会改变预算相等关系，因此 Pro 账户不会因开启三倍预算而多出独立 Instant 条目。
-
-预算不同时，若调用方在主 Sol 条目上请求 `low`，请求会被拒绝，并提示选择独立 Instant 条目。实现不会缩小思考档位的预算来合并这些选项。
+全部 Web 模型和档位使用相同上下文策略。GPT-5.6 Sol 与 GPT-6 主条目均提供 `low`、`medium`、`high`，账号探测可用时增加 `xhigh`；Pro 条目仍需账号权限，固定 `max`。独立 Instant ID 保留用于已保存任务，普通选择器中隐藏。
 
 <a id="effort-mapping"></a>
 
@@ -265,7 +256,7 @@ GPT-5.6 Sol 与 GPT-6 按下述账户和预算规则提供 Instant、Medium、Hi
 
 | Codex 强度 | 自动 Sol／Pro 浏览器选择 | 限制 |
 | --- | --- | --- |
-| `low` | Instant，滑块位置 `0` | 预算相同时可在 Sol 条目内选择，否则需选独立 Instant 条目。 |
+| `low` | Instant，滑块位置 `0` | 在 Sol 主条目内选择；旧独立ID保留兼容。 |
 | `medium` | Medium，位置 `1` | 标准 Sol 思考选项。 |
 | `high` | High，位置 `2` | 主 Sol 条目的默认值。 |
 | `xhigh` | Extra High，位置 `3` | 要求 `extraHighAvailable: true`。 |
@@ -284,13 +275,13 @@ Luna 使用上方目录表中的 Ordinary／Think 映射，不使用 Sol 的五�
 | `chatgpt-web/zero-risk` | ChatGPT Web — Zero Risk | 默认手动条目；用户选择浏览器模型并提交每个增量提示。 |
 | `chatgpt-web/zero-risk-pro` | ChatGPT Web — Zero Risk Pro | 仅在 `zeroRiskProEnabled: true` 时添加；用户必须每回合选择 ChatGPT Pro，以匹配配置的较大预算。 |
 
-两个档位均使用技术强度 `low`，且只接受文本输入；该值不会选择 Instant 或其他 ChatGPT 模型。手动模式不检查浏览器中所选模型，也不刷新账户能力。使用 Pro 预算的条目来自用户显式设置，不代表已探测到使用权限。Context as File 与 skill 附件不可用。
+两个档位均使用技术强度 `low`，且只接受文本输入；该值不会选择 Instant 或其他 ChatGPT 模型。手动模式不检查浏览器中所选模型，也不刷新账户能力。Pro专用条目来自用户显式设置，不代表已探测到使用权限。Context as File 与 skill 附件不可用。
 
 <a id="saved-task-compatibility"></a>
 
 ### 已保存任务兼容
 
-当前账户和交互方式允许时，兼容路由 ID 仍可解析。它们在普通选择器中隐藏，唯一例外是需要独立预算时的单独 Instant 条目。
+当前账户和交互方式允许时，兼容路由 ID 仍可解析。它们在普通选择器中隐藏。
 
 | 兼容 ID | 保留的选择 |
 | --- | --- |
@@ -318,27 +309,22 @@ Luna 使用上方目录表中的 Ordinary／Think 映射，不使用 Sol 的五�
 
 权威实现位于[上下文策略](../src/models/chatgpt-web-context.ts)。这些数值是运行预算配置，文件上传成功、原生／API 模型规格或较小提示成功，都不能证明浏览器能够使用更大的上下文。
 
+Web条目使用下述标准预算，支持的路由可选三倍预算。Codex原生模型条目保留自身元数据；原生模型、工具、历史和过程进度协议不被替换。
+
 <a id="standard-context-budgets"></a>
 
 ### 标准目录预算
 
-数值单位为 token。下表未启用 Context as File 的可选三倍预算。
+全部 Web 模型、思考档位和账号使用统一的标准预算，包括 GPT-6、GPT-5.6 Sol、Pro、Luna 和手动模式。支持文件传输的自动Sol/Pro路由可以单独选择三倍预算。
 
-| 路由／账户策略 | 上下文窗口 | 自动压缩阈值 | 有效窗口百分比 |
-| --- | ---: | ---: | ---: |
-| 未具备 Pro 能力的 Sol Instant | 41,000 | 32,000 | 78% |
-| 未具备 Pro 能力的 Sol Medium／High 及可用的 Extra High | 90,000 | 80,000 | 89% |
-| Pro 账户的 Sol Instant／Medium／High／可用 Extra High | 111,193 | 95,000 | 85% |
-| GPT-5.6 Sol Pro 或 GPT-6 Pro | 112,193 | 95,000 | 85% |
-| 默认手动档位 | 123,000 | 96,000 | 78% |
-| 使用 Pro 预算的手动档位 | 336,579 | 285,000 | 85% |
-| Luna Ordinary／Think | 28,000 | 22,000 | 79% |
+| 预算 | 上下文窗口 | 有效窗口百分比 | 界面可用容量 | 自动压缩阈值 |
+| --- | ---: | ---: | ---: | ---: |
+| 标准 | 272,000 tokens | 95% | 258,400 tokens | 244,800 tokens |
+| 三倍 | 816,000 tokens | 95% | 775,200 tokens | 734,400 tokens |
 
-有效百分比计算为 `round(autoCompactTokenLimit / contextWindow × 100)`。Codex 的上下文指示器使用这些元数据，因此界面显示的工作预算不一定等于原始窗口值。
+界面容量为 `272000 × 95%`，压缩阈值独立设为 `244800`。压缩仍由 Codex 原生机制触发；不会裁剪原始历史、替换工具或制造过程进度。工具结果可能使输入一次越过阈值，下一次请求仍须满足总窗口与传输限制。升级后刷新模型目录并重启对应 Codex。
 
-Pro 账户窗口包含 `8192` token 的平台预留，以及为适配器严格小于判断增加的一个 token：普通 Sol 为 `103000 + 8192 + 1`，Pro 为 `104000 + 8192 + 1`。单条消息边界包含上限本身；上下文发送前检查要求总估算输入严格小于上下文窗口。
-
-手动档位使用每回合参考预算的三倍，因为可见会话承载连续增量回合。这不会启用 Context as File，也不保证任意手动选择的模型都能接受该规模的历史。
+这是本地声明预算，不是对每个网页模型实际容量的承诺。GPT-6 和 GPT-5.6 Sol 的 Extra High 在独立 DEV 中已验证约254k总估算量附近的原生自动压缩、分布事实和压缩后工具续接；其他档位和账号不据此视为完成相同规模的真实验收。上传成功不代表模型完整利用所有内容。单次消息与账号限制仍独立生效。
 
 <a id="message-budgets"></a>
 
@@ -354,27 +340,21 @@ Pro 账户窗口包含 `8192` token 的平台预留，以及为适配器严格�
 
 输入必须同时满足所有适用限制。输入估算包含可见文本、上下文文件内容、所选 skill 附件、`8192` 平台预留以及图片预留。每张图片预留 `4096` token，`detail: "original"` 时预留 `8192`。字符与 token 限制相互独立：消息可能符合 token 预算，却超过字符上限。字符检查采用 JavaScript 字符串长度。
 
-对 Sol／Pro，普通可见文本预算取以下两者较小值：明确的消息 token 上限，以及 `标准上下文窗口 − 平台预留 − 图片预留 − 1`。没有图片预留时，非 Pro Instant 为 `32807`，非 Pro 思考档位为 `81807`，Pro 账户普通 Sol 为 `103000`，Pro 为 `104000`。这些派生值用于传输规划，不是额外的压缩阈值。
+Sol/Pro的单次可见文本规划预算独立于总上下文：无图片时，非Pro Instant为32807、非Pro思考为81807、Pro账户普通Sol为103000、Pro模型为104000 tokens。图片预留从中扣除。它们是传输规划边界，不是自动压缩阈值。
 
 <a id="context-files"></a>
 
-### Context as File 与三倍预算
+### Context as File 与统一预算
 
-`contextPreferenceSources` 为 `files` 和 `budget` 分别记录 `default` 或 `user`。缺少来源不视为用户明确选择。通过CLI设置某项时，仅该项标为 `user`；自动默认值和联动约束不会授予三倍预算。
+开启上下文文件传输后，完整序列化上下文不超过32 KiB（32768个UTF-8字节）时仍内联发送，超过时作为一个带完整性校验的TXT附件发送。大小包含JSON转义、角色、工具和结果，并非只计算最新用户正文。发送前须确认全部本回合附件处理完成；失败会停止发送，不回退为全文输入。上传阈值只改变传输方式，统一窗口及压缩阈值不变。
 
-开启上下文文件传输后，完整序列化上下文不超过32 KiB（32768个UTF-8字节）时仍内联发送，超过时转成一个带完整性校验的TXT附件；输入框保留文件读取要求和桥接指令。大小包含JSON转义、角色、工具和结果，并非只计算最新用户正文。发送前须确认本回合全部附件处理完成；上传失败会在Send之前停止，不会回退为全文输入。阈值只改变传输方式，仍执行全部上下文与压缩预算检查。文件传输与预算分别保存设置来源：只有明确标为 `user` 的选择在升级时保留；缺少来源或其他来源均采用当前版本默认值。因此旧配置即使保存关闭或三倍预算，没有 `user` 标记也会迁移为文件开启与标准预算。用户明确操作才标为 `user`，普通保存与配置同步不会代替用户选择。手动模式及Luna仍受原有支持限制。
-
-`experimentalContextFiles` 改变较大上下文的发送方式；`experimentalContextTripleBudget` 是单独的选择，仅在文件传输开启时生效。对 GPT-5.6 和 GPT-6 的自动 Sol／Pro 策略，它将窗口与压缩阈值乘以三，有效百分比保持不变。例如，Pro 账户普通 Sol 变为 `333579` / `285000`，Pro 路由变为 `336579` / `285000`。
-
-三倍预算不会放大可见消息 token 上限、字符上限或账户使用额度；每张图片的 token 预留保持不变。它也不会改变 Luna 的检查点策略。手动模式拒绝文件传输并使用自己的固定预算。上传成功不证明浏览器模型使用了全部上传上下文。
+文件与预算分别记录contextPreferenceSources.files/budget；仅保留明确user选择，否则采用文件开启＋标准预算（受模式支持限制）。用户操作才记录user，普通同步不修改来源。三倍选项保留，并基于新标准值乘三：816000窗口、775200可用、734400压缩阈值；关闭文件则清除三倍及其来源。手动模式和Luna不支持文件传输。
 
 <a id="luna-continuity"></a>
 
 ### Luna 连续性与浏览器边界
 
-Luna 公布 `28000` 上下文窗口与 `22000` 自动压缩阈值，为实测浏览器预算保留余量。Ordinary 与 Think 均使用共享的原生 Codex 压缩路径，不再用私有滚动检查点替换原始历史。
-
-浏览器发送前仍检查包含预留的 `28000` token 总估算预算。超限明确报错，不会静默裁剪。Codex 可以压缩已完成历史，但单个过大的输入项仍可能需要用户缩小。Context as File 与三倍预算不会扩大 Luna 的预算。
+Luna Ordinary与Think采用同一272000窗口及244800阈值，仍由原生Codex压缩，不使用私有滚动检查点替换历史。Luna未完成该规模的真实容量标定，也不支持文件传输；实际网页拒绝输入时明确报告，不自动裁剪或改选模型。
 
 <a id="native-context-preservation"></a>
 
@@ -472,9 +452,9 @@ DEV 拒绝与生产数据目录重叠，使用独立浏览器登录及 Codex 主
 | `--saved-chats` / `--temporary-chats` | 设置 `useSavedChats`。 |
 | `--fresh-conversation` / `--retained-conversation` | 设置自动交互的会话复用。 |
 | `--context-files` / `--no-context-files` | 设置 Context as File 传输。 |
-| `--context-triple-budget` / `--standard-context-budget` | 设置更大或标准预算；更大预算要求文件传输。 |
+| `--context-triple-budget` / `--standard-context-budget` | 选择三倍或标准预算，三倍须先开启文件传输。 |
 | `--skill-attachments` / `--inline-skills` | 设置所选 skill 的附件传输。 |
-| `--zero-risk-pro` / `--zero-risk-default` | 添加或移除使用 Pro 预算的手动模型条目；仅能在手动模式中配置。 |
+| `--zero-risk-pro` / `--zero-risk-default` | 添加或移除Pro专用手动模型条目；仅能在手动模式中配置。 |
 | `--auto-approve-tool-calls` | 启用浏览器 Allow once 自动点击。 |
 | `--replace-codex-route` | 显式允许可逆替换现有 Responses 或 Voice 路由设置。 |
 | `--restart-service` | 允许配置流程在需要时重启本项目守护进程。 |
@@ -499,8 +479,8 @@ bun run dev:codex -m chatgpt-web/gpt-6-pro
 
 | 现象 | 含义及后续操作 |
 | --- | --- |
-| 没有独立 Instant 条目 | Pro 账户预算策略下，在 GPT-5.6 Sol 或 GPT-6 内选择 `low`。 |
-| Sol 条目拒绝 `low` | 该账户的 Instant 使用独立预算，改选独立 Instant ID。 |
+| 没有独立 Instant 条目 | 在 GPT-5.6 Sol 或 GPT-6 内选择 `low`；所有账户使用相同上下文策略。 |
+| Sol 条目拒绝 `low` | 刷新模型目录并重启对应 Codex，检查账号能力和请求的模型 ID。 |
 | 没有 Extra High | 未保存正向 Extra High 能力观察；在自动模式刷新账户能力。 |
 | Pro 条目没有更低强度 | 具有明确名称的 Pro 路由按设计固定为 `max`。 |
 | `model_version_unavailable` | 无法验证目标浏览器家族／强度；重试前检查浏览器选择及受支持的界面语言。 |
@@ -530,7 +510,7 @@ bun run dev:codex -m chatgpt-web/gpt-6-pro
 
 ## 本地用量与限额参考
 
-用量与诊断统计的是**本应用网页发送次数**。自动模式每次观察到网页接受提交计一次，包含工具结果续发和压缩；原生工具调用本身不增加次数。上下文文件和三倍预算不会直接将次数相乘。其他设备、浏览器及开始记录之前的用量不包含，因此不能计算官方剩余额度或重置时间。
+用量与诊断统计的是**本应用网页发送次数**。自动模式每次观察到网页接受提交计一次，包含工具结果续发和压缩；原生工具调用本身不增加次数。上下文文件和统一预算不会直接将次数相乘。其他设备、浏览器及开始记录之前的用量不包含，因此不能计算官方剩余额度或重置时间。
 
 模型表格上方保留近7天所有已记录模型的总次数。GPT-5.6 Sol、GPT-5.6 Sol Pro、GPT-6、GPT-6 Pro 分别显示滚动24小时/7天总数，两个窗口重叠。同模型合并所有思考档位和发送用途，不另列档位明细。Pro 合计包含两种 Pro 模型和已知属于 Pro、但型号未识别的旧记录，后者仍单列显示。账本保留经确认的档位和用途供诊断；旧记录保留ID与时间，缺失维度保持未知。Token用量仍是估算，不是官方账单。
 

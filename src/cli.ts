@@ -26,11 +26,12 @@ import { formatDoctorReport, runDoctor } from "./doctor";
 import { runChatGptMcpMain } from "./adapters/chatgpt-web/tools/mcp-main";
 import { runCommand } from "./runtime/process";
 import { startServer } from "./server";
-import { assertServiceIdle, cancelActiveTurns, getServiceStatus, installService, interruptActiveTurn, restartService, startService, stopService, uninstallService } from "./runtime/service";
+import { assertServiceIdle, cancelActiveTurns, getServiceStatus, installService, restartService, startService, stopService, uninstallService } from "./runtime/service";
 import { existingMcpBridgeSetupCredentials, preflightSetup, setup, type SetupOptions } from "./setup";
 import { installRuntimeKeyBytes, managedRuntimeKeyPath, stopTunnel, tunnelStatus, waitForTunnelReady } from "./runtime/tunnel";
 import { getTunnelServiceStatus, restartTunnelService, startTunnelService, stopTunnelService, uninstallTunnelService } from "./runtime/tunnel-service";
 import { VERSION } from "./version";
+import { interruptHookCommand } from "./codex/interrupt-command";
 import { licenseCommand } from "./licensing/cli";
 import { requireLicense } from "./licensing/service";
 import { cliCommandRequiresLicense } from "./licensing/access";
@@ -72,7 +73,7 @@ Setup options:
                                Send prompts and read ChatGPT state through browser automation (default)
   --zero-risk-browser-interaction
                                MCP Bridge mode: select, paste, and send in the launcher yourself
-  --zero-risk-pro              Zero Risk: also install the explicit Pro-sized model row
+  --zero-risk-pro              Zero Risk: also install the explicit Pro-specific model row
   --zero-risk-default          Zero Risk: install only the default model row
   --port NUMBER                Loopback Responses port (default: 17841)
   --chrome PATH                Google Chrome/Chromium executable used for account login
@@ -470,32 +471,6 @@ async function serviceCommand(args: string[]): Promise<void> {
             : undefined;
   if (!status) throw new Error(`Unknown service action: ${action}`);
   stdout.write(`${JSON.stringify(status, null, 2)}\n`);
-}
-
-async function interruptHookCommand(args: string[]): Promise<void> {
-  assertNoArgs(args);
-  const chunks: Buffer[] = [];
-  let bytes = 0;
-  for await (const chunk of stdin) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    bytes += buffer.byteLength;
-    if (bytes > 32 * 1024) throw new Error("Codex Interrupt hook payload is too large");
-    chunks.push(buffer);
-  }
-  let payload: { hook_event_name?: unknown; session_id?: unknown; turn_id?: unknown };
-  try {
-    payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  } catch {
-    throw new Error("Codex Interrupt hook payload is not valid JSON");
-  }
-  const threadId = typeof payload.session_id === "string" ? payload.session_id.trim() : "";
-  const turnId = typeof payload.turn_id === "string" ? payload.turn_id.trim() : "";
-  if (payload.hook_event_name !== "Interrupt"
-    || !/^[A-Za-z0-9_-]{6,128}$/.test(threadId)
-    || !/^[A-Za-z0-9_-]{6,128}$/.test(turnId)) {
-    throw new Error("Codex Interrupt hook payload has no valid session_id or turn_id");
-  }
-  await interruptActiveTurn(loadConfig(), { threadId, turnId });
 }
 
 async function tunnelCommand(args: string[]): Promise<void> {

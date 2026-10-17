@@ -614,6 +614,15 @@ test("browser control server releases only ready tabs for an authenticated conve
     });
     assert.equal(unauthenticated.status, 401);
 
+    const stale = await fetch(`${descriptor.endpoint}/v1/turn/release`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${descriptor.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ conversationKey: "b".repeat(64), traceId: "previous-owner" }),
+    });
+    assert.equal(stale.status, 200);
+    assert.deepEqual(await stale.json(), { ok: true, released: 0 });
+    assert.deepEqual(removed, []);
+
     const response = await fetch(`${descriptor.endpoint}/v1/turn/release`, {
       method: "POST",
       headers: {

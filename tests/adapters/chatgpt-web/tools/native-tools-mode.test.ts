@@ -18,6 +18,7 @@ import { TurnBroker } from "../../../../src/adapters/chatgpt-web/tools/turn-brok
 import { StandaloneRequestQueue } from "../../../../src/browser/standalone-request-queue";
 import { DEFAULT_RUNTIME_PARAMETERS } from "../../../../launcher/shared/runtime-parameters.cjs";
 import { withQueuedRequest } from "../../../../src/browser/request-queue-client";
+import { bridgeToResponsesSSE } from "../../../../src/responses/stream";
 import { toolIdentityKey, type AdapterEvent, type CodexParsedRequest, type CodexProviderConfig, type CodexTool } from "../../../../src/types";
 
 const tempRoot = join(tmpdir(), `web2harness-native-tools-${process.pid}-${Date.now()}`);
@@ -291,6 +292,10 @@ describe("native-tools adapter emission", () => {
     const { events } = await withFakeWorker(nativeProvider(), [answer]);
 
     const textDeltas = events.filter(event => event.type === "text_delta");
+    expect(textDeltas).toEqual([{ type: "text_delta", text: "Checking the tree.", phase: "commentary" }]);
+    expect(events.filter(event => event.type !== "heartbeat").map(event => event.type)).toEqual([
+      "text_delta", "tool_call_start", "tool_call_delta", "tool_call_end", "done",
+    ]);
     const streamedText = textDeltas.map(event => event.type === "text_delta" ? event.text : "").join("");
     expect(streamedText).not.toContain(CODEX_TOOL_CALLS_FENCE);
     expect(streamedText).toContain("Checking the tree.");
@@ -309,6 +314,10 @@ describe("native-tools adapter emission", () => {
 
   test("a reply without a block completes as a plain final answer", async () => {
     const { events } = await withFakeWorker(nativeProvider(), ["The project has three modules."]);
+    expect(events.filter(event => event.type === "text_delta")).toEqual([
+      { type: "text_delta", text: "The project has three modules.", phase: "final_answer" },
+    ]);
+    expect(events.filter(event => event.type !== "heartbeat").map(event => event.type)).toEqual(["text_delta", "done"]);
     const streamedText = events
       .filter(event => event.type === "text_delta")
       .map(event => event.type === "text_delta" ? event.text : "")
@@ -318,9 +327,58 @@ describe("native-tools adapter emission", () => {
     expect(events.at(-1)).toMatchObject({ type: "done", stopReason: "stop", endTurn: true });
   });
 
+  test.each([true, false])("Responses SSE preserves native phase and exact reconnects without duplication, tools=%s", async withTools => {
+    const provider = nativeProvider();
+    const turnId = `turn_native_phase_${withTools}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const visibleText = withTools ? "Checking the tree." : "The project has three modules.";
+    const answer = withTools
+      ? visibleText + "\n```" + CODEX_TOOL_CALLS_FENCE + '\n{"calls":[{"name":"exec_command","arguments":{"cmd":"echo ok"}}]}\n```'
+      : visibleText;
+    const first = await withFakeWorker(provider, [answer], turnId);
+    expect(first.prompts).toHaveLength(1);
+    const expectedEvents = first.events.filter(event => event.type !== "heartbeat");
+    const phase = withTools ? "commentary" : "final_answer";
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const result = attempt === 0 ? first : await withFakeWorker(provider, ["must not send"], turnId);
+      if (attempt > 0) expect(result.prompts).toHaveLength(0);
+      expect(result.events.filter(event => event.type !== "heartbeat")).toEqual(expectedEvents);
+      expect(result.events.filter(event => event.type === "text_delta")).toEqual([
+        { type: "text_delta", text: visibleText, phase },
+      ]);
+      expect(result.events.filter(event => event.type === "tool_call_start")).toHaveLength(withTools ? 1 : 0);
+      expect(result.events.filter(event => event.type === "done")).toHaveLength(1);
+
+      // Exercise the shared Responses encoder with actual adapter events, including replay.
+      async function* source() { yield* result.events; }
+      const text = await new Response(bridgeToResponsesSSE(source(), CHATGPT_WEB_MODEL_ID)).text();
+      const frames = text.split("\n\n").flatMap(frame => {
+        const data = frame.split("\n").find(line => line.startsWith("data: "))?.slice(6);
+        return data && data !== "[DONE]" ? [JSON.parse(data)] : [];
+      });
+      const itemFrames = frames.filter(frame => ["response.output_item.added", "response.output_item.done"].includes(frame.type));
+      expect(itemFrames.map(frame => [frame.type, frame.item.type])).toEqual([
+        ["response.output_item.added", "message"],
+        ["response.output_item.done", "message"],
+        ...(withTools ? [["response.output_item.added", "function_call"], ["response.output_item.done", "function_call"]] : []),
+      ]);
+      for (const frame of itemFrames.filter(frame => frame.item.type === "message")) {
+        expect(frame.item).toMatchObject({ role: "assistant", phase });
+      }
+      expect(frames.filter(frame => frame.type === "response.output_text.delta").map(frame => frame.delta).join(""))
+        .toBe(visibleText);
+      const doneItems = frames.filter(frame => frame.type === "response.output_item.done").map(frame => frame.item);
+      expect(doneItems[0].content).toEqual([{ type: "output_text", text: visibleText, annotations: [] }]);
+      const completed = frames.filter(frame => frame.type === "response.completed");
+      expect(completed).toHaveLength(1);
+      expect(completed[0].response.output).toEqual(doneItems);
+      expect(completed[0].response.end_turn).toBe(!withTools);
+    }
+  });
+
   test("an unusable block fails retryably and the retry prompt carries corrective feedback", async () => {
     const provider = nativeProvider();
-    const broken = "```" + CODEX_TOOL_CALLS_FENCE + "\n"
+    const broken = "Checking an unvalidated call.\n```" + CODEX_TOOL_CALLS_FENCE + "\n"
       + '{"calls":[{"name":"shell","arguments":{"cmd":"ls"}}]}\n'
       + "```";
     // Codex retries the same request (same turn identity) after a retryable adapter error.
@@ -340,6 +398,10 @@ describe("native-tools adapter emission", () => {
     expect(retry.prompts[0]).toContain("<previous_tool_call_block>");
     expect(retry.prompts[0]).toContain("unknown tool");
     expect(retry.events.some(event => event.type === "error")).toBe(true);
+    for (const attempt of [first, retry]) {
+      expect(attempt.events.filter(event => ["text_delta", "tool_call_start", "tool_call_delta", "tool_call_end", "done"].includes(event.type)))
+        .toEqual([]);
+    }
   });
 
   test("queue admits a corrective attempt but replays its successful reconnect without resending", async () => {

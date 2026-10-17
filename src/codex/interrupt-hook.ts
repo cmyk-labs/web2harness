@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, join, posix, resolve, win32 } from "node:path";
 import { getStaticTOMLValue, parseTOML, type AST } from "toml-eslint-parser";
 import type { AppConfig } from "../config";
@@ -44,8 +44,6 @@ function cmdShellArgument(value: string): string {
   if (value.includes('"') || /[\r\n]/.test(value)) {
     throw new Error("Codex interrupt hook command contains an invalid Windows path character");
   }
-  // Codex executes command hooks through cmd.exe /C on Windows. Quoting every argument preserves
-  // spaces and shell metacharacters in the installed runtime path.
   return `"${value}"`;
 }
 
@@ -55,8 +53,22 @@ export function codexInterruptHookCommand(
   platform: NodeJS.Platform = process.platform,
 ): string {
   const absoluteHome = platform === "win32" ? win32.resolve(home) : posix.resolve(home);
-  const args = [...config.runtimeCommand, "--home", absoluteHome, "hook", "interrupt"];
-  return args.map(platform === "win32" ? cmdShellArgument : posixShellArgument).join(" ");
+  const runtime = [...config.runtimeCommand];
+  // Known source/bundle entries have a small sibling for this deadline-sensitive command.
+  // Custom executables retain their existing CLI contract.
+  if (runtime.length === 2 && runtime[1]) {
+    const entry = runtime[1];
+    const helper = basename(entry) === "cli.ts" ? join(dirname(entry), "codex", "interrupt-hook-main.ts")
+      : basename(entry) === "cli.js" ? join(dirname(entry), "interrupt-hook.js") : undefined;
+    if (helper && existsSync(helper)) runtime[1] = helper;
+  }
+  const args = [...runtime, "--home", absoluteHome, "hook", "interrupt"];
+  if (platform === "win32") {
+    // Native hook wrapping can break a leading quoted executable. Escape only the
+    // command-level pair for the outer shell; cmd /S receives intact argument quotes.
+    return `cmd.exe /d /s /c ^"${args.map(cmdShellArgument).join(" ")}^"`;
+  }
+  return args.map(posixShellArgument).join(" ");
 }
 
 function lineEnding(text: string): "\n" | "\r\n" | "\r" {

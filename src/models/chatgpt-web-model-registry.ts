@@ -32,7 +32,7 @@ export const CHATGPT_WEB_ZERO_RISK_MODEL_ROUTE: ChatGptWebZeroRiskModelRoute = {
 export const CHATGPT_WEB_ZERO_RISK_PRO_MODEL_ROUTE: ChatGptWebZeroRiskModelRoute = {
   slug: "chatgpt-web/zero-risk-pro",
   displayName: "ChatGPT Web — Zero Risk Pro",
-  description: "Explicit Pro-sized Zero Risk context; select ChatGPT Pro manually for every turn.",
+  description: "Explicit Pro-specific Zero Risk context; select ChatGPT Pro manually for every turn.",
   interactionMode: "manual",
   backendModel: CHATGPT_WEB_ZERO_RISK_PRO_BACKEND_MODEL,
   codexEffort: "low",

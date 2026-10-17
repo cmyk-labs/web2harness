@@ -116,6 +116,24 @@ test("plain wrappers may merge, split and remount without changing semantic bloc
   expect(delivered).toContain("> Quote");
 });
 
+test("a remounted growing list label preserves delivered prefix and full pending content", async () => {
+  // Minimal structure from the authenticated DEV capture: polling may skip the final
+  // streaming frames and next see newly mounted nodes containing the completed label.
+  const stages = await snapshots('<section id="turn"><div class="markdown"><p>验收记录。</p><ul><li><strong>校验</strong></li></ul></div></section>', [
+    document => { document.querySelector('.markdown')!.innerHTML = '<p>验收记录。</p><ul><li><strong>校验标识</strong>：<code>MAPLE</code></li><li>完成。</li></ul>'; },
+  ]);
+  expect(stages[0]!.markdownSegments[1]!.key).not.toBe(stages[1]!.markdownSegments[1]!.key);
+  for (const delivery of ['append', 'buffered'] as const) {
+    const buffer = new ChatGptMarkdownBuffer(undefined, 0, delivery);
+    const first = buffer.observe(stages[0]!.markdownSegments, 0);
+    const next = buffer.observe(stages[1]!.markdownSegments, 1);
+    const final = buffer.finish();
+    expect(first + next + final.delta).toBe('验收记录。\n\n- **校验标识**：`MAPLE`\n- 完成。');
+    expect(final.markdown).toBe(first + next + final.delta);
+    expect(buffer.finish().delta).toBe('');
+  }
+});
+
 test("captured Activity progress is commentary before any assistant answer exists", async () => {
   const progress = await snapshot(powerActivityHtml);
   expect(progress.responsePresent).toBeTrue();
@@ -128,6 +146,37 @@ test("captured Activity progress is commentary before any assistant answer exist
   const answer = await snapshot(combined);
   expect(answer.visibleText).toBe("Final answer.");
   expect(answer.traceBlocks.some(block => block.kind === "commentary")).toBeTrue();
+});
+
+test("pending paragraphs may hydrate into setext headings without losing their text or delivered prefix", async () => {
+  // Authenticated DEV observed the paragraph before the following setext underline
+  // remounted it as H2. The original words remained, with additional trailing text.
+  for (const heading of ['h1', 'h2']) {
+    const stages = await snapshots('<section id="turn"><div class="markdown"><p>Checkpoint.</p><p><span>The </span><span>user instructed </span></p></div></section>', [
+      document => { document.querySelector('.markdown')!.innerHTML = `<p>Checkpoint.</p><${heading}><span>The user instructed Codex to:</span></${heading}><p>Keep all identifiers.</p>`; },
+    ]);
+    for (const delivery of ['append', 'buffered'] as const) {
+      const buffer = new ChatGptMarkdownBuffer(undefined, 0, delivery);
+      const first = buffer.observe(stages[0]!.markdownSegments, 0);
+      const next = buffer.observe(stages[1]!.markdownSegments, 1);
+      const final = buffer.finish();
+      expect(final.markdown).toBe(`Checkpoint.\n\n${heading === 'h1' ? '#' : '##'} The user instructed Codex to:\n\nKeep all identifiers.`);
+      expect(first + next + final.delta).toBe(final.markdown);
+      expect(buffer.finish().delta).toBe('');
+    }
+  }
+});
+
+test("an unfinished list marker can temporarily promote a pending paragraph to a heading", async () => {
+  const stages = await snapshots('<section id="turn"><div class="markdown"><p>Checkpoint.</p><p>The user instructed</p></div></section>', [
+    document => { document.querySelector('.markdown')!.innerHTML = '<p>Checkpoint.</p><h2>The user instructed Codex to:</h2>'; },
+    document => { document.querySelector('.markdown')!.innerHTML = '<p>Checkpoint.</p><p>The user instructed Codex to:</p><ul><li>Keep all identifiers.</li></ul>'; },
+  ]);
+  const b = new ChatGptMarkdownBuffer(undefined, 0);
+  let delivered = '';
+  stages.forEach((s, i) => { delivered += b.observe(s.markdownSegments, i); });
+  delivered += b.finish().delta;
+  expect(delivered).toBe('Checkpoint.\n\nThe user instructed Codex to:\n\n- Keep all identifiers.');
 });
 
 test("captured activity summaries use the status stream and keep actual commentary and answers separate", async () => {

@@ -10,6 +10,7 @@ import {
   assertNewChatPage,
   chatGptNewChatUrl,
   detectChatGptAccountCapabilities,
+  readChatGptEffortSnapshot,
 } from "../../src/browser/session";
 
 test("effort closing acknowledges its owner when Escape is ignored and never reopens a closed picker", async () => {
@@ -95,11 +96,11 @@ test("composer and effort selectors exclude unrelated editable fields and menu b
 test("effort activation binds the owned menu after the control opens", async () => {
   let opened = false;
   const ownedMenu = { isVisible: async () => opened };
-  const hiddenSurface = {
+  const surface = {
     filter() { return this; },
     last() { return this; },
     locator() { return this; },
-    isVisible: async () => false,
+    isVisible: async () => opened,
   };
   const control = {
     getAttribute: async (name: string) => {
@@ -116,7 +117,7 @@ test("effort activation binds the owned menu after the control opens", async () 
   const page = {
     locator: (selector: string) => {
       if (selector === '[id="radix-effort-menu"]') return ownedMenu;
-      return hiddenSurface;
+      return surface;
     },
     keyboard: { press: async () => {} },
   };
@@ -124,6 +125,7 @@ test("effort activation binds the owned menu after the control opens", async () 
   const activation = await activateChatGptEffortMenu(page as never, control as never, { settleMs: 0 });
   expect(activation.method).toBe("click");
   expect(activation.menu).toBe(ownedMenu as never);
+  expect(activation.sliderContainer).toBe(surface as never);
 });
 
 test.each(["aria-expanded", "data-state"])("effort activation does not bind a closing menu (%s)", async attribute => {
@@ -152,11 +154,11 @@ test("effort activation retries one ghost click with a primary pointerdown", asy
   let pointerOpened = false;
   const events: unknown[] = [];
   const ownedMenu = { isVisible: async () => pointerOpened };
-  const hiddenSurface = {
+  const surface = {
     filter() { return this; },
     last() { return this; },
     locator() { return this; },
-    isVisible: async () => false,
+    isVisible: async () => pointerOpened,
   };
   const control = {
     getAttribute: async (name: string) => {
@@ -178,7 +180,7 @@ test("effort activation retries one ghost click with a primary pointerdown", asy
   const page = {
     locator: (selector: string) => {
       if (selector === '[id="radix-effort-menu"]') return ownedMenu;
-      return hiddenSurface;
+      return surface;
     },
     keyboard: {
       press: async (key: string) => {
@@ -191,11 +193,67 @@ test("effort activation retries one ghost click with a primary pointerdown", asy
   const activation = await activateChatGptEffortMenu(page as never, control as never, { settleMs: 0 });
   expect(activation.method).toBe("pointerdown");
   expect(activation.menu).toBe(ownedMenu as never);
+  expect(activation.sliderContainer).toBe(surface as never);
   expect(events).toEqual([
     ["click", { force: true, noWaitAfter: true, timeout: 1 }],
     ["keyboard", "Escape"],
     ["pointerdown", { button: 0, buttons: 1, pointerType: "mouse", isPrimary: true }],
   ]);
+});
+
+test("a visible effort menu waits until its slider surface becomes visible", async () => {
+  let opened = false, visibilityReads = 0;
+  const menu = { isVisible: async () => opened };
+  const surface = {
+    filter() { return this; }, locator() { return this; },
+    isVisible: async () => opened && ++visibilityReads >= 3,
+  };
+  const control = {
+    getAttribute: async (name: string) => name === "aria-expanded" ? String(opened)
+      : name === "aria-controls" ? "owned-menu" : null,
+    click: async () => { opened = true; },
+    dispatchEvent: async () => { throw new Error("A hydrating slider must not require a fallback click"); },
+  };
+  const page = { locator: (selector: string) => selector === '[id="owned-menu"]' ? menu : surface,
+    keyboard: { press: async () => { opened = false; } } };
+  const activation = await activateChatGptEffortMenu(page as never, control as never, { settleMs: 1_000 });
+  expect(visibilityReads).toBe(3);
+  expect(activation.method).toBe("click");
+  expect(activation.sliderContainer).toBe(surface as never);
+});
+
+test("a visible model menu without a visible effort surface exhausts activation and fails closed", async () => {
+  let opened = false, clicks = 0, pointers = 0;
+  const menu = { isVisible: async () => opened };
+  const surface = { filter() { return this; }, locator() { return this; }, isVisible: async () => false };
+  const control = {
+    getAttribute: async (name: string) => name === "aria-expanded" ? String(opened)
+      : name === "aria-controls" ? "owned-menu" : null,
+    click: async () => { clicks++; opened = true; },
+    dispatchEvent: async () => { pointers++; opened = true; },
+  };
+  const page = { locator: (selector: string) => selector === '[id="owned-menu"]' ? menu : surface,
+    keyboard: { press: async () => { opened = false; } } };
+  await expect(activateChatGptEffortMenu(page as never, control as never, { settleMs: 0 }))
+    .rejects.toThrow("did not expose its owned menu or structural slider");
+  expect(clicks).toBe(1); expect(pointers).toBe(1);
+});
+
+test("effort snapshot locator waits share the remaining inspection budget", async () => {
+  const timeouts: number[] = [];
+  const container = {
+    evaluate: async (_read: unknown, arg: unknown, options: { timeout: number }) => {
+      expect(arg).toBeUndefined();
+      expect(options.timeout).toBeGreaterThan(0);
+      timeouts.push(options.timeout);
+      return { min: "0", max: "3", value: "3", locks: Array(timeouts.length === 1 ? 3 : 4).fill("false") };
+    },
+  };
+  expect(await readChatGptEffortSnapshot(container as never, 1_000))
+    .toEqual({ min: 0, max: 3, value: 3, available: [true, true, true, true] });
+  expect(timeouts).toHaveLength(2);
+  expect(timeouts[0]).toBeLessThanOrEqual(1_000);
+  expect(timeouts[1]!).toBeLessThan(timeouts[0]!);
 });
 
 test("effort activation fails closed when neither event exposes a structural surface", async () => {

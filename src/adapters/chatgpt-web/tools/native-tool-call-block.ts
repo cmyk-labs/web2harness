@@ -307,6 +307,7 @@ export function nativeToolCallContractLines(): string[] {
   return [
     "Codex executes the supplied tools under its own sandbox and approvals. This page only returns call decisions.",
     'Return calls in one fenced codex_tool_calls JSON block: {"calls":[{"type":"function_call","namespace":"<original namespace, if any>","name":"<original name>","arguments":{...}}]}.',
+    "The call block encodes tool calls only. Preserve any user-facing progress update or tool preamble required by the active Codex task as ordinary reply text before the block; the block does not replace that message. Keep private reasoning private, and never invent an execution result.",
     'For custom tools use {"type":"custom_tool_call","namespace":"<original namespace, if any>","name":"<original name>","input":"<raw source>"}. For tool_search use type tool_search_call with name tool_search and arguments.',
     "Use the exact declared namespace, name and kind. A namespace group supplies its namespace to its children. Omit namespace only for a tool declared outside a namespace. Never combine namespace and name into an alias.",
     "The catalog describes top-level Codex tools. It does not declare members of exec's tools object. Inside exec use only the nested exports and globals declared by its original description or discovered from its runtime ALL_TOOLS; top-level tools do not imply nested exports.",

@@ -6,9 +6,6 @@ import { createChatGptWebAdapter } from "../adapters/chatgpt-web/adapter";
 import { estimateChatGptWebInputTokens } from "../adapters/chatgpt-web/usage";
 import { RemoteTurnBroker, type TurnBrokerOwner } from "../adapters/chatgpt-web/tools/turn-broker";
 import {
-  CHATGPT_LUNA_BROWSER_INPUT_TOKEN_BUDGET,
-} from "../adapters/chatgpt-web/prompt/input-tokens";
-import {
   CHATGPT_WEB_LUNA_BACKEND_MODEL,
   requireChatGptWebModelRoute,
   resolveChatGptWebContextLimits,
@@ -610,9 +607,6 @@ export class DevChatDriver {
       inputTokens,
       autoCompactTokenLimit,
       contextWindow,
-      ...(route.backendModel === CHATGPT_WEB_LUNA_BACKEND_MODEL
-        ? { browserInputTokenLimit: CHATGPT_LUNA_BROWSER_INPUT_TOKEN_BUDGET }
-        : {}),
       percent: Math.round((inputTokens / autoCompactTokenLimit) * 1_000) / 10,
       inputItems: input.length,
     };

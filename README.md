@@ -2,7 +2,7 @@
   <img src="assets/readme/hero.svg" width="960" alt="WEB2HARNESS · CHATGPT WEB × CODEX — Reason with web models. Get it done in Codex. Your ChatGPT plan. Your Codex workflow. Put your available web models to work.">
 </p>
 
-**Web2Harness** — Use ChatGPT web models, including Pro when available to your account, in Codex with native tool calls, task context, streaming, and image inputs. Optional experimental 3× context budget. Web-model requests follow ChatGPT's web limits without consuming Codex quota. Native Tools is the default; no MCP connector or tunnel required.
+**Web2Harness** — Use ChatGPT web models, including Pro when available to your account, in Codex with native tool calls, task context, streaming, and image inputs. A standard 272,000-token context window, with an optional experimental 3× budget. Web-model requests follow ChatGPT's web limits without consuming Codex quota. Native Tools is the default; no MCP connector or tunnel required.
 
 <p align="center">
   <a href="https://github.com/cmyk-labs/web2harness/releases/latest"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · Latest stable release"></a>&nbsp;
@@ -30,7 +30,7 @@ Select a **(Web)** model in Codex to use your signed-in ChatGPT account for repo
 | Web models and reasoning effort | Adds the Web models available to your account, including Pro when available, alongside native Codex models, with the efforts each route supports. |
 | Tool execution | Native mode preserves Codex Code Mode and namespaced custom tools; Codex executes file reads, code changes, and commands permitted for the active task. |
 | Conversation continuity | Eligible routes reuse the task's web conversation across tool round trips and follow-up questions, reducing repeated context transfer. |
-| History and task context | Sends task history and tool results to the web model. New configurations use Temporary Chat and standard context budgets based on model and account capabilities; an optional experimental 3× budget delays automatic compaction on supported routes. |
+| History and task context | Sends task history and tool results to the web model. Temporary Chat by default; all models and efforts use a standard 272,000 window, 258,400 usable tokens and a 244,800 native compaction threshold, with an optional experimental triple budget. |
 | Streaming responses | Supports streaming responses to Codex. In Native Tools mode, answer text and tool calls are returned after the completed web response has been parsed and validated. |
 | Images and attachments | Automatic interaction forwards task images and PDF, UTF-8 text, or source files supplied inline by the client as real attachments; optional experiments send large context or selected skills as text attachments. |
 | Model switching and subagents | Use native and Web models within a task, with subagent delegation governed by the selected compatibility protocol. |
@@ -137,10 +137,10 @@ See the [development guide](docs/development.md) for environment setup, independ
 ## FAQ
 
 - **Do Web models consume Codex quota?** Web-model requests follow ChatGPT's web limits without consuming Codex quota. Requests to native Codex models still follow their usual quota rules.
-- **Does the experimental 3× budget increase the web model's capacity?** With Context as File enabled, it triples the declared context window and automatic compaction threshold for supported automatic Sol/Pro routes. This does not raise account limits or guarantee that the web model can use all supplied content. File transport is separate: context above 32 KiB (32,768 UTF-8 bytes) is sent as a TXT attachment, and this threshold does not change with the budget. See [context budgets and file transport](docs/reference.md#context-files).
+- **How do context capacity and file uploads work together?** All Web models use a standard 272,000 window, 258,400 usable tokens and a 244,800 auto-compaction threshold. File transport defaults on in supported automatic modes: context over 32 KiB uses a TXT attachment; smaller input stays inline. The optional triple budget multiplies all three values by three. Web limits still apply, and full use of all content is not guaranteed for every model. See [context budgets and file transport](docs/reference.md#context-files).
 - **Can I still use native Codex models?** Yes; Web models are additional entries. Native requests also pass through the local service while it manages the route. Before discontinuing the application, remove its integration as described in the [user guide](docs/user-guide.md).
 - **Does saving history guarantee reuse of the same web chat?** These settings are independent. History controls whether ChatGPT retains the chat; reuse also depends on the mode, task ownership, and context continuity.
-- **Why do my models and effort choices differ from someone else's?** The catalog follows account capabilities. Instant and Thinking may have separate entries when their context budgets differ. Exact mappings are in the [configuration and model reference](docs/reference.md).
+- **Why do my models and effort choices differ from someone else's?** The catalog follows account capabilities. Instant is available as `low` under the corresponding Sol entry; saved standalone Instant IDs remain compatible. Exact mappings are in the [configuration and model reference](docs/reference.md).
 
 <a id="release-history"></a>
 

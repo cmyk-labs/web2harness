@@ -221,7 +221,7 @@ export function compileChatGptWebPrompt(
     }
   }
   if (contextFilesEnabled && parsed.modelId === CHATGPT_WEB_LUNA_MODEL_ID) {
-    throw new Error("Context as File is unavailable for Luna because its browser transcript shares one 28,000-token budget");
+    throw new Error("Context as File is unavailable for Luna");
   }
   if (mode.localTools && !turnToken) {
     throw new Error(manualControl

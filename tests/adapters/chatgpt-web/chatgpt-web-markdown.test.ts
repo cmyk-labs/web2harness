@@ -254,6 +254,46 @@ test("pending code remounts can grow without synthetic closing fences hiding mis
   }
 });
 
+test("remounted pending inline formatting can grow past serializer-generated closing delimiters", () => {
+  const block = (key: string, html: string) => ({ key, tag: "p", html, text: html.replace(/<[^>]*>/g, ""), streamable: false });
+  for (const tag of ["strong", "em", "code", 'span data-markdown-copy="inline-code"']) {
+    const end = tag.split(" ")[0];
+    for (const delivery of ["append", "buffered"] as const) {
+      const b = new ChatGptMarkdownBuffer(undefined, 750, delivery);
+      const before = block("stream", `<p>Result <${tag}>ASSERT_COM</${end}></p>`);
+      const after = block("remount", `<p>Result <${tag}>ASSERT_COMPLETE</${end}>.</p>`);
+      b.observe([before], 0);b.observe([after], 250);
+      expect(b.finish().markdown).toBe(chatGptHtmlToMarkdown(after.html));
+      for (const changed of [
+        `<p>Result <${tag}>COMPLETE</${end}>.</p>`,
+        '<p>Result</p>',
+      ]) {
+        const missing = new ChatGptMarkdownBuffer(undefined, 750, delivery);
+        missing.observe([before], 0);missing.observe([block("remount", changed)], 250);
+        expect(() => missing.finish()).toThrow("missing previously observed pending content");
+      }
+    }
+  }
+});
+
+test("pending inline delimiter growth does not hide changed links, paths, code punctuation or missing blocks", () => {
+  const block = (key: string, html: string) => ({ key, tag: "p", html, text: "fixture", streamable: false });
+  for (const [before, after] of [
+    ['<p><strong><a href="https://example.com/a">Read</a></strong></p>', '<p><strong><a href="https://example.com/b">Read more</a></strong></p>'],
+    ['<p><strong><code>src/a.ts</code></strong></p>', '<p><strong><a href="https://example.com/b">src/a.ts</a></strong></p>'],
+    ['<p><code>literal_*_</code></p>', '<p><code>literal_more</code></p>'],
+    ['<p><strong>Required</strong></p><hr>', '<p><strong>Required content</strong></p>'],
+  ]) {
+    const b = new ChatGptMarkdownBuffer(undefined, 750, "buffered");
+    b.observe([block("old", before!)], 0);b.observe([block("new", after!)], 250);
+    expect(() => b.finish()).toThrow("missing previously observed pending content");
+  }
+  const b = new ChatGptMarkdownBuffer(undefined, 750, "buffered");
+  b.observe([block("first", '<p>Must stay</p>'), block("last", '<p><strong>Par</strong></p>')], 0);
+  b.observe([block("new", '<p><strong>Paragraph</strong></p>')], 250);
+  expect(() => b.finish()).toThrow("missing previously observed pending content");
+});
+
 function katex(source: string, display = false): string {
   const escaped = source.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   const math = '<span class="katex"><span class="katex-mathml"><math><semantics>'
@@ -262,6 +302,52 @@ function katex(source: string, display = false): string {
     + '</semantics></math></span><span class="katex-html" aria-hidden="true">VISUAL_COPY\u200b</span></span>';
   return display ? `<span class="katex-display">${math}</span>` : math;
 }
+
+test("pending heading hydration preserves links, code, literal punctuation, block order and committed text", () => {
+  const block = (key: string, tag: string, body: string, streamable = false) => ({
+    key, tag, html: `<${tag}>${body}</${tag}>`, text: body.replace(/<[^>]*>/g, ''), streamable,
+  });
+  for (const [before, after] of [
+    ['Required text', 'Different text'],
+    ['Required text', 'Required'],
+    ['<a href="https://example.com/a">Read</a>', '<a href="https://example.com/b">Read more</a>'],
+    ['<code>literal_*_</code>', '<code>literal_more</code>'],
+    ['Literal # label', 'Literal label'],
+    ['First<br>Second', 'FirstSecond'],
+  ]) {
+    const b = new ChatGptMarkdownBuffer();
+    b.observe([block('old', 'p', before!)], 0);
+    b.observe([block('new', 'h2', after!)], 1);
+    expect(() => b.finish()).toThrow('missing previously observed pending content');
+  }
+  const missing = new ChatGptMarkdownBuffer();
+  missing.observe([block('first', 'p', 'First'), block('last', 'p', 'Tail')], 0);
+  missing.observe([block('new', 'h2', 'First expanded')], 1);
+  expect(() => missing.finish()).toThrow('missing previously observed pending content');
+  const committed = new ChatGptMarkdownBuffer(undefined, 0);
+  committed.observe([block('old', 'p', 'Already delivered', true), block('tail', 'p', 'Tail')], 0);
+  committed.observe([block('new', 'h2', 'Already delivered but changed'), block('tail', 'p', 'Tail')], 1);
+  expect(() => committed.finish()).toThrow();
+});
+
+test("unfinished inline code hydrates without treating serializer-escaped Windows paths as lost text", () => {
+  const block = (key: string, html: string) => ({ key, tag: 'p', html, text: html.replace(/<[^>]*>/g, ''), streamable: false });
+  const path = String.raw`C:\fixture\run_01\input`;
+  for (const delimiter of ['`', '``']) {
+    for (const code of ['code', 'span data-markdown-copy="inline-code"']) {
+      const old = block('old', `<p>Workspace: <span>${delimiter}</span><span>${path}</span></p>`);
+      const end = code.split(' ')[0];
+      const next = block('new', `<p>Workspace: <${code}>${path}.txt</${end}>. Continue.</p>`);
+      const b = new ChatGptMarkdownBuffer();b.observe([old], 0);b.observe([next], 1);
+      expect(b.finish().markdown).toBe(chatGptHtmlToMarkdown(next.html));
+      for (const changed of [path.replace('run_01', 'run01'), path.replace('\\run_01', '/run_01'), 'C:\\different']) {
+        const missing = new ChatGptMarkdownBuffer();missing.observe([old], 0);
+        missing.observe([block('new', `<p>Workspace: <${code}>${changed}.txt</${end}></p>`)], 1);
+        expect(() => missing.finish()).toThrow('missing previously observed pending content');
+      }
+    }
+  }
+});
 
 
 test("KaTeX inline and display formulas preserve exactly one original LaTeX expression", () => {

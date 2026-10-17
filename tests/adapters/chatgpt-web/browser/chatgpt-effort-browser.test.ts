@@ -1,7 +1,139 @@
 import { expect, test } from "bun:test";
-import { chromium } from "playwright-core";
+import { chromium, type Page } from "playwright-core";
 import { ChatGptBrowserWorker } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
-import { detectChatGptAccountCapabilities } from "../../../../src/browser/session";
+import { activateChatGptEffortMenu, chatGptEffortSlider, detectChatGptAccountCapabilities,
+  readChatGptEffortSnapshot } from "../../../../src/browser/session";
+
+// Local DOM only. chromium.launch owns a fresh temporary profile for each test;
+// no login, saved profile, production or DEV application is involved.
+async function installHydratingEffortPicker(page: Page, options: { hidden?: boolean; delayMs?: number } = {}) {
+  await page.route("**/*", route => route.abort());
+  await page.setContent(`<form><div id="prompt-textarea" contenteditable="true">Draft</div>
+    <button type="button" data-tone="neutral" aria-haspopup="menu" aria-controls="picker" aria-expanded="false">Instant</button></form>
+    <div id="picker" role="menu" hidden><div role="menuitemradio" aria-checked="true">GPT-5.6 Sol</div>
+      <div role="menuitemradio" aria-checked="false">GPT-5.6 Luna</div>
+      <div id="effort-owner" role="menuitem" tabindex="0">${options.hidden ? '<div data-model-picker-power-slider hidden style="height:30px;width:250px"></div>' : ''}</div></div>
+    <script>
+      const control=document.querySelector('button'), menu=document.querySelector('#picker'), owner=document.querySelector('#effort-owner');
+      let value=0, timer;
+      window.fixture={clicks:0, pointers:0, arrows:[], modelClicks:0, submissions:0, hydrated:false};
+      window.hydrateEffort=()=>{
+        owner.innerHTML='<div data-model-picker-power-slider style="height:30px;width:250px"><span data-orientation="horizontal" aria-disabled="false">'
+          +Array.from({length:4},(_,i)=>'<span data-selected="'+(i<=value)+'"></span>').join('')
+          +'<span role="slider" aria-hidden="true" aria-valuemin="0" aria-valuemax="3" aria-valuenow="'+value+'"></span></span></div>';
+        window.fixture.hydrated=true;
+      };
+      function open(){
+        menu.hidden=false;control.setAttribute('aria-expanded','true');
+        ${options.delayMs === undefined ? '' : `timer=setTimeout(window.hydrateEffort,${options.delayMs});`}
+      }
+      control.onclick=()=>{window.fixture.clicks++;open();};
+      control.onpointerdown=e=>{if(!e.isTrusted){window.fixture.pointers++;open();}};
+      document.querySelectorAll('[role=menuitemradio]').forEach(row=>row.onclick=()=>window.fixture.modelClicks++);
+      document.querySelector('form').onsubmit=e=>{e.preventDefault();window.fixture.submissions++;};
+      document.addEventListener('keydown',e=>{
+        if(e.key==='Escape'){clearTimeout(timer);menu.hidden=true;control.setAttribute('aria-expanded','false');control.textContent=['Instant','Medium','High','Extra High'][value];}
+        else if(e.key==='ArrowRight'||e.key==='ArrowLeft'){
+          window.fixture.arrows.push(e.key);value+=e.key==='ArrowRight'?1:-1;window.hydrateEffort();e.preventDefault();
+        }
+      });
+    </script>`);
+}
+
+test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)("visible menu waits for a delayed visible slider before activation returns", async () => {
+  const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
+  try {
+    const page = await browser.newPage();
+    await installHydratingEffortPicker(page, { hidden: true });
+    let finished = false;
+    const pending = activateChatGptEffortMenu(page, page.locator("button"), { settleMs: 2_000 });
+    void pending.then(() => { finished = true; }, () => { finished = true; });
+    await page.waitForFunction(() => document.querySelector("button")?.getAttribute("aria-expanded") === "true");
+    await page.waitForTimeout(100);
+    expect(await page.locator("#picker").isVisible()).toBeTrue();
+    expect(await page.locator("[data-model-picker-power-slider]").isVisible()).toBeFalse();
+    expect(finished).toBeFalse();
+    await page.evaluate(() => (window as any).hydrateEffort());
+    const activation = await pending;
+    expect(activation.method).toBe("click");
+    expect(await activation.sliderContainer.isVisible()).toBeTrue();
+    expect(await readChatGptEffortSnapshot(activation.sliderContainer)).toMatchObject({
+      min: 0, max: 3, value: 0, available: [true, true, true, true],
+    });
+    expect(await page.evaluate(() => (window as any).fixture))
+      .toMatchObject({ clicks: 1, pointers: 0, arrows: [], modelClicks: 0, submissions: 0 });
+  } finally { await browser.close(); }
+}, 10_000);
+
+for (const hidden of [false, true])
+test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`visible menu with ${hidden ? "hidden" : "absent"} slider fails within activation budget`, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
+  try {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(5_000);
+    await installHydratingEffortPicker(page, { hidden });
+    const started = performance.now();
+    const error = await activateChatGptEffortMenu(page, page.locator("button"), { settleMs: 1_000 }).catch(error => error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toContain("did not expose its owned menu or structural slider");
+    expect(performance.now() - started).toBeLessThan(4_000);
+    expect(await page.locator("#picker").isVisible()).toBeTrue();
+    expect(await page.evaluate(() => (window as any).fixture))
+      .toMatchObject({ clicks: 1, pointers: 1, arrows: [], modelClicks: 0, submissions: 0, hydrated: false });
+  } finally { await browser.close(); }
+}, 10_000);
+
+for (const disappears of [false, true])
+test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`effort snapshot bounds locator waiting when the slider ${disappears ? "disappears" : "never appears"}`, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
+  try {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(5_000);
+    await installHydratingEffortPicker(page);
+    await page.locator("button").click();
+    const { sliderContainer } = chatGptEffortSlider(page);
+    if (disappears) {
+      await page.evaluate(() => (window as any).hydrateEffort());
+      expect(await readChatGptEffortSnapshot(sliderContainer)).toMatchObject({ value: 0, max: 3 });
+      await page.locator("[data-model-picker-power-slider]").evaluate(element => element.remove());
+    }
+    const started = performance.now();
+    const error = await readChatGptEffortSnapshot(sliderContainer, 150).catch(error => error);
+    expect(error).toMatchObject({ name: "TimeoutError" });
+    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(await page.locator("#picker").isVisible()).toBeTrue();
+    expect(await page.evaluate(() => (window as any).fixture))
+      .toMatchObject({ arrows: [], modelClicks: 0, submissions: 0 });
+  } finally { await browser.close(); }
+}, 10_000);
+
+for (const delayed of [true, false])
+test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`requested Sol xhigh ${delayed ? "survives delayed slider hydration" : "fails on missing slider without downgrade"}`, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
+  try {
+    const page = await browser.newPage();
+    await installHydratingEffortPicker(page, delayed ? { delayMs: 150 } : {});
+    const worker = Object.create(ChatGptBrowserWorker.prototype) as any;
+    const started = performance.now();
+    const result = worker.selectModelAndEffort(page, "gpt-5.6-sol", "xhigh", {
+      localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: false,
+    });
+    if (delayed) {
+      expect(await result).toMatchObject({ modelId: "gpt-5.6-sol", effort: "xhigh", selection: { label: "Extra High" } });
+      expect(await page.locator('[role="slider"]').getAttribute("aria-valuenow")).toBe("3");
+    } else {
+      const error = await result.catch((error: unknown) => error);
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toContain("did not expose its owned menu or structural slider");
+      expect(performance.now() - started).toBeLessThan(10_000);
+    }
+    expect(await page.locator('[role="menuitemradio"][aria-checked="true"]').textContent()).toBe("GPT-5.6 Sol");
+    expect(await page.evaluate(() => (window as any).fixture)).toMatchObject({
+      arrows: delayed ? ["ArrowRight", "ArrowRight", "ArrowRight"] : [], modelClicks: 0, submissions: 0,
+    });
+    expect(await page.locator("#prompt-textarea").innerText()).toBe("Draft");
+  } finally { await browser.close(); }
+}, 20_000);
 
 for (const picker of ["classic", "power", "track"])
 test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`model selection reuses the ${picker} picker without racing Escape cleanup`, async () => {

@@ -751,9 +751,13 @@ export async function releaseLauncherRetainedConversation(
   descriptorPath: string,
   conversationKey: string,
   timeoutMs = LAUNCHER_TURN_END_TIMEOUT_MS,
+  traceId?: string,
 ): Promise<number> {
   if (!/^[a-f0-9]{64}$/.test(conversationKey)) {
     throw new Error("Launcher retained conversation key is invalid");
+  }
+  if (traceId !== undefined && !/^[A-Za-z0-9_-]{6,128}$/.test(traceId)) {
+    throw new Error("Launcher retained turn trace is invalid");
   }
   const descriptor = readLauncherBrowserHostDescriptor(descriptorPath);
   const controller = new AbortController();
@@ -765,7 +769,7 @@ export async function releaseLauncherRetainedConversation(
         authorization: `Bearer ${descriptor.control.token}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ conversationKey }),
+      body: JSON.stringify({ conversationKey, ...(traceId ? { traceId } : {}) }),
       signal: controller.signal,
     });
     const body = await response.json().catch(() => ({})) as Record<string, unknown>;

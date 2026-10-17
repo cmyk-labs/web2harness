@@ -324,7 +324,7 @@ bun run src/cli.ts dev list
 
 在 DEV 偏好设置中配置 Context as File、Skills as files、复用/历史偏好和交互模式，其行为与常规运行相同。Context as File 默认开启，预算默认 Standard，Triple 必须明确选择；迁移默认值时仅保留标记为用户选择的偏好。启用后，完整序列化上下文的 UTF-8 大小超过 32 KiB 时使用 TXT 附件，较小的上下文保持内联。所有附件必须完成处理后才发送，文件内容仍计入原有 token 预算。此功能需要 Automatic，且不支持 Luna。完整约定见[配置参考](reference.zh-CN.md)。
 
-DEV setup 支持 `--context-files` / `--no-context-files` 和 `--context-triple-budget` / `--standard-context-budget`。仅修改隔离配置，并重启其 Codex 客户端以刷新目录。浏览器实验仍消耗真实账户额度。
+DEV setup支持 `--context-files` / `--no-context-files` 及 `--context-triple-budget` / `--standard-context-budget`。标准窗口/可用/压缩为272000/258400/244800，三倍各乘三。只修改隔离配置，更改后重启对应DEV Codex。
 
 <a id="naming-and-compatibility"></a>
 

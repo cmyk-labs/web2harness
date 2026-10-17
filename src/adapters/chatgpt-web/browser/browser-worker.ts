@@ -40,7 +40,6 @@ import {
   type ChatGptWebModelMode,
 } from "../model";
 import {
-  CHATGPT_LUNA_BROWSER_INPUT_TOKEN_BUDGET,
   compiledChatGptWebMaxMessageChars,
   estimateChatGptWebImageTokens,
   estimateCompiledChatGptWebMessageTokens,
@@ -969,15 +968,6 @@ export function assertChatGptWebInputWithinLimits(
   if (modelId !== CHATGPT_WEB_MODEL_ID && modelId !== CHATGPT_WEB_LUNA_MODEL_ID) {
     throw new Error(`ChatGPT web context limit is not defined for model: ${modelId}`);
   }
-  if (
-    modelId === CHATGPT_WEB_LUNA_MODEL_ID
-    && estimatedInputTokens > CHATGPT_LUNA_BROWSER_INPUT_TOKEN_BUDGET
-  ) {
-    throw new ChatGptWebAdapterError(
-      `This Luna turn requires ${estimatedInputTokens.toLocaleString("en-US")} estimated input tokens, which exceeds the measured ${CHATGPT_LUNA_BROWSER_INPUT_TOKEN_BUDGET.toLocaleString("en-US")}-token ChatGPT Free browser transport budget. Canonical Codex history was preserved. Compact through Codex before continuing; the bridge did not discard or summarize input.`,
-      { status: 400, errorType: "invalid_request_error", code: "context_length_exceeded", retryable: false },
-    );
-  }
   const { contextWindow } = resolveChatGptWebContextLimits(modelId, effort, capabilities);
   const { browserMessageTokenLimit, browserComposerCharLimit } = resolveChatGptWebTransportLimits(
     modelId,
@@ -1002,7 +992,7 @@ export function assertChatGptWebInputWithinLimits(
   }
   if (estimatedInputTokens < contextWindow) return;
   throw new ChatGptWebAdapterError(
-    `This task is estimated at ${estimatedInputTokens.toLocaleString("en-US")} input tokens, which exceeds the ${contextWindow.toLocaleString("en-US")}-token context window for this ChatGPT Web model. Switch to a model with a larger context window, run /compact, then retry this Web model.`,
+    `This task is estimated at ${estimatedInputTokens.toLocaleString("en-US")} input tokens, which exceeds the ${contextWindow.toLocaleString("en-US")}-token context window for this ChatGPT Web model. Run /compact to reduce the context, then retry.`,
     { status: 400, errorType: "invalid_request_error", code: "context_length_exceeded", retryable: false },
   );
 }
@@ -3670,44 +3660,53 @@ export class ChatGptBrowserWorker {
       const queueTarget = turn.queueTicket ? await this.requestQueueTarget() : undefined;
       const queuePermit = turn.queueTicket ? await waitForSendPermit(queueTarget!, turn.queueTicket, turn.abortSignal) : undefined;
       let sendActivated = false, sendAcknowledged = false;
-      const finalSubmissionEvidence = await this.runStage(
-        turn.traceId,
-        "send",
-        browserStageTimeouts.send,
-        (stageSignal) => this.sendAttachedPrompt(
-          page,
-          submissionBaseline,
-          checkpoint => diagnostics.capture(page, checkpoint),
-          turn.abortSignal ? AbortSignal.any([stageSignal, turn.abortSignal]) : stageSignal,
-          turn.externalProgress,
-          { ...turn, onSubmitted: async () => {
-            if (turn.queueTicket && queuePermit) {
-              await queueRequest(queueTarget!, "send-end", { ...turn.queueTicket, permit: queuePermit, outcome: "confirmed" });
-              sendAcknowledged = true;
-              await queueRequest(queueTarget!, "phase", { ...turn.queueTicket, phase: "running" });
-            }
-            if (recordFinalUsage) usageWrites.push(recordFinalUsage.submitted());
-            return turn.onSubmitted?.();
-          }, onSendActivated: async () => {
-            evidence.submissionStarted = true;
-            streamEvidence.mcp.activate();
-            await this.assertSelectedEffort(page, mode);
-            assertSavedChatIdentity(page, expectedConversationId);
-            submissionRejection.begin(page);
-            await turn.onSendActivated?.();
-            recordFinalUsage?.activate();
-            sendActivated = true;
-          } },
-          completionTracker,
-          launcherObservationRecovery
-            ? async (...args) => {
-              const recovered = await recoverSubmissionObservation(...args);
-              submissionBaseline = recovered.baseline;
-              return recovered;
-            }
-            : undefined,
-        ),
-      ).catch(async error => {
+      const finalSubmissionEvidence = await (async () => {
+        // Reopening the model picker is preparation, not evidence that a send was attempted.
+        // Keep it out of the acknowledgement budget and settle a failure as definitely unsent.
+        await this.runStage(turn.traceId, "send_preflight", browserStageTimeouts.effortSelection, async () => {
+          await this.assertSelectedEffort(page, mode);
+          assertSavedChatIdentity(page, expectedConversationId);
+        });
+        return this.runStage(
+          turn.traceId,
+          "send",
+          browserStageTimeouts.send,
+          (stageSignal) => this.sendAttachedPrompt(
+            page,
+            submissionBaseline,
+            checkpoint => diagnostics.capture(page, checkpoint),
+            turn.abortSignal ? AbortSignal.any([stageSignal, turn.abortSignal]) : stageSignal,
+            turn.externalProgress,
+            { ...turn, onSubmitted: async () => {
+              if (turn.queueTicket && queuePermit) {
+                await queueRequest(queueTarget!, "send-end", { ...turn.queueTicket, permit: queuePermit, outcome: "confirmed" });
+                sendAcknowledged = true;
+                await queueRequest(queueTarget!, "phase", { ...turn.queueTicket, phase: "running" });
+              }
+              if (recordFinalUsage) usageWrites.push(recordFinalUsage.submitted());
+              return turn.onSubmitted?.();
+            }, onSendActivated: async () => {
+              // Check the ready controls again without reopening the verified picker.
+              await this.assertSelectedEffort(page, mode, false);
+              assertSavedChatIdentity(page, expectedConversationId);
+              await turn.onSendActivated?.();
+              evidence.submissionStarted = true;
+              streamEvidence.mcp.activate();
+              submissionRejection.begin(page);
+              recordFinalUsage?.activate();
+              sendActivated = true;
+            } },
+            completionTracker,
+            launcherObservationRecovery
+              ? async (...args) => {
+                const recovered = await recoverSubmissionObservation(...args);
+                submissionBaseline = recovered.baseline;
+                return recovered;
+              }
+              : undefined,
+          ),
+        );
+      })().catch(async error => {
         if (turn.queueTicket && queuePermit && !sendAcknowledged) {
           try { await queueRequest(queueTarget!, "send-end", {
             ...turn.queueTicket, permit: queuePermit, outcome: sendActivated ? "unknown" : "not-sent",

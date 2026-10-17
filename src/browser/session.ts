@@ -128,7 +128,9 @@ async function visibleEffortSurface(
   if (expanded === "false" || state === "closed") return undefined;
   const menu = await chatGptEffortMenuForControl(page, control);
   const surface = chatGptEffortSlider(page);
-  if (await menu.isVisible().catch(() => false) || await surface.sliderContainer.isVisible().catch(() => false)) {
+  // An open menu is not yet a usable effort picker: hydration can leave its slider absent.
+  // Returning early made the next snapshot wait on a stale locator for the default 30 seconds.
+  if (await surface.sliderContainer.isVisible().catch(() => false)) {
     return { menu, ...surface };
   }
   return undefined;
@@ -255,7 +257,7 @@ export async function readChatGptEffortSnapshot(
         locks: Array.from(container.querySelectorAll("[data-selected]"), tick =>
           tick.getAttribute("data-locked") ?? (power ? "false" : null)),
       };
-    });
+    }, undefined, { timeout: Math.max(1, deadline - Date.now()) });
     const state = parseChatGptEffortSliderState(snapshot.min, snapshot.max, snapshot.value);
     if (!state) throw new Error("ChatGPT effort slider exposed an invalid ARIA range");
     if (snapshot.locks.some(lock => lock !== "true" && lock !== "false")) break;

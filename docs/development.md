@@ -324,7 +324,7 @@ Only `--simulate` uses `DevChatDriver` and simulated tool receipts. Every simula
 
 Configure Context as File, Skills as files, reuse/history preferences, and interaction mode in DEV preferences using the same settings as regular operation. Context as File defaults on with Standard budget; Triple requires explicit selection. Only preferences marked as a user choice survive default migrations. When enabled, a complete serialized context larger than 32 KiB in UTF-8 uses a TXT attachment; smaller contexts stay inline. Every attachment must finish processing before Send. File contents remain part of the existing token budget. Automatic interaction is required and Luna is unsupported. See the [configuration reference](reference.md) for the complete contract.
 
-DEV setup supports `--context-files` / `--no-context-files` and `--context-triple-budget` / `--standard-context-budget`. Change only the isolated profile and restart its Codex client to refresh the catalog. Browser experiments still consume real account quota.
+DEV setup supports `--context-files` / `--no-context-files` and `--context-triple-budget` / `--standard-context-budget`. Standard window/usable/compaction is 272000/258400/244800; triple multiplies each by three. Change only the isolated profile and restart its Codex client after changing budgets.
 
 <a id="naming-and-compatibility"></a>
 
