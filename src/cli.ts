@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { createInterface } from "node:readline/promises";
+import { contextWindowOptions } from "./context-window-options";
 import { Writable } from "node:stream";
 import { timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -90,6 +91,8 @@ Setup options:
   --auto-approve-tool-calls    Opt in to per-call browser clicks on "Allow once" prompts
   --context-files              Send large context as one file (experimental)
   --no-context-files           Send context inline
+  --fast-context-window N     Fast standard window in tokens (or default)
+  --standard-context-window N Non-Fast/Pro standard window in tokens (or default)
   --context-triple-budget      Opt into triple context and compaction budgets
   --standard-context-budget    Keep normal budgets (default)
   --fresh-conversation         Start each automatic turn in a fresh browser chat
@@ -340,6 +343,7 @@ async function setupCommand(args: string[]): Promise<void> {
   const standardContext = takeFlag(args, "--standard-context-budget");
   if (tripleContext && standardContext) throw new Error("Choose --context-triple-budget or --standard-context-budget");
   if (tripleContext || standardContext) options.experimentalContextTripleBudget = tripleContext;
+  options.contextWindowEdits = contextWindowOptions(takeOption(args, "--fast-context-window"), takeOption(args, "--standard-context-window"));
   if (skillAttachments || inlineSkills) options.experimentalSkillAttachments = skillAttachments;
   const zeroRiskPro = takeFlag(args, "--zero-risk-pro");
   const zeroRiskDefault = takeFlag(args, "--zero-risk-default");

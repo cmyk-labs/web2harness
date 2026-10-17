@@ -143,10 +143,10 @@ Reservations remain charged while requests wait, execute and deliver responses; 
 | `useSavedChats` | `false` | Task conversations use Temporary Chat by default. `true` saves them in ChatGPT history. Explicit choices are retained when loading configuration. This setting is separate from conversation reuse. |
 | `experimentalFreshConversationPerTurn` | `false` | `false` allows eligible launcher-hosted Sol/Pro conversations to be reused with Native Tools or MCP Bridge. `true` starts a new browser conversation for each automatic turn. Browser-only and Luna use different continuity paths. Manual setup rejects an explicit request to enable it. See [conversation state](architecture.md#conversation-state-and-compaction). |
 | `experimentalContextFiles` | `true` in supported automatic modes | Enables experimental Context as File transport for large context. Smaller input can remain inline. Unavailable in manual mode. |
-| `experimentalContextTripleBudget` | `false` | Opt-in with file transport: triples the standard window, usable capacity and compaction threshold to 816000/775200/734400. Message/account limits stay unchanged. Disabling files clears it. |
+| `experimentalContextTripleBudget` | `false` | Opt-in with file transport: triples each configured standard window (default Fast/non-Fast: 240000/816000), with 95% usable and 90% compaction. Message/account limits stay unchanged. Disabling files clears it. |
 | `experimentalSkillAttachments` | `false` | Sends selected skill content as text attachments. Unavailable in manual mode. |
 
-File transport changes delivery only, not the unified budget. Switching to manual mode clears file and skill attachments; manual setup still rejects login inspection and unsupported features.
+File transport changes delivery only, not the selected context budget. Switching to manual mode clears file and skill attachments; manual setup still rejects login inspection and unsupported features.
 
 <a id="endpoint-and-browser"></a>
 
@@ -233,22 +233,22 @@ The launcher records `solAvailable`, `extraHighAvailable` and `proAvailable` fro
 | Model ID | Display name | Catalog condition | Efforts; default |
 | --- | --- | --- | --- |
 | `chatgpt-web/gpt-5.6-luna` | GPT-5.6 Luna · Ordinary / Think (Web) | `solAvailable: false` | `low` = Ordinary, `medium` = Think; default `low` |
-| `chatgpt-web/gpt-5.6-sol-instant` | GPT-5.6 Sol · Instant (Web) | Sol available; hidden compatibility entry | Fixed `low` |
-| `chatgpt-web/gpt-5.6-sol` | GPT-5.6 Sol (Web) | Sol available | `medium`, `high`; `xhigh` if observed; `low` if its budget matches; default `high` |
+| `chatgpt-web/gpt-5.6-sol-instant` | GPT-5.6 Sol · Fast (Web) | Sol available; separate Fast entry | Fixed `low` |
+| `chatgpt-web/gpt-5.6-sol` | GPT-5.6 Sol (Web) | Sol available | `medium`, `high`; `xhigh` if observed; default `high` |
 | `chatgpt-web/gpt-5.6-pro` | GPT-5.6 Sol Pro (Web) | Sol and Pro available | Fixed `max` |
-| `chatgpt-web/gpt-6-sol-instant` | GPT-6 · Instant (Web) | Sol available; hidden compatibility entry | Fixed `low` |
-| `chatgpt-web/gpt-6-sol` | GPT-6 (Web) | Sol available | `medium`, `high`; `xhigh` if observed; `low` if its budget matches; default `high` |
+| `chatgpt-web/gpt-6-sol-instant` | GPT-6 · Fast (Web) | Sol available; separate Fast entry | Fixed `low` |
+| `chatgpt-web/gpt-6-sol` | GPT-6 (Web) | Sol available | `medium`, `high`; `xhigh` if observed; default `high` |
 | `chatgpt-web/gpt-6-pro` | GPT-6 Pro (Web) | Sol and Pro available | Fixed `max` |
 
-GPT-5.6 Sol and GPT-6 provide Instant, Medium, High and Extra High subject to the account and budget rules below. The two Pro entries use fixed `max`. GPT-6 uses the same local account/effort budget policy as GPT-5.6, with a unified 272000 window and 244800 threshold. The picker accepts both `6` and `GPT-6` labels and verifies the requested family from the active header and slider announcements before sending. The new Chinese composer’s “停止” button also proves active generation, preventing false Pro timeouts before an assistant node appears.
+GPT-5.6 Sol and GPT-6 provide Fast, Medium, High and Extra High subject to the account and budget rules below. The two Pro entries use fixed `max`. GPT-6 uses the same local account/effort budget policy as GPT-5.6, with separate Fast and non-Fast budgets. The picker accepts both `6` and `GPT-6` labels and verifies the requested family from the active header and slider announcements before sending. The new Chinese composer’s “停止” button also proves active generation, preventing false Pro timeouts before an assistant node appears.
 
 Catalog gating records general Sol/Extra High/Pro capability, not a separate availability flag for every model family. Before submitting a named automatic route, the adapter selects and verifies both the browser family and effort. A generic Pro label alone is insufficient. Failure to verify the requested family produces `model_version_unavailable` and leaves the pending message unsent; the adapter does not silently substitute another family.
 
 <a id="instant-grouping"></a>
 
-#### Instant grouping
+#### Fast grouping
 
-All Web models and efforts share one context policy. Both GPT-5.6 Sol and GPT-6 offer `low`, `medium` and `high`, plus `xhigh` when observed for the account. Pro entries still require account capability and use fixed `max`. Standalone Instant IDs remain resolvable for saved tasks and hidden from the normal picker.
+Existing `chatgpt-web/gpt-5.6-sol-instant` and `chatgpt-web/gpt-6-sol-instant` slugs remain unchanged, display as Fast, and stay separate with fixed `low`. Ordinary entries offer `medium`, `high` and account-available `xhigh`, sharing the non-Fast budget with fixed-`max` Pro. Equal window values do not merge Fast into ordinary entries.
 
 <a id="effort-mapping"></a>
 
@@ -256,7 +256,7 @@ All Web models and efforts share one context policy. Both GPT-5.6 Sol and GPT-6 
 
 | Codex effort | Automatic Sol/Pro browser selection | Constraint |
 | --- | --- | --- |
-| `low` | Instant, slider position `0` | Within the Sol row; old standalone IDs remain compatible. |
+| `low` | Fast (web Instant), slider position `0` | Fixed effort of the separate Fast entry. |
 | `medium` | Medium, position `1` | Standard Sol thinking option. |
 | `high` | High, position `2` | Default for the main Sol row. |
 | `xhigh` | Extra High, position `3` | Requires `extraHighAvailable: true`. |
@@ -292,8 +292,8 @@ Compatibility route IDs remain resolvable when the current account and interacti
 | `chatgpt-web/pro` | Sol adapter Pro; technical Codex `ultra` maps to browser `max` |
 | `chatgpt-web/luna` | Luna Ordinary, Luna-only accounts |
 | `chatgpt-web/think` | Luna Think, Luna-only accounts |
-| `chatgpt-web/gpt-5.6-sol-instant` | Named GPT-5.6 Sol Instant, including when hidden by grouping |
-| `chatgpt-web/gpt-6-sol-instant` | Named GPT-6 Instant, including when hidden by grouping |
+| `chatgpt-web/gpt-5.6-sol-instant` | GPT-5.6 Sol Fast, fixed `low`; unchanged slug |
+| `chatgpt-web/gpt-6-sol-instant` | GPT-6 Fast, fixed `low`; unchanged slug |
 
 The older fixed routes preserve their original adapter bindings and do not acquire the newer named routes' model-family pinning. Use named current routes for explicit family selection. Unsupported reasoning values on named routes are rejected rather than silently remapped.
 
@@ -315,16 +315,18 @@ Web entries use the standard policy below, with an optional triple budget on sup
 
 ### Standard catalog budgets
 
-All Web models, efforts and accounts use one standard Codex catalog policy, including GPT-6, GPT-5.6 Sol, Pro, Luna and manual profiles. Triple is opt-in with file transport on supported automatic Sol/Pro routes.
+Fast/non-Fast standard context windows default to 80,000/272,000 tokens. Usable capacity (95%) and auto-compaction thresholds (90%) are read-only derived values. Supported routes offer triple budgets, with default windows of 240,000/816,000. Luna and manual profiles use non-Fast budgets; technical low does not mean Fast. Triple applies only to automatic Sol/Pro routes supporting file transport.
 
 | Budget | Context window | Effective percentage | Usable UI capacity | Auto-compaction threshold |
 | --- | ---: | ---: | ---: | ---: |
-| Standard | 272,000 tokens | 95% | 258,400 tokens | 244,800 tokens |
-| Triple | 816,000 tokens | 95% | 775,200 tokens | 734,400 tokens |
+| Fast standard | 80,000 tokens | 95% | 76,000 tokens | 72,000 tokens |
+| Non-Fast standard | 272,000 tokens | 95% | 258,400 tokens | 244,800 tokens |
+| Fast triple | 240,000 tokens | 95% | 228,000 tokens | 216,000 tokens |
+| Non-Fast triple | 816,000 tokens | 95% | 775,200 tokens | 734,400 tokens |
 
-The UI capacity is `272000 × 95%`; the compaction threshold is independently set to `244800`. Native Codex still triggers compaction, without trimming canonical history, replacing tools or manufacturing progress. A tool-result batch can cross the threshold; subsequent requests must still satisfy the total window and transport limits. Refresh the model catalog and restart the corresponding Codex after upgrading.
+The table shows defaults; usable capacity is 95% of the selected window and compaction is 90%, both read-only derived values. Native Codex still triggers compaction, without trimming canonical history, replacing tools or manufacturing progress. A tool-result batch can cross the threshold; subsequent requests must still satisfy the total window and transport limits. Refresh the model catalog and restart the corresponding Codex after upgrading.
 
-This is a local declared budget, not a guarantee of each web model's physical capacity. Isolated authenticated DEV checks on GPT-6 and GPT-5.6 Sol Extra High verified native automatic compaction near 254k total estimated tokens, distributed facts and post-compaction tools. Other efforts and accounts have not thereby passed equivalent live capacity checks. Upload acceptance does not establish full use of all content. Single-message and account limits remain independent.
+This is a local declared budget, not a guarantee of each web model's physical capacity. Isolated authenticated DEV checks on GPT-6 and GPT-5.6 Sol Extra High verified native automatic compaction near 254k total estimated tokens, distributed facts and post-compaction tools. Separate isolated DEV checks of GPT-6 and GPT-5.6 Sol Fast used the 80,000-token policy, reported 76,000 usable tokens, and passed synthetic distributed-fact recall plus native tool execution after automatic compaction. These bounded checks do not establish equivalent capacity or recall for other workloads, efforts or accounts. Upload acceptance does not establish full use of all content. Single-message and account limits remain independent.
 
 <a id="message-budgets"></a>
 
@@ -344,17 +346,21 @@ Visible-text planning budgets are independent of the total window: without image
 
 <a id="context-files"></a>
 
-### Context as File and the unified budget
+### Context as File and the selected context budget
 
-With Context as File enabled, the complete serialized context stays inline up to 32 KiB (32768 UTF-8 bytes). Above that boundary it becomes one integrity-checked TXT attachment. Size includes JSON escapes, roles, tools and results, not just the latest user text. Every owned attachment must finish processing before Send; failures stop submission without falling back to the full inline prompt. The threshold changes transport only, leaving the unified window and compaction threshold unchanged.
+Edit **Fast context window** and **non-Fast context window** together in **Runtime parameters**. `contextWindows.fast/standard` defaults to `80000/272000`; `contextWindowSources.fast/standard` records each source. Only `user` values are retained; missing or `default` sources follow current defaults. Restore defaults changes only the draft until explicitly saved. Window saves synchronize runtime and model catalog through a configuration transaction; busy tasks cause rejection without interruption. Restart the corresponding Codex afterward. Usable capacity (95%) and compaction thresholds (90%) cannot be edited separately. The UI uses lowercase k (1k = 1,000 tokens), accepts 16.384–1,000k in steps of 0.001k, and stores integer token counts from 16,384 to 1,000,000. This is the product configuration range, not measured model capacity; it does not guarantee that web models accept or fully recall input within that range. The 32 KiB serialized-context file threshold is independent; actual web capacity and complete recall are not guaranteed.
 
-File transport and budget record contextPreferenceSources.files/budget separately. Only explicit user choices survive; other sources use files on plus standard budget, subject to mode support. Routine synchronization does not mark user intent. Triple remains available and uses the new standard ×3: 816000 window, 775200 usable, 734400 compaction. Disabling files clears triple and its provenance. Manual mode and Luna do not support file transport.
+CLI `setup` and `dev setup` accept `--fast-context-window N|default` and `--standard-context-window N|default`. `N` is an integer in the range above and saves that window with source `user`; `default` restores the current default value and source `default`. Omitting a flag preserves that group’s existing source rules. Both can be supplied together, for example `--fast-context-window 96000 --standard-context-window 300000`; reset with `--fast-context-window default --standard-context-window default`. These flags update configuration, not evidence of actual model capacity.
+
+With Context as File enabled, the complete serialized context stays inline up to 32 KiB (32768 UTF-8 bytes). Above that boundary it becomes one integrity-checked TXT attachment. Size includes JSON escapes, roles, tools and results, not just the latest user text. Every owned attachment must finish processing before Send; failures stop submission without falling back to the full inline prompt. The threshold changes transport only, leaving the selected window and compaction threshold unchanged.
+
+File transport and budget record contextPreferenceSources.files/budget separately. Only explicit user choices survive; other sources use files on plus standard budget, subject to mode support. Routine synchronization does not mark user intent. Triple multiplies each configured standard window by three: default Fast/non-Fast windows are 240000/816000, with 95% usable and 90% compaction. Disabling files clears triple and its provenance. Manual mode and Luna do not support file transport.
 
 <a id="luna-continuity"></a>
 
 ### Luna continuity and browser boundary
 
-Luna Ordinary and Think share the 272000 window and 244800 threshold, using native Codex compaction without private rolling checkpoints. Equivalent live capacity has not been calibrated for Luna, and file transport remains unavailable. Actual web input rejection is reported without trimming history or selecting another model.
+Luna Ordinary and Think share the configured non-Fast window (default 272000) and its 90% compaction threshold (default 244800), using native Codex compaction without private rolling checkpoints. Equivalent live capacity has not been calibrated for Luna, and file transport remains unavailable. Actual web input rejection is reported without trimming history or selecting another model.
 
 <a id="native-context-preservation"></a>
 
@@ -479,7 +485,7 @@ These commands start real DEV Codex sessions and require the [development setup 
 
 | Symptom | Meaning and next action |
 | --- | --- |
-| Instant is absent as a separate row | Choose `low` under GPT-5.6 Sol or GPT-6; all accounts use the same context policy. |
+| Cannot find Instant | Existing instant slugs display Fast with fixed `low`; ordinary entries expose non-Fast thinking efforts. |
 | `low` rejected on the Sol row | Refresh the model catalog and restart the corresponding Codex; check account capability and the requested model ID. |
 | Extra High absent | No positive Extra High observation is stored; refresh capabilities in automatic mode. |
 | Pro row has no lower effort choices | Named Pro routes are fixed at `max` by design. |
@@ -510,7 +516,7 @@ The following modules define the contracts in this reference. For directory owne
 
 ## Local usage and allowance references
 
-Usage & Diagnostics counts **Web sends from this app**. Automatic mode records each observed, accepted submission once, including tool-result follow-ups and compaction. Native tool calls alone do not add a send. Context as File and the unified budget do not multiply the count. Other devices, browsers and pre-tracking activity are excluded; these records cannot determine official remaining allowance or reset time.
+Usage & Diagnostics counts **Web sends from this app**. Automatic mode records each observed, accepted submission once, including tool-result follow-ups and compaction. Native tool calls alone do not add a send. Context as File and the selected context budget do not multiply the count. Other devices, browsers and pre-tracking activity are excluded; these records cannot determine official remaining allowance or reset time.
 
 The total above the model table counts all recorded models over the last seven days. GPT-5.6 Sol, GPT-5.6 Sol Pro, GPT-6 and GPT-6 Pro have separate rolling 24-hour/7-day totals. The windows overlap. Each model combines all thinking levels and send purposes; there is no separate effort table. The Pro total includes both Pro families and legacy records known to be Pro with an unidentified family. These records also keep their own row. Ledger metadata retains verified effort and purpose for diagnostics; old records retain their IDs and timestamps, with unavailable dimensions unknown. Token usage remains an estimate and is not an official bill.
 

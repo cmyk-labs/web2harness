@@ -54,12 +54,12 @@ test("proxies official /models auth and query, then appends grouped and legacy W
   };
   expect(body.models.map(model => model.slug)).toEqual([
     "gpt-5.6-sol",
+    "chatgpt-web/gpt-5.6-sol-instant",
     "chatgpt-web/gpt-5.6-sol",
     "chatgpt-web/gpt-5.6-pro",
+    "chatgpt-web/gpt-6-sol-instant",
     "chatgpt-web/gpt-6-sol",
     "chatgpt-web/gpt-6-pro",
-    "chatgpt-web/gpt-5.6-sol-instant",
-    "chatgpt-web/gpt-6-sol-instant",
     "chatgpt-web/light",
     "chatgpt-web/medium",
     "chatgpt-web/high",

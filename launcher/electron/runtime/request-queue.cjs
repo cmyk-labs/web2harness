@@ -70,6 +70,17 @@ class RequestQueue {
   }
 
   serial(fn) { const next = this.tail.then(fn); this.tail = next.catch(() => {}); return next; }
+  async whileIdle(operation) {
+    await this.serial(() => {
+      const snapshot = this.snapshot();
+      if (this.admissionBlocked || snapshot.active || snapshot.waiting) {
+        throw new Error("Save context budgets when tasks are idle / 请等待执行与排队任务结束后保存上下文预算");
+      }
+      this.admissionBlocked = true;
+    });
+    try { return await operation(); }
+    finally { await this.serial(() => { this.admissionBlocked = false; }); }
+  }
   stopResource(owner) {
     if (owner.stoppingResource) return;
     owner.stoppingResource = true;
@@ -97,6 +108,7 @@ class RequestQueue {
     if (!input || typeof input !== "object") throw new Error("Invalid queue request");
     let result;
     if (action === "enqueue") {
+      if (this.admissionBlocked) throw Object.assign(new Error("Context budgets are being updated / 正在更新上下文预算，请稍后重试"), { code: "queue_configuration_busy" });
       if (!Number.isSafeInteger(input.pid) || input.pid < 1 || !/^[A-Za-z0-9_-]{6,128}$/.test(input.traceId)) throw new Error("Invalid queue owner");
       if (!/^[a-f0-9]{64}$/.test(input.job?.id)) throw new Error("Invalid request identity");
       const existing = this.core.get(input.job.id);

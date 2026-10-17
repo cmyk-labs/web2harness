@@ -21,6 +21,7 @@ export interface ChatGptWebCapabilities {
   proAvailable: boolean;
   experimentalContextFiles?: boolean;
   experimentalContextTripleBudget?: boolean;
+  contextWindows?: import("../../../launcher/shared/context-budgets.cjs").ContextWindows;
 }
 
 export interface ChatGptWebModelMode {

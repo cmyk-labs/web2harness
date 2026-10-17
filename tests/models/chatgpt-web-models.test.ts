@@ -55,35 +55,37 @@ describe("fixed ChatGPT Web model routes", () => {
 
   test("exposes only Plus-eligible routes without the Pro account capability", () => {
     expect(availableChatGptWebModelRoutes(plus).map(route => route.slug)).toEqual([
+      "chatgpt-web/gpt-5.6-sol-instant",
       "chatgpt-web/gpt-5.6-sol",
+      "chatgpt-web/gpt-6-sol-instant",
       "chatgpt-web/gpt-6-sol",
     ]);
     expect(availableChatGptWebModelRoutes({ solAvailable: true, extraHighAvailable: true, proAvailable: true }))
-      .toEqual(CHATGPT_WEB_MODEL_ROUTES);
+      .toEqual(expect.arrayContaining(CHATGPT_WEB_MODEL_ROUTES));
     expect(() => requireChatGptWebModelRoute("chatgpt-web/extra-high", plus))
       .toThrow("Extra High is not available for this account");
     expect(() => requireChatGptWebModelRoute("chatgpt-web/pro", plus))
       .toThrow("Pro is not available for this account");
   });
 
-  test("merges Instant only when all advertised efforts have the same context contract", () => {
+  test("keeps Fast separate across transport modes and equal configured windows", () => {
     for (const capabilities of [plus, pro]) {
       for (const experimentalContextFiles of [false, true]) {
         for (const experimentalContextTripleBudget of [false, true]) {
-          const config = { ...capabilities, experimentalContextFiles, experimentalContextTripleBudget };
+          const config = { ...capabilities, experimentalContextFiles, experimentalContextTripleBudget, contextWindows: { fast: 272_000, standard: 272_000 } };
           const visible = availableChatGptWebModelRoutes(config);
           for (const family of ["5.6", "6"]) {
             const instantSlug = `chatgpt-web/gpt-${family}-sol-instant`;
             const sol = visible.find(route => route.slug === `chatgpt-web/gpt-${family}-sol`)!;
             expect(sol.codexEffort).toBe("high");
             expect(chatGptWebRouteEfforts(sol, config)).toEqual(capabilities.proAvailable
-              ? ["low", "medium", "high", "xhigh"] : ["low", "medium", "high"]);
-            expect(visible.some(route => route.slug === instantSlug)).toBe(false);
+              ? ["medium", "high", "xhigh"] : ["medium", "high"]);
+            expect(visible.some(route => route.slug === instantSlug)).toBe(true);
             expect(availableChatGptWebModelRoutes(config, true).filter(route => route.slug === instantSlug))
               .toHaveLength(1);
             const low = requireChatGptWebModelRoute(instantSlug, config, "low");
             expect(low.adapterEffort).toBe("low");
-            expect(requireChatGptWebModelRoute(sol.slug, config, "low").adapterEffort).toBe("low");
+            expect(() => requireChatGptWebModelRoute(sol.slug, config, "low")).toThrow("Fast");
           }
         }
       }
@@ -93,7 +95,7 @@ describe("fixed ChatGPT Web model routes", () => {
   test("Extra High stays routable without granting the Pro model", () => {
     const config = { ...defaultConfig("mcp-bridge"), extraHighAvailable: true, proAvailable: false };
     expect(availableChatGptWebModelRoutes(config).map(route => route.slug))
-      .toEqual(["chatgpt-web/gpt-5.6-sol", "chatgpt-web/gpt-6-sol"]);
+      .toEqual(["chatgpt-web/gpt-5.6-sol-instant", "chatgpt-web/gpt-5.6-sol", "chatgpt-web/gpt-6-sol-instant", "chatgpt-web/gpt-6-sol"]);
     const request = parsed("chatgpt-web/extra-high", "low");
     expect(routeChatGptWebRequest(request, config).adapterEffort).toBe("xhigh");
     expect(request.options.reasoning).toBe("xhigh");
@@ -172,9 +174,9 @@ describe("fixed ChatGPT Web model routes", () => {
 
   test("publishes the unified Plus window independently of visible-message limits", () => {
     expect(resolveChatGptWebContextLimits(CHATGPT_WEB_BACKEND_MODEL, "low", plus)).toEqual({
-      contextWindow: 272_000,
+      contextWindow: 80_000,
       effectiveContextWindowPercent: 95,
-      autoCompactTokenLimit: 244_800,
+      autoCompactTokenLimit: 72_000,
     });
     expect(resolveChatGptWebContextLimits(CHATGPT_WEB_BACKEND_MODEL, "medium", plus)).toEqual({
       contextWindow: 272_000,
@@ -198,9 +200,9 @@ describe("fixed ChatGPT Web model routes", () => {
 
   test("publishes the same window for Pro accounts without expanding message limits", () => {
     expect(resolveChatGptWebContextLimits(CHATGPT_WEB_BACKEND_MODEL, "low", pro)).toEqual({
-      contextWindow: 272_000,
+      contextWindow: 80_000,
       effectiveContextWindowPercent: 95,
-      autoCompactTokenLimit: 244_800,
+      autoCompactTokenLimit: 72_000,
     });
     for (const effort of ["medium", "high", "xhigh"] as const) {
       expect(resolveChatGptWebContextLimits(CHATGPT_WEB_BACKEND_MODEL, effort, pro)).toEqual({
@@ -353,7 +355,7 @@ describe("fixed ChatGPT Web model routes", () => {
     const config = { ...defaultConfig("mcp-bridge"), extraHighAvailable: true, proAvailable: true };
     for (const family of ["5.6", "6"] as const) {
       for (const effort of ["low", "medium", "high", "xhigh"] as const) {
-        const request = parsed(`chatgpt-web/gpt-${family}-sol`, effort);
+        const request = parsed(`chatgpt-web/gpt-${family}-sol${effort === "low" ? "-instant" : ""}`, effort);
         routeChatGptWebRequest(request, config);
         expect(request.options.reasoning).toBe(effort);
         expect(request._chatgptModelFamily).toBe(family);

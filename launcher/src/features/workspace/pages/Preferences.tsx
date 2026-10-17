@@ -185,27 +185,7 @@ export function Preferences(p: WorkspaceProps) {
             onChange={(value) => void run(() => api.setContextFiles(value))}
           />
         </Row>
-        {snapshot.state.experimentalContextFiles && (
-          <div className="context-budget">
-            <Row
-              title={copy.contextBudget}
-              description={copy.contextBudgetBody}
-            >
-              <Segment
-                label={copy.contextBudget}
-                value={snapshot.state.experimentalContextTripleBudget}
-                disabled={busy || manual || !configured}
-                options={[
-                  { value: false, label: copy.contextBudgetStandard },
-                  { value: true, label: copy.contextBudgetTriple },
-                ]}
-                onChange={(value) =>
-                  void run(() => api.setContextTripleBudget(value))
-                }
-              />
-            </Row>
-          </div>
-        )}
+        <p className="muted">{t("上下文窗口和标准／三倍预算请在“运行参数”中设置。", "Configure context windows and standard/triple budgets in Runtime parameters.")}</p>
         <Row
           title={copy.skillAttachments}
           description={

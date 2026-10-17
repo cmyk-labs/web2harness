@@ -5,11 +5,13 @@ import {
   type ChatGptWebAdapterEffort, type ChatGptWebAccountCapabilities,
 } from "./chatgpt-web-model-types";
 
+import budgetOptions from "../../launcher/shared/context-budget-options.json";
+import { contextBudgetValues } from "../../launcher/shared/context-budget-values";
 /** Shared Codex-facing policy; not a measurement of ChatGPT's physical model capacity. */
-export const CHATGPT_WEB_CONTEXT_WINDOW = 272_000;
-export const CHATGPT_WEB_EFFECTIVE_CONTEXT_WINDOW_PERCENT = 95;
-export const CHATGPT_WEB_AUTO_COMPACT_TOKEN_LIMIT = 244_800;
-export const CHATGPT_WEB_CONTEXT_BUDGET_MULTIPLIER = 3;
+export const CHATGPT_WEB_CONTEXT_WINDOW = budgetOptions.defaults.standard;
+export const CHATGPT_WEB_EFFECTIVE_CONTEXT_WINDOW_PERCENT = budgetOptions.effectivePercent;
+export const CHATGPT_WEB_AUTO_COMPACT_TOKEN_LIMIT = contextBudgetValues(CHATGPT_WEB_CONTEXT_WINDOW).autoCompactTokenLimit;
+export const CHATGPT_WEB_CONTEXT_BUDGET_MULTIPLIER = budgetOptions.tripleMultiplier;
 
 /** Independent visible-message transport limits; file transport does not expand these. */
 export const CHATGPT_WEB_INSTANT_COMPOSER_CHAR_LIMIT = 211_256;
@@ -54,7 +56,7 @@ export function isChatGptWebZeroRiskBackendModel(
     || model === CHATGPT_WEB_ZERO_RISK_PRO_BACKEND_MODEL;
 }
 
-/** Every available Web route/effort shares the standard policy; file transport can opt into 3×. */
+/** Only automatic Sol Instant is Fast; manual protocol low and Luna keep their standard contract. */
 export function resolveChatGptWebContextLimits(
   backendModel: ChatGptWebBackendModel,
   effort: ChatGptWebAdapterEffort,
@@ -67,14 +69,11 @@ export function resolveChatGptWebContextLimits(
     && !(effort === "xhigh" && capabilities.extraHighAvailable)) {
     throw new Error(`ChatGPT Plus context limit is not defined for unavailable effort: ${effort}`);
   }
-  const multiplier = backendModel === CHATGPT_WEB_BACKEND_MODEL
-    && capabilities.experimentalContextFiles && capabilities.experimentalContextTripleBudget
-    ? CHATGPT_WEB_CONTEXT_BUDGET_MULTIPLIER : 1;
-  return {
-    contextWindow: CHATGPT_WEB_CONTEXT_WINDOW * multiplier,
-    effectiveContextWindowPercent: CHATGPT_WEB_EFFECTIVE_CONTEXT_WINDOW_PERCENT,
-    autoCompactTokenLimit: CHATGPT_WEB_AUTO_COMPACT_TOKEN_LIMIT * multiplier,
-  };
+  const group = backendModel === CHATGPT_WEB_BACKEND_MODEL && effort === "low" ? "fast" : "standard";
+  const window = capabilities.contextWindows?.[group] ?? budgetOptions.defaults[group];
+  const { contextWindow, effectiveContextWindowPercent, autoCompactTokenLimit } = contextBudgetValues(window, backendModel === CHATGPT_WEB_BACKEND_MODEL
+    && capabilities.experimentalContextFiles === true && capabilities.experimentalContextTripleBudget === true);
+  return { contextWindow, effectiveContextWindowPercent, autoCompactTokenLimit };
 }
 
 /** Resolve limits of one visible ChatGPT composer message, independently of model context. */

@@ -445,6 +445,7 @@ export function createChatGptWebAdapter(
     proAvailable: provider.chatgptWeb?.proAvailable === true,
     experimentalContextFiles: experimentalContextFiles === true,
     experimentalContextTripleBudget: experimentalContextTripleBudget === true,
+    ...(provider.chatgptWeb?.contextWindows ? { contextWindows: { ...provider.chatgptWeb.contextWindows } } : {}),
   };
   const manualInteraction = provider.chatgptWeb?.browserInteractionMode === "manual";
   const freshConversationPerTurn = provider.chatgptWeb?.experimentalFreshConversationPerTurn === true;

@@ -53,6 +53,7 @@ export interface ChatGptWebZeroRiskModelRoute extends ChatGptWebModelRouteBase {
 export type ChatGptWebModelRoute = ChatGptWebAutomaticModelRoute | ChatGptWebZeroRiskModelRoute;
 
 export interface ChatGptWebAccountCapabilities {
+  contextWindows?: import("../../launcher/shared/context-budgets.cjs").ContextWindows;
   solAvailable: boolean;
   /** Missing in older saved observations; setup must probe before exposing Extra High. */
   extraHighAvailable?: boolean;

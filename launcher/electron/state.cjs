@@ -9,12 +9,14 @@ const SIDEBAR_MAX_WIDTH = 420;
 const SESSION_REFRESH_REMINDER_INTERVAL_MS = 48 * 60 * 60 * 1000;
 
 const { normalizeContextPreferences } = require("../shared/context-preferences.cjs");
+const { normalizeContextWindows } = require("../shared/context-budgets.cjs");
 
 const DEFAULT_STATE = Object.freeze({
   version: 1,
   requestScheduling: DEFAULT_REQUEST_SCHEDULING,
   requestSchedulingRevision: 1,
   ...normalizeRuntimeParameters(),
+  ...normalizeContextWindows(),
   language: null,
   onboardingComplete: false,
   githubOpened: false,
@@ -112,8 +114,9 @@ function readState(filePath) {
     ]) {
       if (state[key] !== undefined && typeof state[key] !== "boolean") delete state[key];
     }
-    const preferences = normalizeContextPreferences({ ...state, contextPreferenceSources: parsed.contextPreferenceSources });
-    for (const key of ["experimentalContextFiles", "experimentalContextTripleBudget", "contextPreferenceSources"]) state[key] = preferences[key];
+    const preferences = normalizeContextPreferences({ ...state, contextPreferenceSources: parsed.contextPreferenceSources,
+      contextWindows: parsed.contextWindows, contextWindowSources: parsed.contextWindowSources });
+    for (const key of ["experimentalContextFiles", "experimentalContextTripleBudget", "contextPreferenceSources", "contextWindows", "contextWindowSources"]) state[key] = preferences[key];
     return state;
   } catch {
     return { ...DEFAULT_STATE };

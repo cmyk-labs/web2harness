@@ -1,3 +1,4 @@
+const { normalizeContextWindows } = require("./context-budgets.cjs");
 // Persisted values alone do not prove a user choice. Only an explicit source does.
 function normalizeContextPreferences(config) {
   for (const key of ["experimentalContextFiles", "experimentalContextTripleBudget", "experimentalBiggerContext"]) {
@@ -17,7 +18,7 @@ function normalizeContextPreferences(config) {
   const triple = files && budgetSource === "user" && config.experimentalContextTripleBudget === true;
   // Turning transport off clears the optional larger budget, including its provenance.
   if (!files && config.experimentalContextTripleBudget === true) budgetSource = "default";
-  const next = { ...config, experimentalContextFiles: files, experimentalContextTripleBudget: triple,
+  const next = { ...config, ...normalizeContextWindows(config), experimentalContextFiles: files, experimentalContextTripleBudget: triple,
     contextPreferenceSources: { files: filesSource, budget: budgetSource } };
   delete next.experimentalBiggerContext;
   return next;

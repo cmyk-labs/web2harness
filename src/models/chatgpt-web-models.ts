@@ -15,7 +15,7 @@ import {
   CHATGPT_WEB_LEGACY_MODEL_ROUTES,
   CHATGPT_WEB_BUDGET_FALLBACK_ROUTES,
 } from "./chatgpt-web-model-registry";
-import { resolveChatGptWebContextLimits, sameChatGptWebContextLimits } from "./chatgpt-web-context";
+
 
 function indexModelRoutes(): ReadonlyMap<string, ChatGptWebModelRoute> {
   const index = new Map<string, ChatGptWebModelRoute>();
@@ -103,11 +103,8 @@ export function chatGptWebRouteEfforts(
     .filter(effort => {
       if (effort === "xhigh" && capabilities.extraHighAvailable !== true) return false;
       if (route.interactionMode !== "automatic" || effort === "ultra" || !route.contextFallbacks?.[effort]) return true;
-      // Do not reduce the default Thinking budget to make Instant fit a shared catalog row.
-      return sameChatGptWebContextLimits(
-        resolveChatGptWebContextLimits(route.backendModel, route.adapterEffort, capabilities),
-        resolveChatGptWebContextLimits(route.backendModel, effort, capabilities),
-      );
+      // Fast owns its fixed entry, even if both configured windows happen to be equal.
+      return false;
     });
 }
 

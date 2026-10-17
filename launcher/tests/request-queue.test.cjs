@@ -26,6 +26,18 @@ async function fixture(t, options = {}) {
   };
 }
 
+test("budget updates reserve an idle queue and release admission even after failure", async t => {
+  const f = await fixture(t);
+  await assert.rejects(f.queue.whileIdle(async () => {
+    await assert.rejects(f.add("during_update"), { code: "queue_configuration_busy" });
+    await assert.rejects(f.queue.whileIdle(async () => {}), /tasks are idle/);
+    throw new Error("setup failed");
+  }), /setup failed/);
+  const active = await f.add("after_update");
+  await assert.rejects(f.queue.whileIdle(async () => assert.fail("must not apply")), /tasks are idle/);
+  assert.equal((await f.queue.request("poll", active.ticket)).record.state, "preparing");
+});
+
 test("host admits once, persists metadata before ACK, and refuses replay after restart", async t => {
   const f = await fixture(t); const first = await f.add("main");
   assert.equal(first.record.state, "preparing");

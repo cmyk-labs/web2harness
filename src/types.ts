@@ -341,6 +341,7 @@ export interface CodexProviderConfig {
     /** Experimental transport: adapt one context across one, two, or six ChatGPT messages. */
     experimentalContextFiles?: boolean;
     experimentalContextTripleBudget?: boolean;
+    contextWindows?: import("../launcher/shared/context-budgets.cjs").ContextWindows;
     experimentalSkillAttachments?: boolean;
     /** Explicitly rebuild each automatic turn in a fresh browser conversation. */
     experimentalFreshConversationPerTurn?: boolean;

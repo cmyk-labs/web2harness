@@ -239,13 +239,14 @@ check('Success feedback automatically disappears',await page.locator('.feedback'
 await page.getByText('实验功能 · 按需启用',{exact:true}).click();
 check('Explicit user opt-out keeps file transport off and budget hidden',await page.getByRole('switch',{name:'上下文文件传输（实验性）',exact:true}).getAttribute('aria-checked')==='false'&&await page.getByRole('radiogroup',{name:'上下文预算'}).count()===0);
 await page.getByRole('switch',{name:'上下文文件传输（实验性）',exact:true}).click();
-check('Enabling file transport uses standard budget',await page.getByRole('radio',{name:'标准预算（默认）',exact:true}).getAttribute('aria-checked')==='true');
-await page.getByRole('radio',{name:'三倍预算（实验性）',exact:true}).click();
+check('Enabling file transport uses standard budget',await page.evaluate(()=>!window.__fixture.state.experimentalContextTripleBudget));
+check('Budget editing has one location in Runtime parameters',await page.getByRole('radiogroup',{name:'上下文预算'}).count()===0);
+await page.evaluate(()=>window.__fixture.patch({experimentalContextTripleBudget:true}));
 check('Triple budget requires explicit choice',await page.evaluate(()=>window.__fixture.state.experimentalContextFiles&&window.__fixture.state.experimentalContextTripleBudget));
 await page.getByRole('switch',{name:'上下文文件传输（实验性）',exact:true}).click();
 check('Disabling file transport also clears triple budget',await page.evaluate(()=>!window.__fixture.state.experimentalContextFiles&&!window.__fixture.state.experimentalContextTripleBudget));
 await page.getByRole('switch',{name:'上下文文件传输（实验性）',exact:true}).click();
-check('Re-enabling returns to standard budget',await page.getByRole('radio',{name:'标准预算（默认）',exact:true}).getAttribute('aria-checked')==='true');
+check('Re-enabling returns to standard budget',await page.evaluate(()=>!window.__fixture.state.experimentalContextTripleBudget));
 await page.screenshot({path:out+'/context-settings-zh.png'});
 await page.locator('.language-toggle').click();await page.getByRole('region',{name:'Preferences',exact:true}).waitFor();await page.screenshot({path:out+'/preferences-en.png',fullPage:true});
 check('English footer retains compact state and mode',await page.locator('.side-status').innerText()==='Ready · Native Tools');

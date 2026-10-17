@@ -133,6 +133,7 @@ let cdpPort = 0;
 let lastOperation = null;
 let catalogVerificationTimer = null;
 let catalogVerificationInFlight = false;
+let catalogVerificationGeneration = 0;
 let updateController = null;
 let limitsController = null;
 
@@ -161,12 +162,14 @@ function publishOperation(operation) {
 }
 
 function stopCatalogVerificationMonitor() {
+  catalogVerificationGeneration += 1;
   if (catalogVerificationTimer) clearInterval(catalogVerificationTimer);
   catalogVerificationTimer = null;
 }
 
 function startCatalogVerificationMonitor({ logger, stateStore }) {
   stopCatalogVerificationMonitor();
+  const generation = catalogVerificationGeneration;
   let reportedFailure = null;
   const check = async () => {
     const current = stateStore.read();
@@ -179,6 +182,7 @@ function startCatalogVerificationMonitor({ logger, stateStore }) {
     try {
       const config = runtimeSupervisor.readConfig();
       const health = await runtimeSupervisor.proxyHealthPayload(config);
+      if (generation !== catalogVerificationGeneration) return;
       if (!Number.isInteger(health?.successful_model_catalog_requests)
         || health.successful_model_catalog_requests < 1) {
         const result = health?.last_model_catalog_result;
@@ -190,8 +194,6 @@ function startCatalogVerificationMonitor({ logger, stateStore }) {
         const reason = typeof result.failure?.code === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(result.failure.code)
           ? result.failure.code
           : ["config", "request", "transport", "upstream", "catalog"].includes(result.failure?.stage) ? result.failure.stage : "catalog";
-        const state = stateStore.update({ codexRestartRequired: false });
-        send("launcher:state-changed", state);
         logger.warn("codex.model_catalog_failed", { status: result.status, reason, request: result.request });
         publishOperation({
           name: "catalog-verification", status: "failed",
@@ -941,6 +943,22 @@ function registerIpc({ logger, stateStore }) {
       return state;
     });
   }
+  handle("launcher:context-windows", async (_event, edits, tripleBudget) => {
+    await licenseController.assertActive();
+    const queue = requestQueue?.snapshot();
+    if (browserHost.activeTraceId || browserHost.currentOperation() || runtimeHost.currentOperation()
+      || queue?.active || queue?.waiting) {
+      throw new Error("Save context budgets when tasks are idle / 请等待执行与排队任务结束后保存上下文预算");
+    }
+    const apply = () => runtimeHost.setContextWindows(edits, tripleBudget);
+    const result = requestQueue ? await requestQueue.whileIdle(apply) : await apply();
+    const state = stateStore.update({ contextWindows: result.contextWindows, contextWindowSources: result.contextWindowSources,
+      contextPreferenceSources: result.contextPreferenceSources, experimentalContextTripleBudget: result.experimentalContextTripleBudget,
+      ...(result.budgetChanged ? { codexCatalogVerified: false, codexRestartRequired: true } : {}) });
+    send("launcher:state-changed", state);
+    if (result.budgetChanged) startCatalogVerificationMonitor({ logger, stateStore });
+    return state;
+  });
   handle("launcher:skill-attachments", async (_event, enabled) => {
     if (browserHost.activeTraceId || browserHost.currentOperation()) {
       throw new Error("Finish or cancel active ChatGPT turns before changing Skills as files");
@@ -1461,13 +1479,17 @@ async function start() {
       const zeroRiskProEnabled = configuredRuntime.config?.zeroRiskProEnabled === true;
       const saved = stateStore.read();
       if (JSON.stringify(saved.contextPreferenceSources) !== JSON.stringify(configuredRuntime.config?.contextPreferenceSources)
+        || JSON.stringify(saved.contextWindows) !== JSON.stringify(configuredRuntime.config?.contextWindows)
+        || JSON.stringify(saved.contextWindowSources) !== JSON.stringify(configuredRuntime.config?.contextWindowSources)
         || saved.experimentalSkillAttachments !== experimentalSkillAttachments
         || saved.experimentalFreshConversationPerTurn !== experimentalFreshConversationPerTurn
         || saved.useSavedChats !== useSavedChats
         || saved.experimentalContextFiles !== enabled
         || saved.experimentalContextTripleBudget !== experimentalContextTripleBudget
         || saved.zeroRiskProEnabled !== zeroRiskProEnabled) {
-        const state = stateStore.update({ contextPreferenceSources: configuredRuntime.config?.contextPreferenceSources, experimentalContextFiles: enabled, experimentalContextTripleBudget, experimentalSkillAttachments, experimentalFreshConversationPerTurn, useSavedChats, zeroRiskProEnabled });
+        const state = stateStore.update({ contextPreferenceSources: configuredRuntime.config?.contextPreferenceSources,
+          contextWindows: configuredRuntime.config?.contextWindows, contextWindowSources: configuredRuntime.config?.contextWindowSources,
+          experimentalContextFiles: enabled, experimentalContextTripleBudget, experimentalSkillAttachments, experimentalFreshConversationPerTurn, useSavedChats, zeroRiskProEnabled });
         send("launcher:state-changed", state);
       }
     }
@@ -1483,6 +1505,8 @@ async function start() {
         coreSetupComplete: true,
         mcpRuntimeInstalled: config.mode === "mcp-bridge",
         contextPreferenceSources: config.contextPreferenceSources,
+        contextWindows: config.contextWindows,
+        contextWindowSources: config.contextWindowSources,
         experimentalContextFiles: config.experimentalContextFiles === true,
         experimentalContextTripleBudget: config.experimentalContextTripleBudget === true,
         experimentalSkillAttachments: config.experimentalSkillAttachments === true,

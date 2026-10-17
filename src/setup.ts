@@ -42,6 +42,7 @@ import {
 import { connectTunnel, createTunnelConfig, installRuntimeKey, installRuntimeKeyBytes, installTunnelClient, managedRuntimeKeyPath, stopTunnel, waitForTunnelReady } from "./runtime/tunnel";
 import { getTunnelServiceStatus, installTunnelService, restartTunnelService, stopTunnelService, tunnelServiceDefinitionMatches, uninstallTunnelService } from "./runtime/tunnel-service";
 import { normalizeContextPreferences } from "../launcher/shared/context-preferences.cjs";
+import { applyContextWindowEdits, type ContextWindowEdits } from "../launcher/shared/context-budgets.cjs";
 import { VERSION } from "./version";
 import { assertDevRuntimeIsolation, canonicalDevPath } from "./dev/isolation";
 
@@ -57,6 +58,7 @@ export interface SetupOptions {
   autoApproveToolCalls?: boolean;
   experimentalContextFiles?: boolean;
   experimentalContextTripleBudget?: boolean;
+  contextWindowEdits?: ContextWindowEdits;
   experimentalSkillAttachments?: boolean;
   experimentalFreshConversationPerTurn?: boolean;
   useSavedChats?: boolean;
@@ -137,6 +139,7 @@ function meaningfulRuntimeChange(before: AppConfig, after: AppConfig): boolean {
     host: before.host,
     port: before.port,
     contextWindow: before.contextWindow,
+    contextWindows: before.contextWindows,
     appName: before.appName,
     automaticAppName: before.automaticAppName,
     manualAppName: before.manualAppName,
@@ -169,6 +172,7 @@ function meaningfulRuntimeChange(before: AppConfig, after: AppConfig): boolean {
     host: after.host,
     port: after.port,
     contextWindow: after.contextWindow,
+    contextWindows: after.contextWindows,
     appName: after.appName,
     automaticAppName: after.automaticAppName,
     manualAppName: after.manualAppName,
@@ -290,6 +294,7 @@ function baseConfig(
     config.experimentalFreshConversationPerTurn = options.experimentalFreshConversationPerTurn;
   }
   if (options.experimentalContextFiles !== undefined) {
+    // File transport remains independent of the token window settings.
     config.experimentalContextFiles = options.experimentalContextFiles;
     config.contextPreferenceSources = { files: "user", budget: config.contextPreferenceSources?.budget ?? "default" };
   }
@@ -300,6 +305,7 @@ function baseConfig(
     config.experimentalContextTripleBudget = options.experimentalContextTripleBudget;
     config.contextPreferenceSources = { files: config.contextPreferenceSources?.files ?? "default", budget: "user" };
   }
+  if (options.contextWindowEdits !== undefined) Object.assign(config, applyContextWindowEdits(config, options.contextWindowEdits));
   if (!config.experimentalContextFiles) {
     if (config.experimentalContextTripleBudget) config.contextPreferenceSources = { files: config.contextPreferenceSources?.files ?? "default", budget: "default" };
     config.experimentalContextTripleBudget = false;

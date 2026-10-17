@@ -1,0 +1,8 @@
+{
+  "defaults": { "fast": 80000, "standard": 272000 },
+  "effectivePercent": 95,
+  "compactPercent": 90,
+  "tripleMultiplier": 3,
+  "minimumWindow": 16384,
+  "maximumWindow": 1000000
+}

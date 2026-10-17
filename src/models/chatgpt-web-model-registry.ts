@@ -148,8 +148,8 @@ export const CHATGPT_WEB_LEGACY_MODEL_ROUTES: readonly ChatGptWebAutomaticModelR
 /** Kept for saved tasks and accounts whose Instant budget differs from Thinking. */
 export const CHATGPT_WEB_INSTANT_MODEL_ROUTE: ChatGptWebAutomaticModelRoute = {
   slug: "chatgpt-web/gpt-5.6-sol-instant",
-  displayName: "GPT-5.6 Sol · Instant (Web)",
-  description: "GPT-5.6 Sol Instant through ChatGPT, with its own context and compaction budget.",
+  displayName: "GPT-5.6 Sol · Fast (Web)",
+  description: "GPT-5.6 Sol Instant (Codex Low), using the Fast context budget.",
   interactionMode: "automatic",
   backendModel: CHATGPT_WEB_BACKEND_MODEL,
   modelFamily: "5.6",
@@ -162,8 +162,8 @@ export const CHATGPT_WEB_INSTANT_MODEL_ROUTE: ChatGptWebAutomaticModelRoute = {
 
 export const CHATGPT_WEB_GPT6_INSTANT_MODEL_ROUTE: ChatGptWebAutomaticModelRoute = {
   slug: "chatgpt-web/gpt-6-sol-instant",
-  displayName: "GPT-6 · Instant (Web)",
-  description: "GPT-6 Instant through ChatGPT, with its own context and compaction budget.",
+  displayName: "GPT-6 · Fast (Web)",
+  description: "GPT-6 Instant (Codex Low), using the Fast context budget.",
   interactionMode: "automatic",
   backendModel: CHATGPT_WEB_BACKEND_MODEL,
   modelFamily: "6",
@@ -184,7 +184,7 @@ export const CHATGPT_WEB_MODEL_ROUTES: readonly ChatGptWebAutomaticModelRoute[] 
   {
     slug: "chatgpt-web/gpt-5.6-sol",
     displayName: "GPT-5.6 Sol (Web)",
-    description: "GPT-5.6 Sol through ChatGPT. Low selects Instant when it shares the Thinking budget; otherwise Instant has its own entry. Default: High.",
+    description: "GPT-5.6 Sol through ChatGPT. Medium, High and Extra High share the non-Fast budget. For Instant (Low), select Fast. Default: High.",
     interactionMode: "automatic",
     backendModel: CHATGPT_WEB_BACKEND_MODEL,
     modelFamily: "5.6",
@@ -209,7 +209,7 @@ export const CHATGPT_WEB_MODEL_ROUTES: readonly ChatGptWebAutomaticModelRoute[] 
   {
     slug: "chatgpt-web/gpt-6-sol",
     displayName: "GPT-6 (Web)",
-    description: "GPT-6 through ChatGPT. Low selects Instant when it shares the Thinking budget; otherwise Instant has its own entry. Default: High.",
+    description: "GPT-6 through ChatGPT. Medium, High and Extra High share the non-Fast budget. For Instant (Low), select Fast. Default: High.",
     interactionMode: "automatic",
     backendModel: CHATGPT_WEB_BACKEND_MODEL,
     modelFamily: "6",

@@ -12,6 +12,7 @@ import { VERSION } from "./version";
 import { CURRENT_CONFIG_VERSION, migrateRuntimeConfig } from "../launcher/shared/config-migration.cjs";
 
 import { normalizeContextPreferences, type ContextPreferenceSources } from "../launcher/shared/context-preferences.cjs";
+import { normalizeContextWindows } from "../launcher/shared/context-budgets.cjs";
 
 export type RuntimeMode = "browser-only" | "native-tools" | "mcp-bridge";
 export type BrowserHostMode = "managed-chrome" | "launcher";
@@ -89,6 +90,8 @@ export interface AppConfig {
   extraHighAvailable?: boolean;
   proAvailable: boolean;
   contextPreferenceSources?: ContextPreferenceSources;
+  contextWindows: import("../launcher/shared/context-budgets.cjs").ContextWindows;
+  contextWindowSources: import("../launcher/shared/context-budgets.cjs").ContextWindowSources;
   experimentalContextFiles: boolean;
   experimentalContextTripleBudget: boolean;
   experimentalSkillAttachments: boolean;
@@ -228,6 +231,7 @@ export function defaultConfig(mode: RuntimeMode = "native-tools"): AppConfig {
     proAvailable: false,
     experimentalContextFiles: true,
     contextPreferenceSources: { files: "default", budget: "default" },
+    ...normalizeContextWindows(),
     experimentalContextTripleBudget: false,
     experimentalSkillAttachments: false,
     experimentalFreshConversationPerTurn: false,
@@ -542,7 +546,7 @@ function parseConfig(value: unknown, path: string): AppConfig {
   if (parsed.experimentalContextTripleBudget !== undefined && typeof parsed.experimentalContextTripleBudget !== "boolean") {
     throw new Error(`Invalid experimentalContextTripleBudget in ${path}`);
   }
-  const { experimentalContextFiles, experimentalContextTripleBudget, contextPreferenceSources } =
+  const { experimentalContextFiles, experimentalContextTripleBudget, contextPreferenceSources, contextWindows, contextWindowSources } =
     normalizeContextPreferences({ ...parsed, browserInteractionMode, solAvailable });
   delete legacy.experimentalBiggerContext;
   const zeroRiskProEnabled = parsed.zeroRiskProEnabled === true;
@@ -567,6 +571,8 @@ function parseConfig(value: unknown, path: string): AppConfig {
     experimentalContextFiles,
     experimentalContextTripleBudget,
     contextPreferenceSources,
+    contextWindows,
+    contextWindowSources,
     experimentalSkillAttachments,
     experimentalFreshConversationPerTurn,
     useSavedChats,
@@ -631,6 +637,7 @@ export function providerConfig(config: AppConfig): CodexProviderConfig {
       proAvailable: manual ? false : config.proAvailable,
       experimentalContextFiles: manual ? false : config.experimentalContextFiles,
       experimentalContextTripleBudget: !manual && config.experimentalContextFiles && config.experimentalContextTripleBudget,
+      contextWindows: config.contextWindows,
       experimentalSkillAttachments: manual ? false : config.experimentalSkillAttachments,
       experimentalFreshConversationPerTurn: !manual && config.experimentalFreshConversationPerTurn === true,
       useSavedChats: config.useSavedChats === true,

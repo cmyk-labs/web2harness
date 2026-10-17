@@ -4,6 +4,7 @@ const os = require("node:os");
 const { randomBytes } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { migrateRuntimeConfig, needsRuntimeConfigMigration } = require("../../shared/config-migration.cjs");
+const { applyContextWindowEdits, normalizeContextWindows } = require("../../shared/context-budgets.cjs");
 const {
   connectorNameForDevSetup,
   connectorNameForSetup,
@@ -965,6 +966,35 @@ class RuntimeHost {
 
   async setContextFiles(enabled) {
     return this.setContextPreferences({ experimentalContextFiles: enabled === true });
+  }
+
+  async setContextWindows(edits, tripleBudget) {
+    if (this.currentOperation()) throw new Error(`Another launcher operation is active: ${this.currentOperation()}`);
+    const current = this.runtimeConfigSnapshot();
+    if (!current.configured) throw new Error("Initialize the runtime first / 请先初始化运行服务");
+    if (tripleBudget !== undefined && typeof tripleBudget !== "boolean") throw new Error("Invalid context budget / 上下文预算无效");
+    const before = normalizeContextWindows(current.config);
+    const next = edits === undefined ? before : applyContextWindowEdits(current.config, edits);
+    if (tripleBudget === true && (current.config.browserInteractionMode === "manual" || !current.config.experimentalContextFiles)) {
+      throw new Error("Enable Context as File before selecting triple budget / 请先开启上下文文件传输");
+    }
+    const development = this.launcherProfile === "development";
+    const args = [development ? "dev" : "setup", ...(development ? ["setup"] : []),
+      setupModeFlag(current.mode), "--browser-host-descriptor", this.browserDescriptorPath,
+      ...this.browserInteractionArgs(), "--acknowledge-unofficial",
+      ...(development ? [] : ["--replace-codex-route", "--restart-service"]),
+      ...Object.entries(edits ?? {}).flatMap(([key, value]) => [`--${key}-context-window`, String(value)]),
+      ...(tripleBudget === undefined ? [] : [tripleBudget ? "--context-triple-budget" : "--standard-context-budget"]),
+    ];
+    if (current.config.autoApproveToolCalls === true) args.push("--auto-approve-tool-calls");
+    const options = { message: "Updating context budgets", successMessage: "Context budgets updated; restart Codex", timeoutMs: CORE_SETUP_TIMEOUT_MS };
+    const result = development ? await this.runDevSetup("context-budgets", args, options) : await this.runSetup("context-budgets", args, options);
+    const updated = this.runtimeConfigSnapshot().config;
+    return { ...result, ...normalizeContextWindows(updated),
+      experimentalContextTripleBudget: updated.experimentalContextTripleBudget === true,
+      contextPreferenceSources: updated.contextPreferenceSources,
+      budgetChanged: JSON.stringify(before.contextWindows) !== JSON.stringify(next.contextWindows)
+        || (tripleBudget !== undefined && tripleBudget !== (current.config.experimentalContextTripleBudget === true)) };
   }
 
   async setContextTripleBudget(enabled) {

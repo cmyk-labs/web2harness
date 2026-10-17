@@ -44,3 +44,15 @@
 .queue-pagination { justify-content: flex-end; margin-top: 16px; }
 .queue-overview { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 20px; margin-bottom: 20px; }
 @media (max-width: 900px) { .queue-table { min-width: 650px; } .queue-settings select, .queue-number { width: 160px; } }
+.context-budget-mode { display: flex; margin: 12px 0 16px; }
+.context-budget-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.context-budget-table col:first-child { width: 62%; }
+.context-budget-table th, .context-budget-table td { padding: 14px 0; border-bottom: 1px solid var(--color-border-light); vertical-align: middle; text-align: right; }
+.context-budget-table th:first-child { text-align: left; padding-right: 24px; }
+.context-budget-table thead th { color: var(--color-text-secondary); font-size: var(--text-sm); font-weight: 400; }
+.context-budget-table tbody th { font-size: var(--text-base); font-weight: 600; }
+.context-budget-table tbody p { font-weight: 400; }
+.context-window-number { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.context-window-number span { white-space: nowrap; color: var(--color-text-secondary); font-size: var(--text-sm); }
+.context-budget-input input { width: 160px; }
+.context-budget-notes { padding: 12px 0 20px; }

@@ -390,7 +390,7 @@ test("completed model setup remains a repeatable capability probe", () => {
   );
 });
 
-test("catalog verification reports a failed request instead of requesting another restart, then recovers", async () => {
+test("catalog verification reports failure without clearing a pending restart, then recovers", async () => {
   const vm = require("node:vm");
   const start = electronMain.indexOf("function startCatalogVerificationMonitor(");
   const end = electronMain.indexOf("\nfunction ", start + 1);
@@ -401,7 +401,7 @@ test("catalog verification reports a failed request instead of requesting anothe
   let tick;
   let payload = { pid: 10, successful_model_catalog_requests: 0, model_catalog_requests: 0, last_model_catalog_result: null };
   vm.runInNewContext(source + "\nstartCatalogVerificationMonitor({ logger, stateStore });", {
-    catalogVerificationInFlight: false, catalogVerificationTimer: null, lastOperation: null,
+    catalogVerificationInFlight: false, catalogVerificationTimer: null, catalogVerificationGeneration: 0, lastOperation: null,
     stopCatalogVerificationMonitor() {},
     runtimeSupervisor: { readConfig: () => ({}), proxyHealthPayload: async () => payload },
     stateStore: { read: () => state, update: patch => Object.assign(state, patch) },
@@ -419,7 +419,7 @@ test("catalog verification reports a failed request instead of requesting anothe
   await tick();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(state.codexCatalogVerified, false);
-  assert.equal(state.codexRestartRequired, false);
+  assert.equal(state.codexRestartRequired, true);
   assert.equal(operations[0]?.status, "failed");
   assert.match(operations[0].message, /502.*UnsupportedProxyProtocol/);
   await tick();
@@ -431,6 +431,27 @@ test("catalog verification reports a failed request instead of requesting anothe
   assert.equal(state.codexCatalogVerified, true);
   assert.equal(state.codexRestartRequired, false);
   assert.ok(events.some(([event]) => event === "codex.model_catalog_verified"));
+});
+
+test("catalog verification ignores a response from a stopped generation", async () => {
+  const vm = require("node:vm");
+  const start = electronMain.indexOf("function startCatalogVerificationMonitor(");
+  const source = electronMain.slice(start, electronMain.indexOf("\nfunction ", start + 1));
+  let finish;
+  const state = { coreSetupComplete: true, codexCatalogVerified: false, codexRestartRequired: true };
+  const scope = {
+    catalogVerificationInFlight: false, catalogVerificationTimer: null, catalogVerificationGeneration: 1,
+    stopCatalogVerificationMonitor() {},
+    runtimeSupervisor: { readConfig: () => ({}), proxyHealthPayload: () => new Promise(resolve => { finish = resolve; }) },
+    stateStore: { read: () => state, update: patch => Object.assign(state, patch) },
+    setInterval: () => ({ unref() {} }), logger: { info() {}, debug() {} }, send() {},
+  };
+  vm.runInNewContext(source + "\nstartCatalogVerificationMonitor({ logger, stateStore });", scope);
+  scope.catalogVerificationGeneration++;
+  finish({ successful_model_catalog_requests: 1 });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(state.codexCatalogVerified, false);
+  assert.equal(state.codexRestartRequired, true);
 });
 
 test("fresh-conversation IPC commits only after setup succeeds and refuses active browser work", async () => {

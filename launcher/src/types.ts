@@ -33,6 +33,8 @@ export interface LauncherState {
   contextPreferenceSources?: { files: "default" | "user"; budget: "default" | "user" };
   experimentalContextFiles: boolean;
   experimentalContextTripleBudget: boolean;
+  contextWindows?: import("../shared/context-budgets.cjs").ContextWindows;
+  contextWindowSources?: import("../shared/context-budgets.cjs").ContextWindowSources;
   experimentalSkillAttachments: boolean;
   experimentalFreshConversationPerTurn: boolean;
   useSavedChats: boolean;
@@ -273,6 +275,7 @@ export interface LauncherApi {
   setAutostart(enabled: boolean): Promise<{ state: LauncherState; supported: boolean; enabled: boolean }>;
   setContextFiles(enabled: boolean): Promise<LauncherState>;
   setContextTripleBudget(enabled: boolean): Promise<LauncherState>;
+  setContextWindows(edits?: import("../shared/context-budgets.cjs").ContextWindowEdits, tripleBudget?: boolean): Promise<LauncherState>;
   setSkillAttachments(enabled: boolean): Promise<LauncherState>;
   setFreshConversationPerTurn(enabled: boolean): Promise<LauncherState>;
   setUseSavedChats(enabled: boolean): Promise<LauncherState>;

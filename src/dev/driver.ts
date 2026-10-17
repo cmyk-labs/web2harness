@@ -402,6 +402,7 @@ export function createLauncherDevAdapter(
       useSavedChats: config.useSavedChats,
       experimentalContextFiles: config.experimentalContextFiles,
       experimentalContextTripleBudget: config.experimentalContextFiles && config.experimentalContextTripleBudget,
+      contextWindows: { ...config.contextWindows },
     },
   }, { broker });
   return { broker, adapterFactory };

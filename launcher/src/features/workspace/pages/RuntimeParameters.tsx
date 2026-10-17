@@ -4,17 +4,22 @@ import { useLicense } from "../../licensing/LicenseContext";
 import type { LauncherState, RequestSchedulingSettings, RequestQueueStatus } from "../../../types";
 import type { RuntimeParameters as ExecutionParameters, RuntimeParameterEdits } from "../../../../shared/runtime-parameters.cjs";
 import parameterOptions from "../../../../shared/runtime-parameter-options.json";
-import { PageIntro, Row, Section } from "../controls";
+import budgetOptions from "../../../../shared/context-budget-options.json";
+import type { ContextWindows, ContextWindowEdits } from "../../../../shared/context-budgets.cjs";
+import { PageIntro, Row, Section, Segment } from "../controls";
+import { workspaceBusy } from "../status";
 import { translate } from "../labels";
 import type { WorkspaceProps } from "../types";
 import "./queue.css";
 import { usePageNavigationGuard } from "../../shell/PageNavigationGuard";
 
-type Draft = RequestSchedulingSettings & { runtimeParameters: ExecutionParameters };
-const defaults: Draft = { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3, runtimeParameters: parameterOptions.defaults };
+type Draft = RequestSchedulingSettings & { runtimeParameters: ExecutionParameters; contextWindows: ContextWindows; tripleBudget: boolean };
+const defaults: Draft = { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3, runtimeParameters: parameterOptions.defaults, contextWindows: budgetOptions.defaults, tripleBudget: false };
 function stateDraft(state: LauncherState): Draft {
-  return { ...(state.requestScheduling ?? defaults), runtimeParameters: state.runtimeParameters ?? parameterOptions.defaults };
+  return { ...(state.requestScheduling ?? defaults), runtimeParameters: state.runtimeParameters ?? parameterOptions.defaults,
+    contextWindows: state.contextWindows ?? budgetOptions.defaults, tripleBudget: state.experimentalContextTripleBudget };
 }
+const validWindow = (value: number) => Number.isSafeInteger(value) && value >= budgetOptions.minimumWindow && value <= budgetOptions.maximumWindow;
 function validParameters(value: ExecutionParameters) {
   return Object.entries(parameterOptions.choices).every(([key, choices]) => choices.includes(value[key as keyof ExecutionParameters]));
 }
@@ -26,26 +31,33 @@ function loadDraft(settings: Draft, revision: number) {
       && [saved.baseline, saved.draft].every(item => [1, 2, 3, 4, 5].includes(item.maxConcurrent)
         && [5, 10, 15, 30, 60].includes(item.queueTimeoutMinutes)
         && (item.minSendIntervalSeconds === null || typeof item.minSendIntervalSeconds === "number")
-        && validParameters(item.runtimeParameters ?? parameterOptions.defaults))
+        && validParameters(item.runtimeParameters ?? parameterOptions.defaults)
+        && (item.contextWindows === undefined || (item.contextWindows
+          && validWindow(item.contextWindows.fast) && validWindow(item.contextWindows.standard)))
+        && (item.tripleBudget === undefined || typeof item.tripleBudget === "boolean"))
       && (saved.parameterEdits === undefined || (saved.parameterEdits && typeof saved.parameterEdits === "object"
         && !Array.isArray(saved.parameterEdits) && Object.entries(saved.parameterEdits).every(([key, source]) =>
           Object.hasOwn(parameterOptions.defaults, key) && (source === "default" || source === "user"))))) {
-      return { ...saved,
+      const budgetEdits = saved.budgetEdits ?? {};
+      if (typeof budgetEdits !== "object" || Array.isArray(budgetEdits)) throw new Error("Invalid budget draft");
+      if (Object.entries(budgetEdits).some(([key, value]) => !["fast", "standard"].includes(key) || (value !== "default" && !validWindow(value as number)))) throw new Error("Invalid budget draft");
+      return { ...saved, budgetEdits,
         parameterEdits: saved.parameterEdits ?? {},
-        baseline: { ...saved.baseline, runtimeParameters: saved.baseline.runtimeParameters ?? settings.runtimeParameters },
-        draft: { ...saved.draft, runtimeParameters: saved.draft.runtimeParameters ?? settings.runtimeParameters, minSendIntervalSeconds: saved.draft.minSendIntervalSeconds ?? NaN } } as {
-        baseline: Draft; draft: Draft; revision: number; parameterEdits: RuntimeParameterEdits;
+        baseline: { ...settings, ...saved.baseline, runtimeParameters: saved.baseline.runtimeParameters ?? settings.runtimeParameters },
+        draft: { ...settings, ...saved.draft, runtimeParameters: saved.draft.runtimeParameters ?? settings.runtimeParameters, minSendIntervalSeconds: saved.draft.minSendIntervalSeconds ?? NaN } } as {
+        baseline: Draft; draft: Draft; revision: number; parameterEdits: RuntimeParameterEdits; budgetEdits: ContextWindowEdits;
       };
     }
   } catch { /* Storage may be unavailable; in-memory navigation protection still applies. */ }
-  return { baseline: settings, draft: settings, revision, parameterEdits: {} as RuntimeParameterEdits };
+  return { baseline: settings, draft: settings, revision, parameterEdits: {} as RuntimeParameterEdits, budgetEdits: {} as ContextWindowEdits };
 }
-export function RuntimeParameters({ api, snapshot, updateState }: WorkspaceProps) {
+export function RuntimeParameters({ api, snapshot, updateState, browser, operation }: WorkspaceProps) {
   const t = translate(snapshot.state.language ?? "en");
   const { active: licensed } = useLicense();
   const [initial] = useState(() => loadDraft(stateDraft(snapshot.state), snapshot.state.requestSchedulingRevision));
   const [draft, setDraft] = useState(initial.draft);
   const [parameterEdits, setParameterEdits] = useState(initial.parameterEdits);
+  const [budgetEdits, setBudgetEdits] = useState(initial.budgetEdits);
   const [baseline, setBaseline] = useState({ settings: initial.baseline, revision: initial.revision });
   const [status, setStatus] = useState<RequestQueueStatus | null>(null);
   const [feedback, setFeedback] = useState<string | { zh: string; en: string }>("");
@@ -59,33 +71,59 @@ export function RuntimeParameters({ api, snapshot, updateState }: WorkspaceProps
     });
     return () => { disposed = true; };
   }, [api]);
-  const changed = JSON.stringify(draft) !== JSON.stringify(baseline.settings) || Object.keys(parameterEdits).length > 0;
+  const budgetValuesChanged = JSON.stringify(draft.contextWindows) !== JSON.stringify(baseline.settings.contextWindows)
+    || draft.tripleBudget !== baseline.settings.tripleBudget;
+  const budgetChanged = budgetValuesChanged || Object.keys(budgetEdits).length > 0;
+  const contextBusy = !snapshot.state.coreSetupComplete || snapshot.startup.status !== "ready" || workspaceBusy(browser, operation);
+  const changed = JSON.stringify(draft) !== JSON.stringify(baseline.settings) || Object.keys(parameterEdits).length > 0 || budgetChanged;
   useEffect(() => {
     try {
-      if (changed) localStorage.setItem(draftKey, JSON.stringify({ draft, baseline: baseline.settings, revision: baseline.revision, parameterEdits }));
+      if (changed) localStorage.setItem(draftKey, JSON.stringify({ draft, baseline: baseline.settings, revision: baseline.revision, parameterEdits, budgetEdits }));
       else localStorage.removeItem(draftKey);
     } catch { /* Do not block editing when storage is unavailable. */ }
-  }, [draft, baseline, changed, parameterEdits]);
+  }, [draft, baseline, changed, parameterEdits, budgetEdits]);
   useEffect(() => {
-    if (!changed && !working && baseline.revision !== snapshot.state.requestSchedulingRevision) {
+    if (!changed && !working && (baseline.revision !== snapshot.state.requestSchedulingRevision
+      || JSON.stringify(baseline.settings.contextWindows) !== JSON.stringify(snapshot.state.contextWindows ?? budgetOptions.defaults)
+      || baseline.settings.tripleBudget !== snapshot.state.experimentalContextTripleBudget)) {
       setDraft(stateDraft(snapshot.state));
       setBaseline({ settings: stateDraft(snapshot.state), revision: snapshot.state.requestSchedulingRevision });
     }
   }, [changed, working, baseline.revision, snapshot.state]);
-  const valid = Number.isInteger(draft.minSendIntervalSeconds) && draft.minSendIntervalSeconds >= 1 && draft.minSendIntervalSeconds <= 60 && validParameters(draft.runtimeParameters);
+  const valid = Number.isInteger(draft.minSendIntervalSeconds) && draft.minSendIntervalSeconds >= 1 && draft.minSendIntervalSeconds <= 60 && validParameters(draft.runtimeParameters)
+    && validWindow(draft.contextWindows.fast) && validWindow(draft.contextWindows.standard) && typeof draft.tripleBudget === "boolean";
   async function save() {
-    if (!licensed || saving.current || !changed || !valid) return false;
+    if (!licensed || saving.current || !changed || !valid || (budgetChanged && contextBusy)) return false;
     saving.current = true;
     setWorking(true); setFeedback(""); setFailed(false);
     try {
-      const { runtimeParameters, ...scheduling } = draft;
+      const { runtimeParameters, contextWindows, tripleBudget, ...scheduling } = draft;
+      if (budgetChanged && (baseline.revision !== snapshot.state.requestSchedulingRevision
+        || JSON.stringify(baseline.settings.contextWindows) !== JSON.stringify(snapshot.state.contextWindows ?? budgetOptions.defaults)
+        || baseline.settings.tripleBudget !== snapshot.state.experimentalContextTripleBudget)) {
+        throw new Error(t("设置已在其他位置修改，请放弃草稿后重新编辑。", "Settings changed elsewhere. Discard the draft and edit again."));
+      }
+      if (budgetChanged) {
+        const edits: ContextWindowEdits = { ...budgetEdits };
+        for (const key of ["fast", "standard"] as const) {
+          if (contextWindows[key] !== baseline.settings.contextWindows[key] && edits[key] === undefined) edits[key] = contextWindows[key];
+        }
+        const state = await api.setContextWindows(Object.keys(edits).length ? edits : undefined,
+          tripleBudget !== baseline.settings.tripleBudget ? tripleBudget : undefined);
+        updateState(state);
+        setBudgetEdits({});
+        // Preserve successful budget persistence if the subsequent scheduling save fails.
+        setBaseline(value => ({ ...value, settings: { ...value.settings, contextWindows: state.contextWindows ?? budgetOptions.defaults, tripleBudget: state.experimentalContextTripleBudget } }));
+      }
       const result = await api.saveQueueSettings(scheduling, baseline.revision, runtimeParameters, parameterEdits);
       updateState(result.state);
       setBaseline({ settings: stateDraft(result.state), revision: result.persistedRevision });
       setDraft(stateDraft(result.state));
       setParameterEdits({});
       setFailed(result.applyState === "apply-failed");
-      setFeedback(result.applyState === "applied" ? { zh: "已保存并生效", en: "Saved and applied" }
+      setFeedback(result.applyState === "applied" ? budgetValuesChanged
+        ? { zh: "已保存。请重启对应 Codex，使上下文容量和压缩阈值生效。", en: "Saved. Restart the corresponding Codex to load the context windows and compaction thresholds." }
+        : { zh: "已保存并生效", en: "Saved and applied" }
         : result.applyState === "pending-start" ? { zh: "已保存，服务启动后生效", en: "Saved; applies when the service starts" }
         : { zh: "设置已保存，但运行时应用未完成。请检查运行状态，重启服务后生效。", en: "Settings saved, but runtime application did not complete. Check runtime status; settings apply after the service restarts." });
       // Show a failed-apply result on this page before allowing another navigation.
@@ -93,10 +131,11 @@ export function RuntimeParameters({ api, snapshot, updateState }: WorkspaceProps
     } catch (error) { setFeedback(String(error)); setFailed(true); return false; }
     finally { saving.current = false; setWorking(false); }
   }
-  usePageNavigationGuard({ dirty: changed, canSave: licensed && valid && changed, busy: working, save,
+  usePageNavigationGuard({ dirty: changed, canSave: licensed && valid && changed && !(budgetChanged && contextBusy), busy: working, save,
     discard: () => {
       setDraft(stateDraft(snapshot.state));
       setParameterEdits({});
+      setBudgetEdits({});
       setBaseline({ settings: stateDraft(snapshot.state), revision: snapshot.state.requestSchedulingRevision });
       try { localStorage.removeItem(draftKey); } catch { /* best effort */ }
     } });
@@ -111,10 +150,28 @@ export function RuntimeParameters({ api, snapshot, updateState }: WorkspaceProps
       </select>
     </Row>
   );
+  const contextWindow = (key: keyof ContextWindows, title: string, description: string) => {
+    const value = draft.contextWindows[key];
+    return <tr className="context-budget-input">
+      <th scope="row"><label htmlFor={`context-window-${key}`}>{title}</label><p>{description}</p></th>
+      <td>
+        <div className="context-window-number">
+          <input id={`context-window-${key}`} type="number" min={budgetOptions.minimumWindow / 1000} max={budgetOptions.maximumWindow / 1000} step={0.001}
+            title={t(`输入范围：${budgetOptions.minimumWindow / 1000}–${budgetOptions.maximumWindow / 1000}k tokens；1k = 1,000 tokens`, `Input range: ${budgetOptions.minimumWindow / 1000}–${budgetOptions.maximumWindow / 1000}k tokens; 1k = 1,000 tokens`)}
+            aria-label={title} aria-describedby="context-budget-unit" disabled={!licensed || working} value={Number.isFinite(value) ? value / 1000 : ""}
+            onChange={event => { const tokens = event.target.valueAsNumber * 1000;
+              const next = Math.abs(tokens - Math.round(tokens)) < 1e-7 ? Math.round(tokens) : tokens;
+              setDraft({ ...draft, contextWindows: { ...draft.contextWindows, [key]: next } });
+              setBudgetEdits({ ...budgetEdits, [key]: next }); }} />
+          <span>k tokens</span>
+        </div>
+      </td>
+    </tr>;
+  };
   return <>
     <PageIntro title={t("运行参数", "Runtime parameters")} subtitle={t("设置所有会话共享的运行参数。", "Configure runtime parameters shared by all sessions.")} />
-    <Section title={t("请求调度", "Request scheduling")} />
     <form className="panel queue-settings" onSubmit={event => { event.preventDefault(); void save(); }}>
+      <Section title={t("请求调度", "Request scheduling")} />
       <Row title={t("Web 同时执行数", "Concurrent Web turns")} description={t("所有会话共享，超出后排队。", "Shared by all sessions. Additional requests wait in the queue.")}>
         <select aria-label={t("Web 同时执行数", "Concurrent Web turns")} disabled={!licensed || working} value={draft.maxConcurrent} onChange={event => setDraft({ ...draft, maxConcurrent: Number(event.target.value) })}>
           {[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value}</option>)}
@@ -142,11 +199,37 @@ export function RuntimeParameters({ api, snapshot, updateState }: WorkspaceProps
         {parameter("manualSubmitSeconds", t("普通请求提交等待", "Manual request submission timeout"), t("等待粘贴、发送并确认已提交。", "Waits for you to paste, send and confirm submission."), t("秒", "seconds"))}
         {parameter("manualCompactionSubmitSeconds", t("压缩请求提交等待", "Manual compaction submission timeout"), t("压缩请求需要人工提交时的等待时间。", "Time allowed to manually submit a compaction request."), t("秒", "seconds"))}
       </>}
+      <div className="context-budget-settings">
+        <Section title={t("上下文预算", "Context budget")} />
+        <div className="context-budget-mode">
+          <Segment label={t("上下文预算", "Context budget")} value={draft.tripleBudget}
+            disabled={!licensed || working || !snapshot.state.experimentalContextFiles || snapshot.state.browserInteractionMode === "manual"}
+            options={[{ value: false, label: t("标准预算", "Standard budget") }, { value: true, label: t("三倍预算（实验性）", "Triple budget (experimental)") }]}
+            onChange={value => setDraft({ ...draft, tripleBudget: value })} />
+        </div>
+        <table className="context-budget-table" aria-label={t("上下文窗口设置", "Context window settings")}>
+          <colgroup><col /><col /></colgroup>
+          <thead><tr>
+            <th scope="col">{t("类型", "Type")}</th>
+            <th scope="col">{t("标准上下文窗口", "Standard context window")}</th>
+          </tr></thead>
+          <tbody>
+            {contextWindow("fast", t("Fast 上下文窗口", "Fast context window"), "Instant / low")}
+            {contextWindow("standard", t("非Fast上下文窗口", "Non-Fast context window"), "medium / high / xhigh / Pro")}
+          </tbody>
+        </table>
+        <div className="context-budget-notes muted">
+          <p id="context-budget-unit">1k = 1,000 tokens</p>
+          <p>{t("可用容量：95%；自动压缩阈值：90%。三倍预算按标准窗口×3计算。", "Usable capacity: 95%; auto-compaction threshold: 90%. Triple budget uses the standard window ×3.")}</p>
+          <p>{t("请在任务空闲时保存，保存后重启对应 Codex。", "Save while tasks are idle, then restart the corresponding Codex.")}</p>
+        </div>
+      </div>
       <div className="queue-settings-footer">
         <p className="muted">{t("修改不打断已有任务。执行等待用于新请求，保留时间用于下一次进入空闲的标签；排队超时仅用于新入队请求。", "Changes do not interrupt running tasks. Execution waits apply to new requests, retention to newly idle tabs, and queue timeout to newly queued requests.")}</p>
-        <div className="queue-actions"><Button type="submit" disabled={!licensed || working || !changed || !valid}>{working ? t("保存中…", "Saving…") : t("保存设置", "Save settings")}</Button>
+        <div className="queue-actions"><Button type="submit" disabled={!licensed || working || !changed || !valid || (budgetChanged && contextBusy)}>{working ? t("保存中…", "Saving…") : t("保存设置", "Save settings")}</Button>
           <Button type="button" disabled={!licensed || working} onClick={() => {
             setDraft({ ...defaults });
+            setBudgetEdits({ fast: "default", standard: "default" });
             setParameterEdits(Object.fromEntries(Object.keys(parameterOptions.defaults).map(key => [key, "default"])));
             setFeedback({ zh: "已恢复默认值，保存后生效", en: "Defaults restored; save to apply" }); setFailed(false);
           }}>{t("恢复默认值", "Restore defaults")}</Button></div>

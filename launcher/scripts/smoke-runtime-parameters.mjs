@@ -9,6 +9,30 @@ export async function runRuntimeParametersSmoke({ context, origin, out, check, e
   await page.getByRole('region', { name: '运行参数', exact: true }).waitFor();
   const select = name => page.getByLabel(name, { exact: true });
   const save = () => page.getByRole('button', { name: '保存设置', exact: true });
+  check('Context windows use k with one shared percentage explanation',
+    await select('Fast 上下文窗口').inputValue() === '80' && await select('非Fast上下文窗口').inputValue() === '272'
+    && await page.locator('.context-budget-settings output').count() === 0
+    && (await page.locator('.context-budget-notes').innerText()).includes('95%')
+    && (await page.locator('.context-budget-notes').innerText()).includes('90%'));
+  await page.locator('.context-budget-settings').screenshot({path:out+'/budget-zh.png'});
+  await select('Fast 上下文窗口').fill('16.383');
+  check('k input retains the existing lower token bound', !await save().isEnabled());
+  await select('Fast 上下文窗口').fill('96.001');
+  check('Fractional k is valid without saving core values', await save().isEnabled()
+    && await page.evaluate(() => window.__fixture.state.contextWindows.fast === 80000));
+  await page.evaluate(() => { window.__fixture.failBudgetSave = true; });
+  await save().click();await page.getByRole('alert').filter({hasText:'Fixture budget save failed'}).waitFor();
+  check('Failed budget transaction preserves the editable draft', await select('Fast 上下文窗口').inputValue() === '96.001');
+  await page.evaluate(() => { window.__fixture.failBudgetSave = false; });
+  await save().click();await page.getByText('已保存。请重启对应 Codex，使上下文容量和压缩阈值生效。',{exact:true}).waitFor();
+  check('Window saves retain explicit user provenance', await page.evaluate(() => window.__fixture.state.contextWindows.fast === 96001 && window.__fixture.state.contextWindowSources.fast === 'user' && window.__fixture.state.contextWindows.standard === 272000));
+  await page.evaluate(() => window.__fixture.patch({experimentalContextFiles:true}));
+  await page.getByRole('radio',{name:'三倍预算（实验性）',exact:true}).click();
+  check('Triple choice keeps standard k inputs and explains the multiplier', await select('Fast 上下文窗口').inputValue() === '96.001'
+    && (await page.locator('.context-budget-notes').innerText()).includes('×3'));
+  await page.getByRole('radio',{name:'标准预算',exact:true}).click();
+  await select('Fast 上下文窗口').fill('80');await save().click();
+  await page.getByText('已保存。请重启对应 Codex，使上下文容量和压缩阈值生效。',{exact:true}).waitFor();
   check('Current execution defaults remain visible', await select('标签页保留数量').inputValue() === '5'
     && await select('空闲标签保留时间').inputValue() === '30' && await select('网页无进展超时').inputValue() === '5'
     && await select('附件上传与处理等待时间').inputValue() === '2');
@@ -80,10 +104,12 @@ export async function runRuntimeParametersSmoke({ context, origin, out, check, e
   check('Existing save feedback follows language changes', await page.getByText('Saved and applied', { exact: true }).isVisible()
     && await page.getByText('已保存并生效', { exact: true }).count() === 0);
   check('Runtime parameter labels follow English locale', await select('Attachment processing timeout').count() === 1 && await select('Idle tab retention').count() === 1);
+  await page.locator('.context-budget-settings').screenshot({path:out+'/budget-en.png'});
   await page.screenshot({ path: out + '/parameters-en.png', fullPage: true });
   await setWindowFixtureSize(page, { width: 900, height: 600 });
   await page.waitForTimeout(350);
   check('Small desktop window retains controls without horizontal overflow', await page.locator('.content').evaluate(el => el.scrollWidth <= el.clientWidth + 1));
+  await page.locator('.context-budget-settings').screenshot({path:out+'/budget-small.png'});
   await page.screenshot({ path: out + '/parameters-small.png', fullPage: true });
   await page.close();
 }
