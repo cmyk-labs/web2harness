@@ -32,4 +32,6 @@ test("candidate includes untracked source and is stable across line endings and 
     }
     rmSync(root, { recursive: true });
   }
-});
+// This integration fixture starts Git repeatedly; hosted Windows runners can exceed
+// Bun's five-second default without violating any candidate-identity invariant.
+}, 30_000);
