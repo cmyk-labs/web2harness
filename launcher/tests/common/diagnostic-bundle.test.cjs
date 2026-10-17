@@ -13,8 +13,8 @@ const { createLogger } = require("../../electron/logging.cjs");
 const { PREFIX, createDiagnosticRecord, diagnosticReference } = require("../../shared/diagnostic-event.cjs");
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web2harness-diagnostics-test-"));
-  t.after(() => { assert.ok(root.startsWith(path.join(os.tmpdir(), "web2harness-diagnostics-test-"))); fs.rmSync(root, { recursive: true, force: true }); });
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "web2harness-diagnostics-test-"));
+  t.after(() => { assert.ok(root.startsWith(path.join(fs.realpathSync(os.tmpdir()), "web2harness-diagnostics-test-"))); fs.rmSync(root, { recursive: true, force: true }); });
   const options = { logsDirectory: path.join(root, "launcher", "logs"), userData: path.join(root, "launcher"), coreHome: path.join(root, "core") };
   fs.mkdirSync(options.logsDirectory, { recursive: true }); fs.mkdirSync(options.coreHome);
   return { root, options, log: path.join(options.logsDirectory, "launcher.jsonl") };
