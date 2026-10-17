@@ -12,6 +12,7 @@ import { Feedback } from "../Feedback";
 import { translate } from "../labels";
 import { pendingRequestLogs, clearRequestLogs } from "../diagnostic-navigation";
 import { Logs } from "./Logs";
+import { Storage } from "./Storage";
 import { Report } from "../Report";
 import { workspaceBusy } from "../status";
 import type { WorkspaceProps } from "../types";
@@ -87,6 +88,7 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
           ["usage", t("用量", "Usage")],
           ["health", t("健康检查", "Health checks")],
           ["logs", t("运行日志", "Logs")],
+          ["storage", t("存储与缓存", "Storage & cache")],
         ].map(([id, label]) => (
           <button
             type="button"
@@ -154,6 +156,7 @@ export function Diagnostics(p: WorkspaceProps & { tracker: LimitsTracker }) {
           </>
         )}
         {tab === "logs" && <Logs initialSearch={initialLogSearch} api={api} language={language} recent={logs} savedPageSize={snapshot.state.logPageSize} updateState={p.updateState} />}
+        {tab === "storage" && <Storage api={api} language={language} busy={snapshot.startup.status !== "ready" || workspaceBusy(browser, operation)} />}
       </div>
       {notice && (
         <Feedback

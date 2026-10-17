@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createHash, randomUUID } = require("node:crypto");
 const { logFiles, RETENTION_DAYS, MAX_RETAINED_BYTES } = require("./log-files.cjs");
+const { managedLogFiles } = require("../../shared/log-retention.cjs");
 const { cleanText, safeDetail, safeRecord } = require("./redaction.cjs");
 const { zipFiles } = require("./zip.cjs");
 
@@ -100,7 +101,9 @@ function collectDiagnostics({ logsDirectory, coreHome }, input = {}, now = Date.
     for (const file of files) read(logsDirectory, file, path.basename(file), "jsonl");
   } catch (error) { if (error.code?.startsWith("HISTORY_")) throw error; sources.push({ file: "launcher-logs", status: "failed", error: cleanText(error.message) }); }
   for (const [name, event] of [["update-worker.log", "update.worker"], ["process-stream-errors.log", "launcher.process_stream_error"], ["launcher-fatal.log", "launcher.fatal"]]) {
-    read(logsDirectory, path.join(logsDirectory, name), name, "text", event);
+    const files = managedLogFiles(path.join(logsDirectory, name));
+    if (!files.length) read(logsDirectory, path.join(logsDirectory, name), name, "text", event);
+    for (const file of files) read(logsDirectory, file, path.basename(file), "text", event);
   }
   const browserRoot = path.join(coreHome, "diagnostics", "browser-turns");
   try {

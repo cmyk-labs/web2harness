@@ -5,12 +5,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const vm = require("node:vm");
+const { createRequire } = require("node:module");
 const workerPath = path.resolve(__dirname, "../../electron/installation/update-worker.cjs");
 
 function worker(spawn, runInstaller = () => ({ status: 0 })) {
   const module = { exports: {} };
   vm.runInNewContext(fs.readFileSync(workerPath, "utf8"), {
-    module, require: name => name === "node:child_process" ? { spawn, spawnSync: runInstaller } : require(name),
+    module, __dirname: path.dirname(workerPath),
+    require: name => name === "node:child_process" ? { spawn, spawnSync: runInstaller } : createRequire(workerPath)(name),
     process: { pid: process.pid, argv: [], kill() { throw Object.assign(new Error("fixture absent parent"), { code: "ESRCH" }); } },
     setTimeout, clearTimeout,
   }, { filename: workerPath });
@@ -50,7 +52,7 @@ test("worker logs asynchronous relaunch failure, attempts recovery and retains e
   fs.mkdirSync(tempRoot);
   fs.writeFileSync(source, "fixture installer, never executed");
   fs.writeFileSync(target, "fixture application, never executed");
-  const logPath = path.join(root, "update.log"), jobPath = path.join(root, "job.json");
+  const logPath = path.join(root, "update-worker.log"), jobPath = path.join(root, "job.json");
   fs.writeFileSync(jobPath, JSON.stringify({ source, target, tempRoot, logPath, platform: "win32", version: "fixture", parentPid: 1 }));
   const failure = Object.assign(new Error("fixture launch denied"), { code: "EACCES" });
   let launches = 0;

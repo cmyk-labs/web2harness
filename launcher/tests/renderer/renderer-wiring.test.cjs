@@ -81,26 +81,9 @@ test("closing the launcher follows the persisted background-runtime preference",
   assert.match(workspaceSource, /api\.setPreference\(key,\s*value\)/);
 });
 
-test("a foreground launch request survives hidden startup until the launcher window is ready", () => {
-  const showMainWindow = electronMain.slice(
-    electronMain.indexOf("function showMainWindow()"),
-    electronMain.indexOf("async function openWebUrl"),
-  );
-  assert.match(
-    showMainWindow,
-    /mainWindowShowRequested = true;[\s\S]*?!mainWindowReadyToShow[\s\S]*?mainWindowShowRequested = false;/,
-  );
-
-  const readyHandler = electronMain.slice(
-    electronMain.indexOf('window.once("ready-to-show"'),
-    electronMain.indexOf("trackWindowState(window", electronMain.indexOf('window.once("ready-to-show"')),
-  );
-  assert.match(
-    readyHandler,
-    /mainWindowReadyToShow = true;[\s\S]*?if \(mainWindowShowRequested\) showMainWindow\(\);/,
-  );
-
-  const secondInstance = electronMain.indexOf('app.on("second-instance", () => showMainWindow())');
+test("foreground requests are registered before runtime preparation", () => {
+  assert.match(electronMain, /windowVisibility\.attach\(window,/);
+  const secondInstance = electronMain.indexOf('app.on("second-instance", () => showMainWindow("second-instance"))');
   const runtimeMaterialization = electronMain.indexOf("runtimePreparation = prepareRuntimeInBackground", secondInstance);
   assert.ok(secondInstance >= 0, "the second-instance foreground request must be registered");
   assert.ok(
@@ -152,7 +135,7 @@ test("setup preserves session-check failures and never installs without verified
 
 test("startup failure stays visible on another launch and Retry exits the failed instance", async () => {
   const vm = require("node:vm");
-  const source = electronMain.slice(electronMain.indexOf("function showMainWindow()"), electronMain.indexOf("async function openWebUrl"))
+  const source = electronMain.slice(electronMain.indexOf("function showMainWindow("), electronMain.indexOf("async function openWebUrl"))
     + electronMain.slice(electronMain.indexOf("void start().catch("));
   const events = [];
   let visible = false;
@@ -163,7 +146,7 @@ test("startup failure stays visible on another launch and Retry exits the failed
   const window = { isDestroyed: () => false, isMinimized: () => false,
     show: () => { visible = true; }, focus() {}, };
   const sandbox = {
-    mainWindow: window, mainWindowReadyToShow: false, mainWindowShowRequested: false,
+    mainWindow: window, windowVisibility: { show: () => { visible = true; } },
     startupFailed: false, quitting: false, rendererLoaded: false, startupLogger: null, startup: { fail() {}, snapshot: () => ({ stage: "initializing-browser" }) },
     browserHost: { destroy: () => events.push("destroy") },
     browserControl: { close: async () => events.push("control closed") },
@@ -210,14 +193,12 @@ test("hidden startup stays reachable when tray creation fails after the startup 
   const vm = require("node:vm");
   const begin = electronMain.indexOf("  if (startHidden && !trayAvailable) {");
   const source = electronMain.slice(begin, electronMain.indexOf("  await loadRenderer(mainWindow);", begin));
-  for (const ready of [false, true]) {
-    let shown = 0, listener;
+  {
+    let shown = 0;
     vm.runInNewContext(source, {
-      startHidden: true, trayAvailable: false, mainWindowReadyToShow: ready,
+      startHidden: true, trayAvailable: false,
       showMainWindow() { shown++; },
-      mainWindow: { once(event, callback) { assert.equal(event, 'ready-to-show'); listener = callback; } },
     });
-    if (!ready) { assert.equal(shown, 0); listener(); }
     assert.equal(shown, 1);
   }
 });

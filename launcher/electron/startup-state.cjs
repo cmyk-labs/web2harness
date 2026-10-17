@@ -3,7 +3,7 @@ const SHELL_CHANNELS = new Set([
   "license-status", "license-import",
   "snapshot", "workspace-status", "set-language", "complete-onboarding", "open-social",
   "open-external", "set-preference", "sidebar-state", "autostart", "limits",
-  "retry-startup", "logs", "query-logs", "export-logs", "window-state", "browser-bounds", "browser-surface-active",
+  "retry-startup", "logs", "query-logs", "export-logs", "storage-usage", "window-state", "browser-bounds", "browser-surface-active",
 ]);
 
 class StartupState {

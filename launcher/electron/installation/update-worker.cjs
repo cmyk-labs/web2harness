@@ -1,11 +1,12 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
+const { appendBoundedLog } = require(fs.existsSync(path.join(__dirname, "log-retention.cjs"))
+  ? "./log-retention.cjs" : "../../shared/log-retention.cjs");
 
 function appendLog(job, message) {
   try {
-    fs.mkdirSync(path.dirname(job.logPath), { recursive: true, mode: 0o700 });
-    fs.appendFileSync(job.logPath, `${new Date().toISOString()} ${message}\n`, { mode: 0o600 });
+    appendBoundedLog(job.logPath, `${new Date().toISOString()} ${message}\n`);
   } catch {}
 }
 

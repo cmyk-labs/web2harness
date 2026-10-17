@@ -298,6 +298,8 @@ export interface LauncherApi {
   logs(limit?: number): Promise<LogRecord[]>;
   queryLogs(query?: LogQuery): Promise<LogPage>;
   exportLogs(range?: DiagnosticRange): Promise<DiagnosticExport | null>;
+  storageUsage(): Promise<StorageUsage>;
+  clearCaches(): Promise<StorageUsage>;
   installUpdate(): Promise<boolean>;
   checkUpdate(): Promise<UpdateState>;
   windowState(): Promise<{ fullScreen: boolean; maximized: boolean }>;
@@ -308,6 +310,11 @@ export interface LauncherApi {
   onOperation(listener: (state: OperationState) => void): () => void;
   onLog(listener: (record: LogRecord) => void): () => void;
   onUpdateState(listener: (state: UpdateState) => void): () => void;
+}
+
+export interface StorageUsage {
+  runtimeBytes: number; httpCacheBytes: number; codeCacheBytes: number;
+  siteDataBytes: number; logBytes: number; measuredAt: string;
 }
 
 declare global {

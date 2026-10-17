@@ -6,6 +6,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 const main = fs.readFileSync(path.join(__dirname, "../../electron/main.cjs"), "utf8");
 
+test("storage measurement remains available during startup and failure; cleanup waits for readiness", () => {
+  const state = new StartupState();
+  for (const failed of [false, true]) {
+    if (failed) state.fail(new Error("fixture failure"));
+    assert.doesNotThrow(() => state.assertAvailable("launcher:storage-usage"));
+    assert.throws(() => state.assertAvailable("launcher:clear-caches"));
+  }
+  state.ready();
+  assert.doesNotThrow(() => state.assertAvailable("launcher:clear-caches"));
+});
+
 test("initial shell snapshot is available without runtime or browser construction", async () => {
   let snapshot;
   const state = { language: "en", onboardingComplete: true };

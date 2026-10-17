@@ -60,6 +60,8 @@ export const installWorkspaceFixture = ()=>{
   status.configured=false;status.mode=null;status.runtimeStatus='stopped';
   return {cancelled:false,state:patch({coreSetupComplete:false,codexCatalogVerified:false,mcpSetupComplete:false})};
  },
+ storageUsage:async()=>{if(window.__fixture.failStorage)throw new Error('Fixture storage read failed');return window.__fixture.storageUsage??{runtimeBytes:304087040,httpCacheBytes:125829120,codeCacheBytes:209715200,siteDataBytes:31457280,logBytes:4194304,measuredAt:'2026-10-17T12:00:00Z'}},
+ clearCaches:async()=>{window.__fixture.calls.push(['clearCaches']);if(window.__fixture.failCleanup)throw new Error('Fixture cache cleanup failed');const usage=await window.codexWebLauncher.storageUsage();return window.__fixture.storageUsage={...usage,httpCacheBytes:0,codeCacheBytes:0}},
  queryLogs:async(query={})=>{
    window.__fixture.calls.push(['queryLogs',query]);
    if(window.__fixture.expireLogs)return {records:[],total:0,available:{start:null,end:null},partial:false,expired:true};

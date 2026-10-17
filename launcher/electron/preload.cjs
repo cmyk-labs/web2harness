@@ -70,6 +70,8 @@ contextBridge.exposeInMainWorld("codexWebLauncher", {
   logs: (limit) => ipcRenderer.invoke("launcher:logs", limit),
   queryLogs: (query) => ipcRenderer.invoke("launcher:query-logs", query),
   exportLogs: (range) => ipcRenderer.invoke("launcher:export-logs", range),
+  storageUsage: () => ipcRenderer.invoke("launcher:storage-usage"),
+  clearCaches: () => ipcRenderer.invoke("launcher:clear-caches"),
   installUpdate: () => ipcRenderer.invoke("launcher:update-install"),
   checkUpdate: () => ipcRenderer.invoke("launcher:update-check"),
   windowState: () => ipcRenderer.invoke("launcher:window-state"),

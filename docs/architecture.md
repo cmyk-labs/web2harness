@@ -342,6 +342,16 @@ Configuration persistence validates the serialized document through the same loa
 
 Runtime log history uses a persistent background worker. It builds sanitized per-file disk caches and an in-memory index of record positions; unchanged files are reused. Search results retain matching positions in up to four snapshots, expiring after five minutes idle. Cursor paging offers 25/50/100/200 records (default 100) with a 512 KiB target; one larger record remains intact on its own page. The current index is bounded to 100,000 records and 128 MiB of cached JSON, with obsolete snapshots evicted to keep the steady-state cache within 256 MiB. The UI reports partial collection and expired snapshots explicitly. Page size is bound to each snapshot cursor and its page boundaries, while cached matching positions can be reused across sizes. The validated preference is stored in the launcher state. Only one query runs with one replaceable pending query, and cancellation cannot publish a partially rebuilt index. Date-based diagnostic export uses a separate collector and is independent of viewing filters and pagination.
 
+## Window and storage lifecycle
+
+Window visibility is independent of runtime verification. Explicit foreground requests survive window creation and restore/show/focus the owned window immediately. The first of `ready-to-show` and `did-finish-load` handles normal initial display exactly once, so a late event cannot reopen a window the user has since hidden. Hidden autostart uses the same controller.
+
+Thirty seconds after packaged workspace initialization, a worker inspects the private version store. The current verified runtime and newest valid rollback are kept; additional process and configuration/recovery references protect older bundles. Full bundle verification precedes removal. Unknown entries, redirected paths and unexpected content are retained; unavailable process inventory or pending installation recovery fails closed. This does not add recursive work to the normal main-thread readiness check.
+
+Storage measurements are asynchronous and on demand. Cache cleanup reserves the queue's idle admission gate and the browser's manual-operation lock, then calls only Electron `clearCache` and `clearCodeCaches` on the profile's shell and ChatGPT sessions. It never calls `clearStorageData`. Log rotation is shared with the detached updater and Bun daemon. Service logs with open descriptors use bounded-tail copy/truncate rather than renaming an inode still being written.
+
+Packages retain English and Simplified Chinese native resources. Runtime staging removes audited, version-specific dependency test suites, preserving licenses and runtime assets; unknown dependency versions are left intact. Bun remains in the installation source, durable current/rollback runtimes and independent Windows uninstall helper because their repair, rollback and uninstall lifetimes differ.
+
 <a id="development-isolation"></a>
 
 ## Development isolation

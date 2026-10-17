@@ -60,6 +60,8 @@ bun run app:package
 
 `build` 输出 `dist/runtime`。`app:package` 重建启动器和内嵌运行时、准备平台 helper，最终将分发包写入 `launcher/artifacts`。它不发布工件；封装脚本向 electron-builder 传入 `--publish never`。包清单中名义上的 `release` 输出目录被封装脚本的临时构建目录覆盖。
 
+打包保留英文和简体中文 Electron 资源，只从运行时暂存区移除经过审核的依赖测试目录。依赖升级时重新审核 `scripts/runtime-distribution.ts` 中按版本限定的规则，保留许可证、动态导入和运行资源。说明体积收益时同时测量压缩工件和未压缩字节，各平台使用原生构建。仅构建的开发公钥测试包作为证据，不是发布工件。
+
 需要独立的仅构建候选包时，可在候选分支或提交上手动运行 Release 工作流。它使用与标签构建相同的五个原生构建任务和正式公钥清单，上传 `candidate-assets`（七个包与 `checksums.txt`）及 `candidate-source`（源码身份）。手动运行不能进入 publish 任务，即使选择的是标签。此入口按需要使用，不是额外必跑的验收批次。维护者授权后推送 `v*` 标签，执行正常构建及制品检查后发布；后续运行若重建制品，再核对源码身份和制品校验值。
 
 正式版发布成功后，工作流使用 GitHub 最新正式版已上传的制品核对默认分支的下载按钮地址。预先更新的链接应完全一致，因此不会产生额外 README 提交；该步骤仅保留为漏更新时的兜底。按钮分别下载 Windows x64 EXE、macOS Apple silicon DMG 和 Linux x64 AppImage；预览版不会修改它们。保留版本化包名及 README 正文、样式。若文档同步步骤失败（例如分支并发更新或保护规则阻止推送），版本仍已发布：在最新的默认分支检出中执行 `bun run scripts/update-readme-downloads.ts`，检查是否存在仅含 README 链接的差异，再正常提交、推送。不要为了修复下载链接而替换正式版。

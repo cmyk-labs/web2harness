@@ -3,6 +3,7 @@ const path = require("node:path");
 const { renameAtomicFile } = require("./common/atomic-file.cjs");
 const { randomUUID } = require("node:crypto");
 const { logFiles, pruneLogs } = require("./diagnostics/log-files.cjs");
+const { appendBoundedLog } = require("../shared/log-retention.cjs");
 
 const { createDiagnosticRecord, safeDetail, parseDiagnosticLine } = require("../shared/diagnostic-event.cjs");
 
@@ -196,11 +197,9 @@ function installProcessDiagnosticGuards({ filePath, streams = [process.stdout, p
     guarded.add(stream);
     stream.on("error", (error) => {
       try {
-        fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
-        fs.appendFileSync(
+        appendBoundedLog(
           filePath,
           `${new Date().toISOString()} ${error instanceof Error ? error.stack || error.message : String(error)}\n`,
-          { mode: 0o600 },
         );
       } catch {
         // A lost diagnostic sink must not become a second process error.

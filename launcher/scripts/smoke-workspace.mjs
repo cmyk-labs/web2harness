@@ -5,6 +5,7 @@ import { createServer } from '../node_modules/vite/dist/node/index.js';
 import assert from 'node:assert/strict';
 import { runQueueSmoke } from './smoke-queue.mjs';
 import { runRuntimeParametersSmoke } from './smoke-runtime-parameters.mjs';
+import { runStorageSmoke } from './smoke-storage.mjs';
 import { resolve } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer as createHttpServer } from 'node:http';
@@ -32,6 +33,11 @@ await context.addInitScript(installWorkspaceFixture);if(process.env.WORKSPACE_SM
  check('Runtime parameters renderer has no JavaScript errors',errors.length===0);
  await writeFile(out+'/results.json',JSON.stringify({scope:'runtime-parameters',passed:checks.length,checks,errors},null,2));
  console.log(JSON.stringify({scope:'runtime-parameters',passed:checks.length,errors}));
+}else if(process.env.WORKSPACE_SMOKE_SCOPE==='storage'){
+ await runStorageSmoke({context,origin,out,check,errors});
+ check('Storage renderer has no JavaScript errors',errors.length===0);
+ await writeFile(out+'/results.json',JSON.stringify({scope:'storage',passed:checks.length,checks,errors},null,2));
+ console.log(JSON.stringify({scope:'storage',passed:checks.length,errors}));
 }else{
 const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(origin);await page.getByRole('region',{name:'概览',exact:true}).waitFor();await page.waitForTimeout(600);
 await page.screenshot({path:out+'/overview-zh.png'});

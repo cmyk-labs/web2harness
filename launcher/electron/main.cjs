@@ -19,6 +19,9 @@ const {
   Tray,
 } = require("electron");
 const { fitWindowLayout } = require("./window-layout.cjs");
+const { createWindowVisibility } = require("./window-visibility.cjs");
+const { createStorageManager } = require("./storage-management.cjs");
+const { appendBoundedLog, startLogMaintenance } = require("../shared/log-retention.cjs");
 const { BrowserHost, navigationErrorForLog } = require("./browser/browser-host.cjs");
 const { requestBrowserInputOverride } = require("./browser/browser-input-override.cjs");
 const { BrowserControlServer } = require("./control-server.cjs");
@@ -45,6 +48,7 @@ const { RuntimeHost } = require("./runtime/runtime.cjs");
 const { StartupState } = require("./startup-state.cjs");
 const startup = new StartupState(state => send("launcher:startup-state", state));
 const { prepareRuntimeInBackground } = require("./runtime/runtime-preparation.cjs");
+const { retainRuntimeVersions } = require("./runtime/runtime-retention.cjs");
 const { RuntimeSupervisor } = require("./runtime/runtime-supervisor.cjs");
 const { DEVELOPMENT_PROFILE, resolveLauncherProfile } = require("./profile.cjs");
 const { runtimeBundlePaths } = require("./runtime/runtime-command.cjs");
@@ -115,11 +119,10 @@ installProcessDiagnosticGuards({
 });
 
 let mainWindow = null;
-let mainWindowReadyToShow = false;
-let mainWindowShowRequested = false;
 let startupFailed = false;
 let rendererLoaded = false;
 let startupLogger = null;
+const windowVisibility = createWindowVisibility({ log: (event, detail) => startupLogger?.info(event, detail) });
 let runtimePreparation = null;
 let browserHost = null;
 let runtimeHost = null;
@@ -137,6 +140,15 @@ let catalogVerificationInFlight = false;
 let catalogVerificationGeneration = 0;
 let updateController = null;
 let limitsController = null;
+const storageManager = createStorageManager({ coreHome: CORE_HOME, logsDirectory: path.join(launcherUserData, "logs"),
+  sessions: () => [session.defaultSession, session.fromPartition(LAUNCHER_PROFILE.browserPartition)],
+  whileIdle: action => {
+    if (quitting || startup.snapshot().status !== "ready" || !requestQueue || !browserHost) {
+      throw new Error("Wait for startup to finish before clearing caches / 请等待启动完成后清理缓存");
+    }
+    return requestQueue.whileIdle(() => browserHost.withManualOperation("cache cleanup", action));
+  },
+});
 
 function findFreePort() {
   return new Promise((resolve, reject) => {
@@ -298,7 +310,7 @@ function updateTrayMenu(language) {
   if (!tray) return;
   const copy = nativeCopyFor(language);
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: copy.openLauncher, click: () => showMainWindow() },
+    { label: copy.openLauncher, click: () => showMainWindow("tray-menu") },
     { type: "separator" },
     { label: copy.quit, click: () => { void requestQuit(); } },
   ]));
@@ -309,7 +321,7 @@ function createTray(logger, language) {
     tray = new Tray(trayImage());
     tray.setToolTip(LAUNCHER_PROFILE.displayName);
     updateTrayMenu(language);
-    tray.on("click", () => showMainWindow());
+    tray.on("click", () => showMainWindow("tray-click"));
     return true;
   } catch (error) {
     tray = null;
@@ -318,17 +330,8 @@ function createTray(logger, language) {
   }
 }
 
-function showMainWindow() {
-  // A Windows login launch may still be materializing the packaged runtime when the user opens
-  // the desktop shortcut. Electron delivers `second-instance` immediately, before `createWindow`
-  // has produced anything to show. Preserve that foreground request until the real window reaches
-  // `ready-to-show`; otherwise the already-running `--hidden` instance silently consumes it.
-  mainWindowShowRequested = true;
-  if ((!mainWindowReadyToShow && !startupFailed) || !mainWindow || mainWindow.isDestroyed()) return;
-  mainWindowShowRequested = false;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
+function showMainWindow(reason = "open") {
+  windowVisibility.show(reason);
 }
 
 async function openWebUrl(url) {
@@ -436,17 +439,16 @@ function createWindow({ logger, stateStore, windowStatePath, startHidden }) {
   window.on("closed", () => {
     if (mainWindow === window) {
       mainWindow = null;
-      mainWindowReadyToShow = false;
     }
   });
   for (const event of ["enter-full-screen", "leave-full-screen", "maximize", "unmaximize"]) {
     window.on(event, () => send("launcher:window-state-changed", windowStateSnapshot(window)));
   }
-  window.once("ready-to-show", () => {
-    if (!state.onboardingComplete && !Number.isFinite(windowState.bounds.x)) window.center();
-    if (mainWindow === window) mainWindowReadyToShow = true;
-    if (mainWindowShowRequested) showMainWindow();
-    else if (!startHidden) window.show();
+  windowVisibility.attach(window, {
+    startHidden,
+    beforeFirstShow: () => {
+      if (!state.onboardingComplete && !Number.isFinite(windowState.bounds.x)) window.center();
+    },
   });
   trackWindowState(window, windowStatePath, (error) => {
     logger.warn("launcher.window_state_write_failed", {
@@ -1097,6 +1099,12 @@ function registerIpc({ logger, stateStore }) {
   const diagnosticOptions = { logsDirectory: app.getPath("logs"), coreHome: CORE_HOME, userData: launcherUserData };
   diagnosticHistory = createHistoryService(diagnosticOptions);
   handle("launcher:query-logs", (_event, query) => diagnosticHistory.query(query));
+  handle("launcher:storage-usage", () => storageManager.measure());
+  handle("launcher:clear-caches", async () => {
+    const usage = await storageManager.clearCaches();
+    logger.info("launcher.caches_cleared", { httpCacheBytes: usage.httpCacheBytes, codeCacheBytes: usage.codeCacheBytes });
+    return usage;
+  });
   let exportingDiagnostics = false;
   handle("launcher:export-logs", async (_event, input = {}) => {
     if (exportingDiagnostics) throw new Error("Diagnostic export is already running");
@@ -1197,8 +1205,8 @@ async function start() {
     app.quit();
     return;
   }
-  app.on("second-instance", () => showMainWindow());
-  app.on("activate", () => showMainWindow());
+  app.on("second-instance", () => showMainWindow("second-instance"));
+  app.on("activate", () => showMainWindow("activate"));
 
   const startupStartedAt = Date.now();
 
@@ -1240,6 +1248,9 @@ async function start() {
     publish: (record) => send("launcher:log", record),
   });
   startupLogger = logger;
+  startLogMaintenance([app.getPath("logs"), path.join(CORE_HOME, "logs")], error => {
+    logger.warn("launcher.log_retention_deferred", { message: error.message });
+  });
   logger.info("launcher.session_started", { version: app.getVersion(), platform: process.platform, arch: process.arch,
     profile: LAUNCHER_PROFILE.kind, electron: process.versions.electron, node: process.versions.node, chrome: process.versions.chrome });
   stateStore.observeChanges((detail) => logger.info("launcher.config_changed", detail));
@@ -1262,8 +1273,7 @@ async function start() {
   registerIpc({ logger, stateStore });
   const trayAvailable = createTray(logger, stateStore.read().language);
   if (startHidden && !trayAvailable) {
-    if (mainWindowReadyToShow) showMainWindow();
-    else mainWindow.once("ready-to-show", () => showMainWindow());
+    showMainWindow("tray-unavailable");
   }
   // Shell, settings and diagnostics have no dependency on the installed runtime.
   await loadRenderer(mainWindow);
@@ -1398,6 +1408,20 @@ async function start() {
   if (quitting || !mainWindow || mainWindow.isDestroyed()) return;
   startup.ready();
   logger.info("launcher.workspace_initialized", { elapsedMs: Date.now() - startupStartedAt });
+  if (app.isPackaged && installedRuntimeRoot) {
+    // Only after verification and shell initialization; no recursive work on the main thread.
+    const retentionTimer = setTimeout(() => {
+      if (quitting) return;
+      void retainRuntimeVersions({ coreHome: CORE_HOME, codexHome: LAUNCHER_PROFILE.codexHome,
+        appData: app.getPath("appData"), currentRoot: installedRuntimeRoot,
+        serviceDefinitions: process.platform === "darwin" ? ["daemon", "tunnel"].map(name =>
+          path.join(app.getPath("home"), "Library", "LaunchAgents", `io.github.web2harness.${name}.plist`)) : [],
+      }).then(result => {
+        logger.info("launcher.runtime_retention", result);
+      }).catch(error => logger.warn("launcher.runtime_retention_deferred", { message: error.message }));
+    }, 30_000);
+    retentionTimer.unref();
+  }
   let startupAuthenticationRefresh = Promise.resolve();
   if (stateStore.read().browserInteractionMode === "automatic") {
     startupAuthenticationRefresh = browserHost.refreshAuthentication().catch((error) => {
@@ -1605,7 +1629,7 @@ void start().catch(async (error) => {
   startupLogger?.error("launcher.startup_failed", { stage: startup.snapshot().stage, reason: error.reason, errorCode: error.code, message: error.message });
   const message = error instanceof Error ? error.message : String(error);
   try {
-    fs.appendFileSync(path.join(app.getPath("logs"), "launcher-fatal.log"), `${new Date().toISOString()} ${error?.stack || error}\n`);
+    appendBoundedLog(path.join(app.getPath("logs"), "launcher-fatal.log"), `${new Date().toISOString()} ${error?.stack || error}\n`);
   } catch {}
   let keepFailedWorkspaceOpen = false;
   try {

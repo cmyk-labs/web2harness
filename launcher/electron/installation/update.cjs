@@ -384,6 +384,7 @@ function createUpdateController({
 
         const workerPath = path.join(tempRoot, "update-worker.cjs");
         fs.copyFileSync(path.join(__dirname, "update-worker.cjs"), workerPath);
+        fs.copyFileSync(path.join(__dirname, "../../shared/log-retention.cjs"), path.join(tempRoot, "log-retention.cjs"));
         const job = buildJob({
           version: available.version,
           platform,

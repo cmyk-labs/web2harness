@@ -75,7 +75,7 @@ class RequestQueue {
     await this.serial(() => {
       const snapshot = this.snapshot();
       if (this.admissionBlocked || snapshot.active || snapshot.waiting) {
-        throw new Error("Save context budgets when tasks are idle / 请等待执行与排队任务结束后保存上下文预算");
+        throw new Error("Retry when tasks are idle (no active or queued tasks) / 请等待执行与排队任务结束后重试");
       }
       this.admissionBlocked = true;
     });

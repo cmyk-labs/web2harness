@@ -7,6 +7,7 @@ const UNLICENSED_CHANNELS = new Set([
   // Geometry does not activate the web view. Do not launch a verifier on every resize frame.
   "launcher:browser-bounds",
   "launcher:limits", "launcher:logs", "launcher:query-logs", "launcher:export-logs",
+  "launcher:storage-usage", "launcher:clear-caches",
   "launcher:retry-startup", "launcher:open-external", "launcher:update-check", "launcher:update-install",
   "launcher:browser-hide", "launcher:browser-tab-close", "launcher:browser-tab-stop", "launcher:browser-logout",
   "launcher:cancel-turns", "launcher:uninstall-integration", "launcher:session-reminder-dismiss",

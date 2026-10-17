@@ -277,6 +277,16 @@ History pages load on demand from a background disk index. Per page, beside Word
 
 Export diagnostics defaults to all retained logs, with last-24-hours and custom local-time ranges available to the minute (start inclusive, end exclusive). Export ignores viewing filters. The ZIP contains a summary, redacted timeline, export-time environment/configuration snapshot, and collection manifest. Available browser checkpoints, update logs, and process errors are also collected. Missing, unreadable, corrupt, or truncated sources are listed; partial exports remain usable. Application logs rotate with a seven-day/100MiB retention bound; browser checkpoints retain the latest ten traces, and deleted history cannot be recovered. Credentials, conversation bodies, tool input/output, raw screenshots, and browser profiles are excluded by default; nothing is uploaded automatically.
 
+### Storage and cache
+
+Open **Usage & Diagnostics → Storage & cache** to measure installed runtimes, web resource and code caches, retained browser/site data, and logs. Refresh requests a new measurement; sizes are estimates while the application is running. **Clear caches** is available after startup when tasks are idle. It clears HTTP resources and generated code without signing out or deleting cookies, Local Storage, IndexedDB, service workers or saved settings. Caches can grow again as pages load.
+
+After a packaged application starts successfully, background cleanup normally keeps its current runtime and one verified rollback version. Versions referenced by running processes or recovery/configuration records are retained additionally. Unrecognized or damaged directories are preserved; unavailable process information or unfinished installation recovery defers cleanup until a later start. Do not manually delete recovery directories.
+
+Main and helper logs share rotation and archive retention: 4 MiB rotation, up to seven days and a 100 MiB budget per log directory. The launcher and daemon check legacy service stdout/stderr every 30 seconds, preserving a bounded tail while keeping open descriptors usable; these files can temporarily exceed the rotation size between checks. Update, fatal and stream-error archives remain available in diagnostic exports.
+
+Explicitly opening the tray menu or desktop shortcut restores the existing window without waiting for hidden-page painting. Normal startup also has a page-load fallback; hidden sign-in autostart remains hidden until requested.
+
 <a id="runtime-controls"></a>
 
 ## Runtime controls

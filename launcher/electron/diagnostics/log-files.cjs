@@ -1,8 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const RETENTION_DAYS = 7;
-const MAX_RETAINED_BYTES = 100 * 1024 * 1024;
+const { RETENTION_DAYS, MAX_RETAINED_BYTES, pruneLogDirectory } = require("../../shared/log-retention.cjs");
 const ARCHIVE = /^launcher\.\d{13}-[a-f0-9-]+\.jsonl$/;
 function logFiles(filePath) {
   const directory = path.dirname(filePath);
@@ -12,16 +11,6 @@ function logFiles(filePath) {
     .map(name => path.join(directory, name));
 }
 function pruneLogs(filePath, now = Date.now()) {
-  const root = fs.realpathSync(path.dirname(filePath));
-  const archives = logFiles(filePath).filter(file => file !== filePath).flatMap(file => {
-    const stat = fs.lstatSync(file);
-    return stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1 && path.dirname(fs.realpathSync(file)) === root
-      ? [{ file, size: stat.size, at: stat.mtimeMs }] : [];
-  }).sort((a, b) => b.at - a.at);
-  let retained = fs.statSync(filePath, { throwIfNoEntry: false })?.size ?? 0;
-  for (const archive of archives) {
-    if (archive.at < now - RETENTION_DAYS * 86400000 || retained + archive.size > MAX_RETAINED_BYTES) fs.unlinkSync(archive.file);
-    else retained += archive.size;
-  }
+  pruneLogDirectory(path.dirname(filePath), now);
 }
 module.exports = { logFiles, pruneLogs, RETENTION_DAYS, MAX_RETAINED_BYTES };
