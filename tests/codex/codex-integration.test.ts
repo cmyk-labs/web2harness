@@ -158,7 +158,7 @@ describe("reversible native Codex route integration", () => {
 
     const journal = installCodexIntegration(nativeConfig("browser-only"));
     const installed = readFileSync(configPath, "utf8");
-    expect(journal.version).toBe(10);
+    expect(journal.version).toBe(11);
     expect(installed).toContain('openai_base_url = "http://127.0.0.1:17841/v1"');
     expect(installed).toContain(
       `experimental_realtime_webrtc_call_base_url = ${JSON.stringify(CODEX_REALTIME_WEBRTC_CALL_BASE_URL)}`,
@@ -225,7 +225,7 @@ describe("reversible native Codex route integration", () => {
     const journal = installCodexIntegration(compatibilityV1Config("browser-only"));
     const installed = readFileSync(configPath, "utf8");
     expect(journal).toMatchObject({
-      version: 10,
+      version: 11,
       installed: { subagent_protocol: "compatibility-v1", agent_max_depth: 2 },
       previousMultiAgent: { rawLine: "multi_agent = false # user choice", value: "false" },
       previousMultiAgentV2: { rawLine: "multi_agent_v2 = true # user choice", value: "true" },
@@ -563,7 +563,7 @@ describe("reversible native Codex route integration", () => {
 
       const journal = installCodexIntegration(nativeConfig("browser-only"));
       expect(journal).toMatchObject({
-        version: 10,
+        version: 11,
         installed: {
           experimental_realtime_webrtc_call_base_url: CODEX_REALTIME_WEBRTC_CALL_BASE_URL,
         },
@@ -788,7 +788,7 @@ describe("reversible native Codex route integration", () => {
     installCodexIntegration(config);
     const nativeRewrite = () => {
       const journal = inspectCodexIntegration().journal!;
-      if (journal.version !== 10) throw new Error("Expected current journal");
+      if (journal.version !== 11) throw new Error("Expected current journal");
       const hook = journal.interruptHook;
       const inline = `Interrupt = [{ hooks = [{ command = ${JSON.stringify(hook.command)}, timeout = 3, type = 'command' }] }]\n`;
       const without = readFileSync(configPath, "utf8").replace(hook.fragment, "");
@@ -959,7 +959,7 @@ describe("reversible native Codex route integration", () => {
     preflightCodexIntegration(nativeConfig("browser-only"));
     expect(readFileSync(configPath, "utf8")).toBe(legacyConfig);
     const upgraded = installCodexIntegration(nativeConfig("browser-only"));
-    expect(upgraded.version).toBe(10);
+    expect(upgraded.version).toBe(11);
     expect(readFileSync(configPath, "utf8")).toContain(upgraded.interruptHook.fragment);
     expect(uninstallCodexIntegration()).toEqual({ changed: true });
     expect(readFileSync(configPath, "utf8")).toBe(original);
@@ -1044,7 +1044,7 @@ describe("reversible native Codex route integration", () => {
     deactivateCodexIntegration();
 
     expect(JSON.parse(readFileSync(getCodexJournalPath(), "utf8"))).toMatchObject({
-      version: 10,
+      version: 11,
       active: false,
     });
     expect(inspectCodexIntegration()).toMatchObject({ installed: true, active: false, errors: [] });
@@ -1081,7 +1081,7 @@ describe("reversible native Codex route integration", () => {
       nativeConfig("browser-only"),
       { replaceExistingRoute: true },
     );
-    expect(upgraded.version).toBe(10);
+    expect(upgraded.version).toBe(11);
     expect(upgraded.previousRealtimeWebrtcCallBaseUrl.rawLine).toBe(customVoiceLine);
     uninstallCodexIntegration();
     expect(readFileSync(configPath, "utf8")).toBe(original);
@@ -1117,7 +1117,7 @@ describe("reversible native Codex route integration", () => {
     writeFileSync(configPath, currentConfig);
     writeFileSync(getCodexJournalPath(), legacyJournal);
     writeFileSync(getCodexJournalRecoveryPath(), currentJournal);
-    expect(inspectCodexIntegration().journal?.version).toBe(10);
+    expect(inspectCodexIntegration().journal?.version).toBe(11);
     expect(readFileSync(getCodexJournalPath(), "utf8")).toBe(currentJournal);
   });
 
@@ -1184,7 +1184,7 @@ describe("reversible native Codex route integration", () => {
     );
 
     const upgraded = installCodexIntegration(nativeConfig("browser-only"));
-    expect(upgraded.version).toBe(10);
+    expect(upgraded.version).toBe(11);
     expect(readFileSync(configPath, "utf8")).toContain("goals = true");
     expect(readFileSync(configPath, "utf8")).not.toContain("remote_compaction_v2");
     expect(readFileSync(configPath, "utf8")).not.toContain("multi_agent");

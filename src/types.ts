@@ -195,7 +195,7 @@ export interface CodexRequestOptions {
   /** Native Responses text verbosity requested by Codex. */
   verbosity?: CodexVerbosity;
   /** Native Responses JSON-schema output contract requested by Codex. */
-  outputFormat?: CodexJsonSchemaOutputFormat;
+  outputFormat?: CodexJsonSchemaOutputFormat | { type: "json_object" };
   /** Responses prompt-cache affinity key. Passthrough preserves it via _rawBody; routed adapters do not consume it unless their upstream wire supports it. */
   promptCacheKey?: string;
 }

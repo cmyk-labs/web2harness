@@ -7,6 +7,7 @@ import {
   MANAGED_MULTI_AGENT_V2_LINE,
   MANAGED_MULTI_AGENT_V2_TABLE_LINE,
   MANAGED_REMOTE_COMPACTION_LINE,
+  MANAGED_STANDALONE_WEB_SEARCH_LINE,
   MIN_COMPATIBILITY_V1_AGENT_DEPTH,
   getCodexConfigPath,
   managedAgentMaxDepthLine,
@@ -466,6 +467,57 @@ export function findFeatureAssignment(lines: string[], key: string): PreviousFea
   return findBooleanAssignmentInTable(lines, "features", key);
 }
 
+// The reversible editor owns one scalar line, not arbitrary TOML tables. Fail before writing
+// when another valid TOML spelling would hide an existing setting from the line editor.
+export function findStandaloneWebSearchAssignment(text: string): PreviousFeatureAssignment {
+  const lines = splitLines(text);
+  const parsed = Bun.TOML.parse(lines.join("\n")) as { features?: Record<string, unknown> };
+  const current = findFeatureAssignment(lines, "standalone_web_search");
+  const value = parsed.features?.standalone_web_search;
+  if ((value !== undefined && typeof value !== "boolean")
+    || (value !== undefined) !== current.present
+    || (current.present && String(value) !== current.value)) {
+    throw new Error(
+      "Codex standalone_web_search requires a scalar boolean in an explicit [features] table for reversible setup; "
+      + "the existing TOML representation was not changed",
+    );
+  }
+  return current;
+}
+
+export function installStandaloneWebSearch(text: string): {
+  text: string;
+  previousStandaloneWebSearch: PreviousFeatureAssignment;
+} {
+  const document = parseDocument(text);
+  const found = findStandaloneWebSearchAssignment(text);
+  if (found.rawLine === MANAGED_STANDALONE_WEB_SEARCH_LINE) {
+    throw new Error("Managed Codex standalone_web_search has no matching baseline; refusing to adopt it");
+  }
+  const previousStandaloneWebSearch = !found.tablePresent
+    && document.lines.length > 0 && Boolean(document.lines.at(-1)?.trim())
+    ? { ...found, separatorInserted: true }
+    : found;
+  setScalarFeature(document, "standalone_web_search", MANAGED_STANDALONE_WEB_SEARCH_LINE);
+  const installed = renderDocument(document);
+  verifyStandaloneWebSearch(installed);
+  return { text: installed, previousStandaloneWebSearch };
+}
+
+export function verifyStandaloneWebSearch(text: string, previous?: PreviousFeatureAssignment): void {
+  const current = findStandaloneWebSearchAssignment(text);
+  const matches = previous
+    ? current.present === previous.present
+      && (!current.present || (current.value === previous.value && current.rawLine === previous.rawLine))
+    : current.value === "true" && current.rawLine === MANAGED_STANDALONE_WEB_SEARCH_LINE;
+  if (!matches) {
+    throw new Error(
+      `Codex [features].standalone_web_search changed ${previous ? "while the bridge was disconnected" : "after setup"}; `
+      + "refusing to overwrite the user's newer value",
+    );
+  }
+}
+
 export function findMultiAgentV2Assignment(lines: string[]): PreviousFeatureAssignment {
   const rawScalar = rawAssignmentInTable(lines, "features", "multi_agent_v2");
   const table = findTomlTable(lines, "features.multi_agent_v2");
@@ -528,13 +580,8 @@ export function installCompatibilityV1Features(text: string): {
     : foundMultiAgent;
   const previousMultiAgentV2 = findMultiAgentV2Assignment(document.lines);
   const foundAgentMaxDepth = findAgentMaxDepthAssignment(document.lines);
-  const previousAgentMaxDepth: PreviousAgentAssignment = !foundAgentMaxDepth.tablePresent
-    && document.lines.length > 0
-    && Boolean(document.lines.at(-1)?.trim())
-    ? { ...foundAgentMaxDepth, separatorInserted: true }
-    : foundAgentMaxDepth;
   const installedAgentMaxDepth = Math.max(
-    previousAgentMaxDepth.present ? Number(previousAgentMaxDepth.value) : 0,
+    foundAgentMaxDepth.present ? Number(foundAgentMaxDepth.value) : 0,
     MIN_COMPATIBILITY_V1_AGENT_DEPTH,
   );
   setScalarFeature(document, "multi_agent", MANAGED_MULTI_AGENT_LINE);
@@ -559,6 +606,13 @@ export function installCompatibilityV1Features(text: string): {
   } else {
     setScalarFeature(document, "multi_agent_v2", MANAGED_MULTI_AGENT_V2_LINE);
   }
+  // Feature edits can change the document tail. Record whether setAgentMaxDepth will
+  // insert a separator now, rather than before those edits, so restoration owns it exactly.
+  const previousAgentMaxDepth: PreviousAgentAssignment = !foundAgentMaxDepth.tablePresent
+    && document.lines.length > 0
+    && Boolean(document.lines.at(-1)?.trim())
+    ? { ...foundAgentMaxDepth, separatorInserted: true }
+    : foundAgentMaxDepth;
   setAgentMaxDepth(document, installedAgentMaxDepth);
   return {
     text: renderDocument(document),

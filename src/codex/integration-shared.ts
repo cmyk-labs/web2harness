@@ -17,6 +17,8 @@ export const MANAGED_MULTI_AGENT_V2_LINE =
   "multi_agent_v2 = false # Managed by web2harness: keeps routed Web subagent payloads readable.";
 export const MANAGED_MULTI_AGENT_V2_TABLE_LINE =
   "enabled = false # Managed by web2harness: keeps routed Web subagent payloads readable.";
+export const MANAGED_STANDALONE_WEB_SEARCH_LINE =
+  "standalone_web_search = true # Managed by web2harness: uses Codex native web search.";
 export const MIN_COMPATIBILITY_V1_AGENT_DEPTH = 2;
 export function managedAgentMaxDepthLine(value: number): string {
   return `max_depth = ${value} # Managed by web2harness: allows nested routed Web subagents in Compatibility V1.`;
@@ -51,7 +53,7 @@ export interface InstalledCodexInterruptHook {
 }
 
 export interface CodexIntegrationJournal {
-  version: 10;
+  version: 11;
   active: boolean;
   configPath: string;
   installed: {
@@ -59,10 +61,12 @@ export interface CodexIntegrationJournal {
     experimental_realtime_webrtc_call_base_url: string;
     subagent_protocol: SubagentProtocol;
     agent_max_depth?: number;
+    standalone_web_search?: true;
   };
   previous: Record<ManagedAssignmentKey, PreviousAssignment>;
   previousRealtimeWebrtcCallBaseUrl: PreviousAssignment;
   interruptHook: InstalledCodexInterruptHook;
+  previousStandaloneWebSearch?: PreviousFeatureAssignment;
   previousMultiAgent?: PreviousFeatureAssignment;
   previousMultiAgentV2?: PreviousFeatureAssignment;
   previousAgentMaxDepth?: PreviousAgentAssignment;
@@ -70,6 +74,13 @@ export interface CodexIntegrationJournal {
     lineEnding: "\n" | "\r\n" | "\r";
     trailingNewline: boolean;
   };
+}
+
+export interface LegacyCodexIntegrationJournalV10 extends Omit<
+  CodexIntegrationJournal, "version" | "installed" | "previousStandaloneWebSearch"
+> {
+  version: 10;
+  installed: Omit<CodexIntegrationJournal["installed"], "standalone_web_search">;
 }
 
 export interface LegacyCodexIntegrationJournalV9 {
@@ -209,6 +220,7 @@ export interface LegacyCodexIntegrationJournal {
 
 export type ManagedRouteJournal =
   | CodexIntegrationJournal
+  | LegacyCodexIntegrationJournalV10
   | LegacyCodexIntegrationJournalV9
   | LegacyCodexIntegrationJournalV8
   | LegacyCodexIntegrationJournalV7

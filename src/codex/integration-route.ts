@@ -6,6 +6,7 @@ import {
   MANAGED_ROUTE_COMMENT,
   MANAGED_MULTI_AGENT_LINE,
   MANAGED_REMOTE_COMPACTION_LINE,
+  MANAGED_STANDALONE_WEB_SEARCH_LINE,
   managedAgentMaxDepthLine,
 } from "./integration-shared";
 import type {
@@ -17,6 +18,7 @@ import type {
   LegacyCodexIntegrationJournalV7,
   LegacyCodexIntegrationJournalV8,
   LegacyCodexIntegrationJournalV9,
+  LegacyCodexIntegrationJournalV10,
   ManagedAssignmentKey,
   ManagedRouteJournal,
   PreviousAssignment,
@@ -49,10 +51,35 @@ import {
   splitLines,
   verifyInstalledFeatures,
   verifyCompatibilityV1Features,
+  verifyStandaloneWebSearch,
 } from "./integration-document";
 
+export function verifyStandaloneSearchJournalState(text: string, journal: ManagedRouteJournal): void {
+  if (journal.version === 11 && journal.installed.standalone_web_search === true) {
+    if (!journal.previousStandaloneWebSearch) {
+      throw new Error("Codex integration journal is missing the standalone_web_search baseline");
+    }
+    verifyStandaloneWebSearch(text, journal.active ? undefined : journal.previousStandaloneWebSearch);
+  } else if (splitLines(text).includes(MANAGED_STANDALONE_WEB_SEARCH_LINE)) {
+    // In particular, the old v10 journal must not match a config written by the new recovery
+    // journal during migration. Otherwise a crash could discard the feature's restore baseline.
+    throw new Error("Managed Codex standalone_web_search has no matching journal baseline");
+  }
+}
+
+function restoreStandaloneSearch(text: string, journal: ManagedRouteJournal): string {
+  if (journal.version !== 11 || journal.installed.standalone_web_search !== true) return text;
+  if (!journal.previousStandaloneWebSearch) {
+    throw new Error("Codex integration journal is missing the standalone_web_search baseline");
+  }
+  return restoreBooleanFeature(
+    text, "standalone_web_search", "true", MANAGED_STANDALONE_WEB_SEARCH_LINE,
+    journal.previousStandaloneWebSearch,
+  );
+}
+
 function compatibilityV1Evidence(
-  journal: CodexIntegrationJournal | LegacyCodexIntegrationJournalV9 | LegacyCodexIntegrationJournalV8,
+  journal: CodexIntegrationJournal | LegacyCodexIntegrationJournalV10 | LegacyCodexIntegrationJournalV9 | LegacyCodexIntegrationJournalV8,
 ): {
   previousMultiAgent: PreviousFeatureAssignment;
   previousMultiAgentV2: PreviousFeatureAssignment;
@@ -73,8 +100,10 @@ function compatibilityV1Evidence(
 }
 
 function restoreOwnedManagedFeatures(text: string, journal: ManagedRouteJournal): string {
-  let restored = text;
-  if (journal.version === 8 || journal.version === 9 || journal.version === 10) {
+  // Route replacement does not authorize replacing a newer user feature edit.
+  verifyStandaloneSearchJournalState(text, journal);
+  let restored = restoreStandaloneSearch(text, journal);
+  if (journal.version === 8 || journal.version === 9 || journal.version === 10 || journal.version === 11) {
     const evidence = compatibilityV1Evidence(journal);
     if (evidence) {
       const depth = findAgentMaxDepthAssignment(splitLines(restored));
@@ -173,7 +202,20 @@ export function verifyManagedJournalState(text: string, journal: ManagedRouteJou
 }
 
 export function assertBuiltinModelProvider(text: string): void {
-  const { model_provider: provider } = Bun.TOML.parse(splitLines(text).join("\n")) as { model_provider?: unknown };
+  const parsed = Bun.TOML.parse(splitLines(text).join("\n")) as Record<string, unknown>;
+  // Codex 0.134.0+ selects separate profile files via --profile. A root `profile` is
+  // not an effective selector, so never infer provider/feature overrides from legacy tables.
+  // The integration does not own or know a caller's temporary CLI profile selection.
+  if (Object.hasOwn(parsed, "profile")) {
+    throw new Error(
+      "Codex config contains a legacy default profile selector. Codex 0.134.0+ no longer supports "
+      + "profile in config.toml or selection from [profiles.<name>]. "
+      + "Use a separate <name>.config.toml selected explicitly with --profile; "
+      + "review and remove the legacy selector before setup or reconnect. "
+      + "The bridge cannot infer that CLI profile's model_provider or feature overrides and does not change them.",
+    );
+  }
+  const provider = parsed.model_provider;
   if (provider !== undefined && provider !== "openai") {
     throw new Error(
       "Codex model_provider selects a custom provider; the bridge requires the built-in openai provider. "
@@ -191,8 +233,8 @@ export function replacementBaseline(
   if (!configExists) return "";
   if (!managedJournalIsActive(journal)) return currentText;
 
-  if (journal.version === 9 || journal.version === 10) {
-    const withoutHook = journal.version === 10
+  if (journal.version === 9 || journal.version === 10 || journal.version === 11) {
+    const withoutHook = (journal.version === 10 || journal.version === 11)
       ? restoreCodexInterruptHook(currentText, journal.interruptHook, { allowAbsent: true })
       : currentText;
     const baseline = restoreOwnedManagedFeatures(withoutHook, journal);
@@ -300,18 +342,19 @@ export function verifyInstalledRoute(text: string, journal: ManagedRouteJournal)
 }
 
 function verifyOwnedInstalledRoute(text: string, journal: ManagedRouteJournal): void {
+  verifyStandaloneSearchJournalState(text, journal);
   const lines = splitLines(text);
   const current = assignments(lines);
   if (current.openai_base_url.value !== journal.installed.openai_base_url) {
     throw new Error("Codex openai_base_url changed after setup; refusing to overwrite the user's newer value");
   }
-  const expectedMarker = journal.version === 9 || journal.version === 10
+  const expectedMarker = journal.version === 9 || journal.version === 10 || journal.version === 11
     ? MANAGED_ROUTE_COMMENT
     : MANAGED_COMMENT;
   if (!lines.includes(expectedMarker)) {
     throw new Error("Managed Codex route marker changed after setup; refusing to overwrite it");
   }
-  if (journal.version === 9 || journal.version === 10) {
+  if (journal.version === 9 || journal.version === 10 || journal.version === 11) {
     const realtime = findTopLevelAssignment(lines, "experimental_realtime_webrtc_call_base_url");
     const expectedLine = `experimental_realtime_webrtc_call_base_url = ${JSON.stringify(journal.installed.experimental_realtime_webrtc_call_base_url)}`;
     if (realtime.value !== journal.installed.experimental_realtime_webrtc_call_base_url
@@ -319,8 +362,8 @@ function verifyOwnedInstalledRoute(text: string, journal: ManagedRouteJournal): 
       throw new Error("Codex realtime WebRTC call route changed after setup; refusing to overwrite the user's newer value");
     }
   }
-  if (journal.version === 10) verifyCodexInterruptHook(text, journal.interruptHook);
-  if (journal.version === 8 || journal.version === 9 || journal.version === 10) {
+  if (journal.version === 10 || journal.version === 11) verifyCodexInterruptHook(text, journal.interruptHook);
+  if (journal.version === 8 || journal.version === 9 || journal.version === 10 || journal.version === 11) {
     const evidence = compatibilityV1Evidence(journal);
     if (evidence) {
       verifyCompatibilityV1Features(
@@ -330,7 +373,7 @@ function verifyOwnedInstalledRoute(text: string, journal: ManagedRouteJournal): 
       );
     }
   }
-  if (journal.version !== 7 && journal.version !== 8 && journal.version !== 9 && journal.version !== 10) {
+  if (journal.version !== 7 && journal.version !== 8 && journal.version !== 9 && journal.version !== 10 && journal.version !== 11) {
     if (current.model_provider.present || current.model_catalog_json.present) {
       throw new Error("Codex model_provider or model_catalog_json changed after setup; refusing to overwrite the user's newer value");
     }
@@ -350,11 +393,12 @@ function previousAssignmentMatchesExactly(current: PreviousAssignment, previous:
 
 export function verifyRestoredRoute(
   text: string,
-  journal: CodexIntegrationJournal | LegacyCodexIntegrationJournalV9 | LegacyCodexIntegrationJournalV8 | LegacyCodexIntegrationJournalV7 | LegacyCodexIntegrationJournalV6 | LegacyCodexIntegrationJournalV5 | LegacyCodexIntegrationJournalV4,
+  journal: CodexIntegrationJournal | LegacyCodexIntegrationJournalV10 | LegacyCodexIntegrationJournalV9 | LegacyCodexIntegrationJournalV8 | LegacyCodexIntegrationJournalV7 | LegacyCodexIntegrationJournalV6 | LegacyCodexIntegrationJournalV5 | LegacyCodexIntegrationJournalV4,
 ): void {
+  verifyStandaloneSearchJournalState(text, journal);
   const lines = splitLines(text);
   const current = assignments(lines);
-  const keys = journal.version === 7 || journal.version === 8 || journal.version === 9 || journal.version === 10
+  const keys = journal.version === 7 || journal.version === 8 || journal.version === 9 || journal.version === 10 || journal.version === 11
     ? (["openai_base_url"] as const)
     : (["openai_base_url", "model_provider", "model_catalog_json"] as const);
   for (const key of keys) {
@@ -365,7 +409,7 @@ export function verifyRestoredRoute(
   if (lines.includes(MANAGED_COMMENT) || lines.includes(MANAGED_ROUTE_COMMENT)) {
     throw new Error("Managed Codex route marker is present while the bridge is disconnected");
   }
-  if (journal.version === 9 || journal.version === 10) {
+  if (journal.version === 9 || journal.version === 10 || journal.version === 11) {
     const realtime = findTopLevelAssignment(lines, "experimental_realtime_webrtc_call_base_url");
     if (!previousAssignmentMatchesExactly(realtime, journal.previousRealtimeWebrtcCallBaseUrl)) {
       throw new Error(
@@ -373,7 +417,7 @@ export function verifyRestoredRoute(
       );
     }
   }
-  if (journal.version === 10) verifyCodexInterruptHookRestored(text);
+  if (journal.version === 10 || journal.version === 11) verifyCodexInterruptHookRestored(text);
   if (journal.version === 5 || journal.version === 6) {
     const previousFeatures: Array<readonly [string, PreviousFeatureAssignment]> = [
       ["remote_compaction_v2", journal.previousRemoteCompactionV2],
@@ -396,7 +440,7 @@ export function verifyRestoredRoute(
       }
     }
   }
-  if (journal.version === 8 || journal.version === 9 || journal.version === 10) {
+  if (journal.version === 8 || journal.version === 9 || journal.version === 10 || journal.version === 11) {
     const evidence = compatibilityV1Evidence(journal);
     if (evidence) {
       for (const [key, previous] of [
@@ -450,7 +494,7 @@ export function assertPreservedPreviousRealtimeAssignment(
 
 export function restoreManagedRoute(text: string, journal: ManagedRouteJournal): string {
   verifyOwnedInstalledRoute(text, journal);
-  const withoutHook = journal.version === 10
+  const withoutHook = (journal.version === 10 || journal.version === 11)
     ? restoreCodexInterruptHook(text, journal.interruptHook)
     : text;
   const document = parseDocument(withoutHook);
@@ -464,7 +508,7 @@ export function restoreManagedRoute(text: string, journal: ManagedRouteJournal):
   } else {
     removeDocumentLine(document, currentBaseUrl.index);
   }
-  if (journal.version === 9 || journal.version === 10) {
+  if (journal.version === 9 || journal.version === 10 || journal.version === 11) {
     const currentRealtime = findTopLevelAssignment(document.lines, "experimental_realtime_webrtc_call_base_url");
     if (currentRealtime.index === undefined) throw new Error("Managed Codex realtime WebRTC call route is missing");
     const previousRealtime = journal.previousRealtimeWebrtcCallBaseUrl;
@@ -477,7 +521,7 @@ export function restoreManagedRoute(text: string, journal: ManagedRouteJournal):
       removeDocumentLine(document, currentRealtime.index);
     }
   }
-  if (journal.version !== 7 && journal.version !== 8 && journal.version !== 9 && journal.version !== 10) {
+  if (journal.version !== 7 && journal.version !== 8 && journal.version !== 9 && journal.version !== 10 && journal.version !== 11) {
     const removedAssignments = (["model_provider", "model_catalog_json"] as const)
       .map(key => ({ key, previous: journal.previous[key] }))
       .filter(item => item.previous.present)
@@ -488,8 +532,9 @@ export function restoreManagedRoute(text: string, journal: ManagedRouteJournal):
       insertDocumentLine(document, index, item.previous.rawLine);
     }
   }
-  const restoredRoute = renderDocument(document);
-  if (journal.version === 8 || journal.version === 9 || journal.version === 10) {
+  // Search is installed after Compatibility V1, so restore it before V1 removes a shared table.
+  const restoredRoute = restoreStandaloneSearch(renderDocument(document), journal);
+  if (journal.version === 8 || journal.version === 9 || journal.version === 10 || journal.version === 11) {
     const evidence = compatibilityV1Evidence(journal);
     return evidence
       ? restoreCompatibilityV1Features(

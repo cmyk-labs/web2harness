@@ -260,9 +260,29 @@ bun run app
 
 发送前，浏览器等待可用的推理力度滑块，并验证所选模型。完整模型菜单复核有独立的准备期限，不占用发送确认预算；激活前失败属于未发送。`chatgpt_submission_ambiguous` 和 `send_outcome_unknown` 表示尚不能确定是否已接受：明确重试前，请检查该任务页及已完成的工具结果。单独的 HTTP 成功状态或超时都不能授权自动重发。
 
+### WebSocket 续接或 steering 被拒绝
+
+以下是未发布源码行为，不表示已安装 2.4.0 已升级。`previous_response_not_found` 可能来自过期、淘汰、重启或传入授权／账号／组织／项目作用域变化。WebSocket／预填历史及后代保持纯内存；应去掉缺失 ID，提交包含已有工具结果的完整原历史，不重做工具来重建。
+
+同通道 create 现按 FIFO 排队，其他通道可在有界准入及 Web 容量内并发。`websocket_queue_full` 表示被拒绝请求未执行。Steering 仅在受支持的自动交互 GPT-6 Native Tools 请求自然完成时应用。`response.steer.accepted` 不是提交：继续读取直到后继启动或明确失败。遇到 `response.steer.pending`／`steering_required_input_missing`，在同通道返回匹配工具结果或审批决定，不重复已接受的 steering。自动后继保留原模型／effort，显式续接使用自身设置。没有已核实的 Responses `response.cancel` 客户端帧；使用适用的归属断连／原生 interrupt 路径，不发送 Realtime 帧。
+
+### 远程附件或 provider 文件被拒绝
+
+远程图片／文件 URL 须有精确的任务／provider／账号授权，且为公开 HTTPS 的 443 端口。私有／特殊用途 DNS 地址、未授权重定向、环境凭据／代理、不支持的 MIME／字符集／HTTP 压缩及超限都会明确失败。不要削弱检查或附上生产凭据；可通过已授权任务工具提供支持格式的原始内联字节，或符合[引用契约](reference.zh-CN.md#input-references)的已授权公开 URL。
+
+`generate:false` 可保留有效 URL 而不下载，预填就绪不证明可达或模型可读。provider `file_id` 在预填和生成均失败，因为尚无兼容的 Codex／ChatGPT 下载契约。此附件路径也不支持原始音视频，转录／抽帧不能证明等价。
+
+### Hosted 工具或原生加密上下文不受支持
+
+可用时使用 Codex 真正注册的 `web.run`、`image_gen.imagegen` 或 MCP 工具，并保留功能／认证／权限门槛。同名函数不能替代 hosted 声明；其他 hosted 类型需要原环境、资源、凭据及事件／审批生命周期，详见[逐工具阻碍](native-tools-compatibility.zh-CN.md#hosted-tools)。
+
+`incompatible_web_context` 对不变输入不可重试。保留完整原请求，不删除密文或换成可见摘要；空加密参数标记只支持新原始明文协作调用，不能处理旧密文。没有实现已验证的原生推理／压缩明文导出服务。保留所选模型／effort；受支持的源后端导出或明确选择原后端续接属于独立操作。
+
 ### 消息发送前的页面准备失败
 
 `chatgpt_composer_unavailable`、`chatgpt_page_structure_unsupported` 和 `chatgpt_preparation_timeout` 表示浏览器准备故障，不代表模型容量不足。登录、会话过期和浏览器验证提示分别保留具体错误。通用服务不可用或 HTTP 503 本身不能证明模型过载。
+
+文档仍在加载时出现登录提示，就绪检查会在原截止时间内继续等待；只要登录提示仍存在，就不会放行可编辑输入框。完整加载的登录页仍报 `chatgpt_sign_in_required`，该处理不会恢复认证。此前主页已登录的观察可能过时；应核对当前任务页面，恢复 DEV 验收前在独立 DEV 配置中完成登录。
 
 一次两秒就绪探测超时不代表页面准备预算耗尽。桥接在原准备截止时间内继续等待同一次DOM读取，不叠加就绪探测，也不重发请求；接纳就绪输入框前再次检查取消、截止时间和认证状态。读取被拒绝时保留原始异常；就绪等待到期时，如已有观察超时，会将其保留在cause中。
 
@@ -274,7 +294,7 @@ bun run app
 
 恢复需要独立证明提交尚未开始：无 Send 激活、会话请求、用户／助手回合、Stop 状态或 MCP 活动。仅有 `prepared` 标签不足以授权恢复。已接受或接收状态不明的提交保留原有防重放规则。发送前重新核验模型、effort 和连接器选择。
 
-准备仍失败时，检查准确错误和该任务的 ChatGPT 页面。诊断记录有界的页面／传输类别；CDP 流观察可用时，还记录响应事件数量和可见正文长度，不保存响应正文、工具参数或隐藏推理。流不可读取或被截断时仍标为证据不足；模型说“安全检查阻止”不构成平台拒绝证明。网页自身断网轮询与这份准备预算分开。
+准备仍失败时，保留准确错误并检查归属任务页。普通诊断只含有界页面／传输类别、事件计数及可见正文长度，不含响应正文、工具参数或隐藏推理。独立的仅失败私有响应证据可能包含经隐私投影的公开回答事件，不能混入普通日志或公开支持报告；未知／截断／未保留的数据仍属证据不足，模型声称安全拒绝不构成平台证据。
 
 ### `Reconnecting`、`stream disconnected`、`ChatGPT failed` 或 HTTP 502
 
@@ -285,6 +305,14 @@ bun run app
 **恢复判断**：完整回答和预期工具结果返回 Codex。再次请求相同操作前，确认失败尝试是否已经产生部分文件变更。
 
 ### 网页已有回答，但 Codex 报告 `browser_stream_inconsistent`
+
+自动交互的 Native Tools 与 Browser-only 现在优先使用校验后的原响应，避免 HTML 往返转换影响表格单元格、代码围栏语言和重复段落。`browser.response_source_committed` 记录该路径，`browser.response_source_fallback` 说明为何改用独立校验的 DOM。富引用和未支持的协议结构仍可能需要 DOM。`chatgpt_response_source_invalid` 表示身份／完成／拒绝的明确证据阻止了交付，不能绕过，也不能把网页可见回答当作已执行的工具结果。
+
+缺少 `is_complete` 或 finish 元数据时，现仅在输入／会话身份、唯一已结束 final、其他公开消息状态及父链检查通过后返回 `response_terminal_metadata_unavailable`。这不授权交付来源正文，只允许既有独立 DOM 完成及 Markdown 覆盖校验决定能否回退。明确 false 的完成值、非 stop 或格式错误的 finish、未结束状态、身份冲突及迟到修改仍阻断回退；明确终态失败保留 `response_message_incomplete`。这只是允许进行回退校验，不代表成功交付或历史失败已修复。
+
+出现 `chatgpt_send_outcome_unknown` 时，检查有界输入／网络事实及绑定输入的回执。未发布 worker 在初次观察／发送阶段失败后最多只读核对五秒；只有唯一匹配请求、HTTP 200、绑定的接受回执和完整身份才能确认原发送，不再次点击、重绑定、重载或重发。重复请求、观察丢失、取消或过期仍按实际情况保持不确定／失败。`queue_blocked_send_outcome_unknown` 及其他故障暂停仍立即报告原阻塞源；远程结果未知保持全局保护，单独关页不足以清除。既有恢复不会重启已失败的子 agent。
+
+私有失败捕获默认限制 2 MiB／2,048 个事件，在 detach 前保存，普通诊断只含引用／计数。它是经隐私投影的事件数据，不是精确原始网络字节，未知敏感结构及缺口明确保留状态。重放仅用于离线诊断，不能执行工具或授权交付。原始历史失败流未保存；新增捕获及 37 个脱敏样本重放一致，都不能证明旧 `response_message_incomplete` 或发送未知根因已修复。保留 DEV 续接失败。独立 DEV 登录恢复了认证。捕获／重放现支持实测 SSE 事件名并进行隐私投影，真实样本重放与直接解析事实／结果一致，但不是 missing-metadata 失败复现。真实 CLI resume／interrupt／恢复及公开 PDF／prefill／steering 组件复验通过，原失败证据及历史根因限制继续保留。见[可靠性证据](native-tools-compatibility.zh-CN.md#reliability)。工具命令成功不证明最终响应已交付。已发布 2.4.0 不变。
 
 **检查**：最终网页结构无法与已读取的回答可靠对齐。这是回答提取失败，不能仅凭此认定网络断开。原生工具模式会先缓存原始正文，完成后再解析并校验工具调用，因此该错误不意味着 Codex 已经收到报告。
 

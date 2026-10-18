@@ -82,7 +82,9 @@ function observeChatGptReadiness(page: Page): Promise<ChatGptReadinessSnapshot> 
 
 export function assertReadinessFailure(snapshot: ChatGptReadinessSnapshot): void {
   if (snapshot.expired) throw preparationError("chatgpt_session_expired");
-  if (snapshot.signIn) throw preparationError("chatgpt_sign_in_required");
+  // Navigation can expose a sign-in placeholder before the authenticated page hydrates.
+  // Keep waiting within the existing deadline; a complete sign-in page still fails immediately.
+  if (snapshot.documentComplete && snapshot.signIn) throw preparationError("chatgpt_sign_in_required");
   if (snapshot.verification) throw preparationError("chatgpt_verification_required");
   if (snapshot.subscriptionFailure) throw preparationError("chatgpt_subscription_unavailable");
   if (snapshot.composers > 1) throw preparationError("chatgpt_page_structure_unsupported");
@@ -141,7 +143,7 @@ export async function waitForChatGptReadiness(page: Page, options: {
     options.onSnapshot?.(snapshot);
     assertReadinessFailure(snapshot);
     if (now() >= options.deadline) throw preparationError("chatgpt_composer_unavailable");
-    if (snapshot.surfaceBound && snapshot.composers === 1 && snapshot.editable) {
+    if (!snapshot.signIn && snapshot.surfaceBound && snapshot.composers === 1 && snapshot.editable) {
       return page.locator(CHATGPT_COMPOSER_SELECTOR).filter({ visible: true }).first();
     }
     await sleep(Math.min(100, Math.max(1, options.deadline - now())));

@@ -19,6 +19,7 @@ This document maintains reusable capability cases: prompts, pass criteria and re
 - [CAP-008: Runtime logs and diagnostic bundles](#cap-008)
 - [CAP-009: Global Web request queue](#cap-009)
 - [CAP-010: Aggregate HTTP body budget](#cap-010)
+- [CAP-011: Native search, content and transport compatibility](#cap-011)
 - [Candidate results](#result-record)
 - [Adding and maintaining cases](#extend-cases)
 
@@ -26,7 +27,7 @@ This document maintains reusable capability cases: prompts, pass criteria and re
 
 ## Release requirements and case index
 
-The maintainer reviews the applicable CAP-001–006, CAP-008–010 and Q01–Q17 cases before publication. Exercise new or affected behavior, retain reviewed valid evidence and combine compatible checks in shared flows. Record the agreed scope and keep passed, failed, unexecuted and explicitly deferred items distinct. Do not reopen completed or excluded work merely because a checklist row combines several observations. This is manual capability acceptance: neither `bun run verify` nor GitHub Actions runs or enforces these cases automatically, and no fixed JSON manifest is required.
+The maintainer reviews the applicable CAP-001–006, CAP-008–011 and Q01–Q17 cases before publication. Exercise new or affected behavior, retain reviewed valid evidence and combine compatible checks in shared flows. Record the agreed scope and keep passed, failed, unexecuted and explicitly deferred items distinct. Do not reopen completed or excluded work merely because a checklist row combines several observations. This is manual capability acceptance: neither `bun run verify` nor GitHub Actions runs or enforces these cases automatically, and no fixed JSON manifest is required.
 
 | ID | Capability | Coverage applicability | Key pass evidence |
 | --- | --- | --- | --- |
@@ -40,6 +41,7 @@ The maintainer reviews the applicable CAP-001–006, CAP-008–010 and Q01–Q17
 | [CAP-008](#cap-008) | Runtime logs and diagnostic bundles | Every desktop release | Readable history; native ZIP export; date boundaries, redaction, correlation and collection coverage. |
 | [CAP-009](#cap-009) | Global queue and MCP round handoff | Every release containing the scheduler; UI/MCP steps apply to their supported modes | Launcher controls, standalone cross-process ownership, shared capacity, send spacing, main plus three children, physical release and explicit recovery. |
 | [CAP-010](#cap-010) | Aggregate HTTP body budget | Every release containing the Responses service | Shared Responses/compact accounting, size/depth rejection, 503 overload and reservation cleanup; isolated synthetic evidence. |
+| [CAP-011](#cap-011) | Native search, content and transport compatibility | Changes to search, attachments, output controls, context or Responses transport | Actual native search/tool results; validated content and output; explicit opaque-context errors; recorded HTTP/WebSocket continuation and cancellation. |
 
 The applicability column guides manual scope selection. These cases and the [release manual's](release.md#authenticated-runtime) cancellation, compaction, reuse, MCP, platform and installation checks may share evidence when the same observations establish the required behavior. Revalidate affected behavior or invalidated assumptions, and preserve valid results elsewhere.
 
@@ -114,6 +116,8 @@ For answer-extraction or Markdown consistency changes, cover missing pending tai
 For readiness and pending-format recovery, cover a renderer read exceeding the two-second probe cap but finishing inside the original preparation deadline, one outstanding read, deadline/abort rejection and unchanged authentication checks. Replay coalesced streaming-to-final frames with remounted partial bold/italic/inline-code labels, including list items; verify full ordered delivery once, while missing text, changed URLs/file targets and committed edits still fail. In authenticated DEV, verify native compaction and an actual file-reading command after compaction, with the queue and browser ownership settled. Keep delayed-renderer fixtures distinct from natural Web observations.
 
 Also cover pending paragraph → setext heading → paragraph transitions and unfinished inline-code Windows paths becoming code elements. Preserve literal backslashes, punctuation, link destinations and required following blocks. Apply normalization only to pending comparisons, and verify the final observed format is delivered once. Reuse successful model/effort evidence; rerun failed combinations without changing their budget or selection.
+
+Original-response changes additionally cover byte-split UTF-8, BOM and all SSE line endings, inherited v1 patches, hydrated input identity, long tables/code/repeated paragraphs, hidden-content exclusion, wrong page/conversation/parent, duplicate matching requests, incomplete finals, late frames, cancellation and same-request body fallback. Verify one complete delivery even with no answer DOM, zero partial delivery on rejection, and no source/DOM concatenation. Unsupported references must use checked DOM or fail explicitly. Exercise single-click submission with Enter intercepted, and prove prevented input events are observed after event handlers. Verify transport completion fencing, bounded redacted network/exception facts and removal of page observers. Queue fault fixtures must preserve blocking causes across reconnect/restart, fail queued work promptly, preserve manual pause semantics and never resend failed receipts. Authenticated DEV requires requested model/effort, native read → patch → command evidence, continuation/compaction, cancellation followed by a new task, and main plus three real children; compare native wait intervals against Web leases. Record unsupported/unexecuted modes separately.
 
 <a id="cap-002"></a>
 
@@ -287,9 +291,34 @@ Use isolated service/body fixtures on the current candidate, without browser log
 3. Cover queued work, JSON/SSE responses, compact and native forwarding. A disconnect or delivered terminal event must not release execution reservations before actual adapter cleanup; cancellation and decompression failure must settle reader/decoder resources. After all work settles, reservations return to zero and a new request is admitted. Preserve native request bytes and explicit model/metadata choices.
 4. Record the HTTP allocation estimate separately from scheduler waiting bytes and any observed RSS. The 256 MiB estimate is not a hard RSS cap; a synthetic stress pass does not establish real browser concurrency or authenticated MCP/manual acceptance.
 
+<a id="cap-011"></a>
+
+## CAP-011: Native search, content and transport compatibility
+
+Applies to Native Tools changes affecting search routing, attachments, output controls, context or Responses transport. Use an isolated DEV profile, an authenticated account and the selected model/effort. Keep fixture results separate from real model and tool acceptance; apply the preparation and teardown boundaries above.
+
+1. Reapply Native Tools configuration and restart the DEV Codex client. Preserve `web_search` mode, filters and location. Prompt: “Use native Codex web search to find one official documentation page, cite its source, read input.txt, patch result.txt and verify it with a command. Report each actual result.” Confirm native `web.run` reaches the search service with its exact query/settings, real results return to the model and the file matches. Disabling search or replacing it with browser-internal browsing does not pass. Exercise cached/live and filters at the forwarding boundary; verify integration restoration and user-edit conflicts with isolated configuration fixtures.
+2. Supply valid inline PDF/text/DOCX/XLSX/PPTX and images as applicable. Confirm original bytes/MIME reach the browser and the model identifies a unique fixture marker. Cover malformed, encrypted, oversized and unsupported references separately; parser acceptance alone is not upload/model acceptance. Local file tools are a separate capability.
+3. Require a complete `json_object` and strict schema result. Invalid final output must fail before successful delivery; tool-only rounds remain usable. Verify effective unsupported generation controls fail before sending, while null/no-override values and command-tool budgets remain intact. Estimates must remain labelled estimates.
+4. Cover original plaintext V2 collaboration, author/recipient boundaries and the supported direct-call empty encrypted-arguments marker. Mixed plaintext/ciphertext, native reasoning/compaction, encrypted tool outputs and malformed bridge envelopes must fail before browser work without dropping history, changing model/effort or repeating tools. Visible summaries do not prove complete export; successful rejection is boundary coverage, not migration acceptance.
+5. Verify HTTP/SSE and WebSocket tool roundtrips, then named/default-lane FIFO, bounded cross-lane concurrency, fork/cache loss and full-history recovery. Test auth/account/organization/project separation, memory-only WebSocket/prepared histories and HTTP descendants across unrelated snapshot flush/restart. Preparation must do zero model/browser/tool/download work. Test natural-completion steering: ordered acceptance, original settings on automatic successors, pending tool results/approvals, same-lane explicit continuation settings, one-time input application and failure before successor commitment. Unsupported earlier-boundary steering must not fabricate completion. Disconnect affects only owned connection work; drain/shutdown preserve cleanup. No documented Responses `response.cancel` client frame is a gate; native interrupt and background HTTP cancellation are separate. Record actual transport; synthetic dispatch and HTTP fallback are not authenticated WebSocket passes.
+6. For URL references, verify task/provider/account-scoped exact grants, validation before DNS, all-address public checks, pinned HTTPS/TLS, no ambient credentials/proxy, independently authorized redirects, original bytes/MIME, bounded memory/time and cancellation cleanup. Cover URLs in normal/tool-result content, preparation without network, invalid/missing history, unsupported provider file IDs in both modes, and raw audio/video rejection. Use injected network fixtures for unsafe targets; live acceptance uses only authorized public fixtures. Prepared IDs do not prove download/model acceptance.
+7. For standalone image generation/edit when the actual CLI advertises it, verify its native executor, original image model, incoming auth, output bytes/events/artifacts and task permissions. Preserve parent Web model/effort. Record generic hosted web/image/computer/file-search/interpreter/MCP blockers separately: no fabricated function, disabled tool, guessed endpoint, new container or arbitrary native-model fallback counts as equivalence. A hosted approval shape in steering tests does not certify hosted execution.
+8. For reliability changes, inject a late unique input-bound acknowledgement after the initial send deadline: at most one Send activation and one confirmation, with cancellation, duplicate/mismatched requests and lost observation retaining their proper failure/fence. Unknown remote effects stay globally protected; page closure is insufficient. Verify failure-only bounded private capture before detach, privacy projection/revocation, explicit gaps, content-free normal diagnostics and offline-only replay. Success/cancel must not create the artifact. Preserve historical unknown causes and missing original streams; fault fixtures do not establish live incident resolution.
+
+For terminal-metadata changes, verify missing fields never authorize source delivery: identity, unique finished final and lineage checks precede independent DOM completion/coverage. Explicit false, non-stop/malformed finish, unfinished status and identity conflicts must still block fallback. Readiness fixtures must distinguish loading sign-in indicators from a fully signed-out page, never release an editable composer while sign-in is visible, and preserve expiry/challenge/deadline/cancellation failures. A stale authenticated home page is not current task authentication evidence.
+
+Diagnostic fixtures also cover observed `delta_encoding`/`message`/`delta` events, structural-only projection of hidden `model_editable_context`, unknown/error withholding, and chunked replay matching direct facts/results without retaining checked private values. A matching successful sample is not reproduction of a missing-metadata failure.
+
+Recorded scoped results for the reviewed unreleased candidate (2026-10-18): real CLI resume/interrupt/recovery passed with zero HTTP fallback, and public-PDF URL reading, independent prefill and natural-boundary steering passed through shared components. Original failed evidence is retained. These results do not certify remote-image live input, raw media, Codex file-tool end-to-end execution or every CAP-011 capability; see the [verified scopes](native-tools-compatibility.md#evidence).
+
+Reuse CAP-001–003, CAP-009–010 and valid existing evidence where the same observations apply. Record tool events, settings, file/attachment hashes, transport and lifecycle outcomes, production boundary comparisons and all unexecuted or failed paths. See [capability boundaries](native-tools-compatibility.md).
+
 <a id="result-record"></a>
 
 ## Candidate results
+
+The [2026-10-18 task records](native-tools-compatibility.md#evidence) preserve passing single-task read-only analysis and failed three-agent parallel review. All three child reports arrived, but the main final answer failed; body-delivery acceptance remains open. Preserve both outcomes when validating a later fix.
 
 Keep a simple result record for the agreed candidate scope. Reference valid earlier results with the original version and the reason they still apply; do not reset them or invent a new execution. No fixed JSON schema or source-hash approval record is required. Keep raw logs, rollouts, snapshots and artifacts in ignored `output/` or private DEV storage; share only redacted conclusions. Full release metadata and confidentiality requirements are in the [release manual](release.md#validation-evidence).
 
@@ -306,6 +335,7 @@ Record version/commit and candidate-difference identifier, test date and operato
 | CAP-008 | Pending | Not executed | To record | To record |
 | CAP-009 | Pending | Not executed | To record | To record |
 | CAP-010 | Pending | Not executed | To record | To record |
+| CAP-011 | Pending | Not executed | To record | To record |
 
 The table above is an empty example, not an instruction to rerun every case. Record completed observations separately from any remaining part of a composite case. Label Passed / Failed / Not executed, identify reused evidence, and record any maintainer decision to exclude or defer work with its reason and responsibility. Deferral is not a pass. Distinguish model output, bridge conversion, the Codex executor and permission/account/network conditions; do not blame a layer without evidence.
 
@@ -313,14 +343,14 @@ The table above is an empty example, not an instruction to rerun every case. Rec
 
 ## Adding and maintaining cases
 
-When adding a target capability or changing an existing one, add or update its acceptance case, identifying fixture and live requirements, and execute it before publication. Continue numbering at `CAP-011`; do not renumber for a new version or reuse old IDs. Keep English and Chinese IDs, prompt semantics, and pass criteria aligned, and update the index above.
+When adding a target capability or changing an existing one, add or update its acceptance case, identifying fixture and live requirements, and execute it before publication. Continue numbering at `CAP-012`; do not renumber for a new version or reuse old IDs. Keep English and Chinese IDs, prompt semantics, and pass criteria aligned, and update the index above.
 
 Document each new case's mode/platform/account applicability and required environment, then include its affected behavior in the manual acceptance scope. Reuse a flow where its observations cover several requirements. Keep actual failures visible and document maintainer scope or deferral decisions separately. Retain retired IDs with the reason and replacement reference.
 
 Use this format for additions:
 
 ```text
-ID and name: CAP-011: <target capability>
+ID and name: CAP-012: <target capability>
 Applicability and revalidation triggers: <modes/platforms/accounts; affected dependencies>
 Prerequisites: <candidate, environment, permissions, fixture, and selected model>
 Prompt and steps: <copyable; no private paths or historical conversation IDs>

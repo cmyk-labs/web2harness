@@ -105,7 +105,7 @@ export function chatGptTurnIsComplete(state: {
       || state.handoffCompletionVisible === true);
 }
 
-export type ChatGptSubmissionEvidence = "user_turn" | "assistant_turn" | "generation_running" | "mcp_tool_call";
+export type ChatGptSubmissionEvidence = "user_turn" | "assistant_turn" | "generation_running" | "mcp_tool_call" | "response_stream";
 
 export function chatGptSubmissionEvidence(state: {
   initialTurnIdentities: readonly string[];

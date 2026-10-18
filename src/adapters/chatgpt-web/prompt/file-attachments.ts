@@ -32,7 +32,8 @@ export function validateInputFiles(files: unknown): asserts files is ChatGptInpu
 export function inputFileTokens(files: ChatGptInputFile[] | undefined, modelId: string): number {
   return (files ?? []).reduce((sum, file) => {
     const bytes = Buffer.from(file.data, "base64");
-    // PDFs are opaque here: reserve one token per byte instead of claiming an extracted count.
-    return sum + (file.mimeType === "application/pdf" ? bytes.length : estimateTokens(bytes.toString("utf8"), modelId));
+    // Binary documents stay opaque. This byte-based reservation is an estimate, not the
+    // upstream extracted token count; never decode Office ZIP bytes as replacement text.
+    return sum + (file.mimeType !== "text/plain" ? bytes.length : estimateTokens(bytes.toString("utf8"), modelId));
   }, 0);
 }

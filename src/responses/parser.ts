@@ -19,6 +19,7 @@ import { compactionItemToText, isNativeTextCompaction } from "./compaction";
 import { previousResponseReplayPrefixLength } from "./state";
 import { decodeReasoningEnvelope } from "./reasoning-envelope";
 import { parseInputFile } from "./file-input";
+import { assertNoUnresolvedInputReferences, assertSupportedInputReferences, inputReferenceOf } from "./input-references";
 import { toolChoiceKind } from "./tool-choice";
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -29,14 +30,17 @@ type InputBlock =
   | { type: "input_text"; text: string }
   | { type: "text"; text: string }
   | { type: "input_image"; image_url?: string; file_id?: string; detail?: string }
-  | { type: "input_file"; file_id?: string; filename?: string; file_data?: string };
+  | { type: "input_file"; file_id?: string; filename?: string; file_data?: string; file_url?: string };
 
-function inputContentParts(blocks: unknown[] | string | undefined): string | CodexContentPart[] {
+function inputContentParts(blocks: unknown[] | string | undefined, validationOnly = false): string | CodexContentPart[] {
   if (typeof blocks === "string") return blocks;
   if (!blocks) return [];
   const parts: CodexContentPart[] = [];
   for (const raw of blocks) {
     const block = raw as InputBlock;
+    // A preparation validation result never exposes this temporary projection as executable context.
+    // Its _rawBody still contains every original reference, without fabricated attachment bytes.
+    if (validationOnly && isObj(raw) && inputReferenceOf(raw)) continue;
     if (block.type === "input_text" || block.type === "text") {
       parts.push({ type: "text", text: (block as { text: string }).text });
     } else if (block.type === "input_image") {
@@ -126,6 +130,10 @@ function parseTextControls(value: unknown): Pick<CodexRequestOptions, "verbosity
     out.verbosity = value.verbosity;
   }
   const format = value.format;
+  if (isObj(format) && format.type === "json_object") {
+    out.outputFormat = { type: "json_object" };
+    return out;
+  }
   if (
     isObj(format)
     && format.type === "json_schema"
@@ -233,6 +241,9 @@ export function buildTools(tools: unknown[] | undefined): CodexTool[] | undefine
       });
     }
     else {
+      if (t.type === "web_search" || t.type === "web_search_preview") {
+        throw new Error("Hosted web_search declarations cannot execute through ChatGPT Web. Enable Codex features.standalone_web_search using the bridge integration, then reopen the task so Codex supplies its native web.run tool. Keep the requested web_search mode and search filters; do not disable search to bypass this error.");
+      }
       throw new Error(`Unsupported Codex tool type: ${String(t.type)}`);
     }
   }
@@ -252,13 +263,14 @@ function ensureAssistantPlaceholder(messages: CodexMessage[], modelId: string, n
  * `input_image` items): returns content parts when any image is present, else a plain joined string.
  * Never inlines an image_url as text (that would explode the token count).
  */
-function outputToToolResultContent(output: string | unknown[] | undefined): string | CodexContentPart[] {
+function outputToToolResultContent(output: string | unknown[] | undefined, validationOnly = false): string | CodexContentPart[] {
   if (typeof output === "string") return output;
   if (!Array.isArray(output)) return "";
   const parts: CodexContentPart[] = [];
   let hasAttachment = false;
   for (const raw of output) {
     if (!isObj(raw)) continue;
+    if (validationOnly && inputReferenceOf(raw)) continue;
     if (raw.type === "output_text" || raw.type === "text" || raw.type === "input_text") {
       if (typeof raw.text === "string") parts.push({ type: "text", text: raw.text });
     } else if (raw.type === "refusal" && typeof raw.refusal === "string") {
@@ -294,7 +306,21 @@ function findToolById(messages: CodexMessage[], callId: string): { name: string;
 
 const REASONING_EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
+export type PreparedRequestValidation = Omit<CodexParsedRequest, "context"> & { validationOnly: true };
+
+/** Schema/control/tool validation without network. No executable context or placeholder attachments. */
+export function validateRequestForPreparation(body: unknown): PreparedRequestValidation {
+  const { context: _context, ...validated } = parseRequestInternal(body, true);
+  return { ...validated, validationOnly: true };
+}
+
 export function parseRequest(body: unknown): CodexParsedRequest {
+  return parseRequestInternal(body, false);
+}
+
+function parseRequestInternal(body: unknown, validationOnly: boolean): CodexParsedRequest {
+  if (validationOnly) assertSupportedInputReferences(body);
+  else assertNoUnresolvedInputReferences(body);
   const replayedInputPrefixLength = previousResponseReplayPrefixLength(body);
   const parsed = responsesRequestSchema.safeParse(body);
   if (!parsed.success) {
@@ -382,6 +408,7 @@ export function parseRequest(body: unknown): CodexParsedRequest {
 
         const content = inputContentParts(
           agentMessage.content as unknown[] | string | undefined,
+          validationOnly,
         );
 
         // An agent_message is external input delivered to the parent agent. Keep its distinct
@@ -409,7 +436,7 @@ export function parseRequest(body: unknown): CodexParsedRequest {
         switch (msg.role) {
           case "system": {
             pendingReasoning.length = 0;
-            const text = inputContentParts(msg.content as unknown[] | string | undefined);
+            const text = inputContentParts(msg.content as unknown[] | string | undefined, validationOnly);
             const flat = typeof text === "string" ? text : text.map(p => (p.type === "text" ? p.text : "")).join("");
             if (flat.length > 0) systemPrompt.push(flat);
             break;
@@ -417,7 +444,7 @@ export function parseRequest(body: unknown): CodexParsedRequest {
           case "user":
           case "developer": {
             pendingReasoning.length = 0;
-            const content = inputContentParts(msg.content as unknown[] | string | undefined);
+            const content = inputContentParts(msg.content as unknown[] | string | undefined, validationOnly);
             const kinds = msg.internal_chat_message_metadata_passthrough?.content_item_kinds;
             const selectedSkill = msg.role === "user" && kinds?.length === 1
               && kinds[0] === "skills.selected_skill_instructions";
@@ -568,7 +595,7 @@ export function parseRequest(body: unknown): CodexParsedRequest {
         messages.push({
           role: "toolResult", toolCallId: output.call_id,
           toolName: toolInfo.name, toolNamespace: toolInfo.namespace,
-          content: outputToToolResultContent(output.output), isError: output.is_error === true, timestamp: now,
+          content: outputToToolResultContent(output.output, validationOnly), isError: output.is_error === true, timestamp: now,
         });
         continue;
       }
@@ -582,7 +609,7 @@ export function parseRequest(body: unknown): CodexParsedRequest {
           toolName: toolInfo.name, toolNamespace: toolInfo.namespace,
           // Same payload shape as function_call_output (codex-rs FunctionCallOutputPayload):
           // string or content items — normalize arrays instead of leaking raw wire blocks.
-          content: outputToToolResultContent(output.output), isError: output.is_error === true, timestamp: now,
+          content: outputToToolResultContent(output.output, validationOnly), isError: output.is_error === true, timestamp: now,
         });
       }
     }
@@ -616,9 +643,9 @@ export function parseRequest(body: unknown): CodexParsedRequest {
   };
 
   const options: CodexRequestOptions = {};
-  if (data.max_output_tokens !== undefined) options.maxOutputTokens = data.max_output_tokens;
-  if (data.temperature !== undefined) options.temperature = data.temperature;
-  if (data.top_p !== undefined) options.topP = data.top_p;
+  if (data.max_output_tokens != null) options.maxOutputTokens = data.max_output_tokens;
+  if (data.temperature != null) options.temperature = data.temperature;
+  if (data.top_p != null) options.topP = data.top_p;
   if (data.stop !== undefined && data.stop !== null) {
     options.stopSequences = typeof data.stop === "string" ? [data.stop] : data.stop;
   }
@@ -635,9 +662,9 @@ export function parseRequest(body: unknown): CodexParsedRequest {
   }
   const summaryMode = data.reasoning?.summary;
   if (!summaryMode || summaryMode === "none") options.hideThinkingSummary = true;
-  if (data.presence_penalty !== undefined) options.presencePenalty = data.presence_penalty;
-  if (data.frequency_penalty !== undefined) options.frequencyPenalty = data.frequency_penalty;
-  if (data.service_tier !== undefined) options.serviceTier = data.service_tier;
+  if (data.presence_penalty != null) options.presencePenalty = data.presence_penalty;
+  if (data.frequency_penalty != null) options.frequencyPenalty = data.frequency_penalty;
+  if (data.service_tier != null) options.serviceTier = data.service_tier;
   Object.assign(options, parseTextControls(data.text));
   if (data.prompt_cache_key !== undefined) options.promptCacheKey = data.prompt_cache_key;
 

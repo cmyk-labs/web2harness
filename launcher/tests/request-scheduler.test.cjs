@@ -131,8 +131,40 @@ test("unknown send pauses dispatch and cannot be cleared by an ordinary user res
   f.scheduler.resume();
   assert.equal(f.scheduler.snapshot().pausedReason, "send_outcome_unknown");
   assert.throws(() => f.scheduler.resume(), { code: "queue_pause_changed" });
-  f.finish("a", "failed"); assert.equal(f.scheduler.get("b").state, "queued");
-  f.scheduler.resume("send_outcome_unknown"); assert.equal(f.scheduler.get("b").state, "preparing");
+  f.finish("a", "failed"); assert.equal(f.scheduler.get("b").state, "failed");
+  assert.equal(f.scheduler.get("b").reason, "queue_blocked_send_outcome_unknown");
+  assert.deepEqual(f.scheduler.get("b").blockedBy, { reason: "send_outcome_unknown", requestId: "a" });
+  f.scheduler.resume("send_outcome_unknown"); assert.equal(f.scheduler.get("b").state, "failed");
+  assert.equal(f.add("new").state, "preparing");
+});
+
+test("late send confirmation keeps shared capacity occupied until physical cleanup", () => {
+  const f = fixture({ maxConcurrent: 2, minSendIntervalSeconds: 1 });
+  f.add("reconciling"); f.add("other-active"); f.add("waiting");
+  const lease = f.scheduler.lease("reconciling");
+  const permit = f.scheduler.beginSend("reconciling", lease).permit;
+  f.advance(5000);
+  assert.deepEqual(f.scheduler.beginSend("other-active", f.scheduler.lease("other-active")), { allowed: false, reason: "send_in_progress" });
+  assert.equal(f.scheduler.get("waiting").state, "queued");
+  f.scheduler.endSend("reconciling", lease, permit, "confirmed");
+  assert.equal(f.scheduler.snapshot().pausedReason, null);
+  assert.equal(f.scheduler.snapshot().active, 2);
+  assert.equal(f.scheduler.get("waiting").state, "queued");
+  f.scheduler.settle("reconciling", lease, "failed", "fixture_after_acceptance");
+  assert.equal(f.scheduler.get("waiting").state, "preparing");
+  assert.equal(f.scheduler.snapshot().active, 2);
+});
+
+test("owner loss while reconciling cannot be mistaken for safe per-page isolation", () => {
+  const f = fixture({ maxConcurrent: 2 });
+  f.add("lost-owner"); f.add("other-active"); f.add("waiting");
+  const lease = f.scheduler.lease("lost-owner");
+  f.scheduler.beginSend("lost-owner", lease);
+  f.scheduler.cancel("lost-owner");
+  f.scheduler.settle("lost-owner", lease, "cancelled", "owner_disconnected");
+  assert.equal(f.scheduler.snapshot().pausedReason, "send_outcome_unknown");
+  assert.equal(f.scheduler.get("waiting").reason, "queue_blocked_send_outcome_unknown");
+  assert.equal(f.scheduler.beginSend("other-active", f.scheduler.lease("other-active")).reason, "send_outcome_unknown");
 });
 
 test("user pause stops new admissions but lets already admitted turns finish sending", () => {
@@ -148,8 +180,24 @@ test("recovering one pause cause cannot clear another unresolved failure", () =>
   f.scheduler.pause("account_rate_limited");
   f.add("waiting");
   f.scheduler.resume("account_rate_limited");
-  assert.equal(f.scheduler.get("waiting").state, "queued");
+  assert.equal(f.scheduler.get("waiting").state, "failed");
+  assert.equal(f.scheduler.get("waiting").reason, "queue_blocked_send_outcome_unknown");
   assert.equal(f.scheduler.snapshot().pausedReason, "send_outcome_unknown");
+});
+
+test("fault pauses fail queued requests immediately even with free capacity, retaining the cause", () => {
+  for (const reason of ["send_outcome_unknown", "browser_unavailable", "account_rate_limited"]) {
+    const f = fixture({ maxConcurrent: 1 });
+    f.add("owner"); f.add("waiting"); f.scheduler.pause(reason, "owner");
+    const blocked = f.scheduler.get("waiting");
+    assert.equal(blocked.state, "failed"); assert.equal(blocked.reason, `queue_blocked_${reason}`);
+    assert.equal(blocked.waitMs, 0); assert.deepEqual(blocked.blockedBy, { reason, requestId: "owner" });
+    f.finish("owner"); assert.equal(f.scheduler.snapshot().active, 0);
+    assert.equal(f.add("later").reason, `queue_blocked_${reason}`);
+    f.advance(15 * 60000); assert.equal(f.scheduler.get("waiting").reason, `queue_blocked_${reason}`);
+    f.scheduler.resume(reason); assert.equal(f.scheduler.get("waiting").state, "failed");
+    assert.equal(f.add("recovered").state, "preparing");
+  }
 });
 
 test("number and byte budgets reject overload without charging exact replay twice", () => {

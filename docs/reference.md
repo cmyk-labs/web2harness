@@ -14,6 +14,8 @@ Defaults apply to new configurations; existing explicit settings follow the load
 - [HTTP request body limits](#http-body-limits)
 - [Model catalog and reasoning effort](#models)
 - [Context and transport budgets](#context-budgets)
+- [Responses transport and continuation](#responses-transport)
+- [Attachment reference resolution](#input-references)
 - [Profiles and data locations](#data-locations)
 - [Environment overrides](#environment-overrides)
 - [Command interfaces](#commands)
@@ -34,6 +36,8 @@ Defaults apply to new configurations; existing explicit settings follow the load
 In **Connection & Models**, selecting a tool mode changes the draft. **Apply configuration** runs setup. Preferences such as Context as File have their own controls and apply through the runtime controller. Finish or cancel active turns before changing runtime transport or interaction settings; the launcher rejects those changes while its browser is busy. Changes that alter the model catalog require the corresponding Codex client to refresh or restart.
 
 The CLI `setup` parser defaults to Native Tools whenever no mode flag is supplied, including when an existing configuration uses another mode. Specify the intended mode on each setup invocation. Existing optional preferences are generally preserved when neither member of their flag pair is supplied. `--auto-approve-tool-calls` is an exception: omitting it in the regular CLI setup supplies `false`.
+
+Native Tools setup manages `[features].standalone_web_search = true` so supported Codex clients execute their native `web.run` through `/v1/alpha/search`. It preserves the user's `web_search` mode, domain filters and location. The integration journal records the previous flag and restores it on disconnect, removal or a mode change; conflicting user edits are reported. Existing installations require reapplying Native Tools configuration and restarting Codex. This does not add support for arbitrary hosted `web_search` Responses declarations; see [compatibility and limits](native-tools-compatibility.md).
 
 <a id="runtime-settings"></a>
 
@@ -371,6 +375,34 @@ Web2Harness creates Web entries from a native catalog template, then assigns the
 Native rows retain their native `context_window`, compaction metadata and budgets. The integration does not write a Web budget into the user's top-level `model_context_window` or `model_auto_compact_token_limit`. If the user already set a positive `model_context_window`, catalog augmentation can raise a native row's advertised `max_context_window` to preserve that explicit override; it does not lower a larger maximum or change the native row's context/compaction fields. Codex remains responsible for applying its own configuration.
 
 The `compatibility-v1` subagent setting separately changes collaboration metadata for native and Web rows; context preservation does not imply that every native catalog field is byte-for-byte unchanged.
+
+<a id="responses-transport"></a>
+
+### Responses transport and continuation
+
+These are unreleased source contracts; published **2.4.0 is unchanged**. The updated `runtime-bundle-verified` build and relocation smoke passed. The failed DEV run is retained. Authenticated CLI resume/cancellation/recovery and the public-PDF URL, independent prefill-lane and natural-boundary steering component checks passed. These component results do not certify remote-image live input, raw media or Codex file-tool end-to-end execution. See the [evidence limits](native-tools-compatibility.md#evidence).
+
+| Interface | Contract |
+| --- | --- |
+| WebSocket `response.create` | Shares HTTP Responses dispatch. Named `stream_id` and the default lane each run FIFO; different lanes may run concurrently. Defaults: 16 active responses, 32 named lanes plus default, 128 queued requests / 64 MiB. These are connection limits, not additional Web execution slots. |
+| `previous_response_id` | Lineage is independent of lane name. A bounded process-local cache is partitioned by incoming authorization/account/organization/project digest. Scope is not authentication. Cache misses require complete original history, including tool results, without re-execution. |
+| WebSocket / prepared history | Memory-only, including descendants later continued over HTTP; excluded from unrelated snapshot flushes. Cache bounds: one hour, 1,000 entries, 64 MiB UTF-8 item data. No restart durability or upstream ZDR certification. |
+| Web `generate:false` | Validation and memory-only request-state preparation, with a resumable empty response and zero input/output/total token usage. No model/browser/tool execution, URL download or KV-cache warming. Unsupported provider file IDs fail; native prewarm returns `unsupported_native_prewarm`. |
+| `response.steer` | Natural-completion continuation for supported ordinary automatic GPT-6 Native Tools requests. Accepted means queued; successor `response.created` commits input. Automatic successors preserve original model/effort/tools/settings. Earlier output-item interruption is not implemented. |
+| Required tool results / approval | Steering stays pending. A matching explicit create on the same connection/lane supplies the results/decisions and retains its own settings; accepted input is prepended once. Recognition of a hosted approval shape does not implement its hosted tool. |
+| Cancellation | Disconnect cancels only owned connection work; native precise turn interrupt has its own identity/authority checks. No documented Responses `response.cancel` client frame was established; do not import Realtime or background HTTP cancellation semantics. |
+
+Queue/lane/steering limits fail explicitly (`websocket_queue_full`, `websocket_stream_limit_reached`, `too_many_pending_steers`). The steering budget defaults to 64 pending submissions / 8 MiB with a 10-second validation deadline. `steering_required_input_missing` leaves accepted input pending without starting a model request. Background/non-streaming Web generation, unsupported steering routes and native prewarm remain explicit boundaries. The original model/effort are never changed to make these checks pass.
+
+<a id="input-references"></a>
+
+### Attachment reference resolution
+
+Remote `input_image.image_url` and `input_file.file_url` are resolved only after shared history/context/model/effort/tool/control validation. The server derives exact URL grants from validated task input and binds them to task/provider/account scope; arbitrary metadata is not a grant. Preparation retains unresolved original references without DNS/HTTP; generation resolves before normal attachment validation. Native passthrough bypasses this Web-only path.
+
+Only public HTTPS on port 443 is supported. All DNS answers must be public; the socket is pinned to a checked address with hostname/TLS verification. No authorization headers, cookies, browser identity, ambient credentials or proxies are forwarded. Each redirect requires a separate exact scoped URL grant. Inline and remote image/file attachments in the expanded request share a limit of 10 attachments and 50,000,000 total content bytes, including both inline and downloaded bytes; each attachment is limited to 20,000,000 bytes. Repeated inline files with the same filename and data count once; images and URL references are counted individually. Downloads have a 30-second overall deadline and at most three redirects; shared request allocation reservations and cancellation also apply. The resolver can enforce lower download budgets but cannot raise built-in ceilings.
+
+Original bytes and supported specific MIME types are preserved. Ambiguous octet-stream/ZIP MIME, unsupported charset/HTTP compression and raw audio/video are rejected. `unsupported_provider_file_reference` applies to provider `file_id` in both preparation and generation: no compatible authenticated Codex/ChatGPT file service is established. The API Files endpoint alone is not that contract. No transcription, frame extraction or guessed endpoint is used as an equivalent fallback. See [attachment boundaries](native-tools-compatibility.md#data-contracts).
 
 <a id="data-locations"></a>
 

@@ -52,6 +52,7 @@ class RequestScheduler {
     this.lastServed = new Map();
     this.serviceOrder = 0;
     this.pauseReasons = new Set();
+    this.pauseSources = new Map();
     this.lastSendAt = undefined;
     this.sendOwner = null;
     this.closed = false;
@@ -67,6 +68,10 @@ class RequestScheduler {
       for (const [id, job] of this.jobs) {
         if (TERMINAL.has(job.state) && now - job.endedMonotonic >= this.receiptTtlMs) {
           this.jobs.delete(id);
+        } else if (job.state === "queued" && this.pausedReason && this.pausedReason !== "user") {
+          const reason = this.pausedReason;
+          job.blockedBy = { reason, ...(this.pauseSources.has(reason) ? { requestId: this.pauseSources.get(reason) } : {}) };
+          this.terminal(job, "failed", `queue_blocked_${reason}`);
         } else if (job.state === "queued" && now >= job.deadlineMonotonic) {
           this.terminal(job, "timed-out", "queue_wait_timeout");
         }
@@ -200,7 +205,7 @@ class RequestScheduler {
     this.sendOwner = null;
     if (outcome !== "not-sent") this.lastSendAt = this.monotonicNow();
     if (outcome === "confirmed") job.sendConfirmedAt = this.now();
-    if (outcome === "unknown") this.pause("send_outcome_unknown");
+    if (outcome === "unknown") this.pause("send_outcome_unknown", job.id);
     this.event(`queue.send_${outcome.replaceAll("-", "_")}`, job);
   }
 
@@ -229,7 +234,7 @@ class RequestScheduler {
     if (this.sendOwner?.id === id) {
       this.sendOwner = null;
       this.lastSendAt = this.monotonicNow();
-      this.pause("send_outcome_unknown");
+      this.pause("send_outcome_unknown", job.id);
     }
     this.terminal(job, job.state === "stopping" ? "cancelled" : outcome, reason ?? job.reason);
     this.tick();
@@ -304,17 +309,19 @@ class RequestScheduler {
     return { settings: { ...this.settings }, configRevision: this.configRevision };
   }
 
-  pause(reason = "user") {
+  pause(reason = "user", requestId) {
     if (!["user", "account_rate_limited", "browser_unavailable", "send_outcome_unknown"].includes(reason)) {
       throw new Error("Invalid scheduler pause reason");
     }
     this.pauseReasons.add(reason);
+    if (requestId && this.jobs.has(requestId)) this.pauseSources.set(reason, requestId);
     this.event("queue.paused");
   }
 
   resume(expectedReason = "user") {
     if (!this.pauseReasons.has(expectedReason)) throw schedulingError("queue_pause_changed", "Pause reason changed; reconcile it before resuming");
     this.pauseReasons.delete(expectedReason);
+    this.pauseSources.delete(expectedReason);
     this.event("queue.resumed");
     this.tick();
   }
@@ -332,6 +339,7 @@ class RequestScheduler {
       ...(job.mcpScope ? { mcpScope: job.mcpScope, connectorName: job.connectorName, retryAttempt: job.retryAttempt,
         cooldownUntil: !TERMINAL.has(job.state) && this.mcpWait(job) ? this.now() + this.mcpWait(job) : undefined } : {}),
       state: job.state, reason: job.reason, configRevision: job.configRevision,
+      ...(job.blockedBy ? { blockedBy: { ...job.blockedBy } } : {}),
       queuedAt: job.queuedAt, deadlineAt: job.deadlineAt, startedAt: job.startedAt, endedAt: job.endedAt,
       sendAttemptedAt: job.sendAttemptedAt, sendConfirmedAt: job.sendConfirmedAt,
       waitMs: Math.max(0, (job.startedMonotonic ?? end) - job.queuedMonotonic),
@@ -346,6 +354,7 @@ class RequestScheduler {
     return {
       settings: { ...this.settings }, configRevision: this.configRevision, pausedReason: this.pausedReason,
       pauseReasons: [...this.pauseReasons],
+      pauseSources: [...this.pauseSources].map(([reason, requestId]) => ({ reason, requestId })),
       mcpStatus: this.mcpStatus(),
       active: this.active().length, waiting: this.waiting().length,
       waitingBytes: this.waiting().reduce((sum, job) => sum + job.bytes, 0), closed: this.closed,
@@ -376,6 +385,15 @@ class RequestScheduler {
     // receipts must persist them before calling beginSend, and fail closed on errors.
     try { this.onEvent(name, { ...(job ? this.view(job) : {}), configRevision: this.configRevision, pausedReason: this.pausedReason }); }
     catch { /* A diagnostic sink must not corrupt the resource ledger. */ }
+  }
+
+  restorePauseSources(sources = []) {
+    if (!Array.isArray(sources) || sources.length > 4) throw new Error("Invalid queue pause sources");
+    for (const source of sources) {
+      if (!source || !this.pauseReasons.has(source.reason) || typeof source.requestId !== "string"
+        || !source.requestId || source.requestId.length > 256) throw new Error("Invalid queue pause source");
+      this.pauseSources.set(source.reason, source.requestId);
+    }
   }
 }
 

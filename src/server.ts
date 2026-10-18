@@ -47,6 +47,8 @@ import {
 } from "./models/chatgpt-web-models";
 import { forwardNativeCodexRequest, type NativeFetch, type NativeImageEndpoint } from "./codex/native-passthrough";
 import { fetchNativeCodex } from "./codex/native-network";
+import { NativeSearchModelError } from "./codex/native-search";
+import { validateChatGptWebRequestControls } from "./adapters/chatgpt-web/request-controls";
 import { ModelCatalogFetches } from "./codex/model-catalog-fetches";
 import {
   buildCompactV1Output,
@@ -54,8 +56,12 @@ import {
   decodeCompactionSummary,
   extractCompactUserMessages,
 } from "./responses/compaction";
-import { parseRequest } from "./responses/parser";
-import { expandPreviousResponseInput, flushResponseState, rememberResponseState } from "./responses/state";
+import { parseRequest, validateRequestForPreparation } from "./responses/parser";
+import { InputReferenceError, inspectInputReferences, resolveInputReferences, type InputReferenceTransport } from "./responses/input-references";
+import { preflightContextCompatibility } from "./responses/context-compatibility";
+import { createChatGptStructuredOutputValidator } from "./adapters/chatgpt-web/output-validation";
+import { createResponsesWebSocketAdapter, type SteerTarget, type SteerValidation } from "./responses/websocket";
+import { copyPreviousResponseProvenance, expandPreviousResponseInput, flushResponseState, rememberResponseState, responseStateScope } from "./responses/state";
 import { toolIdentityKey, type AdapterEvent, type CodexParsedRequest } from "./types";
 import type { CodexProviderConfig } from "./types";
 import type { ProviderAdapter } from "./adapters/base";
@@ -383,6 +389,14 @@ export class HttpTurnCounter {
 type ChatGptWebAdapterFactory = (provider: CodexProviderConfig) => ProviderAdapter;
 
 export interface ResponseRequestOptions {
+  /** Internal WebSocket generate:false operation: validate/cache input without generation. */
+  prepareOnly?: boolean;
+  /** WebSocket store:false generations must not create restart snapshots. */
+  memoryOnlyState?: boolean;
+  /** Internal pure validation for WebSocket steering; no generation, download or cache write. */
+  validateOnly?: boolean;
+  /** Trusted host/test injection; never populated from request JSON. */
+  inputReferenceTransport?: InputReferenceTransport;
   /** One resource pool shared by Responses and compact for this service. */
   bodyBudget?: HttpBodyBudget;
   /** DEV and other in-process harnesses can keep continuation state in their own canonical store. */
@@ -480,9 +494,14 @@ export async function nativeSearchRequest(
   req: Request,
   fetchUpstream?: NativeFetch,
 ): Promise<Response> {
+  const authorization = req.headers.get("authorization") ?? "";
+  if (!authorization.startsWith("Bearer ") || authorization.length <= "Bearer ".length) {
+    return formatErrorResponse(401, "authentication_error", "Native search requires incoming Codex Bearer authorization");
+  }
   try {
     return await forwardNativeCodexRequest(req, "alpha/search", fetchUpstream);
   } catch (error) {
+    if (error instanceof NativeSearchModelError) return formatErrorResponse(400, "invalid_request_error", error.message);
     return formatErrorResponse(502, "upstream_error", error instanceof Error ? error.message : String(error));
   }
 }
@@ -567,6 +586,22 @@ async function withRequestBody(
   } finally { body.reservation.release(); }
 }
 
+function preparedResponse(input: unknown, model: string, scope: string, options: ResponseRequestOptions): Response {
+  const done: AdapterEvent = { type: "done", usage: { inputTokens: 0, outputTokens: 0 }, endTurn: true };
+  const prepared = buildResponseJSON([done], model);
+  // State preparation retains exact input, including unresolved URLs, with no network/model work.
+  if (options.rememberState === false || !rememberResponseState(input, prepared, { force: true, memoryOnly: true, scope })) {
+    return Response.json({ error: {
+      type: "invalid_request_error", code: "prewarm_context_unavailable", retryable: false,
+      message: "The prepared context cannot be retained within the local continuation cache. No generation was started.",
+    } }, { status: 400 });
+  }
+  async function* preparedEvents(): AsyncGenerator<AdapterEvent> { yield done; }
+  return new Response(bridgeToResponsesSSE(preparedEvents(), model, undefined, undefined, undefined, undefined, 2_000, {
+    responseId: prepared.id as string,
+  }), { headers: { "content-type": "text/event-stream", "cache-control": "no-cache" } });
+}
+
 export function responseRequest(
   req: Request,
   config: AppConfig,
@@ -597,6 +632,14 @@ async function responseRequestFromBody(
     return formatErrorResponse(400, "invalid_request_error", error instanceof Error ? error.message : String(error));
   }
   if (typeof requestedModel === "string" && !isChatGptWebModelSlug(requestedModel)) {
+    if (options.validateOnly) return Response.json({ error: {
+      type: "invalid_request_error", code: "steering_not_supported", retryable: false,
+      message: "Native Responses steering requires a native WebSocket service; HTTP forwarding cannot validate it.",
+    } }, { status: 400 });
+    if (options.prepareOnly) return Response.json({ error: {
+      type: "invalid_request_error", code: "unsupported_native_prewarm", param: "generate", retryable: false,
+      message: "Native model prewarm cannot be represented by the HTTP passthrough route. No generation was started.",
+    } }, { status: 400 });
     try {
       return await forwardNativeCodexRequest(body.replay(req), "responses", undefined, raw);
     } catch (error) {
@@ -612,40 +655,97 @@ async function responseRequestFromBody(
   const requestedPreviousResponseId = raw && typeof raw === "object" && !Array.isArray(raw)
     ? (raw as { previous_response_id?: unknown }).previous_response_id
     : undefined;
-  const expanded = expandPreviousResponseInput(raw);
+  const continuationScope = responseStateScope(req.headers);
+  let expanded = expandPreviousResponseInput(raw, continuationScope);
+  if (typeof requestedPreviousResponseId === "string" && expanded === raw) {
+    return Response.json({ error: {
+      type: "invalid_request_error", code: "previous_response_not_found", param: "previous_response_id", retryable: false,
+      message: "Local continuation state for previous_response_id is unavailable. Resend the complete original history without previous_response_id; do not replay tool side effects or send only the latest message.",
+    } }, { status: 400 });
+  }
+  const contextCompatibility = preflightContextCompatibility(
+    expanded && typeof expanded === "object" ? (expanded as { input?: unknown }).input ?? [] : [],
+  );
+  if (contextCompatibility.status === "blocked") {
+    return Response.json({ error: {
+      type: "invalid_request_error", code: "incompatible_web_context", retryable: false,
+      message: "ChatGPT Web cannot faithfully read this context. Preserve the original task and use the reported source-backend recovery path; retrying unchanged content cannot fix it.",
+      issues: contextCompatibility.issues, issue_count: contextCompatibility.issueCount,
+      issues_truncated: contextCompatibility.issuesTruncated,
+    } }, { status: 400 });
+  }
   let parsed: CodexParsedRequest;
   let route: ChatGptWebModelRoute;
   try {
+    const references = inspectInputReferences(expanded);
+    if (references.length || options.validateOnly) {
+      const validated = validateRequestForPreparation(expanded);
+      const validatedRoute = requireChatGptWebModelRoute(validated.modelId, config, validated.options.reasoning);
+      if (!validated._compactionRequest) validateChatGptWebRequestControls(validated._rawBody);
+      createChatGptStructuredOutputValidator(validated.options.outputFormat);
+      if (references.some(reference => reference.kind === "provider_file")) throw new InputReferenceError(
+        "unsupported_provider_file_reference", "Provider file_id requires a verified download endpoint for this provider/account; no compatible endpoint is configured.",
+      );
+      const identity = extractCodexTurnIdentityFromBody(expanded);
+      const cancelled = chatGptTurnSessions.cancelledError("", identity);
+      if (cancelled) return Response.json({ error: { type: "client_closed_request", code: "client_cancelled", message: cancelled.message } }, { status: 400 });
+      if (options.validateOnly) {
+        const validationBody = validated._rawBody as Record<string, unknown>;
+        if (config.mode !== "native-tools" || validatedRoute.interactionMode !== "automatic" || validatedRoute.modelFamily !== "6"
+          || validated._compactionRequest || validationBody.conversation != null
+          || (Array.isArray(validationBody.context_management) ? validationBody.context_management.length > 0 : validationBody.context_management != null)
+          || validationBody.agents != null) {
+          return Response.json({ error: { type: "invalid_request_error", code: "steering_not_supported",
+            message: "Steering is supported for ordinary automatic GPT-6 Native Tools responses without hosted conversations or automatic compaction.", retryable: false } }, { status: 400 });
+        }
+        return new Response(null, { status: 204 });
+      }
+      if (options.prepareOnly) {
+        if (validated._compactionRequest) return Response.json({ error: { type: "invalid_request_error", code: "unsupported_compaction_prewarm",
+          message: "Compaction requires its dedicated operation.", retryable: false } }, { status: 400 });
+        if (req.signal.aborted) throw new HttpBodyError("Request cancelled", 499);
+        return preparedResponse(expanded, validatedRoute.slug, continuationScope, options);
+      }
+      const scope = {
+        taskId: createHash("sha256").update(JSON.stringify([identity.threadId ?? crypto.randomUUID(), identity.turnId ?? ""])).digest("hex"),
+        providerId: validatedRoute.slug, accountId: continuationScope,
+      };
+      const resolved = await resolveInputReferences(expanded, {
+        scope, authorization: { scope, urls: references.flatMap(reference => reference.kind === "url" ? [reference.url] : []) },
+        signal: req.signal, reserveBytes: bytes => body.reservation.grow(bytes), transport: options.inputReferenceTransport,
+      });
+      copyPreviousResponseProvenance(expanded, resolved);
+      expanded = resolved;
+    }
     parsed = parseRequest(expanded);
     route = routeChatGptWebRequest(parsed, config);
+    if (!parsed._compactionRequest) validateChatGptWebRequestControls(parsed._rawBody);
+    if (options.prepareOnly) createChatGptStructuredOutputValidator(parsed.options.outputFormat);
     const identity = extractChatGptTurnIdentity(parsed);
     if (identity.threadId && identity.turnId) {
       options.onTurnIdentity?.({ threadId: identity.threadId, turnId: identity.turnId });
     }
   } catch (error) {
+    if (error instanceof HttpBodyError) throw error;
+    if (error instanceof InputReferenceError) return Response.json({ error: {
+      type: error.type, code: error.code, message: error.message, retryable: false,
+    } }, { status: error.status });
+    if (error instanceof ChatGptWebAdapterError) {
+      return Response.json({ error: { type: error.errorType, code: error.code, message: error.message, retryable: false } }, { status: error.status });
+    }
     return formatErrorResponse(400, "invalid_request_error", error instanceof Error ? error.message : String(error));
   }
-  if (parsed._opaqueMultiAgentV2Payload) {
-    return formatErrorResponse(
-      400,
-      "invalid_request_error",
-      "ChatGPT Web cannot read this encrypted cross-backend subagent payload. "
-        + "Start a new Compatibility V1 task, or delegate from a Web model whose collaboration call uses the plaintext-delivery marker.",
-    );
-  }
-  if (typeof requestedPreviousResponseId === "string" && expanded === raw) {
-    return formatErrorResponse(
-      409,
-      "invalid_request_error",
-      "Local continuation state for previous_response_id is unavailable; refusing to run ChatGPT Web with partial Codex context. Compact the Codex task or start a new task before retrying.",
-    );
-  }
-
   const compaction = parsed._compactionRequest === true;
+  if (options.prepareOnly && compaction) return Response.json({ error: {
+    type: "invalid_request_error", code: "unsupported_compaction_prewarm", retryable: false,
+    message: "Compaction requires its dedicated operation and cannot be prepared as an empty response.",
+  } }, { status: 400 });
   const compactionItem = compaction && parsed._compactionResponseFormat !== "message";
   const rememberCompletedResponse = (response: Record<string, unknown>): void => {
     if (!compaction) {
-      if (options.rememberState !== false) rememberResponseState(parsed._rawBody, response, { force: true });
+      if (options.rememberState !== false) rememberResponseState(parsed._rawBody, response, {
+        force: true, memoryOnly: options.memoryOnlyState, scope: continuationScope,
+      });
       return;
     }
     if (response.status !== "completed") return;
@@ -682,7 +782,9 @@ async function responseRequestFromBody(
     parsed.context.messages.push({ role: "user", content: COMPACT_PROMPT, timestamp: Date.now() });
   }
 
-  const provider = withLauncherRuntimeParameters(providerConfig(config));
+  // Preparing context must not require a running browser host. Keep native revision and
+  // cancellation validation below, but hydrate live runtime settings only for generation.
+  const provider = options.prepareOnly ? providerConfig(config) : withLauncherRuntimeParameters(providerConfig(config));
   let traceId: string | undefined;
   try {
     traceId = chatGptWebTraceId(provider, parsed);
@@ -720,6 +822,10 @@ async function responseRequestFromBody(
       status: 400,
       headers: { "content-type": "application/json" },
     });
+  }
+  if (options.prepareOnly) {
+    if (req.signal.aborted) throw new HttpBodyError("Request cancelled", 499);
+    return preparedResponse(parsed._rawBody, route.slug, continuationScope, options);
   }
   const adapter = adapterFactory(provider);
   const queue = new AsyncEventQueue<AdapterEvent>();
@@ -940,9 +1046,44 @@ export function startServer(
   const httpTurns = new HttpTurnCounter();
   const modelCatalogFetches = dependencies.modelCatalogFetches ?? new ModelCatalogFetches();
   const bodyBudget = dependencies.bodyBudget ?? new HttpBodyBudget();
+  const dispatchResponses = (req: Request, operation?: { prepareOnly?: boolean; memoryOnlyState?: boolean }): Promise<Response> => {
+    if (draining) return Promise.resolve(formatErrorResponse(503, "server_error", "web2harness is draining for a requested service operation"));
+    return httpTurns.track(
+      (signal, bindIdentity) => responseRequest(
+        new Request(req, { signal }), config, dependencies.adapterFactory,
+        { onTurnIdentity: bindIdentity, bodyBudget, prepareOnly: operation?.prepareOnly, memoryOnlyState: operation?.memoryOnlyState },
+      ),
+      req.signal, process.platform, "responses",
+    );
+  };
+  const responsesWs = createResponsesWebSocketAdapter({
+    dispatch: (req, operation) => dispatchResponses(req, { ...operation, memoryOnlyState: true }),
+    async validateSteer(req: Request, target: SteerTarget): Promise<SteerValidation> {
+      if (draining) return { ok: false, code: "response_not_active", message: "Responses server is draining." };
+      const validation = await withRequestBody(req, config, { bodyBudget }, async reserved => {
+        const submission = reserved.value as Record<string, unknown>;
+        const original = target.requestBody;
+        const full = expandPreviousResponseInput(original, responseStateScope(req.headers)) as Record<string, unknown>;
+        if (typeof original.previous_response_id === "string" && full === original) {
+          return Response.json({ error: { code: "previous_response_not_found", message: "The target's original history is no longer available; steering was not accepted." } }, { status: 400 });
+        }
+        const items = (value: unknown): unknown[] => Array.isArray(value) ? value
+          : typeof value === "string" ? [{ role: "user", content: value }] : [];
+        const candidate: Record<string, unknown> = { ...full, input: [...items(full.input), ...items(submission.input)] };
+        delete candidate.previous_response_id;
+        return responseRequestFromBody(req, config, dependencies.adapterFactory ?? createChatGptWebAdapter, { validateOnly: true, bodyBudget }, reserved, candidate);
+      });
+      if (validation.status === 204) return { ok: true };
+      try {
+        const body = await validation.json() as { error?: { code?: string; message?: string } };
+        return { ok: false, code: body.error?.code ?? "invalid_input", message: body.error?.message ?? "Steering validation failed." };
+      } catch { return { ok: false, code: "invalid_input", message: "Steering validation failed." }; }
+    },
+  });
   const activity = () => ({
     active_http_turns: httpTurns.count(),
     active_browser_turns: chatGptTurnSessions.activeCount() + (turnBroker?.externalOwnerActiveCount() ?? 0),
+    active_websocket_turns: responsesWs.activeCount(),
   });
   const controlAuthorized = (req: Request): boolean => {
     const header = req.headers.get("authorization") ?? "";
@@ -954,7 +1095,8 @@ export function startServer(
     hostname: config.host,
     port: config.port,
     idleTimeout: 0,
-    async fetch(req) {
+    websocket: responsesWs.websocket,
+    async fetch(req, bunServer) {
       const url = new URL(req.url);
       if (req.method === "GET" && url.pathname === "/healthz") {
         return Response.json({
@@ -977,6 +1119,7 @@ export function startServer(
       if (req.method === "POST" && (url.pathname === "/admin/drain" || url.pathname === "/admin/resume")) {
         if (!controlAuthorized(req)) return new Response("Unauthorized", { status: 401 });
         draining = url.pathname === "/admin/drain";
+        responsesWs.setDraining(draining);
         turnBroker?.setExternalOwnersAccepted(!draining);
         return Response.json({ status: "ok", accepting_turns: !draining, ...activity() });
       }
@@ -1103,7 +1246,7 @@ export function startServer(
       if (req.method === "POST" && url.pathname === "/admin/shutdown") {
         if (!controlAuthorized(req)) return new Response("Unauthorized", { status: 401 });
         const current = activity();
-        if (!draining || current.active_http_turns > 0 || current.active_browser_turns > 0) {
+        if (!draining || current.active_http_turns > 0 || current.active_browser_turns > 0 || current.active_websocket_turns > 0) {
           return Response.json(
             {
               status: "refused",
@@ -1171,24 +1314,15 @@ export function startServer(
         }, req.signal, process.platform, "models");
       }
       if (req.method === "GET" && url.pathname === "/v1/responses") {
-        return new Response("Responses WebSocket transport is not enabled on this local route", {
-          status: 426,
-          headers: { "content-type": "text/plain; charset=utf-8" },
-        });
+        if (draining) return formatErrorResponse(503, "server_error", "web2harness is draining for a requested service operation");
+        if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+          return new Response("WebSocket upgrade required", { status: 426 });
+        }
+        if (bunServer.upgrade(req, { data: responsesWs.createData(req) })) return;
+        return formatErrorResponse(400, "invalid_request_error", "WebSocket upgrade failed");
       }
       if (req.method === "POST" && url.pathname === "/v1/responses") {
-        if (draining) return formatErrorResponse(503, "server_error", "web2harness is draining for a requested service operation");
-        return httpTurns.track(
-          (signal, bindIdentity) => responseRequest(
-            new Request(req, { signal }),
-            config,
-            dependencies.adapterFactory,
-            { onTurnIdentity: bindIdentity, bodyBudget },
-          ),
-          req.signal,
-          process.platform,
-          "responses",
-        );
+        return dispatchResponses(req);
       }
       if (req.method === "POST" && url.pathname === "/v1/responses/compact") {
         if (draining) return formatErrorResponse(503, "server_error", "web2harness is draining for a requested service operation");
@@ -1232,10 +1366,18 @@ export function startServer(
   function shutdown(): void {
     if (shutdownPromise) return;
     draining = true;
+    responsesWs.closeAll();
     modelCatalogFetches.close();
     chatGptTurnSessions.clear();
     flushResponseState();
     shutdownPromise = (async () => {
+      let transportTimer: ReturnType<typeof setTimeout> | undefined;
+      const transportSettled = await Promise.race([
+        responsesWs.settled().then(() => true),
+        new Promise<boolean>(resolve => { transportTimer = setTimeout(() => resolve(false), 5_000); }),
+      ]);
+      clearTimeout(transportTimer);
+      if (!transportSettled) console.warn("[web2harness] Responses WebSocket cleanup exceeded the shutdown deadline");
       const results = await Promise.allSettled([
         closeChatGptBrowserWorkers(),
         closeTurnBrokers(),

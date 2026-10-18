@@ -15,6 +15,7 @@ export function responsesUsage(usage: CodexUsage | undefined): Record<string, un
     output_tokens: usage.outputTokens,
     total_tokens: usageDisplayTotalTokens(usage) ?? inputTokens + usage.outputTokens,
   };
+  if (usage.estimated === true) out.estimated = true;
   const inputDetails: Record<string, number> = {};
   if (usage.cachedInputTokens !== undefined) {
     // cached_tokens carries cache READS only, matching OpenAI semantics.

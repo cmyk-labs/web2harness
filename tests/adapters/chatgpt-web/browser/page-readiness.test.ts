@@ -40,6 +40,70 @@ const empty: ChatGptReadinessSnapshot = { documentComplete: true, surfaceBound: 
   verification: false, subscriptionFailure: false };
 const unsent = { reused: false, submissionStarted: false, conversationRequestObserved: false };
 
+test.each([false, true])("readiness waits through a loading sign-in placeholder before returning the authenticated composer (editable=%s)", async editable => {
+  const composer = {} as Locator;
+  let now = 0, reads = 0, composerSelections = 0;
+  const page = { locator: () => {
+    composerSelections++;
+    expect(reads).toBe(2);
+    return { filter: () => ({ first: () => composer }) };
+  } } as unknown as Page;
+  const loading = { ...empty, documentComplete: false, surfaceBound: editable,
+    composers: editable ? 1 : 0, editable, signIn: true };
+  const ready = { ...empty, composers: 1, editable: true, unknownEditors: 0 };
+  const observed: ChatGptReadinessSnapshot[] = [];
+  expect(await waitForChatGptReadiness(page, {
+    deadline: 250, now: () => now,
+    sleep: async ms => { expect(composerSelections).toBe(0); now += ms; },
+    read: async () => ++reads === 1 ? loading : ready,
+    onSnapshot: snapshot => observed.push(snapshot),
+  })).toBe(composer);
+  expect(observed).toEqual([loading, ready]);
+  expect(composerSelections).toBe(1);
+  expect(now).toBe(100);
+});
+
+test("readiness rejects a complete sign-in page before returning even an editable composer", async () => {
+  let reads = 0;
+  const page = { locator: () => { throw new Error("must not select a composer on a complete sign-in page"); } } as unknown as Page;
+  await rejects(waitForChatGptReadiness(page, {
+    deadline: 250, now: () => 0,
+    sleep: async () => { throw new Error("complete sign-in must not be retried"); },
+    read: async () => { reads++; return { ...empty, composers: 1, editable: true, signIn: true }; },
+  }), { code: "chatgpt_sign_in_required", status: 401, retryable: false });
+  expect(reads).toBe(1);
+});
+
+test.each([false, true])("a persistent loading sign-in placeholder expires at the original readiness deadline (editable=%s)", async editable => {
+  let now = 0, reads = 0;
+  const budgets: number[] = [];
+  await rejects(waitForChatGptReadiness({} as Page, {
+    deadline: 250, now: () => now, sleep: async ms => { now += ms; },
+    read: async (_page, budget) => {
+      reads++; budgets.push(budget);
+      return { ...empty, documentComplete: false, surfaceBound: editable,
+        composers: editable ? 1 : 0, editable, signIn: true };
+    },
+  }), { code: "chatgpt_composer_unavailable", retryable: false });
+  expect(now).toBe(250);
+  expect(reads).toBe(3);
+  expect(budgets).toEqual([250, 150, 50]);
+});
+
+test("cancellation while a loading sign-in placeholder hydrates prevents another readiness read", async () => {
+  const abort = new AbortController();
+  let reads = 0;
+  await rejects(waitForChatGptReadiness({} as Page, {
+    deadline: 250, now: () => 0, signal: abort.signal,
+    sleep: async () => { abort.abort(); },
+    read: async () => {
+      reads++;
+      return { ...empty, documentComplete: false, surfaceBound: false, signIn: true };
+    },
+  }), { name: "AbortError" });
+  expect(reads).toBe(1);
+});
+
 test("readiness waits for editable hydration and gives explicit auth/challenge errors before a composer", async () => {
   const composer = {} as Locator;
   const page = { locator: () => ({ filter: () => ({ first: () => composer }) }) } as unknown as Page;

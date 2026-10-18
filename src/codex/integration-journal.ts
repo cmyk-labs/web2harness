@@ -14,6 +14,7 @@ import type {
   CodexIntegrationJournal,
   LegacyCodexIntegrationJournal,
   LegacyCodexIntegrationJournalV9,
+  LegacyCodexIntegrationJournalV10,
   LegacyCodexIntegrationJournalV3,
   LegacyCodexIntegrationJournalV4,
   LegacyCodexIntegrationJournalV5,
@@ -22,6 +23,7 @@ import type {
   LegacyCodexIntegrationJournalV8,
 } from "./integration-shared";
 import { verifyManagedJournalState } from "./integration-route";
+import { findFeatureAssignment } from "./integration-document";
 
 function isPreviousAssignment(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
@@ -41,10 +43,29 @@ function isInstalledInterruptHook(value: unknown): boolean {
     && typeof hook.fragment === "string" && hook.fragment.length > 0;
 }
 
+function isStandaloneSearchBaseline(value: unknown): boolean {
+  if (!isPreviousAssignment(value)) return false;
+  const previous = value as Record<string, unknown>;
+  if (typeof previous.tablePresent !== "boolean" || previous.tableName !== "features"
+    || previous.inlineTable !== undefined
+    || (previous.separatorInserted !== undefined && typeof previous.separatorInserted !== "boolean")
+    || (previous.index !== undefined && (!Number.isSafeInteger(previous.index) || (previous.index as number) < 0))) {
+    return false;
+  }
+  if (!previous.present) return previous.rawLine === undefined && previous.value === undefined;
+  if (!previous.tablePresent || /[\r\n]/.test(previous.rawLine as string)) return false;
+  try {
+    const assignment = findFeatureAssignment(["[features]", previous.rawLine as string], "standalone_web_search");
+    return assignment.present && assignment.value === previous.value;
+  } catch {
+    return false;
+  }
+}
+
 function parseJournal(path: string): AnyCodexIntegrationJournal {
   const value = JSON.parse(stripUtf8Bom(readFileSync(path, "utf8"))) as Record<string, unknown>;
   const installed = value.installed as Record<string, unknown> | undefined;
-  if (value.version === 10
+  if ((value.version === 10 || value.version === 11)
     && typeof value.active === "boolean"
     && installed
     && typeof installed.openai_base_url === "string"
@@ -59,8 +80,12 @@ function parseJournal(path: string): AnyCodexIntegrationJournal {
     && value.previous
     && isPreviousAssignment(value.previousRealtimeWebrtcCallBaseUrl)
     && isInstalledInterruptHook(value.interruptHook)
+    && (value.version === 11 || (installed.standalone_web_search === undefined && value.previousStandaloneWebSearch === undefined))
+    && (installed.standalone_web_search === undefined
+      ? value.previousStandaloneWebSearch === undefined
+      : installed.standalone_web_search === true && isStandaloneSearchBaseline(value.previousStandaloneWebSearch))
     && typeof value.configPath === "string") {
-    return value as unknown as CodexIntegrationJournal;
+    return value as unknown as CodexIntegrationJournal | LegacyCodexIntegrationJournalV10;
   }
   if (value.version === 9
     && typeof value.active === "boolean"
@@ -180,6 +205,16 @@ export function readJournal(): AnyCodexIntegrationJournal | undefined {
 
   const primaryMatches = primary ? journalMatchesConfig(primary) : false;
   const recoveryMatches = recovery ? journalMatchesConfig(recovery) : false;
+  if (primaryMatches && recoveryMatches && primary && recovery
+    && ((primary.version === 10 && recovery.version === 11) || (primary.version === 11 && recovery.version === 10))
+    && JSON.stringify({ ...primary, version: 11 }) === JSON.stringify({ ...recovery, version: 11 })) {
+    // A non-Native-Tools upgrade may change only the journal version, with identical config
+    // and restore evidence. This is not the conflicting-baseline case below.
+    const upgraded = primary.version === 11 ? primary : recovery;
+    const data = serializeJournal(upgraded);
+    writeFilesWithCompensation([{ path: recoveryPath, data }, { path: primaryPath, data }]);
+    return upgraded;
+  }
   if (primaryMatches === recoveryMatches) {
     throw new Error(
       primaryMatches

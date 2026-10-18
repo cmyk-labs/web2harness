@@ -35,6 +35,7 @@ class RequestQueue {
       this.core.restoreMcpStatus(saved.mcpStatus);
       for (const reason of saved.pauseReasons ?? []) this.core.pause(reason);
       if (saved.pendingSend === true) this.core.pause("send_outcome_unknown");
+      this.core.restorePauseSources(saved.pauseSources);
       if (Number.isFinite(saved.lastSendAt)) this.core.lastSendAt = performance.now() - Math.max(0, Date.now() - saved.lastSendAt);
       for (const record of saved.records) {
         if (typeof record.id !== "string" || typeof record.groupId !== "string" || !Number.isFinite(record.queuedAt)
@@ -93,7 +94,8 @@ class RequestQueue {
   }
   async persist() {
     if (!this.dirty) return;
-    const text = JSON.stringify({ version: 1, pauseReasons: [...this.core.pauseReasons], pendingSend: Boolean(this.core.sendOwner),
+    const text = JSON.stringify({ version: 1, pauseReasons: [...this.core.pauseReasons],
+      pauseSources: [...this.core.pauseSources].map(([reason, requestId]) => ({ reason, requestId })), pendingSend: Boolean(this.core.sendOwner),
       mcpStatus: this.core.mcpStatus(),
       lastSendAt: this.core.lastSendAt === undefined ? undefined : Date.now() - (performance.now() - this.core.lastSendAt),
       records: [...this.core.jobs.values()].map(job => this.core.view(job)) });
@@ -135,7 +137,7 @@ class RequestQueue {
       else if (action === "send-end") result = this.core.endSend(input.id, lease, input.permit, input.outcome) ?? { acknowledged: true };
       else if (action === "settle") {
         if (this.hasResource(owner.traceId)) throw new Error("Browser resources have not been released");
-        if (input.reason === "rate_limit_exceeded") this.core.pause("account_rate_limited");
+        if (input.reason === "rate_limit_exceeded") this.core.pause("account_rate_limited", input.id);
         result = lease ? this.core.settle(input.id, lease, input.outcome, input.reason, input.remote) : this.core.cancel(input.id);
       } else throw new Error("Unknown queue action");
     }

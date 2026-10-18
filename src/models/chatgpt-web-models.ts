@@ -50,6 +50,11 @@ function indexModelRoutes(): ReadonlyMap<string, ChatGptWebModelRoute> {
 
 const routesBySlug = indexModelRoutes();
 
+/** Identity lookup only. Generation must still use requireChatGptWebModelRoute for account checks. */
+export function lookupChatGptWebModelRoute(modelId: string): ChatGptWebModelRoute | undefined {
+  return routesBySlug.get(modelId);
+}
+
 function accountSupportsRoute(route: ChatGptWebModelRoute, capabilities: ChatGptWebAccountCapabilities): boolean {
   return (!route.requiresPro || capabilities.proAvailable)
     && (!route.requiresExtraHigh || capabilities.extraHighAvailable === true);

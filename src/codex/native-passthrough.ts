@@ -6,6 +6,7 @@ import {
 } from "../responses/compaction";
 import { BRIDGE_REASONING_PREFIX } from "../responses/reasoning-envelope";
 import { fetchNativeCodex } from "./native-network";
+import { resolveNativeSearchModel } from "./native-search";
 
 const CODEX_BACKEND = "https://chatgpt.com/backend-api/codex";
 const FIRST_PARTY_CODEX_ORIGINATORS = new Set([
@@ -243,6 +244,13 @@ export async function forwardNativeCodexRequest(
       compactionRequest ||= endpoint === "responses" && isObject(tail) && tail.type === "compaction_trigger";
     }
     const scrubbed = scrubBridgeArtifactsForNative(parsedBody);
+    if (endpoint === "alpha/search" && isObject(scrubbed.value) && typeof scrubbed.value.model === "string") {
+      const searchModel = resolveNativeSearchModel(scrubbed.value.model);
+      if (searchModel !== scrubbed.value.model) {
+        scrubbed.value = { ...scrubbed.value, model: searchModel };
+        scrubbed.changed = true;
+      }
+    }
     if (scrubbed.changed) {
       headers.delete("content-encoding");
       body = JSON.stringify(scrubbed.value);
@@ -257,7 +265,7 @@ export async function forwardNativeCodexRequest(
     signal: request.signal,
     // Images create work: preserve redirects as responses instead of replaying a POST or
     // forwarding account headers to a redirect destination.
-    redirect: imageRequest ? "manual" : "follow",
+    redirect: imageRequest || endpoint === "alpha/search" ? "manual" : "follow",
   });
   const upstream = await fetchUpstream(upstreamRequest);
   if (compactionRequest && !upstream.ok) {
@@ -269,7 +277,7 @@ export async function forwardNativeCodexRequest(
   }
   const responseHeaders = endToEndHeaders(upstream.headers);
   // fetch exposes decompressed image JSON; retaining gzip/br would make Codex decode it twice.
-  if (imageRequest) responseHeaders.delete("content-encoding");
+  if (imageRequest || endpoint === "alpha/search") responseHeaders.delete("content-encoding");
   const isEventStream = (upstream.headers.get("content-type") ?? "")
     .toLowerCase()
     .includes("text/event-stream");

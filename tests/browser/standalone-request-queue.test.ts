@@ -80,7 +80,7 @@ test("lost remote owner retains its physical lease and fences new dispatch", asy
     const deadline = Date.now() + 2500;
     while (!queue.snapshot().pausedReason && Date.now() < deadline) await delay(25);
     expect(queue.snapshot()).toMatchObject({ active: 1, pausedReason: "browser_unavailable" });
-    expect((await admit(queue, "after_remote_crash")).record.state).toBe("queued");
+    expect((await admit(queue, "after_remote_crash")).record).toMatchObject({ state: "failed", reason: "queue_blocked_browser_unavailable" });
     await expect(queue.close()).rejects.toMatchObject({ code: "queue_resource_not_released" });
     expect((await inspectStandaloneRequestQueue(profile)).ownerPresent).toBe(true);
   } finally {
@@ -277,7 +277,7 @@ test("unknown send and rate limits pause dispatch until offline recovery; settin
     const permit = await waitForSendPermit(queue, ticket);
     await queue.request("send-end", { ...ticket, permit, outcome: "unknown" });
     await queue.request("settle", { ...ticket, outcome: "failed" });
-    expect((await admit(queue, "blocked")).record.state).toBe("queued");
+    expect((await admit(queue, "blocked")).record).toMatchObject({ state: "failed", reason: "queue_blocked_send_outcome_unknown", blockedBy: { requestId: ticket.id } });
     await queue.close(); queue = await StandaloneRequestQueue.open(profile);
     expect(queue.snapshot().pausedReason).toBe("send_outcome_unknown");
     await queue.close();

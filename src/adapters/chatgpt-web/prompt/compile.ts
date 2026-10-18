@@ -266,7 +266,9 @@ export function compileChatGptWebPrompt(
         : parsed.options.verbosity === "high"
           ? ["Codex requested high response verbosity. Use thorough detail in the final user-facing answer when it improves completeness or precision."]
           : []),
-    ...(parsed.options.outputFormat
+    ...(parsed.options.outputFormat?.type === "json_object"
+      ? ["Codex requested json_object output. The final user-facing answer must be one valid JSON object without Markdown fences or surrounding prose."]
+      : parsed.options.outputFormat
       ? [
         `Codex requested a ${parsed.options.outputFormat.strict ? "strict " : ""}JSON-schema final answer named ${JSON.stringify(parsed.options.outputFormat.name)}.`,
         "The final user-facing answer must be one JSON value matching the supplied schema. Do not wrap it in a Markdown code fence and do not add prose before or after the JSON value.",

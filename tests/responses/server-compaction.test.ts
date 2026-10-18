@@ -549,7 +549,9 @@ test("refuses a ChatGPT Web continuation when local previous-response state is u
     }),
   }), defaultConfig("browser-only"));
 
-  expect(response.status).toBe(409);
-  const body = await response.json() as { error: { message: string } };
-  expect(body.error.message).toContain("partial Codex context");
+  expect(response.status).toBe(400);
+  const body = await response.json() as { error: { message: string; code: string; param: string } };
+  expect(body.error.code).toBe("previous_response_not_found");
+  expect(body.error.param).toBe("previous_response_id");
+  expect(body.error.message).toContain("complete original history");
 });

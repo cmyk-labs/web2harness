@@ -1,0 +1,432 @@
+import type { ServerWebSocket, WebSocketHandler } from "bun";
+import { WebSocketSteering, type SteeringJob, type SteerTarget, type SteerValidation } from "./websocket-steering";
+export type { SteerTarget, SteerValidation } from "./websocket-steering";
+
+type JsonObject = Record<string, unknown>;
+type Socket = ServerWebSocket<ResponsesWebSocketData>;
+type PendingFrame = { text: string; bytes: number; resolve(): void; reject(error: Error): void };
+type ActiveResponse = { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array> };
+type QueuedResponse = SteeringJob & { bytes: number };
+type Lane = { streamId?: string; queue: QueuedResponse[]; active?: ActiveResponse; ready: boolean };
+
+export interface ResponsesWebSocketData {
+  readonly url: string;
+  /** Snapshot of the upgrade request, never populated from response.create fields. */
+  readonly headers: readonly (readonly [string, string])[];
+  lanes: Map<string | undefined, Lane>;
+  ready: Lane[];
+  inFlight: number;
+  queuedRequests: number;
+  queuedBytes: number;
+  scheduling: boolean;
+  sequence: number;
+  steering?: WebSocketSteering;
+  closed: boolean;
+  pending: PendingFrame[];
+  pendingBytes: number;
+  blocked?: PendingFrame;
+  backpressureTimer?: ReturnType<typeof setTimeout>;
+}
+
+export interface ResponsesWebSocketLimits {
+  maxMessageBytes: number;
+  maxEventBytes: number;
+  maxBufferedBytes: number;
+  maxPendingFrames: number;
+  backpressureTimeoutMs: number;
+  maxConnections: number;
+  maxActiveResponses: number;
+  maxNamedLanes: number;
+  maxQueuedRequests: number;
+  maxQueuedBytes: number;
+  maxPendingSteers: number;
+  maxSteeringBytes: number;
+  steerValidationTimeoutMs: number;
+}
+
+export interface ResponsesWebSocketOptions {
+  /**
+   * The SAME dispatch/lifecycle used by POST /v1/responses, including native routing.
+   * prepareOnly MUST validate and prepare request state without generating. A route
+   * that cannot prepare state must return an error; it must never ignore this option.
+   */
+  dispatch(request: Request, options?: { prepareOnly?: boolean }): Promise<Response>;
+  /** Validate only; never generate/cache. Required to opt this shared route into steering. */
+  validateSteer?(request: Request, target: SteerTarget): Promise<SteerValidation>;
+  limits?: Partial<ResponsesWebSocketLimits>;
+}
+
+const MIB = 1024 * 1024;
+const DEFAULT_LIMITS: ResponsesWebSocketLimits = {
+  maxMessageBytes: 64 * MIB,
+  maxEventBytes: 16 * MIB,
+  maxBufferedBytes: 32 * MIB,
+  maxPendingFrames: 32,
+  backpressureTimeoutMs: 30_000,
+  maxConnections: 128,
+  maxActiveResponses: 16,
+  maxNamedLanes: 32,
+  maxQueuedRequests: 128,
+  maxQueuedBytes: 64 * MIB,
+  maxPendingSteers: 64,
+  maxSteeringBytes: 8 * MIB,
+  steerValidationTimeoutMs: 10_000,
+};
+const TERMINAL_EVENTS = new Set(["response.completed", "response.failed", "response.incomplete", "error"]);
+const object = (value: unknown): value is JsonObject => value !== null && typeof value === "object" && !Array.isArray(value);
+
+function errorEvent(status: number, code: string, message: string, param?: string): JsonObject {
+  return {
+    type: "error", status,
+    error: { type: status >= 500 ? "server_error" : "invalid_request_error", code, message, ...(param ? { param } : {}) },
+  };
+}
+
+/** Incremental SSE framing: chunk boundaries, CR/LF and UTF-8 boundaries are not events. */
+async function* sseData(reader: ReadableStreamDefaultReader<Uint8Array>, maxBytes: number): AsyncGenerator<string> {
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let line = "", parts: string[] = [], eventBytes = 0, skipLf = false;
+  function* lines(text: string): Generator<string> {
+    for (const char of text) {
+      if (skipLf) { skipLf = false; if (char === "\n") continue; }
+      if (char !== "\r" && char !== "\n") {
+        line += char;
+        if (line.length + eventBytes > maxBytes) throw new Error("SSE event too large");
+        continue;
+      }
+      skipLf = char === "\r";
+      eventBytes += Buffer.byteLength(line) + 1;
+      if (eventBytes > maxBytes) throw new Error("SSE event too large");
+      if (!line) {
+        const data = parts.length ? parts.join("\n") : undefined;
+        parts = []; eventBytes = 0;
+        if (data !== undefined) yield data;
+      } else if (line === "data") parts.push("");
+      else if (line.startsWith("data:")) parts.push(line.slice(line[5] === " " ? 6 : 5));
+      line = "";
+    }
+  }
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    // Do not decode an arbitrarily large upstream chunk into a second unbounded string.
+    for (let offset = 0; offset < value.length; offset += 64 * 1024) {
+      yield* lines(decoder.decode(value.subarray(offset, offset + 64 * 1024), { stream: true }));
+    }
+  }
+  yield* lines(decoder.decode());
+  if (parts.length || line === "data" || line.startsWith("data:")) throw new Error("Unterminated SSE event");
+}
+
+async function readHttpError(response: Response, active: ActiveResponse, maxBytes: number): Promise<JsonObject> {
+  const chunks: Uint8Array[] = [];
+  let size = 0, body: unknown;
+  if (response.body) {
+    const reader = active.reader = response.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if ((size += value.length) > maxBytes) throw new Error("HTTP error body too large");
+      chunks.push(value);
+    }
+    try { body = JSON.parse(Buffer.concat(chunks, size).toString("utf8")); } catch { /* Never forward arbitrary HTML. */ }
+  }
+  const event = errorEvent(response.status, "upstream_http_error", `Responses request failed with HTTP ${response.status}.`);
+  if (object(body) && object(body.error)) event.error = body.error;
+  const headers: Record<string, string> = {};
+  for (const name of ["retry-after", "x-request-id"]) {
+    const value = response.headers.get(name);
+    if (value) headers[name] = value;
+  }
+  if (Object.keys(headers).length) event.headers = headers;
+  return event;
+}
+
+/**
+ * Transport only: response.create -> existing HTTP POST -> Responses JSON events.
+ * No model substitution, tools, response cache, replay or cross-connection cancellation.
+ * Authenticate/authorize the upgrade exactly as the HTTP route before server.upgrade().
+ */
+export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptions) {
+  const limits = { ...DEFAULT_LIMITS, ...options.limits };
+  for (const [name, value] of Object.entries(limits)) {
+    if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`Invalid WebSocket limit: ${name}`);
+  }
+  if (limits.maxActiveResponses > 16 || limits.maxNamedLanes > 32) throw new Error("Responses WebSocket protocol lane limits exceeded");
+  const sockets = new Set<Socket>();
+  const activeTasks = new Set<Promise<void>>();
+  const controlTasks = new Set<Promise<void>>();
+  let draining = false;
+
+  function releaseSocket(ws: Socket): void {
+    const data = ws.data;
+    if (data.closed) return;
+    data.closed = true;
+    sockets.delete(ws);
+    clearTimeout(data.backpressureTimer);
+    const error = new Error("Responses WebSocket disconnected");
+    data.steering?.close();
+    for (const lane of data.lanes.values()) {
+      lane.active?.controller.abort(error);
+      void lane.active?.reader?.cancel(error).catch(() => {});
+      lane.queue.length = 0; lane.ready = false;
+    }
+    data.ready.length = 0; data.queuedRequests = 0; data.queuedBytes = 0;
+    data.blocked?.reject(error);
+    data.blocked = undefined;
+    for (const pending of data.pending.splice(0)) pending.reject(error);
+    data.pendingBytes = 0;
+  }
+
+  function closeSocket(ws: Socket, code: number, reason: string): void {
+    releaseSocket(ws);
+    ws.close(code, reason);
+  }
+
+  function flush(ws: Socket): void {
+    const data = ws.data;
+    while (!data.closed && !data.blocked && data.pending.length) {
+      const frame = data.pending.shift()!;
+      data.pendingBytes -= frame.bytes;
+      let sent: number;
+      try { sent = ws.send(frame.text); } catch { sent = 0; }
+      if (sent === 0) {
+        frame.reject(new Error("WebSocket frame was dropped"));
+        closeSocket(ws, 1011, "Responses transport send failed");
+      } else if (sent === -1) {
+        // Bun has ALREADY queued this frame. Resolve on drain; never send it a second time.
+        data.blocked = frame;
+        data.backpressureTimer = setTimeout(() => closeSocket(ws, 1013, "Responses backpressure timeout"), limits.backpressureTimeoutMs);
+      } else frame.resolve();
+    }
+  }
+
+  function send(ws: Socket, event: JsonObject, streamId?: string): Promise<void> {
+    if (ws.data.closed) return Promise.reject(new Error("WebSocket is closed"));
+    const payload = { ...event };
+    delete payload.stream_id;
+    if (streamId !== undefined) payload.stream_id = streamId;
+    if ("sequence_number" in payload || String(payload.type).startsWith("response.steer.")) payload.sequence_number = ws.data.sequence++;
+    const text = JSON.stringify(payload), bytes = Buffer.byteLength(text), data = ws.data;
+    if (bytes > limits.maxEventBytes || data.pending.length >= limits.maxPendingFrames
+      || ws.getBufferedAmount() + data.pendingBytes + bytes > limits.maxBufferedBytes) {
+      closeSocket(ws, 1013, "Responses output buffer limit");
+      return Promise.reject(new Error("WebSocket output limit"));
+    }
+    return new Promise<void>((resolve, reject) => {
+      data.pending.push({ text, bytes, resolve, reject }); data.pendingBytes += bytes;
+      flush(ws);
+    });
+  }
+
+  function reject(ws: Socket, status: number, code: string, message: string, param?: string, streamId?: string): void {
+    trackControl(send(ws, errorEvent(status, code, message, param), streamId));
+  }
+
+  function trackControl(promise: Promise<void>): void {
+    const task = promise.catch(() => {}).finally(() => controlTasks.delete(task));
+    controlTasks.add(task);
+  }
+
+  function request(data: ResponsesWebSocketData, body: JsonObject, signal: AbortSignal): Request {
+    return new Request(data.url, { method: "POST", headers: data.headers as [string, string][], body: JSON.stringify(body), signal });
+  }
+
+  function markReady(data: ResponsesWebSocketData, lane: Lane): void {
+    if (!lane.active && lane.queue.length && !lane.ready && !data.closed) {
+      lane.ready = true; data.ready.push(lane);
+    }
+  }
+
+  function schedule(ws: Socket): void {
+    const data = ws.data;
+    if (data.scheduling || data.closed) return;
+    data.scheduling = true;
+    try {
+      // One request per ready lane per rotation; a busy lane never blocks another.
+      // Accepted work drains normally even after admission is closed by setDraining.
+      while (!data.closed && !data.blocked && data.inFlight < limits.maxActiveResponses && data.ready.length) {
+        const lane = data.ready.shift()!;
+        lane.ready = false;
+        if (lane.active || !lane.queue.length) continue;
+        const job = lane.queue.shift()!;
+        data.queuedRequests--; data.queuedBytes -= job.bytes;
+        const active = { controller: new AbortController() };
+        lane.active = active; data.inFlight++;
+        const task = run(ws, job, active, lane.streamId)
+          .catch(() => { if (!data.closed) closeSocket(ws, 1011, "Responses transport failed"); })
+          .finally(() => {
+            lane.active = undefined; data.inFlight--;
+            activeTasks.delete(task);
+            markReady(data, lane); schedule(ws);
+          });
+        activeTasks.add(task);
+      }
+    } finally { data.scheduling = false; }
+  }
+
+  function enqueue(ws: Socket, body: JsonObject, prepareOnly: boolean, streamId?: string, claimed?: SteeringJob["claimed"], quiet = false): boolean {
+    const data = ws.data;
+    if (data.closed) return false;
+    let lane = data.lanes.get(streamId);
+    if (!lane && streamId !== undefined && data.lanes.size - Number(data.lanes.has(undefined)) >= limits.maxNamedLanes) {
+      if (!quiet) reject(ws, 400, "websocket_stream_limit_reached", "Reuse an existing stream_id or open a new connection; the named stream limit has been reached.", "stream_id", streamId);
+      return false;
+    }
+    const bytes = Buffer.byteLength(JSON.stringify(body));
+    const canStart = !lane?.active && !data.blocked && !data.ready.length && data.inFlight < limits.maxActiveResponses;
+    if (bytes > limits.maxMessageBytes || (!canStart && (data.queuedRequests >= limits.maxQueuedRequests || data.queuedBytes + bytes > limits.maxQueuedBytes))) {
+      if (!quiet) reject(ws, 429, "websocket_queue_full", "The connection's bounded input queue is full. This request was not executed.", undefined, streamId);
+      return false;
+    }
+    if (!lane) { lane = { streamId, queue: [], ready: false }; data.lanes.set(streamId, lane); }
+    lane.queue.push({ body, prepareOnly, bytes, claimed }); data.queuedRequests++; data.queuedBytes += bytes;
+    markReady(data, lane); schedule(ws);
+    return true;
+  }
+
+  async function run(ws: Socket, job: QueuedResponse, active: ActiveResponse, streamId?: string): Promise<void> {
+    const data = ws.data;
+    const preflight = data.steering?.prepare(job, streamId);
+    if (preflight) { await send(ws, preflight, streamId); return; }
+    let terminal: JsonObject | undefined;
+    try {
+      if (Buffer.byteLength(JSON.stringify(job.body)) > limits.maxMessageBytes) throw new Error("Steering continuation too large");
+      const response = await options.dispatch(request(data, job.body, active.controller.signal), job.prepareOnly ? { prepareOnly: true } : undefined);
+      if (active.controller.signal.aborted) {
+        await response.body?.cancel();
+        return;
+      }
+      if (!response.ok) terminal = await readHttpError(response, active, limits.maxEventBytes);
+      else {
+        if (!response.body || !/^text\/event-stream(?:\s*;|$)/i.test(response.headers.get("content-type") ?? "")) {
+          await response.body?.cancel();
+          throw new Error("Expected Responses SSE body");
+        }
+        const reader = active.reader = response.body.getReader();
+        let doneMarker = false;
+        for await (const value of sseData(reader, limits.maxEventBytes)) {
+          if (value === "[DONE]") { if (!terminal) throw new Error("Missing terminal event"); doneMarker = true; continue; }
+          const event: unknown = JSON.parse(value);
+          if (!object(event) || typeof event.type !== "string"
+            || !(event.type.startsWith("response.") || event.type === "error")) throw new Error("Invalid Responses event");
+          if (event.type === "response.heartbeat" && terminal) continue;
+          if (terminal || doneMarker) throw new Error("Event after terminal");
+          if (TERMINAL_EVENTS.has(event.type)) { terminal = event; data.steering?.stopAccepting(job); }
+          else {
+            if (event.type === "response.created") data.steering?.created(job, event, streamId);
+            await send(ws, event, streamId);
+          }
+        }
+        if (!terminal) throw new Error("SSE ended before terminal event");
+      }
+    } catch {
+      if (!data.closed && !active.controller.signal.aborted) {
+        terminal = errorEvent(502, "websocket_upstream_error", "Responses transport failed before a complete result. No request was replayed.");
+        active.controller.abort(new Error("Responses transport failed"));
+      }
+    } finally {
+      data.steering?.stopAccepting(job);
+      if (active.reader) {
+        try { await active.reader.cancel(); } catch { /* Closed/failed reader. */ }
+        active.reader.releaseLock();
+      }
+    }
+    // Keep this lane occupied until HTTP cleanup AND terminal backpressure settle.
+    await data.steering?.beforeTerminal(job);
+    if (terminal && !data.closed) await send(ws, terminal, streamId);
+    await data.steering?.afterTerminal(job, terminal, streamId);
+  }
+
+  const websocket: WebSocketHandler<ResponsesWebSocketData> = {
+    maxPayloadLength: limits.maxMessageBytes,
+    backpressureLimit: limits.maxBufferedBytes,
+    closeOnBackpressureLimit: true,
+    idleTimeout: 0,
+    sendPings: true,
+    perMessageDeflate: false,
+    open(ws) {
+      if (draining || sockets.size >= limits.maxConnections) { closeSocket(ws, 1013, "Responses server unavailable"); return; }
+      ws.data.steering = new WebSocketSteering({
+        validate: options.validateSteer, request: (body, signal) => request(ws.data, body, signal),
+        send: (event, streamId) => send(ws, event, streamId),
+        enqueue: (job, streamId) => enqueue(ws, job.body, job.prepareOnly, streamId, job.claimed, true),
+        accepting: () => !draining && !ws.data.closed,
+        maxSubmissions: limits.maxPendingSteers, maxBytes: limits.maxSteeringBytes, validationTimeoutMs: limits.steerValidationTimeoutMs,
+      });
+      sockets.add(ws);
+    },
+    message(ws, message) {
+      if (ws.data.closed) return;
+      if (typeof message !== "string") { reject(ws, 400, "invalid_websocket_frame", "Send response.create as a JSON text frame."); return; }
+      if (Buffer.byteLength(message) > limits.maxMessageBytes) { closeSocket(ws, 1009, "Responses request too large"); return; }
+      let event: unknown;
+      try { event = JSON.parse(message); } catch { reject(ws, 400, "invalid_json", "Invalid JSON in WebSocket frame."); return; }
+      if (object(event) && event.type === "response.steer") {
+        if (ws.data.steering) trackControl(ws.data.steering.accept(event).catch(() => { if (!ws.data.closed) closeSocket(ws, 1011, "Steering transport failed"); }));
+        return;
+      }
+      if (!object(event) || event.type !== "response.create") {
+        reject(ws, 400, "unsupported_websocket_event", "Only response.create and response.steer are Responses WebSocket client events.", "type"); return;
+      }
+      const streamId = event.stream_id;
+      if (streamId !== undefined && (typeof streamId !== "string" || !/^[A-Za-z0-9_.-]{1,256}$/.test(streamId))) {
+        reject(ws, 400, "invalid_stream_id", "stream_id must contain 1–256 letters, numbers, underscores, hyphens or periods.", "stream_id"); return;
+      }
+      const fail = (status: number, code: string, message: string, param?: string) => reject(ws, status, code, message, param, streamId);
+      if (draining) { fail(503, "server_draining", "Responses server is draining."); return; }
+      if (event.generate !== undefined && typeof event.generate !== "boolean") {
+        fail(400, "invalid_websocket_generate", "generate must be a boolean when supplied.", "generate"); return;
+      }
+      if ((event.stream !== undefined && event.stream !== true)
+        || (event.background !== undefined && event.background !== null && event.background !== false)) {
+        fail(400, "unsupported_websocket_transport_option", "WebSocket Responses requires streaming foreground generation."); return;
+      }
+      if ("headers" in event || "authorization" in event) {
+        fail(400, "unsupported_websocket_headers", "Authentication and request headers belong to the initial connection."); return;
+      }
+      const body: JsonObject = { ...event, stream: true };
+      for (const key of ["type", "stream_id", "generate", "background"]) delete body[key];
+      if (body.previous_response_id === null) delete body.previous_response_id;
+      // generate is a WebSocket transport control. Carry false into the shared handler
+      // explicitly, even though it does not belong in the HTTP Responses JSON body.
+      enqueue(ws, body, event.generate === false, streamId);
+    },
+    drain(ws) {
+      clearTimeout(ws.data.backpressureTimer);
+      const blocked = ws.data.blocked;
+      ws.data.blocked = undefined;
+      blocked?.resolve();
+      flush(ws);
+      schedule(ws);
+    },
+    close(ws) { releaseSocket(ws); },
+  };
+
+  return {
+    websocket,
+    createData(request: Request): ResponsesWebSocketData {
+      const headers = new Headers(request.headers);
+      const hopByHop = ["connection", "upgrade", "keep-alive", "proxy-connection", "transfer-encoding", "te", "trailer", "content-length", "content-encoding", "host"];
+      for (const name of (headers.get("connection") ?? "").split(",")) if (name.trim()) hopByHop.push(name.trim());
+      for (const name of [...headers.keys()]) if (name.startsWith("sec-websocket-")) headers.delete(name);
+      for (const name of hopByHop) headers.delete(name);
+      headers.set("content-type", "application/json");
+      headers.set("accept", "text/event-stream");
+      return { url: request.url, headers: [...headers.entries()], closed: false, pending: [], pendingBytes: 0,
+        lanes: new Map(), ready: [], inFlight: 0, queuedRequests: 0, queuedBytes: 0, scheduling: false, sequence: 0 };
+    },
+    setDraining(value: boolean): void { draining = value; },
+    connectionCount(): number { return sockets.size; },
+    /** Includes admitted creates waiting for a lane/slot, so shutdown cannot strand them. */
+    activeCount(): number { return activeTasks.size + [...sockets].reduce((sum, ws) => sum + ws.data.queuedRequests, 0); },
+    queuedCount(): number { return [...sockets].reduce((sum, ws) => sum + ws.data.queuedRequests, 0); },
+    /** Reject new work first. Existing generations finish normally until closeAll is called. */
+    closeAll(): void {
+      draining = true;
+      for (const ws of [...sockets]) closeSocket(ws, 1001, "Responses server is shutting down");
+    },
+    /** The owner supplies its shutdown deadline; a dispatcher must honor Request.signal. */
+    async settled(): Promise<void> { while (activeTasks.size || controlTasks.size) await Promise.allSettled([...activeTasks, ...controlTasks]); },
+  };
+}

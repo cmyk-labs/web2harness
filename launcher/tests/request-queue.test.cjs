@@ -134,7 +134,9 @@ test("send permits authenticate the owner and unknown sends stop dispatch", asyn
   await f.queue.request("settle", { ...first.ticket, outcome: "failed" });
   assert.ok(f.queue.snapshot().pauseReasons.includes("send_outcome_unknown"));
   await assert.rejects(f.queue.control("resume"), /reconcile/);
-  assert.equal((await f.queue.request("poll", second.ticket)).record.state, "queued");
+  assert.equal((await f.queue.request("poll", second.ticket)).record.reason, "queue_blocked_send_outcome_unknown");
+  assert.deepEqual((await f.queue.request("poll", second.ticket)).record.blockedBy,
+    { reason: "send_outcome_unknown", requestId: first.ticket.id });
 });
 
 test("rate-limit pauses persist across restart and require explicit recovery", async t => {
@@ -143,10 +145,13 @@ test("rate-limit pauses persist across restart and require explicit recovery", a
   await f.restart();
   assert.deepEqual(f.queue.snapshot().pauseReasons, ["account_rate_limited"]);
   const waiting = await f.add("retry_new_request");
-  assert.equal(waiting.record.state, "queued");
+  assert.equal(waiting.record.state, "failed");
+  assert.equal(waiting.record.reason, "queue_blocked_account_rate_limited");
+  assert.deepEqual(waiting.record.blockedBy, { reason: "account_rate_limited", requestId: first.ticket.id });
   await assert.rejects(f.queue.control("resume"), /reconcile/);
   await f.queue.control("recover");
-  assert.equal((await f.queue.request("poll", waiting.ticket)).record.state, "preparing");
+  assert.equal((await f.queue.request("poll", waiting.ticket)).record.state, "failed");
+  assert.equal((await f.add("after_recovery")).record.state, "preparing");
   assert.equal(f.queue.query({ state: "ended" }).items[0].reason, "rate_limit_exceeded");
 });
 
@@ -169,8 +174,9 @@ test("restart during an unacknowledged send pauses dispatch without replaying th
   await f.queue.request("send-begin", first.ticket);
   await f.restart();
   assert.ok(f.queue.snapshot().pauseReasons.includes("send_outcome_unknown"));
-  assert.equal((await f.add("after_restart")).record.state, "queued");
+  assert.equal((await f.add("after_restart")).record.reason, "queue_blocked_send_outcome_unknown");
   await assert.rejects(f.queue.request("enqueue", first.input), /receipt/);
   await f.queue.control("recover");
-  assert.equal(f.queue.snapshot().active, 1);
+  assert.equal(f.queue.snapshot().active, 0);
+  assert.equal((await f.add("after_recovery")).record.state, "preparing");
 });

@@ -15,8 +15,23 @@ function validationError(message: string): ChatGptWebAdapterError {
 }
 
 export function createChatGptStructuredOutputValidator(
-  format: CodexJsonSchemaOutputFormat | undefined,
+  format: CodexJsonSchemaOutputFormat | { type: "json_object" } | undefined,
 ): ChatGptStructuredOutputValidator | undefined {
+  // Validate the complete final answer, never repair it or extract a fenced fragment.
+  // This is a delivery guarantee, not Web-side constrained decoding.
+  if (format?.type === "json_object") {
+    return (answer: string): void => {
+      let value: unknown;
+      try {
+        value = JSON.parse(answer);
+      } catch {
+        throw validationError("ChatGPT Web returned malformed JSON for Codex json_object output");
+      }
+      if (value === null || typeof value !== "object" || Array.isArray(value)) {
+        throw validationError("ChatGPT Web did not return a JSON object for Codex json_object output");
+      }
+    };
+  }
   if (!format?.strict) return undefined;
 
   const ajv = new Ajv({

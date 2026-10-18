@@ -1,5 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
 import { atomicWriteFile, getConfigDir } from "../config";
 
 const MAX_STORED_RESPONSES = 1_000;
@@ -19,6 +20,10 @@ interface StoredResponseState {
   items: unknown[];
   /** Approximate in-memory size, computed locally at insert time (never trusted from disk). */
   sizeBytes?: number;
+  /** Prepared contexts are connection optimizations, never durable response snapshots. */
+  memoryOnly?: boolean;
+  /** Digest of the incoming authorization/account context; never a credential. */
+  scope?: string;
 }
 
 const states = new Map<string, StoredResponseState>();
@@ -28,7 +33,7 @@ let storedResponseBytes = 0;
 function measuredEntry(entry: Omit<StoredResponseState, "sizeBytes">): StoredResponseState {
   let sizeBytes = 0;
   try {
-    sizeBytes = JSON.stringify(entry.items).length;
+    sizeBytes = Buffer.byteLength(JSON.stringify(entry.items));
   } catch {
     /* unserializable items: weightless rather than fatal */
   }
@@ -56,6 +61,7 @@ function deleteEntry(id: string): void {
 // upstream. Consumers use the prefix length to bind trusted history and rolling checkpoints to the
 // exact replayed portion of this request.
 const replayedInputPrefixLengths = new WeakMap<object, number>();
+const memoryOnlyReplayBodies = new WeakSet<object>();
 let loaded = false;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingPersistPath: string | null = null;
@@ -93,6 +99,7 @@ function ensureLoaded(): void {
       setEntry(id, {
         createdAt: rec.createdAt,
         items: rec.items,
+        ...(typeof rec.scope === "string" && /^[a-f0-9]{64}$/.test(rec.scope) ? { scope: rec.scope } : {}),
       });
     }
     pruneResponses();
@@ -114,9 +121,10 @@ function persistNow(path: string): void {
     for (const entry of [...states].reverse()) {
       // sizeBytes is in-memory accounting only; keep it out of the disk snapshot.
       const [id, state] = entry;
-      const { sizeBytes: _sizeBytes, ...persistable } = state;
+      if (state.memoryOnly) continue;
+      const { sizeBytes: _sizeBytes, memoryOnly: _memoryOnly, ...persistable } = state;
       const persistEntry: [string, StoredResponseState] = [id, persistable];
-      const size = JSON.stringify(persistEntry).length;
+      const size = Buffer.byteLength(JSON.stringify(persistEntry));
       if (size > SNAPSHOT_ENTRY_MAX_BYTES) continue;
       if (total + size > SNAPSHOT_TOTAL_MAX_BYTES) break;
       total += size;
@@ -174,7 +182,19 @@ function pruneResponses(at = now()): void {
   }
 }
 
-export function expandPreviousResponseInput(body: unknown): unknown {
+/** Bind cached history to the caller's incoming authorization context, including account routing.
+ * This is cache partitioning, not authentication. No token or account value is persisted. */
+export function responseStateScope(headers: Headers): string {
+  return createHash("sha256").update(JSON.stringify([
+    "web2harness-response-scope-v1",
+    headers.get("authorization") ?? "",
+    headers.get("chatgpt-account-id") ?? "",
+    headers.get("openai-organization") ?? "",
+    headers.get("openai-project") ?? "",
+  ])).digest("hex");
+}
+
+export function expandPreviousResponseInput(body: unknown, scope?: string): unknown {
   if (!body || typeof body !== "object" || Array.isArray(body)) return body;
   const request = body as Record<string, unknown>;
   const previousId = typeof request.previous_response_id === "string" ? request.previous_response_id : undefined;
@@ -182,13 +202,22 @@ export function expandPreviousResponseInput(body: unknown): unknown {
   ensureLoaded();
   pruneResponses();
   const previous = states.get(previousId);
-  if (!previous) return body;
+  if (!previous || previous.scope !== scope) return body;
   const expanded = {
     ...request,
     input: [...previous.items, ...inputItems(request.input)],
   };
   replayedInputPrefixLengths.set(expanded, previous.items.length);
+  if (previous.memoryOnly) memoryOnlyReplayBodies.add(expanded);
   return expanded;
+}
+
+/** A validated input resolver may replace reference blocks without losing replay provenance. */
+export function copyPreviousResponseProvenance(source: unknown, target: unknown): void {
+  if (!source || typeof source !== "object" || !target || typeof target !== "object") return;
+  const prefix = replayedInputPrefixLengths.get(source);
+  if (prefix !== undefined) replayedInputPrefixLengths.set(target, prefix);
+  if (memoryOnlyReplayBodies.has(source)) memoryOnlyReplayBodies.add(target);
 }
 
 /** Number of leading input items restored from previous_response_id state for this exact body. */
@@ -204,27 +233,33 @@ export function previousResponseReplayPrefixLength(body: unknown): number {
 export function rememberResponseState(
   requestBody: unknown,
   response: { id?: unknown; output?: unknown; status?: unknown; incomplete_details?: unknown },
-  opts?: { force?: boolean },
-): void {
-  if (!requestBody || typeof requestBody !== "object" || Array.isArray(requestBody)) return;
+  opts?: { force?: boolean; memoryOnly?: boolean; scope?: string },
+): boolean {
+  if (!requestBody || typeof requestBody !== "object" || Array.isArray(requestBody)) return false;
   const request = requestBody as Record<string, unknown>;
   // `force` bypasses only the store:false skip: Codex sends `store:false` on every non-Azure
   // HTTP request (and WS inherits it), yet its WS turns still chain with previous_response_id.
-  // The passthrough branch records with force so those chains can be expanded locally; the
-  // store stays in-memory with a 1h TTL, so this is a proxy-internal continuation cache, not
-  // real server-side response storage.
-  if (request.store === false && !opts?.force) return;
-  if (typeof response.id !== "string" || !Array.isArray(response.output)) return;
+  // The Web handler records with force so those chains can be expanded locally.
+  // This bounded internal cache uses a 1h TTL. HTTP histories may use a best-effort restart
+  // snapshot. Prepared/WS contexts and their descendants remain strictly memory-only.
+  if (request.store === false && !opts?.force) return false;
+  if (typeof response.id !== "string" || !Array.isArray(response.output)) return false;
   if (response.status === "incomplete") {
     const details = response.incomplete_details;
     if (!details || typeof details !== "object" || Array.isArray(details)
-      || (details as { reason?: unknown }).reason !== "max_output_tokens") return;
-  } else if (response.status !== undefined && response.status !== "completed") return;
+      || (details as { reason?: unknown }).reason !== "max_output_tokens") return false;
+  } else if (response.status !== undefined && response.status !== "completed") return false;
+  const items = [...inputItems(request.input), ...response.output];
+  const memoryOnly = opts?.memoryOnly || memoryOnlyReplayBodies.has(request);
+  if (Buffer.byteLength(JSON.stringify(items)) > MAX_STORED_RESPONSE_BYTES) return false;
   ensureLoaded();
   setEntry(response.id, {
     createdAt: now(),
-    items: [...inputItems(request.input), ...response.output],
+    items,
+    ...(memoryOnly ? { memoryOnly: true } : {}),
+    ...(opts?.scope ? { scope: opts.scope } : {}),
   });
   pruneResponses();
-  schedulePersist();
+  if (!memoryOnly) schedulePersist();
+  return states.has(response.id);
 }

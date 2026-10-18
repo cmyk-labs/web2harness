@@ -53,6 +53,23 @@ test("send permit only waits for interval and in-progress denials", async () => 
   expect(attempts).toBe(3);
 });
 
+test.each(["send_outcome_unknown", "browser_unavailable", "account_rate_limited"])(
+  "queued request reports %s without consuming a slot or waiting for its timeout", async reason => {
+    await withQueueFixture(async queue => {
+      queue.core.pause(reason);
+      let executed = false;
+      const traceId = `trace_blocked_${reason}`;
+      const job = { id: createHash("sha256").update(traceId).digest("hex"), groupId: "fixture", model: "gpt-6", mode: "native-tools", bytes: 1 };
+      await expect(withQueuedRequest({ descriptorPath: queue, traceId, job,
+        execute: async () => { executed = true; },
+      })).rejects.toMatchObject({ status: 503, code: `queue_blocked_${reason}`, retryable: false });
+      expect(executed).toBe(false);
+      expect(queue.snapshot()).toMatchObject({ active: 0, waiting: 0, pausedReason: reason });
+      expect(queue.query({ state: "failed" }).items[0]).toMatchObject({ reason: `queue_blocked_${reason}`, blockedBy: { reason } });
+    });
+  },
+);
+
 test("unknown send outcome remains paused and a failed receipt never sends again", async () => {
   await withQueueFixture(async queue => {
     const traceId = "trace_unknown_send";

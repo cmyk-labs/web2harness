@@ -30,7 +30,9 @@ test("rejects encrypted cross-backend delegation before constructing the browser
   expect(await response.json()).toMatchObject({
     error: {
       type: "invalid_request_error",
-      message: expect.stringContaining("encrypted cross-backend subagent payload"),
+      code: "incompatible_web_context",
+      retryable: false,
+      issues: [expect.objectContaining({ code: "encrypted_agent_message", path: "/input/0/content/0/encrypted_content" })],
     },
   });
   expect(adapterConstructions).toBe(0);

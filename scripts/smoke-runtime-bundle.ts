@@ -1,7 +1,7 @@
-import { cpSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { defaultBrokerEndpoint } from "../src/config";
 import { VERSION } from "../src/version";
 
@@ -15,7 +15,8 @@ const { validateRuntimeBundle } = require("../launcher/electron/installation/run
 
 const sourceBundle = resolve(process.argv[2] ?? "dist/runtime");
 const sourceRoot = resolve(import.meta.dir, "..");
-const root = join(homedir(), `.web2harness-release-smoke-${process.pid}-${Date.now()}`);
+const smokeParent = resolve(process.env.WEB2HARNESS_SMOKE_PARENT ?? homedir());
+const root = mkdtempSync(join(smokeParent, ".web2harness-release-smoke-"));
 const firstLocation = join(root, "first-location");
 const runtimeRoot = join(root, "relocated-runtime");
 cpSync(sourceBundle, firstLocation, { recursive: true, verbatimSymlinks: true });
@@ -102,7 +103,10 @@ writeFileSync(join(appHome, "config.json"), `${JSON.stringify(config, null, 2)}\
 writeFileSync(config.storageStatePath, "{}\n", { mode: 0o600 });
 
 const env = { ...process.env, WEB2HARNESS_HOME: appHome, CODEX_HOME: codexHome };
-const child = Bun.spawn([...runtimeCommand, "serve"], { env, stdout: "pipe", stderr: "pipe" });
+const child = Bun.spawn([...runtimeCommand, "serve"], {
+  env, stdout: Bun.file(join(root, "daemon.stdout.private.log")),
+  stderr: Bun.file(join(root, "daemon.stderr.private.log")),
+});
 let stoppedGracefully = false;
 try {
   const deadline = Date.now() + 10_000;
@@ -128,8 +132,25 @@ try {
   }
   const websocketNegotiation = await fetch(`http://127.0.0.1:${port}/v1/responses`);
   if (websocketNegotiation.status !== 426) {
-    throw new Error(`Responses WebSocket negotiation did not select Codex HTTP/SSE fallback: HTTP ${websocketNegotiation.status}`);
+    throw new Error(`Responses without upgrade did not return 426: HTTP ${websocketNegotiation.status}`);
   }
+  // Exercise the packaged upgrade and shared validation, without a model/browser request.
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/v1/responses`);
+  try {
+    await new Promise<void>((resolveSocket, reject) => {
+      const timer = setTimeout(() => reject(new Error("Packaged WebSocket smoke timed out")), 5_000);
+      const fail = (error: Error) => { clearTimeout(timer); reject(error); };
+      socket.onopen = () => socket.send(JSON.stringify({ type: "response.create", model: "chatgpt-web/not-enabled", input: "fixture" }));
+      socket.onerror = () => fail(new Error("Packaged WebSocket failed"));
+      socket.onmessage = event => {
+        try {
+          const payload = JSON.parse(String(event.data));
+          if (payload.type !== "error" || payload.status !== 400) throw new Error("Packaged WebSocket bypassed shared request validation");
+          clearTimeout(timer); resolveSocket();
+        } catch (error) { fail(error instanceof Error ? error : new Error(String(error))); }
+      };
+    });
+  } finally { socket.close(); }
   const invalid = await fetch(`http://127.0.0.1:${port}/v1/responses`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -193,6 +214,10 @@ try {
   if (!stoppedGracefully) {
     child.kill("SIGTERM");
     await child.exited;
+    console.error(`Preserved failed smoke evidence: ${root}`);
   }
-  rmSync(root, { recursive: true, force: true });
+  if (dirname(root) !== smokeParent || !basename(root).startsWith(".web2harness-release-smoke-")) {
+    throw new Error("Refusing fixture cleanup outside the verified owned smoke directory");
+  }
+  if (stoppedGracefully) rmSync(root, { recursive: true, force: true });
 }

@@ -711,11 +711,11 @@ test("an accepted MCP Bridge send survives one stalled DOM probe and a later MCP
       ? assistantLocator
       : hiddenLocator,
   } as unknown as Page;
-  let sendPresses = 0;
+  let sendClicks = 0;
   const sendButton = {
     waitFor: async () => {},
     isEnabled: async () => true,
-    press: async () => { sendPresses += 1; },
+    click: async () => { sendClicks += 1; },
   };
   const composer = {
     locator: () => ({ locator: (selector: string) => { expect(selector).toBe(CHATGPT_SEND_BUTTON_SELECTOR); return sendButton; } }),
@@ -775,7 +775,7 @@ test("an accepted MCP Bridge send survives one stalled DOM probe and a later MCP
   );
 
   expect(evidence).toBe("mcp_tool_call");
-  expect(sendPresses).toBe(1);
+  expect(sendClicks).toBe(1);
   expect(domObservations).toBe(2);
   expect(recoveries).toBe(1);
   expect(lifecycle).toEqual(["activated", "submitted"]);
@@ -827,15 +827,14 @@ test("send activation keeps the outer stage budget instead of restoring a nested
     isClosed: () => false,
     locator: () => hiddenLocator,
   } as unknown as Page;
-  let pressOptions: { noWaitAfter?: boolean; signal?: AbortSignal; timeout?: number } | undefined;
+  let clickOptions: { noWaitAfter?: boolean; signal?: AbortSignal; timeout?: number } | undefined;
   const sendButton = {
     waitFor: async () => {},
     isEnabled: async () => true,
-    press: async (
-      _key: string,
+    click: async (
       options?: { noWaitAfter?: boolean; signal?: AbortSignal; timeout?: number },
     ) => {
-      pressOptions = options;
+      clickOptions = options;
       if (options?.timeout !== 0) throw new Error("nested locator timeout replaced the outer stage budget");
     },
   };
@@ -850,8 +849,8 @@ test("send activation keeps the outer stage budget instead of restoring a nested
     1_000,
     stageSignal => worker.sendAttachedPrompt(page, {}, undefined, stageSignal),
   )).resolves.toBe("user_turn");
-  expect(pressOptions).toMatchObject({ noWaitAfter: true, timeout: 0 });
-  expect(pressOptions?.signal).toBeInstanceOf(AbortSignal);
+  expect(clickOptions).toMatchObject({ noWaitAfter: true, timeout: 0 });
+  expect(clickOptions?.signal).toBeInstanceOf(AbortSignal);
 });
 
 test("submission observation recovery resumes with rebound locators and is strictly bounded", async () => {

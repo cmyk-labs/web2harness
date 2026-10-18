@@ -32,6 +32,7 @@ export interface QueueInput {
   retryAttempt?: number;
 }
 export interface QueueRecord extends Omit<QueueInput, "bytes"> {
+  blockedBy?: { reason: QueuePauseReason; requestId?: string };
   state: QueueState;
   cooldownUntil?: number;
   reason?: string;
@@ -50,6 +51,7 @@ export interface QueueSnapshot {
   configRevision: number;
   pausedReason: QueuePauseReason | null;
   pauseReasons: QueuePauseReason[];
+  pauseSources: Array<{ reason: QueuePauseReason; requestId: string }>;
   active: number;
   waiting: number;
   waitingBytes: number;
@@ -88,7 +90,8 @@ export class RequestScheduler {
   mcpStatus(): McpQueueStatus[];
   restoreMcpStatus(values?: McpQueueStatus[]): void;
   updateSettings(settings: RequestSchedulingSettings): { settings: RequestSchedulingSettings; configRevision: number };
-  pause(reason?: QueuePauseReason): void;
+  pause(reason?: QueuePauseReason, requestId?: string): void;
+  restorePauseSources(sources?: Array<{ reason: QueuePauseReason; requestId: string }>): void;
   resume(expectedReason?: QueuePauseReason): void;
   close(): QueueRecord[];
   get(id: string): QueueRecord | null;

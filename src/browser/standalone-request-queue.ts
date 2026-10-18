@@ -22,6 +22,7 @@ interface Receipts {
   version: 1;
   settings: RequestSchedulingSettings;
   pauseReasons: QueuePauseReason[];
+  pauseSources?: Array<{ reason: QueuePauseReason; requestId: string }>;
   lastSendAt?: number;
   pendingSend: boolean;
   records: QueueRecord[];
@@ -129,6 +130,7 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
     this.core.restoreMcpStatus(saved.mcpStatus);
     for (const reason of saved.pauseReasons) this.core.pause(reason);
     if (saved.pendingSend) this.core.pause("send_outcome_unknown");
+    this.core.restorePauseSources(saved.pauseSources);
   }
 
   static async open(storageStatePath: string): Promise<StandaloneRequestQueue> {
@@ -200,6 +202,7 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
     try {
       await atomicJson(join(this.directory, "receipts.json"), {
         version: 1, settings: snapshot.settings, pauseReasons: snapshot.pauseReasons,
+        pauseSources: snapshot.pauseSources,
         mcpStatus: snapshot.mcpStatus,
         lastSendAt: this.lastSendAt, pendingSend: this.pendingSend, records: [...this.records.values()],
       } satisfies Receipts);
@@ -280,7 +283,7 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
           this.core.pause("browser_unavailable"); await this.persist();
           throw failure("queue_resource_not_released", "Managed browser resources have not been physically released");
         }
-        if (input.reason === "rate_limit_exceeded") this.core.pause("account_rate_limited");
+        if (input.reason === "rate_limit_exceeded") this.core.pause("account_rate_limited", input.id);
         if (this.pendingSend && this.core.get(input.id)?.sendAttemptedAt && !this.core.get(input.id)?.sendConfirmedAt) {
           this.lastSendAt = Date.now(); this.lastSendMonotonic = performance.now();
         }
@@ -419,7 +422,7 @@ export async function recoverStandaloneRequestQueue(storageStatePath: string, co
     saved.records = saved.records.map(row => TERMINAL.has(row.state) ? row : {
       ...row, state: "failed", reason: "runtime_restarted_outcome_unknown", endedAt: Date.now(),
     });
-    saved.pendingSend = false; saved.pauseReasons = [];
+    saved.pendingSend = false; saved.pauseReasons = []; saved.pauseSources = [];
     await atomicJson(join(directory, "receipts.json"), saved);
     if (owner) await unlink(join(directory, "owner.json"));
   } finally { await recovery.close(); await unlink(join(directory, "recovery.lock")); }

@@ -22,6 +22,14 @@ export async function queueRequest<T>(descriptorPath: RequestQueueTarget, action
   return result as T;
 }
 function terminalError(record: QueueRecord): Error {
+  if (record.state === "failed" && record.reason?.startsWith("queue_blocked_")) {
+    const reason = record.blockedBy?.reason ?? record.reason.slice("queue_blocked_".length);
+    return new ChatGptWebAdapterError(
+      `Web dispatch is suspended: ${reason}${record.blockedBy?.requestId ? ` (blocking request ${record.blockedBy.requestId})` : ""}. `
+      + "Reconcile the blocking request and confirm recovery in the task queue before starting new work; this request was not sent.",
+      { status: 503, errorType: "server_error", code: record.reason, retryable: false },
+    );
+  }
   // Receipts retain state/reason, not the original exception's status or cause.
   if (record.state === "failed") return new ChatGptWebAdapterError(
     `Web request failed${record.reason ? `: ${record.reason}` : ""}`, {

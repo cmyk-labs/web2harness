@@ -35,6 +35,17 @@ async function encodeStream(events: AdapterEvent[], compaction: boolean) {
   return { response: terminal[0].response, frames, cached, statuses };
 }
 
+test("JSON/SSE disclose estimated usage without labelling measured usage as estimated", async () => {
+  for (const estimated of [undefined, true]) {
+    const events: AdapterEvent[] = [{ type: "done", usage: { ...usage, estimated } }];
+    const json = buildResponseJSON(events, "fixture");
+    const sse = await encodeStream(events, false);
+    expect((json.usage as Record<string, unknown>).estimated).toBe(estimated);
+    expect(sse.response.usage).toEqual(json.usage);
+    expect(sse.response.usage.total_tokens).toBe(18);
+  }
+});
+
 for (const compaction of [false, true]) for (const fixture of fixtures) {
   test(`JSON/SSE terminal semantics agree for ${fixture.name}, compaction=${compaction}`, async () => {
     const events: AdapterEvent[] = [{ type: "text_delta", text: "Fixture summary" }, ...(fixture.terminal ? [fixture.terminal] : [])];

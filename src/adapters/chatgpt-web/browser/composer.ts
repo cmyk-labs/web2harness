@@ -42,7 +42,9 @@ export function chatGptImageFilePayloads(images: ChatGptWebPromptImage[]): Array
   let totalBytes = 0;
   return images.map(image => {
     const parsed = parseDataUrl(image.imageUrl);
-    if (!parsed) throw new Error(`ChatGPT web input image ${image.ref} must be an inline base64 data URL`);
+    // A URL alone grants no network or filesystem authority. Resolve only in a separately
+    // authorized task tool/provider integration, then submit the bounded inline bytes here.
+    if (!parsed) throw new Error(`ChatGPT web input image ${image.ref} must be an inline base64 data URL; remote references require a task-authorized resolver`);
     const extension = imageExtensions.get(parsed.mediaType.toLowerCase());
     if (!extension) throw new Error(`ChatGPT web input image ${image.ref} has unsupported media type: ${parsed.mediaType}`);
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(parsed.base64) || parsed.base64.length % 4 !== 0) {

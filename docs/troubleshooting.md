@@ -260,9 +260,29 @@ Native Tools forwards real tool-preface prose as Codex `commentary` and the fina
 
 Before sending, the browser waits for a usable effort slider and verifies the selected model. The full model-menu check has a separate preparation deadline; it does not consume the send acknowledgement budget. A failure before activation is unsent. `chatgpt_submission_ambiguous` and `send_outcome_unknown` mean acceptance could not be established: inspect the owned task page and completed tool results before explicitly retrying. Neither a successful HTTP status alone nor a timeout authorizes an automatic resend.
 
+### WebSocket continuation or steering is rejected
+
+These are unreleased-source behaviors, not an installed 2.4.0 upgrade. `previous_response_not_found` can mean expiry, eviction, restart or different incoming auth/account/organization/project scope. WebSocket/prepared histories and their descendants are memory-only. Submit complete original history without the missing ID, preserving existing tool results; never rerun tools to rebuild it.
+
+Same-lane creates now queue FIFO; other lanes can run concurrently within bounded admission and Web capacity. `websocket_queue_full` means the rejected request was not executed. Steering applies at natural completion on supported automatic GPT-6 Native Tools requests. `response.steer.accepted` is not commitment: keep reading until a successor starts or a failure is returned. For `response.steer.pending` / `steering_required_input_missing`, return matching tool results or approval decisions on the same lane; do not repeat the accepted steering. Automatic successors keep original model/effort; explicit continuations use their own settings. No documented Responses `response.cancel` client frame was established; use the applicable owned disconnect/native interrupt path, not a Realtime frame.
+
+### A remote attachment or provider file is rejected
+
+Remote image/file URLs require exact task/provider/account-scoped grants and public HTTPS on port 443. Private/special-use DNS addresses, ungranted redirect targets, ambient credentials/proxies, unsupported MIME/charset/HTTP compression and exceeded bounds fail explicitly. Do not weaken these checks or attach production credentials. Supply supported inline original bytes through an authorized task tool, or an authorized public URL satisfying the [reference contract](reference.md#input-references).
+
+`generate:false` can retain a valid URL without downloading it; readiness does not prove reachability or model acceptance. Provider `file_id` fails in preparation and generation because no compatible Codex/ChatGPT download contract is established. Raw audio/video is also unsupported by this attachment path; transcript/frame substitutes do not establish equivalence.
+
+### A hosted tool or native encrypted context is unsupported
+
+Use Codex's actual registered `web.run`, `image_gen.imagegen` or MCP tools when available, preserving their feature/auth/permission gates. A same-name function is not a replacement for a hosted declaration. Other hosted types need their original environment, resources, credentials and event/approval lifecycle; see [per-tool blockers](native-tools-compatibility.md#hosted-tools).
+
+`incompatible_web_context` is non-retryable for unchanged input. Preserve the complete original request; do not remove ciphertext or replace it with visible summaries. The empty encrypted-arguments marker only supports new original plaintext collaboration calls, not old ciphertext. No verified native reasoning/compaction plaintext-export service is implemented. Keep the requested model/effort; a supported source-backend export or explicitly chosen original-backend continuation is a separate action.
+
 ### Page preparation fails before the message is sent
 
 `chatgpt_composer_unavailable`, `chatgpt_page_structure_unsupported` and `chatgpt_preparation_timeout` describe browser preparation, not model capacity. Sign-in, expired-session and browser-verification prompts keep their own errors. Generic service unavailability or HTTP 503 alone does not establish model overload.
+
+A sign-in indicator while the document is still loading keeps readiness waiting within the existing deadline; it never releases an editable composer while sign-in remains visible. A fully loaded sign-in page still fails with `chatgpt_sign_in_required`. This handling does not restore authentication. A previous authenticated home page may be stale: check the current task page and sign in independently to the DEV profile before resuming DEV acceptance.
 
 A single two-second readiness probe expiring does not exhaust page preparation. The bridge continues waiting for that same DOM read within the original preparation deadline, without overlapping readiness probes or resending the request. It checks cancellation, the deadline and authentication again before accepting a ready composer. A rejected read retains its original error; a readiness deadline failure retains the observation timeout as its cause when available.
 
@@ -274,7 +294,7 @@ Automatic new conversations allow at most one preparation recovery, within one 9
 
 Recovery requires independent evidence that submission has not started: no Send activation, conversation request, user/assistant turn, Stop state or MCP activity. A `prepared` label alone is insufficient. Accepted or uncertain submissions keep their replay protection. Model, effort and connector selection are checked again before sending.
 
-If preparation still fails, inspect the exact error and the owned ChatGPT page. Diagnostics include bounded page/transport categories and, when CDP streaming is available, response-event counts and visible-text lengths. They do not store response bodies, tool arguments or hidden reasoning. Unavailable or truncated stream evidence remains inconclusive; a model's claim that a safety check blocked a tool does not prove a platform rejection. Browser-controlled network polling is separate from this preparation budget.
+If preparation still fails, retain the exact error and inspect the owned task page. Normal diagnostics contain bounded page/transport categories, event counts and visible-text lengths, not response bodies, tool arguments or hidden reasoning. Separate failure-only private response evidence may contain privacy-projected public answer events; do not include it in ordinary logs or public support reports. Unknown/truncated/withheld data remains inconclusive. A model's safety-rejection claim is not platform evidence.
 
 ### `Reconnecting`, `stream disconnected`, `ChatGPT failed`, or HTTP 502
 
@@ -285,6 +305,14 @@ If preparation still fails, inspect the exact error and the owned ChatGPT page. 
 **Verify:** a complete answer and expected tool results return to Codex. Identify any partial file changes from a failed attempt before requesting the same operation again.
 
 ### The Web answer exists but Codex reports `browser_stream_inconsistent`
+
+Automatic Native Tools and Browser-only now prefer the verified original response, preserving table cells, code-fence info and repeated paragraphs without HTML round-tripping. `browser.response_source_committed` records that path; `browser.response_source_fallback` records why independently checked DOM extraction was used. Rich references and unsupported protocol shapes may still require DOM. `chatgpt_response_source_invalid` means positive identity/completion/rejection evidence prevented delivery; do not bypass it or treat a visible answer as an executed tool result.
+
+Missing `is_complete` or finish metadata now yields `response_terminal_metadata_unavailable` only after input/conversation identity, unique finished final, other public-message status and parent-lineage checks pass. This never authorizes source-text delivery: only the existing independent DOM completion and Markdown coverage checks may permit fallback. Explicit false completion, non-stop or malformed finish metadata, unfinished status, identity conflicts and late mutations still block fallback; explicit terminal failures retain `response_message_incomplete`. This is fallback eligibility, not successful delivery or evidence that the historical failure is fixed.
+
+For `chatgpt_send_outcome_unknown`, inspect bounded input/traffic facts and input-bound acknowledgement. The unreleased worker performs at most five seconds of read-only reconciliation after initial observation/stage failure; only one matched request, HTTP 200, a bound acceptance acknowledgement and intact identity can confirm the original send. No second click, rebind, reload or resend occurs. Duplicates, lost observation, cancellation or expiry remain uncertain/failures as applicable. `queue_blocked_send_outcome_unknown` and other fault pauses still report the original blocker immediately. Unknown remote effects keep the global fence; closing a page alone does not justify clearing it. Existing recovery does not restart failed children.
+
+Private failure capture is bounded by default to 2 MiB / 2,048 events and saved before detach, with references/counts only in normal diagnostics. It is privacy-projected event data, not exact original wire bytes; unknown sensitive forms and gaps remain explicit. Replay is offline diagnostic-only and cannot execute tools or authorize delivery. The original historical failing streams were not retained: neither the new capture nor 37 consistent redacted-sample replays proves the old `response_message_incomplete` or unknown-send cause was fixed. The failed DEV continuation remains recorded. Independent DEV login restored authentication. Capture/replay now supports the observed SSE names with privacy projection; the real sample replay matched direct facts/results, but did not reproduce the missing-metadata failure. Real CLI resume/interrupt/recovery and public-PDF/prefill/steering component revalidation passed; original failed evidence and historical root-cause limits remain. See [reliability evidence](native-tools-compatibility.md#reliability). Successful tool commands do not prove final response delivery. Published 2.4.0 is unchanged.
 
 **Check:** the final page structure could not be aligned with the observed answer. This is an answer-extraction failure; it does not by itself establish a network interruption. Native Tools buffers raw answer text until completion and tool-call validation, so this error does not imply that Codex already received the report.
 

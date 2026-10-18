@@ -14,6 +14,8 @@
 - [HTTP 请求正文限制](#http-body-limits)
 - [模型目录与推理强度](#models)
 - [上下文与传输预算](#context-budgets)
+- [Responses 传输与续接](#responses-transport)
+- [附件引用解析](#input-references)
 - [环境与数据位置](#data-locations)
 - [环境变量](#environment-overrides)
 - [命令接口](#commands)
@@ -36,6 +38,8 @@
 CLI 的 `setup` 解析器在未传入模式参数时始终采用原生工具，即使现有配置使用其他模式。每次调用 setup 都应明确指定需要的模式。大多数可选偏好在未传入对应开关时保留现值；`--auto-approve-tool-calls` 是例外，常规 CLI setup 未提供此参数时会传入 `false`。
 
 <a id="runtime-settings"></a>
+
+原生工具配置流程管理 `[features].standalone_web_search = true`，让支持该能力的 Codex 客户端通过 `/v1/alpha/search` 执行原生 `web.run`。用户的 `web_search` 模式、域名过滤与位置保持不变。集成日志记录原值，在断开、移除或切换模式时恢复；用户修改冲突会明确报告。已有安装需要重新应用原生工具配置并重启 Codex。这不等于支持任意 Responses 请求中的托管 `web_search` 声明，详见[兼容性与限制](native-tools-compatibility.zh-CN.md)。
 
 ## 运行时与启动器设置
 
@@ -371,6 +375,34 @@ Web2Harness 从原生模型目录模板创建 Web 条目，再写入 Web 路由�
 原生条目保留自己的 `context_window`、压缩元数据与预算。集成不会将 Web 预算写入用户顶层的 `model_context_window` 或 `model_auto_compact_token_limit`。如果用户已设置正整数 `model_context_window`，目录扩展可以提高原生条目的 `max_context_window`，以保留该显式覆盖；不会降低原有更大的最大值，也不会修改原生条目的上下文／压缩字段。Codex 仍负责应用自身配置。
 
 `compatibility-v1` 子代理设置会另外修改原生与 Web 条目的协作元数据；保留上下文并不代表原生目录中的每个字段逐字节不变。
+
+<a id="responses-transport"></a>
+
+### Responses 传输与续接
+
+以下为未发布源码契约，**已发布 2.4.0 不变**。更新后的 `runtime-bundle-verified` 构建及搬迁烟测已通过。保留 DEV 失败；真实 CLI resume／取消恢复，以及公开 PDF URL、独立 prefill 通道和自然边界 steering 组件检查均通过。组件结果不代表远程图片 live、原始媒体或 Codex 文件工具端到端验收。详见[证据边界](native-tools-compatibility.zh-CN.md#evidence)。
+
+| 接口 | 契约 |
+| --- | --- |
+| WebSocket `response.create` | 共用 HTTP Responses 调度。具名 `stream_id` 和默认通道各自 FIFO，不同通道可并发。每连接默认 16 个活动响应、32 个具名通道加默认通道、128 个待处理请求／64 MiB；不增加 Web 执行名额。 |
+| `previous_response_id` | 历史来源与通道名独立。进程内有界缓存按传入授权／账号／组织／项目摘要分区；作用域不是身份认证。缓存丢失须提交包含工具结果的完整原历史，不重新执行。 |
+| WebSocket／预填历史 | 保持纯内存，包括后续改走 HTTP 的后代；其他请求刷盘时同样排除。缓存上限一小时、1,000 项、64 MiB UTF-8 历史项数据；不保证重启持久性或上游 ZDR 认证。 |
+| Web `generate:false` | 校验并预填纯内存请求状态，返回可续接空响应，input／output／total Token 均为零。不执行模型／浏览器／工具，不下载 URL，不预热 KV 缓存。provider 文件 ID 仍失败；原生预填返回 `unsupported_native_prewarm`。 |
+| `response.steer` | 在自然完成边界续接，限受支持的普通自动交互 GPT-6 Native Tools 请求。accepted 表示排队，后继 `response.created` 才提交输入；自动后继保留原模型／effort／工具／设置。未实现更早输出项边界打断。 |
+| 所需工具结果／审批 | Steering 保持待处理；同连接／通道上匹配的显式 create 提交结果／决定并保留其自身设置，已接受输入仅前置一次。识别 hosted 审批结构不表示实现了该 hosted 工具。 |
+| 取消 | 断连仅取消归属连接的工作；原生精确轮次 interrupt 有独立身份／授权校验。没有已核实的 Responses `response.cancel` 客户端帧，不能套用 Realtime 或后台 HTTP 取消语义。 |
+
+队列／通道／steering 超限会明确失败（`websocket_queue_full`、`websocket_stream_limit_reached`、`too_many_pending_steers`）。Steering 默认最多 64 条待处理输入／8 MiB，校验时限 10 秒。`steering_required_input_missing` 保留待处理输入，不启动模型请求。Web 后台／非流式生成、不支持的 steering 路由和原生预填仍是明确边界；不会为通过检查而改变原模型／effort。
+
+<a id="input-references"></a>
+
+### 附件引用解析
+
+远程 `input_image.image_url` 和 `input_file.file_url` 仅在共享历史／上下文／模型／effort／工具／控制校验后解析。服务器从已校验任务输入产生精确 URL 授权，绑定任务／provider／账号作用域；任意元数据不是授权。预填保留未解析原引用，不做 DNS／HTTP；生成时先解析再走普通附件校验。原生透传绕过此 Web 专用路径。
+
+仅支持公开 HTTPS 的 443 端口。所有 DNS 结果须为公网地址，socket 固定到已检查地址并验证主机名／TLS。不转发授权头、Cookie、浏览器身份、环境凭据或代理；每个重定向目标须有独立精确 URL 授权。展开请求中的内联与远程图片／文件附件合计最多 10 个、内容总计 50,000,000 字节，同时计入内联和下载字节；单附件最多 20,000,000 字节。同名且数据相同的重复内联文件只计一次，图片和 URL 引用逐项计数。下载整体限时 30 秒、最多三次重定向，并受共享请求分配预留和取消约束。解析器可施加更低的下载预算，但不能提高内置上限。
+
+保留原字节及支持的明确 MIME。含糊的 octet-stream／ZIP MIME、不支持的字符集／HTTP 压缩及原始音视频被拒绝。provider `file_id` 在预填和生成均报 `unsupported_provider_file_reference`，因为尚无已确认兼容认证的 Codex／ChatGPT 文件服务；API Files 端点本身不是该契约。不以转录、抽帧或猜测端点作为等价回退。详见[附件边界](native-tools-compatibility.zh-CN.md#data-contracts)。
 
 <a id="data-locations"></a>
 
