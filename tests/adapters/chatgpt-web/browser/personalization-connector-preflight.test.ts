@@ -584,29 +584,26 @@ test("the labeled Unpersonalized path never hides an unclosed menu", async () =>
   expect(menuOpen).toBeTrue();
 });
 
-test("the absolute personalization deadline always returns the connector deadline error", async () => {
+test("elapsed time in earlier personalization checks does not consume a later connector proof", async () => {
   const originalNow = Date.now;
   let now = 10_000;
   let countReads = 0;
   Date.now = () => now;
   const absent = visibleLocator(() => {
     countReads += 1;
-    if (countReads === 2) now += 30_001;
+    if (countReads === 2) now += 60_001;
     return 0;
   });
   try {
-    await expect(ensureChatGptPersonalizedConnectorAccess({ getByRole: () => absent } as any))
-      .rejects.toMatchObject({
-        status: 424,
-        code: "connector_not_found",
-        message: "ChatGPT personalization preflight exceeded its readiness deadline",
-      });
+    await expect(ensureChatGptPersonalizedConnectorAccess(
+      { getByRole: () => absent } as any, undefined, async () => true,
+    )).resolves.toBe("already-personalized");
   } finally {
     Date.now = originalNow;
   }
 });
 
-test("an absolute deadline never hides a failed personalization rollback", async () => {
+test("slow personalization proof never hides a failed rollback", async () => {
   const originalNow = Date.now;
   let now = 20_000;
   let personalized = false;
@@ -660,7 +657,7 @@ test("an absolute deadline never hides a failed personalization rollback", async
         async () => {
           proofCalls += 1;
           if (proofCalls === 1) return false;
-          now += 30_001;
+          now += 60_001;
           return false;
         },
       );
@@ -669,7 +666,7 @@ test("an absolute deadline never hides a failed personalization rollback", async
     }
     expect(failure).toMatchObject({
       name: "ChatGptPersistentBrowserStateError",
-      message: "ChatGPT personalization proof failed and the original state could not be restored",
+      message: "ChatGPT personalization changed but connector access was not proven and the original state could not be restored",
     });
     expect(failure).toBeInstanceOf(AggregateError);
     expect(personalized).toBeTrue();

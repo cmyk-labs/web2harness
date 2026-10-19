@@ -1,9 +1,105 @@
 // Adapted from miuuyy/codex-chatgpt-web (MIT; see LICENSES).
-import {test,expect} from "bun:test";
+import {test,expect,spyOn} from "bun:test";
 import {chromium,type Browser} from "playwright-core";
 import {observeChatGptAttachmentUploads} from "../../../../src/adapters/chatgpt-web/browser/attachment-upload";
 import {ChatGptBrowserWorker} from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import {ChatGptWebAdapterError} from "../../../../src/adapters/chatgpt-web/adapter-error";
+import {ChatGptBrowserObservationTimeoutError} from "../../../../src/adapters/chatgpt-web/browser/turn-observation";
+
+const flush = () => new Promise<void>(resolve => setImmediate(resolve));
+
+function mockObservationClock() {
+  let now = 0, nextId = 0;
+  const timers = new Map<number, { at: number; callback: () => void }>();
+  const set = spyOn(globalThis, "setTimeout").mockImplementation(((callback: () => void, ms: number) => {
+    const id = ++nextId;
+    timers.set(id, { at: now + ms, callback });
+    return id;
+  }) as typeof setTimeout);
+  const clear = spyOn(globalThis, "clearTimeout").mockImplementation(((id: number) => {
+    timers.delete(id);
+  }) as typeof clearTimeout);
+  return {
+    timers,
+    async tick(ms: number) {
+      now += ms;
+      for (const [id, timer] of [...timers]) if (timer.at <= now) {
+        timers.delete(id); timer.callback();
+      }
+      await flush();
+    },
+    restore() { clear.mockRestore(); set.mockRestore(); },
+  };
+}
+
+test("frame inspection failure retains its error after an independent 30s stuck-detach limit", async () => {
+  const clock = mockObservationClock();
+  const original = new Error("Owned frame inspection failed");
+  let rejectFrame!: (error: Error) => void;
+  const frame = new Promise<never>((_resolve, reject) => { rejectFrame = reject; });
+  let detachCalls = 0, settled = false;
+  const commands: string[] = [];
+  const session = {
+    send: (method: string) => { commands.push(method); return frame; },
+    detach: () => { detachCalls++; return new Promise<void>(() => {}); },
+  };
+  const page = { url: () => "https://chatgpt.com/", context: () => ({ newCDPSession: async () => session }) };
+  try {
+    const pending = observeChatGptAttachmentUploads(page as never, ["owned.png"])
+      .catch(error => { settled = true; return error; });
+    await flush();
+    await clock.tick(29_000);
+    rejectFrame(original);
+    await flush();
+    expect(detachCalls).toBe(1);
+    await clock.tick(29_999);
+    expect(settled).toBeFalse();
+    await clock.tick(1);
+    expect(settled).toBeTrue();
+    expect(await pending).toBe(original);
+    expect(commands).toEqual(["Page.getFrameTree"]);
+    expect(clock.timers.size).toBe(0);
+  } finally { clock.restore(); }
+});
+
+test("late CDP creation bounds stuck detach without replacing the initialization timeout", async () => {
+  const clock = mockObservationClock();
+  let detachCalls = 0, commands = 0, settled = false;
+  const session = {
+    send: async () => { commands++; throw new Error("Abandoned session must not initialize"); },
+    detach: () => { detachCalls++; return new Promise<void>(() => {}); },
+  };
+  let resolveSession!: (created: typeof session) => void;
+  const creation = new Promise<typeof session>(resolve => { resolveSession = resolve; });
+  let lateOpening!: Promise<unknown>;
+  const page = { context: () => ({ newCDPSession: () => ({
+    then: (onSession: (created: typeof session) => Promise<unknown>) => {
+      lateOpening = creation.then(onSession);
+      return lateOpening;
+    },
+  }) }) };
+  try {
+    const pending = observeChatGptAttachmentUploads(page as never, ["owned.png"])
+      .catch(error => { settled = true; return error; });
+    await clock.tick(30_000);
+    expect(settled).toBeTrue();
+    const original = await pending;
+    expect(original).toBeInstanceOf(ChatGptBrowserObservationTimeoutError);
+    let cleanupSettled = false;
+    const cleanup = lateOpening.catch(error => { cleanupSettled = true; return error; });
+    resolveSession(session);
+    await flush();
+    expect(detachCalls).toBe(1);
+    await clock.tick(29_999);
+    expect(cleanupSettled).toBeFalse();
+    await clock.tick(1);
+    expect(cleanupSettled).toBeTrue();
+    expect(await cleanup).toMatchObject({ message: "Upload observer initialization expired" });
+    expect(await pending).toBe(original);
+    expect(commands).toBe(0);
+    expect(clock.timers.size).toBe(0);
+  } finally { clock.restore(); }
+});
 
 const executable=process.env.CHATGPT_DOM_TEST_BROWSER;
 const html=`<form><div id="prompt-textarea" contenteditable="true">original message</div><input data-testid="upload-photos-input" type="file" multiple><button data-testid="send-button" type="button" onclick="window.sends++">Send</button></form>
@@ -16,7 +112,7 @@ async function fixture(run:(browser:Browser,base:string)=>Promise<void>,handler:
 }
 const prompt={text:'original message',images:[{ref:'codex-input-image-1',imageUrl:'data:image/png;base64,'+Buffer.from('test').toString('base64')}]};
 
-for (const timeoutMs of [120_000, 600_000]) test.skipIf(!executable)(`attachment budget ${timeoutMs} reaches the actual DOM substep waits`, async () => {
+for (const timeoutMs of [120_000, 300_000, 600_000]) test.skipIf(!executable)(`upload processing limit ${timeoutMs} never shortens independent DOM waits`, async () => {
  await fixture(async(browser,base)=>{
   const page=await browser.newPage();await page.goto(base);
   const worker=Object.create(ChatGptBrowserWorker.prototype) as any;
@@ -25,9 +121,8 @@ for (const timeoutMs of [120_000, 600_000]) test.skipIf(!executable)(`attachment
   prototype.waitFor=function(options:any){observed.push(options.timeout);return original.call(this,options);};
   try { await worker.attachFiles(page,prompt,AbortSignal.timeout(5000),timeoutMs); }
   finally { prototype.waitFor=original; }
-  const extra=timeoutMs-120_000;
-  expect(observed).toContain(20_000+extra);
-  expect(observed).toContain(60_000+extra);
+  expect(observed).toContain(60_000);
+  expect(observed).toContain(120_000);
   expect(await page.evaluate(()=>(window as any).sends)).toBe(0);
  },()=>new Response('{"event":"file.processing.completed","file_id":"owned-file"}\n',{headers:{'content-type':'application/x-ndjson'}}));
 },10000);

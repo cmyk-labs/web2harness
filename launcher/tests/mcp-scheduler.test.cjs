@@ -26,11 +26,11 @@ test("cooldown releases slots, isolates scopes, admits only one recovery at a ti
   assert.equal(f.scheduler.snapshot().mcpStatus[0].cooldownUntil, undefined);
 });
 test("explicit Retry-After survives restart and waiting remains cancellable or expires normally", () => {
-  const f = fixture(); f.add("first"); f.end("first", { failure: { ...failure, retryAfterMs: 1000000 } });
+  const f = fixture(); f.add("first"); f.end("first", { failure: { ...failure, retryAfterMs: 2000000 } });
   const restored = fixture(); restored.scheduler.restoreMcpStatus(f.scheduler.mcpStatus());
   assert.equal(restored.add("cancel").state, "queued"); restored.scheduler.cancel("cancel");
   assert.equal(restored.scheduler.get("cancel").state, "cancelled");
-  restored.add("timeout"); restored.advance(900000);
+  restored.add("timeout"); restored.advance(1800000);
   assert.equal(restored.scheduler.get("timeout").state, "timed-out");
   assert.equal(restored.scheduler.snapshot().active, 0);
 });

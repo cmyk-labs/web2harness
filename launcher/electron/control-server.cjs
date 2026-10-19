@@ -170,8 +170,30 @@ class BrowserControlServer {
           error.code = "manual_browser_inspection_disabled";
           throw error;
         }
-        const result = await host.inspectSession(body?.detectCapabilities === true);
-        writeJson(response, 200, result);
+        const streamStages = request.headers.accept === "application/x-ndjson";
+        const controller = new AbortController();
+        const onClose = () => { if (!response.writableEnded) controller.abort(); };
+        response.once("close", onClose);
+        let sequence = 0;
+        const send = value => { if (!response.destroyed) response.write(`${JSON.stringify(value)}\n`); };
+        if (streamStages) {
+          response.writeHead(200, { "content-type": "application/x-ndjson", "cache-control": "no-store" });
+          response.flushHeaders();
+        }
+        try {
+          const result = await host.inspectSession(body?.detectCapabilities === true, {
+            abortSignal: controller.signal,
+            ...(streamStages ? { onStage: stage => send({ type: "stage", sequence: ++sequence, stage }) } : {}),
+          });
+          if (streamStages) { send({ type: "result", value: result }); response.end(); }
+          else writeJson(response, 200, result);
+        } catch (error) {
+          if (!streamStages) throw error;
+          send({ type: "error", message: error instanceof Error ? error.message : String(error) });
+          response.end();
+        } finally {
+          response.off("close", onClose);
+        }
         return;
       }
       if (isTurnRelease) {

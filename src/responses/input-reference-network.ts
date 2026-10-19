@@ -77,6 +77,13 @@ export async function withReferenceSignal<T>(operation: Promise<T>, signal: Abor
   finally { signal.removeEventListener("abort", abort); }
 }
 
+/** A phase owns its timer; finishing it never shortens the next phase's allowance. */
+export function referenceTimeout(parent: AbortSignal, timeoutMs: number) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException("Attachment phase timed out", "TimeoutError")), timeoutMs);
+  return { signal: AbortSignal.any([parent, controller.signal]), dispose: () => clearTimeout(timer) };
+}
+
 export interface AttachmentDownload {
   status: number;
   headers: Headers;
@@ -84,20 +91,26 @@ export interface AttachmentDownload {
   cancel(): void;
 }
 
-/** Injection is for trusted host code/tests only, never request JSON. Must retain this security contract. */
-export type InputReferenceTransport = (url: URL, signal: AbortSignal) => Promise<AttachmentDownload>;
+/** Trusted transports own independent DNS/headers timers and must retain the security contract. */
+export type InputReferenceTransport = (url: URL, signal: AbortSignal, timeouts?: {
+  dnsMs: number; headersMs: number;
+}) => Promise<AttachmentDownload>;
 
 /** Exported factory lets fixtures verify the actual pinned HTTPS options without a live socket. */
 export function createPublicHttpsTransport(io: {
   lookup?: typeof lookup;
   request?: typeof request;
 } = {}): InputReferenceTransport {
-  return async (url, signal) => {
+  return async (url, signal, timeouts = { dnsMs: 30_000, headersMs: 60_000 }) => {
     attachmentUrl(url.href);
     throwIfReferenceAborted(signal);
     const host = url.hostname.replace(/^\[|\]$/g, "");
-    const addresses = isIP(host) ? [{ address: host, family: isIP(host) }]
-      : await withReferenceSignal((io.lookup ?? lookup)(host, { all: true, verbatim: true }), signal);
+    const dns = referenceTimeout(signal, timeouts.dnsMs);
+    let addresses;
+    try {
+      addresses = isIP(host) ? [{ address: host, family: isIP(host) }]
+        : await withReferenceSignal((io.lookup ?? lookup)(host, { all: true, verbatim: true }), dns.signal);
+    } finally { dns.dispose(); }
     if (!addresses.length || addresses.length > 64 || addresses.some(value =>
       !isPublicAttachmentAddress(value.address) || isIP(value.address) !== value.family)) {
       throw new InputReferenceError("unsafe_attachment_host", "Attachment DNS returned a nonpublic or invalid address");
@@ -117,20 +130,29 @@ export function createPublicHttpsTransport(io: {
         else callback(null, pinned.address, pinned.family);
       },
     };
-    return new Promise<AttachmentDownload>((resolve, reject) => {
-      const req = (io.request ?? request)(options, response => {
-        const headers = new Headers();
-        for (const [name, value] of Object.entries(response.headers)) {
-          if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(", ") : value);
-        }
-        resolve({
-          status: response.statusCode ?? 0, headers, body: response,
-          cancel: () => { response.destroy(); req.destroy(); },
+    const headersTimeout = referenceTimeout(signal, timeouts.headersMs);
+    let req: ReturnType<typeof request> | undefined;
+    try {
+      return await withReferenceSignal(new Promise<AttachmentDownload>((resolve, reject) => {
+        req = (io.request ?? request)(options, response => {
+          if (headersTimeout.signal.aborted) { response.destroy(); req?.destroy(); return; }
+          const headers = new Headers();
+          for (const [name, value] of Object.entries(response.headers)) {
+            if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(", ") : value);
+          }
+          resolve({
+            status: response.statusCode ?? 0, headers, body: response,
+            cancel: () => { response.destroy(); req?.destroy(); },
+          });
         });
-      });
-      req.once("error", reject);
-      req.end();
-    });
+        req.once("error", reject);
+        req.end();
+      }), headersTimeout.signal);
+    } catch (error) {
+      req?.destroy();
+      throwIfReferenceAborted(headersTimeout.signal);
+      throw error;
+    } finally { headersTimeout.dispose(); }
   };
 }
 

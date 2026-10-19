@@ -2094,7 +2094,7 @@ test("hard refresh timeout cannot become success when stopping emits did-stop-lo
   try {
     await assert.rejects(
       fixture.hardRefreshHome(5),
-      /ChatGPT hard refresh did not finish within 60 seconds/,
+      /ChatGPT hard refresh did not finish within 0\.005 seconds/,
     );
   } finally {
     clearTimeout(keepTestAlive);

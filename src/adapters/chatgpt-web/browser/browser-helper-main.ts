@@ -33,7 +33,6 @@ interface RunMessage {
     textDelivery?: BrowserTurn["textDelivery"];
     uiLanguage?: BrowserTurn["uiLanguage"];
     traceId: string;
-    preparationDeadline?: number;
     attachmentTimeoutMs?: number;
     queueTicket?: import("../../../browser/request-queue-client").QueueTicket;
     modelId: string;
@@ -187,8 +186,6 @@ async function run(message: RunMessage): Promise<void> {
   if (message.turn.attachmentTimeoutMs !== undefined && ![120_000, 180_000, 300_000, 600_000].includes(message.turn.attachmentTimeoutMs)) {
     throw new Error("Browser helper attachment timeout is invalid");
   }
-  if (message.turn.preparationDeadline !== undefined && (!Number.isSafeInteger(message.turn.preparationDeadline)
-    || message.turn.preparationDeadline <= 0)) throw new Error("Browser helper preparation deadline is invalid");
   if (message.turn.retainConversation !== undefined && typeof message.turn.retainConversation !== "boolean") {
     throw new Error("Browser helper conversation retention flag is invalid");
   }
@@ -250,7 +247,6 @@ async function run(message: RunMessage): Promise<void> {
   const prepareSelected = async () => ({ ...await promptSelection.wait(), release: () => {} });
   const turn: BrowserTurn = {
     traceId: message.turn.traceId,
-    ...(message.turn.preparationDeadline !== undefined ? { preparationDeadline: message.turn.preparationDeadline } : {}),
     ...(message.turn.attachmentTimeoutMs !== undefined ? { attachmentTimeoutMs: message.turn.attachmentTimeoutMs } : {}),
     ...(message.turn.queueTicket ? { queueTicket: message.turn.queueTicket } : {}),
     modelId: message.turn.modelId,
@@ -319,6 +315,11 @@ async function run(message: RunMessage): Promise<void> {
         reject(new Error("Browser helper could not request the Send activation boundary"));
       }
     }),
+    onResponseCompleted: () => {
+      if (!writeProtocol({ type: "event", id: message.id, event: "response_completed" })) {
+        throw new Error("Browser helper could not report response completion");
+      }
+    },
     onSubmitted: () => {
       if (!writeProtocol({ type: "event", id: message.id, event: "submitted" })) {
         throw new Error("Browser helper could not persist ChatGPT submission evidence");
@@ -366,11 +367,18 @@ async function run(message: RunMessage): Promise<void> {
 }
 
 async function verify(message: VerifyMessage): Promise<void> {
+  if (abortControllers.has(message.id)) throw new Error(`Browser helper maintenance operation already exists: ${message.id}`);
+  const abortController = new AbortController();
+  abortControllers.set(message.id, abortController);
   try {
-    const selected = await maintenanceWorker(message).verifyConnector(message.id);
+    const worker = maintenanceWorker(message);
+    writeProtocol({ type: "stage", id: message.id, sequence: 1, stage: "running" });
+    const selected = await worker.verifyConnector(message.id, abortController.signal);
     writeProtocol({ type: "result", id: message.id, text: selected });
   } catch (error) {
     writeProtocol(browserHelperError(message.id, error));
+  } finally {
+    abortControllers.delete(message.id);
   }
 }
 
@@ -397,9 +405,10 @@ async function maintain(message: InspectMessage | SmokeMessage | LimitsMessage):
   abortControllers.set(message.id, abortController);
   try {
     const worker = maintenanceWorker(message);
+    writeProtocol({ type: "stage", id: message.id, sequence: 1, stage: "running" });
     const value = message.type === "inspect"
-      ? await worker.inspectSession(message.detectCapabilities)
-      : message.type === "limits" ? await worker.inspectLimitsPlan()
+      ? await worker.inspectSession(message.detectCapabilities, abortController.signal)
+      : message.type === "limits" ? await worker.inspectLimitsPlan(abortController.signal)
       : await worker.smokeTest(abortController.signal, message.id);
     writeProtocol({ type: "result", id: message.id, value });
   } catch (error) {
@@ -532,4 +541,4 @@ process.once("SIGTERM", () => {
 });
 
 // Advertise the optional frames this helper understands so the daemon can negotiate them explicitly.
-writeProtocol({ type: "ready", features: ["progress", "tool-boundary-ack", "completion-fence", "browser-reply-fence", "mcp-delivery-observation", "preparation-deadline", "context-file", "skill-attachments", "input-files", "attachment-timeout"] });
+writeProtocol({ type: "ready", features: ["progress", "tool-boundary-ack", "completion-fence", "browser-reply-fence", "mcp-delivery-observation", "context-file", "skill-attachments", "input-files", "attachment-timeout"] });

@@ -3,6 +3,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const { randomBytes } = require("node:crypto");
 const { spawn } = require("node:child_process");
+const { createInterface } = require("node:readline");
+const { createOperationStageWatchdog } = require("../../shared/operation-stages.cjs");
 const { migrateRuntimeConfig, needsRuntimeConfigMigration } = require("../../shared/config-migration.cjs");
 const { normalizeContextWindows } = require("../../shared/context-budgets.cjs");
 const {
@@ -21,10 +23,10 @@ const { captureSetupCheckpoint, setupCheckpointChanged, restoreSetupCheckpoint }
 
 const MAX_CAPTURE_BYTES = 8 * 1024 * 1024;
 const MAX_RUNTIME_LOG_LINE_CHARS = 64 * 1024;
-const CORE_SETUP_TIMEOUT_MS = 5 * 60_000;
-const MCP_SETUP_TIMEOUT_MS = 10 * 60_000;
+const CORE_SETUP_TIMEOUT_MS = 60_000;
+const MCP_SETUP_TIMEOUT_MS = 60_000;
 const UNINSTALL_TIMEOUT_MS = 2 * 60_000;
-const PASSKEY_LOGIN_TIMEOUT_MS = 10 * 60_000;
+const PASSKEY_LOGIN_TIMEOUT_MS = 15 * 60_000;
 const MAX_PASSKEY_STATE_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_PASSKEY_MARKER_FILE_BYTES = 64 * 1024;
 function collect(stream, chunks, onLine, onError) {
@@ -304,7 +306,7 @@ class RuntimeHost {
         env: this.launcherControlEnvironment(),
         message: "Sign in with your passkey in Chrome, then return here and choose Continue",
         successMessage: "Passkey session captured for private Launcher verification",
-        timeoutMs: PASSKEY_LOGIN_TIMEOUT_MS,
+        stageTimeouts: true,
       });
       const stateStat = fs.lstatSync(storageStatePath);
       if (!stateStat.isFile() || stateStat.size < 1 || stateStat.size > MAX_PASSKEY_STATE_FILE_BYTES) {
@@ -508,6 +510,9 @@ class RuntimeHost {
   }
 
   async run(name, args, options = {}) {
+    if (args[0] === "setup" || (args[0] === "dev" && args[1] === "setup")) {
+      options = { ...options, stageTimeouts: true };
+    }
     if (this.active) throw new Error(`Another launcher operation is active: ${this.active}`);
     if (this.activeChild
       && this.activeChild.exitCode === null
@@ -532,12 +537,13 @@ class RuntimeHost {
         Object.assign(environment, {
           WEB2HARNESS_BROWSER_HOST_DESCRIPTOR: this.browserDescriptorPath,
           ...(options.env || {}),
+          ...(options.stageTimeouts ? { WEB2HARNESS_STAGE_PIPE: "1" } : {}),
         });
         const child = spawn(invocation.executable, invocation.args, {
           cwd: invocation.cwd,
           detached: DETACH_OWNED_CHILD,
           env: environment,
-          stdio: [options.controlStdin ? "pipe" : "ignore", "pipe", "pipe"],
+          stdio: [options.controlStdin ? "pipe" : "ignore", "pipe", "pipe", ...(options.stageTimeouts ? ["pipe"] : [])],
           windowsHide: true,
         });
         this.activeChild = child;
@@ -559,15 +565,20 @@ class RuntimeHost {
         let timedOut = null;
         let terminationTimeout = null;
         let forceTimeout = null;
+        let timeout = null;
+        let stageWatchdog = null;
+        let stageInput = null;
         const clearTimers = () => {
           if (timeout) clearTimeout(timeout);
+          stageWatchdog?.stop();
+          stageInput?.close();
           if (terminationTimeout) clearTimeout(terminationTimeout);
           if (forceTimeout) clearTimeout(forceTimeout);
         };
-        const timeout = options.timeoutMs
-          ? setTimeout(() => {
+        const expire = (error) => {
               if (settled) return;
-              timedOut = new Error(`${name} timed out after ${options.timeoutMs}ms`);
+              if (timedOut) return;
+              timedOut = error;
               try {
                 terminateOwnedProcessTree(child);
               } catch (error) {
@@ -597,8 +608,18 @@ class RuntimeHost {
                   reject(new Error(`${timedOut.message}; the child process did not exit after forced termination`));
                 }, 2_000);
               }, 5_000);
-            }, options.timeoutMs)
-          : null;
+        };
+        if (options.stageTimeouts) {
+          stageWatchdog = createOperationStageWatchdog(expire);
+          stageInput = createInterface({ input: child.stdio[3] });
+          stageInput.on("line", line => {
+            try { stageWatchdog.accept(JSON.parse(line)); }
+            catch (error) { expire(error); }
+          });
+          child.stdio[3].on("error", error => expire(error));
+        } else if (options.timeoutMs) {
+          timeout = setTimeout(() => expire(new Error(`${name} timed out after ${options.timeoutMs}ms`)), options.timeoutMs);
+        }
         child.once("error", (error) => {
           const childStillRunning = Number.isInteger(child.pid)
             && child.exitCode === null
@@ -1392,6 +1413,7 @@ class RuntimeHost {
     const previousRuntime = this.runtimeConfigSnapshot();
     const checkpoint = this.captureSetupCheckpoint(previousRuntime);
     this.lifecycleOperation = name;
+    options = { ...options, stageTimeouts: true };
     let setupCommandStarted = false;
     let runtimeTransitionStarted = false;
     try {

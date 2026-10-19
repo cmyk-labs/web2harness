@@ -25,6 +25,7 @@ export function runCommand(command: string, args: string[], options: SpawnSyncOp
   const result = spawnSync(command, args, {
     encoding: "utf8",
     stdio: "pipe",
+    timeout: 60_000,
     ...options,
   });
   if (result.error) throw result.error;

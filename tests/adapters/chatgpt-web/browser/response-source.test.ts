@@ -116,18 +116,17 @@ test("unbound ancestry, multiple finals, unresolved references and late data are
   expect(late.result()).toMatchObject({ state: "rejected", reason: "response_after_termination" });
 });
 
-test("missing terminal metadata requires independent DOM validation without bypassing identity or explicit failure", () => {
+test("optional terminal metadata does not override successful completion, identity or explicit failure", () => {
   const candidate = (metadata: Record<string, unknown> = {}, status = "finished_successfully") => [
     "v1", { type: "input_message", input_message: user, conversation_id: binding.conversationId },
-    { message: message({ status, end_turn: true, content: { content_type: "text", parts: ["not source-authorized"] },
+    { message: message({ status, end_turn: true, content: { content_type: "text", parts: ["complete answer"] },
       metadata: { parent_id: user.id, ...metadata } }), conversation_id: binding.conversationId },
     { type: "message_stream_complete", conversation_id: binding.conversationId }, "[DONE]",
   ];
   for (const metadata of [{}, { is_complete: true }, { finish_details: { type: "stop" } }]) {
     const result = project(candidate(metadata)).result();
-    expect(result).toEqual({ state: "rejected", reason: "response_terminal_metadata_unavailable" });
+    expect(result).toMatchObject({ state: "complete", text: "complete answer" });
     expect(responseSourceBlocksFallback(result)).toBe(false);
-    expect(result).not.toHaveProperty("text");
   }
   for (const [metadata, status, reason] of [
     [{ is_complete: false }, "finished_successfully", "response_message_incomplete"],
@@ -143,6 +142,60 @@ test("missing terminal metadata requires independent DOM validation without bypa
   }
   const noDone = project(candidate().slice(0, -1)).result();
   expect(noDone).toEqual({ state: "collecting" });
+});
+
+test("the message marker does not freeze the response before DONE", () => {
+  const frames = [...begin(), { p: "/message/content/parts/0", o: "append", v: "complete" }, terminal,
+    { type: "message_stream_complete", conversation_id: binding.conversationId }];
+  const source = new ChatGptResponseSource(binding);
+  source.push(wire(frames));
+  expect(source.result()).toEqual({ state: "collecting" });
+  source.push(wire([{ p: "/message/content/parts/0", o: "append", v: " answer" }, "[DONE]"]));
+  source.finish();
+  expect(source.result()).toMatchObject({ state: "complete", text: "complete answer" });
+  for (const negative of [
+    { p: "/message/metadata/is_complete", o: "replace", v: false },
+    { p: "/message/metadata/finish_details", o: "replace", v: { type: "length" } },
+    { p: "/message/status", o: "replace", v: "interrupted" },
+  ]) {
+    const result = project([...frames, negative, "[DONE]"]).result();
+    expect(result).toEqual({ state: "rejected", reason: "response_message_incomplete" });
+    expect(responseSourceBlocksFallback(result)).toBeTrue();
+  }
+  const unknown = project([...frames, { p: "/unsupported-projection", o: "replace", v: {} }, "[DONE]"]).result();
+  expect(unknown).toEqual({ state: "rejected", reason: "response_patch_unsupported" });
+  expect(responseSourceBlocksFallback(unknown)).toBeFalse();
+  expect(project([...frames, "[DONE]", { p: "/message/content/parts/0", o: "append", v: "late" }]).result())
+    .toEqual({ state: "rejected", reason: "response_after_termination" });
+});
+
+test("removing optional completion metadata restores absence, not explicit failure", () => {
+  for (const keys of [["is_complete"], ["finish_details"], ["is_complete", "finish_details"]]) {
+    const frames = [...begin(), { p: "/message/content/parts/0", o: "append", v: "complete answer" }, terminal,
+      { p: "", o: "patch", v: keys.map(key => ({ p: `/message/metadata/${key}`, o: "remove" })) },
+      { type: "message_stream_complete", conversation_id: binding.conversationId }, "[DONE]"];
+    expect(project(frames).result()).toMatchObject({ state: "complete", text: "complete answer" });
+    for (const [key, value] of [["is_complete", false], ["finish_details", { type: "length" }], ["finish_details", null]]) {
+      const negative = [...frames.slice(0, -2), { p: `/message/metadata/${key}`, o: "add", v: value }, ...frames.slice(-2)];
+      expect(project(negative).result()).toEqual({ state: "rejected", reason: "response_message_incomplete" });
+    }
+  }
+});
+
+test("request binding compares all text parts and retains edge whitespace and attachment parts", () => {
+  const request = (parts: unknown[]) => ({ method: "POST", url: "https://chatgpt.com/backend-api/f/conversation",
+    postData: JSON.stringify({ action: "next", conversation_id: binding.conversationId,
+      messages: [{ ...user, content: { parts } }] }) });
+  const attachment = { content_type: "image_asset_pointer", asset_pointer: "fixture-image" };
+  for (const parts of [["input"], [attachment, "input"], ["in", attachment, "put"]]) {
+    expect(chatGptResponseRequestBinding(request(parts), "input", binding.conversationId)).toEqual(binding);
+  }
+  for (const parts of [["input", "extra"], ["extra", "input"], [" input"], ["input\n"], ["input\t"], []]) {
+    expect(chatGptResponseRequestBinding(request(parts), "input", binding.conversationId)).toBeUndefined();
+  }
+  expect(chatGptResponseRequestBinding(request([" input "]), " input ", binding.conversationId)).toEqual(binding);
+  expect(chatGptResponseRequestBinding(request(["input"]), " input ", binding.conversationId)).toBeUndefined();
+  expect(chatGptResponseRequestBinding(request(["a\nb"]), "a\r\nb", binding.conversationId)).toEqual(binding);
 });
 
 test("request binding requires this prompt, exact generation POST, user identity and conversation", () => {
@@ -164,4 +217,48 @@ test("complete source text retains exact native tool fences for the existing sch
   const parsed = parseNativeToolCallReply(result.text, tools);
   expect(parsed.issues).toEqual([]); expect(parsed.calls).toHaveLength(1);
   expect(parseNativeToolCallReply(result.text, []).calls).toHaveLength(0);
+});
+
+// Message topology observed in the 2026-10-18 owned DEV failure exports 3/5. Bodies and IDs
+// are synthetic; this is a regression of the protocol shape, not a raw/private wire fixture.
+test("completed descendant final supersedes an unfinished nonterminal commentary ancestor", () => {
+  const commentary = message({ id: "progress", channel: "commentary", content: { content_type: "text", parts: ["Working"] } });
+  const recap = message({ id: "recap", channel: null, content: { content_type: "reasoning_recap" },
+    status: "finished_successfully", end_turn: false, metadata: { parent_id: commentary.id } });
+  const final = message({ metadata: { parent_id: recap.id }, content: { content_type: "text", parts: ["Exact final"] } });
+  const values = ["v1", { type: "input_message", input_message: user, conversation_id: binding.conversationId },
+    ...[commentary, recap, final].map(m => ({ message: m, conversation_id: binding.conversationId })), ...end()];
+  expect(project(values).result()).toMatchObject({ state: "complete", text: "Exact final" });
+  for (const change of [
+    { status: "finished_partial" }, { status: "error" }, { end_turn: true },
+    { metadata: { parent_id: user.id, is_complete: false } },
+    { metadata: { parent_id: user.id, finish_details: { type: "length" } } },
+  ]) {
+    const bad = structuredClone(values); (bad[2] as any).message = { ...commentary, ...change };
+    expect(project(bad).result()).toMatchObject({ state: "rejected", reason: "response_message_incomplete" });
+  }
+  const sibling = structuredClone(values); (sibling[4] as any).message.metadata.parent_id = user.id;
+  expect(project(sibling).result()).toMatchObject({ state: "rejected", reason: "response_message_incomplete" });
+  const later = structuredClone(values); later.splice(later.length - 2, 0, { message: { ...commentary, id: "later", metadata: { parent_id: final.id } } } as any);
+  expect(project(later).result()).toMatchObject({ state: "rejected", reason: "response_message_incomplete" });
+});
+
+test("semantic failure does not erase observed termination or mask later identity/server failures", () => {
+  const unknown = { type: "unknown-control", payload: "not-authorized" };
+  const source = project([...begin(), unknown, ...end()]);
+  expect(source.result()).toEqual({ state: "rejected", reason: "response_event_unsupported" });
+  expect(source.facts()).toMatchObject({ done: false, streamComplete: false, observedDone: true, observedStreamComplete: true });
+  for (const [late, reason] of [
+    [{ conversation_id: "foreign" }, "response_identity_mismatch"],
+    [{ p: "", o: "add", v: { conversation_id: "foreign" } }, "response_identity_mismatch"],
+    [{ p: "", o: "patch", v: [{ p: "/conversation_id", o: "replace", v: "foreign" }] }, "response_identity_mismatch"],
+    [{ type: "input_message", input_message: { ...user, id: "foreign" } }, "response_identity_mismatch"],
+    [{ p: "", o: "replace", v: { error_code: "failure" } }, "response_upstream_error"],
+    [{ error: { message: "not telemetry" } }, "response_upstream_error"],
+  ] as const) {
+    const result = project([...begin(), unknown, late, ...end()]).result();
+    expect(result).toEqual({ state: "rejected", reason }); expect(responseSourceBlocksFallback(result)).toBe(true);
+  }
+  expect(project([...begin(), unknown, ...end(), { v: "late" }]).result())
+    .toEqual({ state: "rejected", reason: "response_after_termination" });
 });

@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { chromium } from "playwright-core";
 import { runInNewContext } from "node:vm";
 import { rejects } from "node:assert/strict";
@@ -197,8 +197,8 @@ test("both evaluate entry points serialize with no module closure dependencies",
   }
 });
 
-// Each 65k multiline insertion can take over 20s on Windows Chromium. Give each
-// independent DOM/draft case its own budget instead of timing all four together.
+// Each 65k multiline insertion can take tens of seconds on Windows Chromium. The
+// fixture ceiling must outlast independent write/read/cleanup operation limits.
 for (const modern of [false, true]) for (const hasStaleDraft of [false, true]) {
   test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(
     "a selected connector never appends a new request to an old draft (modern=" + modern + ", stale=" + hasStaleDraft + ")",
@@ -228,13 +228,51 @@ for (const modern of [false, true]) for (const hasStaleDraft of [false, true]) {
             menu.hidden = true;
           });
         }, { pill, staleDraft });
-        await worker.attachPrompt(page, prompt, true);
+        const began = performance.now();
+        const checkpoints: Array<{ phase: string; elapsedMs: number }> = [];
+        try {
+          await worker.attachPrompt(page, prompt, true, async (phase: string) => {
+            checkpoints.push({ phase, elapsedMs: Math.round(performance.now() - began) });
+          });
+        } catch (error) {
+          console.error("composer fixture phases", { modern, hasStaleDraft, checkpoints });
+          throw error;
+        }
         expect(await worker.attachedPromptText(page)).toBe(prompt);
         expect(await worker.connectorIsSelected(page.locator("#prompt-textarea"))).toBeTrue();
       } finally { await browser.close(); }
     },
-    45_000,
+    180_000,
   );
+}
+
+for (const purpose of ["preparation", "rollback"] as const) {
+  test(`slow composer preparation does not consume the separate rollback budget (${purpose})`, async () => {
+    let now = 100_000;
+    const clock = spyOn(Date, "now").mockImplementation(() => now);
+    const actions: string[] = [];
+    const action = (name: string, duration: number, options: { timeout: number; signal: AbortSignal }) => {
+      options.signal.throwIfAborted();
+      if (options.timeout < duration) throw new Error("fixture action deadline exhausted");
+      now += duration;actions.push(name);
+    };
+    const composer = {
+      focus: async (options: any) => action("focus", 25_000, options),
+      press: async (key: string, options: any) => action(key, 25_000, options),
+      evaluate: async () => "",
+    };
+    const page = { locator: () => ({ press: async (key: string, options: any) => action(key, 25_000, options) }) };
+    const worker = Object.assign(Object.create(ChatGptBrowserWorker.prototype), {
+      activeComposer: async () => { now += 120;return composer; },
+      connectorIsSelected: async () => false,
+    });
+    try {
+      const clearing = worker.clearChatGptComposerState(page, new AbortController().signal, purpose);
+      await clearing;expect(actions.at(-1)).toBe("Backspace");
+      expect(now - 100_000).toBeGreaterThan(100_000);
+      expect(actions).not.toContain("Enter");
+    } finally { clock.mockRestore(); }
+  });
 }
 
 for (const kind of ["plain", "whitespace", "textarea", "connector", "blocked-delete", "replacement-draft", "cancelled"] as const) {
@@ -283,5 +321,5 @@ for (const kind of ["plain", "whitespace", "textarea", "connector", "blocked-del
         expect(await worker.attachedPromptText(page)).toBe("");
       }
     } finally { await browser.close(); }
-  }, 15_000);
+  }, 180_000);
 }

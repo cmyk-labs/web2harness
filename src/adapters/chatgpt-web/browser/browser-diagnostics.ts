@@ -1,10 +1,11 @@
 /** Private browser diagnostics: redact captured state and bound trace retention. */
 
 import { randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, mkdirSync, readdirSync, rmSync, statSync, lstatSync, realpathSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import type { Locator, Page } from "playwright-core";
 import { atomicWriteFile } from "../../../config";
+import { diagnosticError } from "../../../diagnostics";
 import {
   CHATGPT_ASSISTANT_TURN_SELECTOR,
   CHATGPT_COMPLETION_ACTION_SELECTOR,
@@ -50,6 +51,39 @@ export function sanitizeChatGptBrowserDiagnosticState(value: unknown): unknown {
 }
 
 const CHATGPT_BROWSER_DIAGNOSTIC_TRACE_LIMIT = 10;
+const RESPONSE_EVIDENCE_SLOTS = 64;
+const RESPONSE_EVIDENCE_MAX_BYTES = 4 * 1024 * 1024;
+
+export class ChatGptResponseEvidenceStorageError extends Error {
+  constructor(readonly code: "response_evidence_too_large" | "response_evidence_archive_full") {
+    super(code === "response_evidence_too_large" ? "Response evidence exceeds archive budget" : "Response evidence archive is full");
+  }
+}
+
+/** Failure evidence has its own bounded archive, never the rotating screenshot pool. Exclusive
+ * directory reservations work across helper processes. At capacity, stop capturing rather than
+ * deleting a failure while a task is still being investigated. Existing evidence is never replaced.
+ */
+export function persistChatGptResponseEvidence(root: string, artifact: unknown,
+  file: "response-source.private.json" | "response-dom.private.json" | "browser-failure.private.json" = "response-source.private.json"): string {
+  const serialized = JSON.stringify(artifact);
+  if (Buffer.byteLength(serialized) > RESPONSE_EVIDENCE_MAX_BYTES) throw new ChatGptResponseEvidenceStorageError("response_evidence_too_large");
+  privateDirectory(root);
+  const canonicalRoot = realpathSync(root);
+  for (let slot = 0; slot < RESPONSE_EVIDENCE_SLOTS; slot++) {
+    const name = `response-source-${String(slot).padStart(2, "0")}`;
+    const directory = join(canonicalRoot, name);
+    try { mkdirSync(directory, { mode: 0o700 }); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "EEXIST") continue; throw error; }
+    // This newly created reservation is task-owned; do not follow an externally replaced link.
+    if (lstatSync(directory).isSymbolicLink() || dirname(realpathSync(directory)) !== canonicalRoot) {
+      throw new Error("Response evidence ownership changed");
+    }
+    atomicWriteFile(join(directory, file), serialized);
+    return `${name}/${file}`;
+  }
+  throw new ChatGptResponseEvidenceStorageError("response_evidence_archive_full");
+}
 
 export function browserDiagnosticCheckpoint(value: string): string {
   const safe = value.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
@@ -61,15 +95,20 @@ function privateDirectory(path: string): void {
   try { chmodSync(path, 0o700); } catch { /* Windows ACLs are managed by the installer. */ }
 }
 
-function pruneBrowserDiagnostics(root: string): void {
+export function pruneBrowserDiagnostics(root: string): void {
+  const canonicalRoot = realpathSync(root);
   const traces = readdirSync(root, { withFileTypes: true })
-    .filter(entry => entry.isDirectory() && /^[A-Za-z0-9_-]{6,128}$/.test(entry.name))
+    .filter(entry => entry.isDirectory() && !entry.isSymbolicLink()
+      && !entry.name.startsWith("response-source-")
+      && /^[A-Za-z0-9_-]{6,128}-[a-f0-9]{8}$/.test(entry.name))
     .map(entry => {
       const path = join(root, entry.name);
       return { path, modifiedAt: statSync(path).mtimeMs };
     })
     .sort((left, right) => right.modifiedAt - left.modifiedAt);
   for (const trace of traces.slice(CHATGPT_BROWSER_DIAGNOSTIC_TRACE_LIMIT)) {
+    if (lstatSync(trace.path).isSymbolicLink() || dirname(realpathSync(trace.path)) !== canonicalRoot
+      || dirname(resolve(trace.path)) !== resolve(root)) continue;
     rmSync(trace.path, { recursive: true, force: true });
   }
 }
@@ -300,7 +339,7 @@ export class ChatGptBrowserDiagnostics {
           ),
         ]] : []),
       ]);
-      atomicWriteFile(join(this.directory, `${stem}.json`), `${JSON.stringify({
+      const artifact = {
         version: 2,
         capturedAt,
         traceId: this.traceId,
@@ -312,7 +351,12 @@ export class ChatGptBrowserDiagnostics {
           ? { state: sanitizeChatGptBrowserDiagnosticState(stateResult.value) }
           : {}),
         ...(Object.keys(captureErrors).length > 0 ? { captureErrors } : {}),
-      }, null, 2)}\n`);
+      };
+      atomicWriteFile(join(this.directory, `${stem}.json`), `${JSON.stringify(artifact, null, 2)}\n`);
+      if (error !== undefined && diagnosticError(error).category !== "cancelled") {
+        const reference = persistChatGptResponseEvidence(this.root, artifact, "browser-failure.private.json");
+        console.info(`[chatgpt-web] browser failure retained trace=${this.traceId} reference=${reference}`);
+      }
       if (Object.keys(captureErrors).length > 0) {
         console.warn(
           `[chatgpt-web] browser diagnostic partial capture trace=${this.traceId}`

@@ -4,8 +4,6 @@ import { ChatGptWebAdapterError } from "../adapter-error";
 import type { ChatGptExternalTurnProgressSnapshot } from "../tools/turn-progress";
 import { ChatGptBrowserObservationTimeoutError, withChatGptBrowserObservationTimeout } from "./turn-observation";
 
-export const CHATGPT_PREPARATION_BUDGET_MS = 90_000;
-export const CHATGPT_PREPARATION_ATTEMPT_MS = 30_000;
 export const MAX_CHATGPT_PREPARATION_RECOVERIES = 1;
 // This internal code is produced only after checking the unsent page, never from error text.
 export const CHATGPT_UNSUBMITTED_PREPARATION = "chatgpt_preparation_unsubmitted";
@@ -16,7 +14,7 @@ export function preparationError(code: "chatgpt_composer_unavailable" | "chatgpt
   cause?: unknown): ChatGptWebAdapterError {
   const messages = {
     chatgpt_composer_unavailable: "ChatGPT did not expose a ready message composer. Check the ChatGPT page before retrying.",
-    chatgpt_preparation_timeout: "ChatGPT page preparation exceeded its shared time budget. The message was not submitted.",
+    chatgpt_preparation_timeout: "A ChatGPT page preparation operation timed out. The message was not submitted.",
     chatgpt_page_structure_unsupported: "ChatGPT exposed an unsupported or ambiguous message composer.",
     chatgpt_sign_in_required: "ChatGPT requested sign-in. Open sign in in Web2Harness, then retry.",
     chatgpt_session_expired: "The ChatGPT session has expired. Sign in again in Web2Harness.",
@@ -150,15 +148,12 @@ export async function waitForChatGptReadiness(page: Page, options: {
   }
 }
 
-/** One native-round budget lives outside HTTP adapters. Terminal queue receipts still fence restarts. */
-export class ChatGptPreparationBudget {
-  deadline?: number;
+/** Recovery count survives reconnects; elapsed time in another step cannot consume this attempt. */
+export class ChatGptPreparationRecovery {
   recoveries = 0;
   closedAt?: number;
-  start(now = Date.now()): number { return this.deadline ??= now + CHATGPT_PREPARATION_BUDGET_MS; }
-  recover(now = Date.now()): boolean {
-    if (this.closedAt !== undefined || this.deadline === undefined || now >= this.deadline
-      || this.recoveries >= MAX_CHATGPT_PREPARATION_RECOVERIES) return false;
+  recover(): boolean {
+    if (this.closedAt !== undefined || this.recoveries >= MAX_CHATGPT_PREPARATION_RECOVERIES) return false;
     this.recoveries += 1;
     return true;
   }

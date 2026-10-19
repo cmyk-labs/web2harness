@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
@@ -621,13 +621,13 @@ test("Luna turns without a retained conversation never send connector identity a
 test("chat preparation preserves page-read and composer errors instead of reporting an expired login", async () => {
   const prepare = (ChatGptBrowserWorker.prototype as unknown as {
     prepareChatSurface(page: unknown, capture: undefined, useSavedChats: false,
-      readiness: { deadline: number }): Promise<unknown>;
+      readiness: { timeoutMs: number }): Promise<unknown>;
   }).prepareChatSurface;
   for (const error of [new ChatGptBrowserObservationTimeoutError(5_000), new Error("ChatGPT composer is unavailable")]) {
     const page = { url: () => "https://chatgpt.com/?temporary-chat=true", evaluate: async () => { throw error; } };
-    // Observation timeouts can recover within the shared preparation budget. Once
+    // Observation timeouts can recover within the independent readiness timeout. Once
     // it expires, preserve the original cause rather than misclassifying login.
-    const preparation = prepare.call({}, page, undefined, false, { deadline: Date.now() + 100 });
+    const preparation = prepare.call({}, page, undefined, false, { timeoutMs: 100 });
     if (error instanceof ChatGptBrowserObservationTimeoutError) {
       await expect(preparation).rejects.toMatchObject({
         code: "chatgpt_composer_unavailable", status: 502, retryable: false, cause: error,
@@ -791,7 +791,7 @@ test("an accepted MCP Bridge send survives one stalled DOM probe and a later MCP
   }
 });
 
-test("send activation keeps the outer stage budget instead of restoring a nested 20-second timeout", async () => {
+test("send activation and semantic acknowledgement each receive an independent limit", async () => {
   const provider: CodexProviderConfig = {
     adapter: "chatgpt-web",
     baseUrl: `browser://send-stage-budget-${Date.now()}-${Math.random()}`,
@@ -835,7 +835,7 @@ test("send activation keeps the outer stage budget instead of restoring a nested
       options?: { noWaitAfter?: boolean; signal?: AbortSignal; timeout?: number },
     ) => {
       clickOptions = options;
-      if (options?.timeout !== 0) throw new Error("nested locator timeout replaced the outer stage budget");
+      expect(options?.timeout).toBe(60_000);
     },
   };
   worker.activeComposer = async () => ({
@@ -849,7 +849,7 @@ test("send activation keeps the outer stage budget instead of restoring a nested
     1_000,
     stageSignal => worker.sendAttachedPrompt(page, {}, undefined, stageSignal),
   )).resolves.toBe("user_turn");
-  expect(clickOptions).toMatchObject({ noWaitAfter: true, timeout: 0 });
+  expect(clickOptions).toMatchObject({ noWaitAfter: true, timeout: 60_000 });
   expect(clickOptions?.signal).toBeInstanceOf(AbortSignal);
 });
 
@@ -1228,7 +1228,7 @@ test("large Markdown-rich context uses one plain-text editing command before exa
   expect(calls[0]).toEqual(["clear"]);
   expect(calls.filter(call => call[0] === "evaluate")).toEqual([["evaluate", prompt]]);
   expect(calls.filter(call => call[0] === "evaluateOptions")).toEqual([
-    ["evaluateOptions", { timeout: 20_000 }],
+    ["evaluateOptions", { timeout: 60_000 }],
   ]);
   expect(asserted).toBe(prompt);
 });
@@ -1392,7 +1392,7 @@ test("connector selection re-resolves the active composer after ChatGPT replaces
     fill: async (value: string) => { calls.push(["fill", value]); },
     focus: async () => { calls.push(["focus"]); },
     pressSequentially: async (value: string, options: { delay: number; signal?: AbortSignal; timeout: number }) => {
-      expect(options).toEqual({ delay: 25, signal: undefined, timeout: 10_000 });
+      expect(options).toEqual({ delay: 25, signal: undefined, timeout: 60_000 });
       calls.push(["pressSequentially", value]);
     },
     press: async (key: string) => {
@@ -1741,7 +1741,7 @@ for (const captureScreenshots of [false, true]) test(`connector failure persists
       },
     }, "verify_contract_trace")).rejects.toBe(failure);
 
-    const [traceDirectory] = readdirSync(diagnosticsRoot);
+    const traceDirectory = readdirSync(diagnosticsRoot).find(name => name.startsWith("verify_contract_trace-"));
     expect(traceDirectory).toStartWith("verify_contract_trace-");
     const files = readdirSync(join(diagnosticsRoot, traceDirectory!));
     expect(screenshots).toBe(captureScreenshots ? 4 : 0);
@@ -2150,7 +2150,7 @@ for (const proof of [false, true]) for (const failure of ["caret", "cancel", "lo
       focus: async () => {},
       evaluate: async (fn: unknown, value: unknown, options: { timeout: number; signal: AbortSignal }) => {
         expect(value).toBeUndefined();
-        expect(options.timeout).toBe(10_000);
+        expect(options.timeout).toBe(60_000);
         expect(options.signal.aborted).toBeFalse();
         if (fn === prepareComposerForInput) {
           calls.push("prepare");
@@ -2837,15 +2837,15 @@ test("effort readback rejects a changed selection or surface before activating S
   const controls = { filter() { return this; }, count: async () => state.count, first: () => control };
   const composer = { locator: () => ({ locator: () => controls }), isEditable: async () => state.editable };
   const worker = Object.assign(Object.create(ChatGptBrowserWorker.prototype), { activeComposer: async () => composer }) as {
-    assertSelectedEffort(page: unknown, mode: unknown): Promise<void>;
+    assertSelectedEffort(page: unknown, mode: unknown, verifyFamily?: boolean): Promise<void>;
   };
   const page = { url: () => state.url };
   const mode = { selection };
-  await worker.assertSelectedEffort(page, mode);
+  await worker.assertSelectedEffort(page, mode, false);
   for (const change of [{ label: "Medio" }, { url: "https://chatgpt.com/" }, { expanded: "true" },
     { editable: false }, { count: 2 }]) {
     Object.assign(state, { url: selection.url, label: "Alto", expanded: "false", editable: true, count: 1 }, change);
-    await expect(worker.assertSelectedEffort(page, mode)).rejects.toMatchObject({
+    await expect(worker.assertSelectedEffort(page, mode, false)).rejects.toMatchObject({
       code: "upstream_server_error", retryable: false,
     });
   }
@@ -2961,6 +2961,102 @@ test("effort selection stops as soon as ChatGPT reports an expired session", asy
   });
 });
 
+test("sequential effort hydration keeps 110s container and 20s input waits independent of alert watchers", async () => {
+  let now = 0, nextId = 0, opened = true, inputStarted = false;
+  let activeWatchers = 0, cancelledWatchers = 0;
+  const clock = spyOn(Date, "now").mockImplementation(() => now);
+  const timers = new Map<number, { at: number; fire: () => void }>();
+  const schedule = (delay: number, fire: () => void) => {
+    const id = ++nextId;
+    timers.set(id, { at: now + delay, fire });
+    return id;
+  };
+  const flush = () => new Promise<void>(resolve => setImmediate(resolve));
+  const advance = async (ms: number) => {
+    const target = now + ms;
+    for (;;) {
+      const next = [...timers].filter(([, timer]) => timer.at <= target).sort((a, b) => a[1].at - b[1].at)[0];
+      if (!next) break;
+      now = next[1].at; timers.delete(next[0]); next[1].fire();
+      await flush();
+    }
+    now = target;
+    await flush();
+  };
+  const wait = (delay: number | undefined, options: { timeout: number; signal: AbortSignal }) => new Promise<void>((resolve, reject) => {
+    const ids: number[] = [];
+    let settled = false;
+    if (delay === undefined) activeWatchers++;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      ids.forEach(id => timers.delete(id));
+      options.signal.removeEventListener("abort", abort);
+      if (delay === undefined) activeWatchers--;
+      if (error) reject(error); else resolve();
+    };
+    const abort = () => {
+      if (delay === undefined) cancelledWatchers++;
+      finish(new DOMException("Fixture wait aborted", "AbortError"));
+    };
+    if (delay !== undefined) ids.push(schedule(delay, () => finish()));
+    // Model real locator behavior: a positive watcher timeout must actually reject
+    // the race, so the former 120s aggregate cap fails this 130s hydration sequence.
+    if (options.timeout > 0) ids.push(schedule(options.timeout, () => finish(new Error("Fixture locator timed out"))));
+    options.signal.addEventListener("abort", abort, { once: true });
+    if (options.signal.aborted) abort();
+  });
+  let started!: () => void;
+  const hydrationStarted = new Promise<void>(resolve => { started = resolve; });
+  const control = {
+    filter() { return this; }, first() { return this; }, count: async () => 1, waitFor: async () => {},
+    getAttribute: async (name: string) => name === "aria-expanded" ? String(opened) : null,
+    innerText: async () => "High",
+    evaluateAll: async (read: (nodes: any[]) => unknown) => read([{ id: "owned-control", getAttribute: (name: string) =>
+      name === "aria-expanded" ? String(opened) : name === "aria-controls" ? "owned-menu" : null }]),
+  };
+  const slider = {
+    locator: () => ({ press: async () => { throw new Error("Already selected High must not change"); } }),
+    waitFor: (options: { timeout: number; signal: AbortSignal }) => {
+      expect(options.timeout).toBe(120_000); inputStarted = true; return wait(20_000, options);
+    },
+  };
+  const container = {
+    filter() { return this; }, isVisible: async () => true, locator: () => slider,
+    evaluate: async () => ({ min: "0", max: "3", value: "2", locks: ["false", "false", "false", "false"] }),
+    waitFor: (options: { timeout: number; signal: AbortSignal }) => {
+      expect(options.timeout).toBe(120_000); started(); return wait(110_000, options);
+    },
+  };
+  const alert = {
+    filter() { return this; }, last() { return this; }, isVisible: async () => false,
+    waitFor: (options: { timeout: number; signal: AbortSignal }) => wait(undefined, options),
+  };
+  const composer = { locator: () => ({ locator: () => control }), isEditable: async () => true };
+  const page = {
+    url: () => "https://chatgpt.com/?temporary-chat=true",
+    keyboard: { press: async () => { opened = false; } },
+    locator: (selector: string) => selector.includes("data-model-reasoning-effort-slider") ? container : alert,
+  };
+  const worker = Object.assign(Object.create(ChatGptBrowserWorker.prototype), { activeComposer: async () => composer });
+  try {
+    const selection = worker.selectModelAndEffort(page, "gpt-5.6-sol", "high", {
+      localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: false,
+    });
+    void selection.catch(() => {});
+    await hydrationStarted;
+    expect(activeWatchers).toBe(2);
+    await advance(110_000);
+    expect(inputStarted).toBeTrue();
+    await advance(20_000);
+    expect(await selection).toMatchObject({ effort: "high", selection: { label: "High" } });
+    expect(now).toBe(130_000);
+    expect(activeWatchers).toBe(0);
+    expect(cancelledWatchers).toBe(4);
+    expect(timers.size).toBe(0);
+  } finally { clock.mockRestore(); }
+});
+
 test("effort menu waiting stops when ChatGPT reports an expired session", async () => {
   const neverVisible = new Promise<void>(() => {});
   let waitingForSliderInput = false;
@@ -2969,6 +3065,7 @@ test("effort menu waiting stops when ChatGPT reports an expired session", async 
     last() { return this; },
     waitFor: async () => {},
     getAttribute: async () => "true",
+    evaluateAll: async (read: (nodes: any[]) => unknown) => read([{ id: "fixture-owner", getAttribute: () => "true" }]),
   };
   const composerForm = { locator: () => effortControl };
   const composer = { locator: () => composerForm };

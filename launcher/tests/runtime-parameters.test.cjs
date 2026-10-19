@@ -4,6 +4,13 @@ const { DEFAULT_RUNTIME_PARAMETERS: defaults, normalizeRuntimeParameters, valida
 const { createQueueSettingsSaver } = require("../electron/runtime/queue-settings.cjs");
 
 test("runtime defaults and choices require explicit user provenance across upgrades", () => {
+  assert.equal(defaults.stallMinutes, 15);
+  assert.equal(defaults.attachmentMinutes, 5);
+  const oldExplicit = { ...defaults, stallMinutes: 5, attachmentMinutes: 2 };
+  assert.deepEqual(normalizeRuntimeParameters(oldExplicit, { stallMinutes: "user", attachmentMinutes: "user" }).runtimeParameters, oldExplicit);
+  const { DEFAULT_REQUEST_SCHEDULING, validateRequestScheduling } = require("../shared/request-scheduler.cjs");
+  assert.equal(DEFAULT_REQUEST_SCHEDULING.queueTimeoutMinutes, 30);
+  assert.equal(validateRequestScheduling({ ...DEFAULT_REQUEST_SCHEDULING, queueTimeoutMinutes: 15 }).queueTimeoutMinutes, 15);
   assert.deepEqual(normalizeRuntimeParameters({ ...defaults, idleTabMinutes: 120 }).runtimeParameters, defaults);
   const migrated = normalizeRuntimeParameters({ ...defaults, idleTabMinutes: 120, maxRetries: 0 }, { idleTabMinutes: "user", maxRetries: "default" });
   assert.equal(migrated.runtimeParameters.idleTabMinutes, 120);

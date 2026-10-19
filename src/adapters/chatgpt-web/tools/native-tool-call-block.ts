@@ -102,7 +102,7 @@ function unescapeMarkdownToken(token: string): string {
  *     turndown) followed by blank lines and a bare opening fence (what the browser Markdown
  *     extraction produces, because ChatGPT's DOM drops the info string from the `<pre>`).
  *
- * Each matched block ends at the next bare closing fence.
+ * Each matched block ends at the next bare closing fence or the completed reply's EOF.
  */
 export function splitNativeToolCallBlocks(text: string): {
   visibleText: string;
@@ -186,19 +186,18 @@ function compactAjvErrors(validate: ValidateFunction): string {
 }
 
 /**
- * Parse and validate the ```codex_tool_calls blocks of one ChatGPT reply against the tools the
+ * Parse and validate the ```codex_tool_calls blocks of one completed ChatGPT reply against the tools the
  * current Codex round actually declared. Unknown names, malformed JSON, and schema violations are
  * returned as issues (never thrown) so the caller can feed them back for a corrected block
  * instead of failing the turn.
  */
 export function parseNativeToolCallReply(text: string, tools: readonly CodexTool[]): ParsedNativeToolCallReply {
   const index = buildToolIndex(tools);
-  const { visibleText, blocks, unclosed } = splitNativeToolCallBlocks(text);
+  const { visibleText, blocks } = splitNativeToolCallBlocks(text);
   const calls: NativeToolCall[] = [];
   const issues: NativeToolCallIssue[] = [];
-  if (unclosed) {
-    issues.push(issueFor(null, "a tool-call block was opened but never closed with ```"));
-  }
+  // Markdown allows EOF to close a fence. Only completed replies reach this parser;
+  // JSON parsing and the declared tool contract still reject truncated or invalid calls.
   for (const block of blocks) {
     const decoded = blockCalls(block.body);
     if ("invalid" in decoded) {

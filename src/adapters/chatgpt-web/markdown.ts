@@ -342,7 +342,11 @@ export class ChatGptMarkdownBuffer {
 
   /** Read the complete current projection without committing unstable tail blocks. */
   preview(): string {
-    if (this.consistencyError) throw this.consistencyError;
+    if (this.consistencyError) {
+      const covered = this.coveredBufferedSnapshot();
+      if (!covered) throw this.consistencyError;
+      return covered.markdown;
+    }
     return this.projectPending();
   }
 
@@ -369,15 +373,34 @@ export class ChatGptMarkdownBuffer {
       if (index < 0) {
         // Equivalent pending wrappers can merge/split without stable node identities.
         const known = this.projectPending();
-        return !!known && this.projectPending(pending).startsWith(known);
+        return (!!known && this.projectPending(pending).startsWith(known))
+          || this.coversResegmentedPending(pending);
       }
       after = index;
     }
     return true;
   }
 
+  private coversResegmentedPending(pending: ChatGptMarkdownSegment[]): boolean {
+    // Compare the entire pending sequence, not individual DOM identities. A renderer can
+    // merge wrappers while the last inline/code block hydrates. Only reuse the existing
+    // pending-tail rules when serialization preserves every block separator exactly.
+    const aggregate = (segments: ChatGptMarkdownSegment[]) => {
+      const html = segments.map(segment => segment.html).join("");
+      const projection = new ChatGptMarkdownBuffer(this.transform, this.stabilityMs);
+      for (const segment of segments) projection.commit(segment);
+      if (this.transform(chatGptHtmlToMarkdown(html)) !== projection.markdown) return undefined;
+      return { key: "pending-projection", tag: "div", html,
+        text: segments.map(segment => segment.text).join(""), streamable: false };
+    };
+    const previous = aggregate(this.latest), next = aggregate(pending);
+    return !!previous && !!next && this.extendsPendingContent(previous, next);
+  }
+
   private extendsPendingContent(previous: ChatGptMarkdownSegment, next: ChatGptMarkdownSegment): boolean {
     if (previous.sourceStart !== undefined && next.sourceStart !== undefined && previous.sourceStart !== next.sourceStart) return false;
+    if (previous.html.includes("<table") && next.html.includes("<table")
+      && this.extendsPendingTable(previous.html, next.html)) return true;
     // An unfinished underline/list marker can temporarily render a P as H1/H2
     // and back again. Normalize only those pending wrappers for comparison;
     // retain inline markup, links and literal content. Delivery keeps the actual
@@ -422,6 +445,40 @@ export class ChatGptMarkdownBuffer {
     return (hydrated !== known && observed.startsWith(hydrated))
       || this.extendsPendingInlineTail(previous.html, observed)
       || this.hydratesPendingInlineCode(known, next.html);
+  }
+
+  private extendsPendingTable(previousHtml: string, nextHtml: string): boolean {
+    const rows = (html: string) => {
+      const root = createDocument().createElement("div");root.innerHTML = html;
+      const tables = root.querySelectorAll("table");
+      if (tables.length !== 1) return undefined;
+      const table = tables[0]!;
+      // The finished renderer wraps a streaming TABLE in DIVs and a toolbar. Ignore
+      // wrappers only when the same serializer proves that they add no answer content.
+      if (chatGptHtmlToMarkdown(html) !== chatGptHtmlToMarkdown(table.outerHTML)) return undefined;
+      return Array.from(table.querySelectorAll("tr")).map(row => Array.from(row.children).map(cell => ({
+        tag: cell.tagName, html: `<div>${cell.innerHTML}</div>`, markdown: chatGptHtmlToMarkdown(cell.innerHTML),
+      })));
+    };
+    const previous = rows(previousHtml), next = rows(nextHtml);
+    if (!previous?.length || !next || next.length < previous.length) return false;
+    let lastRow = -1, lastCell = -1;
+    previous.forEach((row, r) => row.forEach((cell, c) => { if (cell.markdown) { lastRow = r;lastCell = c; } }));
+    if (lastRow < 0) return false;
+    for (const [r, row] of previous.entries()) {
+      if (next[r]!.length !== row.length) return false;
+      for (const [c, cell] of row.entries()) {
+        const observed = next[r]![c]!;
+        if (cell.tag !== observed.tag || !["TD", "TH"].includes(cell.tag)) return false;
+        if (r > lastRow || (r === lastRow && c > lastCell)) continue;
+        if (cell.markdown === observed.markdown) continue;
+        if (r !== lastRow || c !== lastCell || !this.extendsPendingContent(
+          { key: "table-tail", tag: "div", html: cell.html, text: cell.markdown, streamable: false },
+          { key: "table-tail", tag: "div", html: observed.html, text: observed.markdown, streamable: false },
+        )) return false;
+      }
+    }
+    return true;
   }
 
   private hydratesPendingInlineCode(known: string, html: string): boolean {
@@ -473,7 +530,24 @@ export class ChatGptMarkdownBuffer {
   }
 
   needsCoverageRecovery(): boolean {
-    return this.consistencyError?.diagnostic?.reason === "missing_pending_content";
+    return this.consistencyError?.diagnostic?.reason === "missing_pending_content"
+      && !this.coveredBufferedSnapshot();
+  }
+
+  private coveredBufferedSnapshot(): ChatGptMarkdownBuffer | undefined {
+    if (this.delivery !== "buffered" || this.emittedChars !== 0) return undefined;
+    const known = this.projectPending();
+    if (!known) return undefined;
+    const candidate = new ChatGptMarkdownBuffer(this.transform, this.stabilityMs);
+    let previousStart: number | undefined;
+    for (const segment of this.observed) {
+      if (segment.sourceStart !== undefined) {
+        if (previousStart !== undefined && segment.sourceStart <= previousStart) return undefined;
+        previousStart = segment.sourceStart;
+      }
+      candidate.commit(segment);
+    }
+    return candidate.markdown.startsWith(known) ? candidate : undefined;
   }
 
   finish(): { markdown: string; delta: string } {
@@ -482,19 +556,11 @@ export class ChatGptMarkdownBuffer {
       // retain the *entire* known Markdown projection (including the uncommitted tail), byte for
       // byte and in order. This is not substring/length matching: missing virtualized prefixes,
       // changed URLs, reordered content and missing tails cannot satisfy this coverage check.
-      if (this.delivery !== "buffered" || this.emittedChars !== 0
-        || this.consistencyError.diagnostic?.reason !== "unanchored_snapshot") throw this.consistencyError;
-      const known = this.projectPending();
-      const candidate = new ChatGptMarkdownBuffer(this.transform, this.stabilityMs);
-      let previousStart: number | undefined;
-      for (const segment of this.observed) {
-        if (segment.sourceStart !== undefined) {
-          if (previousStart !== undefined && segment.sourceStart <= previousStart) throw this.consistencyError;
-          previousStart = segment.sourceStart;
-        }
-        candidate.commit(segment);
-      }
-      if (!known || !candidate.markdown.startsWith(known)) throw this.consistencyError;
+      // A split/merged block can also look like a changed text/range or a missing pending
+      // identity. Those local mismatches are recoverable only through the same full,
+      // byte-exact coverage proof below; actual content changes still fail that proof.
+      const candidate = this.coveredBufferedSnapshot();
+      if (!candidate) throw this.consistencyError;
       this.markdown = candidate.markdown;
       this.lastGroup = candidate.lastGroup;
       this.committed.splice(0, this.committed.length, ...this.observed.map(segment => this.committedSegment(segment)));
@@ -517,6 +583,15 @@ export class ChatGptMarkdownBuffer {
   deliveryState() {
     return { delivery: this.delivery, emittedChars: this.emittedChars, committedSegments: this.committed.length,
       observedSegments: this.observed.length, rebuilt: this.rebuilt };
+  }
+
+  /** Private diagnostic artifact only: public answer projections, never normal telemetry. */
+  failureEvidence() {
+    if (!this.consistencyError) return undefined;
+    return { version: 1, format: "chatgpt-public-markdown-buffer", ...this.deliveryState(),
+      conflict: this.consistencyError.diagnostic, markdown: this.markdown, lastGroup: this.lastGroup,
+      committed: structuredClone(this.committed), pending: structuredClone(this.latest),
+      observed: structuredClone(this.observed) };
   }
 
   currentSnapshotIsConsistent(): boolean {

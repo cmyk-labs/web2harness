@@ -13,7 +13,7 @@ import "./queue.css";
 import { usePageNavigationGuard } from "../../shell/PageNavigationGuard";
 
 type Draft = RequestSchedulingSettings & { runtimeParameters: ExecutionParameters; tripleBudget: boolean };
-const defaults: Draft = { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3, runtimeParameters: parameterOptions.defaults, tripleBudget: false };
+const defaults: Draft = { ...parameterOptions.requestScheduling.defaults, runtimeParameters: parameterOptions.defaults, tripleBudget: false };
 function stateDraft(state: LauncherState): Draft {
   return { ...(state.requestScheduling ?? defaults), runtimeParameters: state.runtimeParameters ?? parameterOptions.defaults,
     tripleBudget: state.experimentalContextTripleBudget };
@@ -27,7 +27,7 @@ function loadDraft(settings: Draft, revision: number) {
     const saved = JSON.parse(localStorage.getItem(draftKey) ?? "null");
     if (saved && Number.isSafeInteger(saved.revision) && saved.baseline && saved.draft
       && [saved.baseline, saved.draft].every(item => [1, 2, 3, 4, 5].includes(item.maxConcurrent)
-        && [5, 10, 15, 30, 60].includes(item.queueTimeoutMinutes)
+        && parameterOptions.requestScheduling.queueTimeoutChoices.includes(item.queueTimeoutMinutes)
         && (item.minSendIntervalSeconds === null || typeof item.minSendIntervalSeconds === "number")
         && validParameters(item.runtimeParameters ?? parameterOptions.defaults)
         && (item.tripleBudget === undefined || typeof item.tripleBudget === "boolean"))

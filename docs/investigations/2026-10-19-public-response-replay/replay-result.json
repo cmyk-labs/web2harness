@@ -1,0 +1,178 @@
+{
+  "kind": "offline-public-projection-replay",
+  "productEndToEnd": false,
+  "browserTransfer": {
+    "utf8Bytes": 10254,
+    "fnv1a32": "90e57e59",
+    "matched": true
+  },
+  "currentParser": [
+    {
+      "chunkBytes": 1,
+      "eventCount": 26,
+      "framing": {
+        "discardedData": false
+      },
+      "result": {
+        "state": "rejected",
+        "reason": "response_references_unsupported"
+      },
+      "facts": {
+        "frames": 19,
+        "messageCount": 5,
+        "inputBound": true,
+        "done": false,
+        "streamComplete": false,
+        "observedDone": true,
+        "observedStreamComplete": true,
+        "reason": "response_references_unsupported",
+        "publicStates": [
+          {
+            "channel": "final",
+            "finished": false,
+            "endTurn": false,
+            "complete": false,
+            "stopped": false,
+            "completion": "missing",
+            "finish": "missing"
+          }
+        ]
+      }
+    },
+    {
+      "chunkBytes": 7,
+      "eventCount": 26,
+      "framing": {
+        "discardedData": false
+      },
+      "result": {
+        "state": "rejected",
+        "reason": "response_references_unsupported"
+      },
+      "facts": {
+        "frames": 19,
+        "messageCount": 5,
+        "inputBound": true,
+        "done": false,
+        "streamComplete": false,
+        "observedDone": true,
+        "observedStreamComplete": true,
+        "reason": "response_references_unsupported",
+        "publicStates": [
+          {
+            "channel": "final",
+            "finished": false,
+            "endTurn": false,
+            "complete": false,
+            "stopped": false,
+            "completion": "missing",
+            "finish": "missing"
+          }
+        ]
+      }
+    },
+    {
+      "chunkBytes": 17,
+      "eventCount": 26,
+      "framing": {
+        "discardedData": false
+      },
+      "result": {
+        "state": "rejected",
+        "reason": "response_references_unsupported"
+      },
+      "facts": {
+        "frames": 19,
+        "messageCount": 5,
+        "inputBound": true,
+        "done": false,
+        "streamComplete": false,
+        "observedDone": true,
+        "observedStreamComplete": true,
+        "reason": "response_references_unsupported",
+        "publicStates": [
+          {
+            "channel": "final",
+            "finished": false,
+            "endTurn": false,
+            "complete": false,
+            "stopped": false,
+            "completion": "missing",
+            "finish": "missing"
+          }
+        ]
+      }
+    },
+    {
+      "chunkBytes": 4096,
+      "eventCount": 26,
+      "framing": {
+        "discardedData": false
+      },
+      "result": {
+        "state": "rejected",
+        "reason": "response_references_unsupported"
+      },
+      "facts": {
+        "frames": 19,
+        "messageCount": 5,
+        "inputBound": true,
+        "done": false,
+        "streamComplete": false,
+        "observedDone": true,
+        "observedStreamComplete": true,
+        "reason": "response_references_unsupported",
+        "publicStates": [
+          {
+            "channel": "final",
+            "finished": false,
+            "endTurn": false,
+            "complete": false,
+            "stopped": false,
+            "completion": "missing",
+            "finish": "missing"
+          }
+        ]
+      }
+    }
+  ],
+  "publicFinal": {
+    "utf16Length": 438,
+    "codePoints": 436,
+    "utf8Bytes": 973,
+    "status": "finished_successfully",
+    "endTurn": true,
+    "complete": true,
+    "finish": {
+      "type": "stop",
+      "stop_tokens": [
+        200002
+      ]
+    },
+    "model": "gpt-6-thinking"
+  },
+  "referenceChecks": [
+    {
+      "language": "python",
+      "start": 330,
+      "end": 375,
+      "utf16Matches": false,
+      "codePointMatches": true,
+      "byteMatches": false,
+      "actualUtf16Start": 332
+    },
+    {
+      "language": "mermaid",
+      "start": 377,
+      "end": 424,
+      "utf16Matches": false,
+      "codePointMatches": true,
+      "byteMatches": false,
+      "actualUtf16Start": 379
+    }
+  ],
+  "nonPrefixFallbackRevisions": [
+    18,
+    19
+  ]
+}

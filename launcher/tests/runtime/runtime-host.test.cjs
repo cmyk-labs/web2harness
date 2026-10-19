@@ -6,6 +6,33 @@ const path = require("node:path");
 const { CURRENT_CONNECTOR_NAME, DEV_CONNECTOR_NAME } = require("../../electron/connector-identity.cjs");
 const { RuntimeHost } = require("../../electron/runtime/runtime.cjs");
 
+test("setup child uses its dedicated stage pipe instead of the obsolete enclosing deadline", async t => {
+  const parent = fs.realpathSync(os.tmpdir());
+  const root = fs.mkdtempSync(path.join(parent, "web2harness-runtime-stage-pipe-"));
+  t.after(() => {
+    assert.equal(path.dirname(root), parent);
+    assert.match(path.basename(root), /^web2harness-runtime-stage-pipe-/);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const host = new RuntimeHost({ app: { getPath: () => root },
+    logger: { info() {}, warn() {}, error() {} }, sourceRoot: root, browserDescriptorPath: path.join(root, "unused.json"), supervisor: {} });
+  const script = path.join(root, "fixture.cjs");
+  fs.writeFileSync(script, `
+    const fs = require("node:fs");
+    if (process.env.WEB2HARNESS_STAGE_PIPE !== "1") process.exit(2);
+    const send = message => fs.writeSync(3, JSON.stringify(message) + "\\n");
+    send({type:"stage", event:"begin", id:1, stage:"download"});
+    setTimeout(() => {
+      send({type:"stage", event:"end", id:1});
+      process.stdout.write("fixture complete");
+    }, 25);
+  `);
+  host.command = () => ({ executable: process.execPath, args: [script], cwd: root });
+  const result = await host.run("fixture-setup", ["setup"], { timeoutMs: 1 });
+  assert.equal(result.stdout, "fixture complete");
+  assert.equal(host.activeChild, null);
+});
+
 function hostFor(existingConfig, interactionMode = "automatic") {
   const host = new RuntimeHost({
     app: {
@@ -1288,7 +1315,8 @@ test("macOS passkey capture uses an isolated launcher-controlled transfer", asyn
     assert.deepEqual(invocation.args.slice(0, 4), ["login", "--launcher-control", "--chrome", chrome]);
     assert.equal(invocation.options.embedded, true);
     assert.equal(invocation.options.controlStdin, true);
-    assert.equal(invocation.options.timeoutMs, 10 * 60_000);
+    assert.equal(invocation.options.timeoutMs, undefined);
+    assert.equal(invocation.options.stageTimeouts, true);
     const transferRoot = path.dirname(invocation.args[invocation.args.indexOf("--storage-state") + 1]);
     assert.equal(fs.existsSync(transferRoot), true);
     await transfer.cleanup();

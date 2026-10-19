@@ -1,0 +1,49 @@
+{
+  "kind": "public-response-projection-provenance",
+  "date": "2026-10-19",
+  "rawWireReplay": false,
+  "publicProjectionReplay": true,
+  "originalWireBytesSaved": false,
+  "projectEndToEndAcceptance": false,
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "65def5719a72d673e6c67cfd332fdfe870fffd549659311323b81d91a33c3ef5"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "sha256": "905818739a1f0b57ebc2969b4c67ad6172eb8ab1fd588c8c1b49b2eddc2a196a"
+    },
+    {
+      "path": "public-events.json",
+      "sha256": "88efcc21ec2d0025a439321bdad4676164eb0e39453ab7ecdfc8217cf8827ac4"
+    },
+    {
+      "path": "replay-result.json",
+      "sha256": "8a09918138d96f7526b2cf3b78ba63859e7517757e575d04c6d4b80621c7cf45"
+    }
+  ],
+  "sources": [
+    {
+      "path": "src/adapters/chatgpt-web/browser/response-source.ts",
+      "sha256": "621b6fa3f28eb2fbb8e4d6372a65e46f753cdf452adb114805cceecaa2e9c1c1"
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/response-evidence.ts",
+      "sha256": "815a21f7d7be9f182d94472f71af919bd9e22053e05a1574c522041ead5fa53e"
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/sse-decoder.ts",
+      "sha256": "2810a6fe41828e8b9e4c001331ea670599e4b98e44096b6e4dca777a2d3860c8"
+    },
+    {
+      "path": "src/adapters/chatgpt-web/tools/native-tool-call-block.ts",
+      "sha256": "da7bd4b6bb0942acbd82e84226e0f239f60705fa26d348f4b8ea495ee0e85feb"
+    }
+  ],
+  "officialReferences": [
+    "https://learn.chatgpt.com/docs/codex/cli",
+    "https://developers.openai.com/api/docs/guides/tools-code-interpreter"
+  ],
+  "statement": "Public projection and current-parser replay; original IDs are aliased, nonpublic bodies and renderer fields omitted. SHA-256 proves artifact identity, not full transport fidelity or product success."
+}

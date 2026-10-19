@@ -33,6 +33,60 @@ function recoveryFixture() {
     browserDescriptorPath: path.join(__dirname, "unused-fixture-descriptor.json") });
 }
 
+test("daemon shutdown waits independently for every socket and browser cleanup owner", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  t.mock.method(performance, "now", () => Date.now());
+  const { EventEmitter } = require("node:events");
+  const child = Object.assign(new EventEmitter(), { exitCode: null, signalCode: null, operationStageEvents: [] });
+  const supervisor = recoveryFixture();
+  let finished = false;
+  const pending = supervisor.waitForChildExit("daemon", child).then(() => { finished = true; });
+  for (const [id, stage, wait] of [[1, "websocket-close", 29999], [2, "websocket-close", 29999], [3, "cleanup", 119999], [4, "cleanup", 119999]]) {
+    child.emit("operation-stage", { type: "stage", event: "begin", id, stage });
+    t.mock.timers.tick(wait);
+    assert.equal(finished, false);
+    child.emit("operation-stage", { type: "stage", event: "end", id });
+  }
+  child.exitCode = 0;
+  child.emit("exit", 0);
+  await pending;
+  assert.equal(finished, true);
+  assert.equal(child.listenerCount("operation-stage"), 0);
+});
+
+test("a stuck daemon shutdown owner still expires and releases listeners", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { EventEmitter } = require("node:events");
+  const child = Object.assign(new EventEmitter(), { exitCode: null, signalCode: null, operationStageEvents: [] });
+  const pending = recoveryFixture().waitForChildExit("daemon", child);
+  const rejected = assert.rejects(pending, /websocket-close stage timed out after 30000ms/);
+  child.emit("operation-stage", { type: "stage", event: "begin", id: 1, stage: "websocket-close" });
+  t.mock.timers.tick(30_000);
+  await rejected;
+  assert.deepEqual(child.eventNames(), []);
+});
+
+test("streamed shutdown verifies stale PID ownership and independent leaf completion", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  t.mock.method(performance, "now", () => Date.now());
+  let stream;
+  const response = new Response(new ReadableStream({ start(controller) { stream = controller; } }));
+  const send = message => stream.enqueue(new TextEncoder().encode(`${JSON.stringify(message)}\n`));
+  const pending = recoveryFixture().readShutdownProgress(response, process.pid, new AbortController());
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  send({ type: "accepted", pid: process.pid });
+  for (const [id, stage, elapsed] of [[1, "websocket-close", 29000], [2, "cleanup", 119000], [3, "cleanup", 119000]]) {
+    send({ type: "stage", event: "begin", id, stage });
+    await flush(); t.mock.timers.tick(elapsed);
+    send({ type: "stage", event: "end", id });
+    await flush();
+  }
+  send({ type: "result", status: "ok", pid: process.pid });
+  assert.deepEqual(await pending, { status: "ok" });
+  const wrongOwner = new Response(`${JSON.stringify({ type: "accepted", pid: process.pid + 1 })}\n`);
+  await assert.rejects(recoveryFixture().readShutdownProgress(wrongOwner, process.pid, new AbortController()), /ownership is invalid/);
+});
+
 for (const status of [401, 403]) test(`daemon recovery cannot bypass a retained tunnel HTTP ${status} failure`, async () => {
   const supervisor = recoveryFixture(), config = { mode: "mcp-bridge" };
   supervisor.readConfig = () => config;

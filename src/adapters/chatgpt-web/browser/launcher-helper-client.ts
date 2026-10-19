@@ -1,4 +1,5 @@
 import { PREFIX as DIAGNOSTIC_PREFIX } from "../../../../launcher/shared/diagnostic-event.cjs";
+import { operationStage } from "../../../runtime/operation-stage";
 import { validateContextFile } from "../prompt/context-attachments";
 import { validateInputFiles } from "../prompt/file-attachments";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -30,7 +31,7 @@ interface PendingTurn {
 
 type HelperMessage =
   | { type: "ready"; features?: string[] }
-  | { type: "event"; id: string; event: "heartbeat" | "send_activated" | "submitted" | "reasoning" | "commentary" | "text"; text?: string; continuation?: boolean }
+  | { type: "event"; id: string; event: "heartbeat" | "send_activated" | "submitted" | "response_completed" | "reasoning" | "commentary" | "text"; text?: string; continuation?: boolean }
   | { type: "event"; id: string; event: "tool_batch_observed"; revision: number }
   | { type: "event"; id: string; event: "completion_fence_begin"; requestId: number }
   | { type: "event"; id: string; event: "completion_fence_commit"; requestId: number; revision: number; browserReply?: string }
@@ -107,7 +108,7 @@ function parseHelperMessage(line: string): HelperMessage {
       }
       return { type: "event", id: message.id, event, reused: message.reused };
     }
-    if (!["heartbeat", "send_activated", "submitted", "reasoning", "commentary", "text"].includes(String(event))) {
+    if (!["heartbeat", "send_activated", "submitted", "response_completed", "reasoning", "commentary", "text"].includes(String(event))) {
       throw new Error("Launcher browser helper emitted an unknown event");
     }
     if (text !== undefined && typeof text !== "string") {
@@ -119,7 +120,7 @@ function parseHelperMessage(line: string): HelperMessage {
     return {
       type: "event",
       id: message.id,
-      event: event as "heartbeat" | "send_activated" | "submitted" | "reasoning" | "commentary" | "text",
+      event: event as "heartbeat" | "send_activated" | "submitted" | "response_completed" | "reasoning" | "commentary" | "text",
       ...(text !== undefined ? { text: text as string } : {}),
       ...(continuation !== undefined ? { continuation: continuation as boolean } : {}),
     };
@@ -214,9 +215,6 @@ export class LauncherBrowserHelperClient {
       throw new Error("Restart the updated browser helper to apply attachment waiting settings");
     }
     if (turn.abortSignal?.aborted) throw new DOMException("ChatGPT web turn aborted", "AbortError");
-    if (turn.preparationDeadline !== undefined && !this.helperFeatures.has("preparation-deadline")) {
-      throw new Error("Launcher browser helper does not support the shared preparation deadline; update or restart the launcher");
-    }
     if (turn.externalProgress && !this.helperFeatures.has("tool-boundary-ack")) {
       throw new Error(
         "Launcher browser helper does not support causal Codex tool-boundary acknowledgement; update or restart the launcher",
@@ -283,7 +281,6 @@ export class LauncherBrowserHelperClient {
             traceId: turn.traceId,
             ...(turn.textDelivery ? { textDelivery: turn.textDelivery } : {}),
             ...(turn.uiLanguage ? { uiLanguage: turn.uiLanguage } : {}),
-            ...(turn.preparationDeadline !== undefined ? { preparationDeadline: turn.preparationDeadline } : {}),
             ...(turn.attachmentTimeoutMs !== undefined ? { attachmentTimeoutMs: turn.attachmentTimeoutMs } : {}),
             ...(turn.queueTicket ? { queueTicket: turn.queueTicket } : {}),
             modelId: turn.modelId,
@@ -323,7 +320,7 @@ export class LauncherBrowserHelperClient {
     }
     if (!child) return;
     await this.sendTo(child, { type: "shutdown" }).catch(() => {});
-    await this.terminateChild(child, 2_000);
+    await operationStage("cleanup", () => this.terminateChild(child, 120_000));
   }
 
   private async ensureChild(): Promise<void> {
@@ -377,7 +374,7 @@ export class LauncherBrowserHelperClient {
     )));
     const timer = setTimeout(() => {
       if (this.child === child) this.readyReject?.(new Error("Launcher browser helper did not become ready"));
-    }, 15_000);
+    }, 30_000);
     try {
       await this.ready;
     } catch (error) {
@@ -499,6 +496,7 @@ export class LauncherBrowserHelperClient {
         ));
       }
       else if (message.event === "submitted") pending.turn.onSubmitted?.();
+      else if (message.event === "response_completed") void Promise.resolve().then(() => pending.turn.onResponseCompleted?.()).catch(error => this.abortWithLocalFailure(message.id, error instanceof Error ? error : new Error(String(error)), pending));
       else if (message.event === "prepared_selected") {
         const prepare = message.reused ? pending.turn.prepareResume : pending.turn.prepare;
         void Promise.resolve().then(() => prepare?.()).then(prepared => {

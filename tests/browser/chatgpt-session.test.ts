@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { ChatGptBrowserWorker } from "../../src/adapters/chatgpt-web/browser/browser-worker";
 import {
   CHATGPT_COMPOSER_SELECTOR,
@@ -13,6 +13,15 @@ import {
   readChatGptEffortSnapshot,
 } from "../../src/browser/session";
 
+function observeControl<T extends { getAttribute: (name: string) => Promise<string | null> }>(control: T): T {
+  Object.assign(control, { evaluateAll: async (read: (elements: unknown[]) => unknown) => {
+    const keys = ["id", "aria-controls", "aria-expanded", "data-state"];
+    const attrs = Object.fromEntries(await Promise.all(keys.map(async key => [key, await control.getAttribute(key)])));
+    return read([{ id: attrs.id ?? "", getAttribute: (key: string) => attrs[key] ?? null }]);
+  } });
+  return control;
+}
+
 test("effort closing acknowledges its owner when Escape is ignored and never reopens a closed picker", async () => {
   for (const escapeWorks of [true, false]) {
     let expanded = true, escapes = 0, toggles = 0;
@@ -24,11 +33,11 @@ test("effort closing acknowledges its owner when Escape is ignored and never reo
     const page: any = { keyboard: { press: async (key: string) => {
       expect(key).toBe("Escape"); escapes++; if (escapeWorks) expanded = false;
     } } };
-    await closeChatGptEffortMenu(page, control, { settleMs: 0 });
+    await closeChatGptEffortMenu(page, observeControl(control), { settleMs: 0 });
     expect(expanded).toBeFalse();
     expect(escapes).toBe(1);
     expect(toggles).toBe(escapeWorks ? 0 : 1);
-    await closeChatGptEffortMenu(page, control, { settleMs: 0 });
+    await closeChatGptEffortMenu(page, observeControl(control), { settleMs: 0 });
     expect(escapes).toBe(1);
     expect(toggles).toBe(escapeWorks ? 0 : 1);
   }
@@ -38,10 +47,10 @@ test("effort closing rejects missing ownership and a picker that ignores both cl
   let actions = 0;
   const page: any = { keyboard: { press: async () => { actions++; } } };
   const control: any = { getAttribute: async () => null, dispatchEvent: async () => { actions++; } };
-  await expect(closeChatGptEffortMenu(page, control, { settleMs: 0 })).rejects.toThrow("owner state");
+  await expect(closeChatGptEffortMenu(page, observeControl(control), { settleMs: 0 })).rejects.toThrow("owner state");
   expect(actions).toBe(0);
   control.getAttribute = async (name: string) => name === "aria-expanded" ? "true" : "open";
-  await expect(closeChatGptEffortMenu(page, control, { settleMs: 0 })).rejects.toThrow("did not close");
+  await expect(closeChatGptEffortMenu(page, observeControl(control), { settleMs: 0 })).rejects.toThrow("did not close");
   expect(actions).toBe(2);
 });
 
@@ -122,7 +131,7 @@ test("effort activation binds the owned menu after the control opens", async () 
     keyboard: { press: async () => {} },
   };
 
-  const activation = await activateChatGptEffortMenu(page as never, control as never, { settleMs: 0 });
+  const activation = await activateChatGptEffortMenu(page as never, observeControl(control) as never, { settleMs: 0 });
   expect(activation.method).toBe("click");
   expect(activation.menu).toBe(ownedMenu as never);
   expect(activation.sliderContainer).toBe(surface as never);
@@ -144,7 +153,7 @@ test.each(["aria-expanded", "data-state"])("effort activation does not bind a cl
     click: async () => { clicks++; opened = true; },
   };
   const page = { locator: () => surface, keyboard: { press: async () => {} } };
-  const activation = await activateChatGptEffortMenu(page as never, control as never, { settleMs: 0 });
+  const activation = await activateChatGptEffortMenu(page as never, observeControl(control) as never, { settleMs: 0 });
   expect(activation.method).toBe("click");
   expect(clicks).toBe(1);
 });
@@ -190,7 +199,7 @@ test("effort activation retries one ghost click with a primary pointerdown", asy
     },
   };
 
-  const activation = await activateChatGptEffortMenu(page as never, control as never, { settleMs: 0 });
+  const activation = await activateChatGptEffortMenu(page as never, observeControl(control) as never, { settleMs: 0 });
   expect(activation.method).toBe("pointerdown");
   expect(activation.menu).toBe(ownedMenu as never);
   expect(activation.sliderContainer).toBe(surface as never);
@@ -216,7 +225,7 @@ test("a visible effort menu waits until its slider surface becomes visible", asy
   };
   const page = { locator: (selector: string) => selector === '[id="owned-menu"]' ? menu : surface,
     keyboard: { press: async () => { opened = false; } } };
-  const activation = await activateChatGptEffortMenu(page as never, control as never, { settleMs: 1_000 });
+  const activation = await activateChatGptEffortMenu(page as never, observeControl(control) as never, { settleMs: 1_000 });
   expect(visibilityReads).toBe(3);
   expect(activation.method).toBe("click");
   expect(activation.sliderContainer).toBe(surface as never);
@@ -234,26 +243,95 @@ test("a visible model menu without a visible effort surface exhausts activation 
   };
   const page = { locator: (selector: string) => selector === '[id="owned-menu"]' ? menu : surface,
     keyboard: { press: async () => { opened = false; } } };
-  await expect(activateChatGptEffortMenu(page as never, control as never, { settleMs: 0 }))
+  await expect(activateChatGptEffortMenu(page as never, observeControl(control) as never, { settleMs: 0 }))
     .rejects.toThrow("did not expose its owned menu or structural slider");
   expect(clicks).toBe(1); expect(pointers).toBe(1);
 });
 
-test("effort snapshot locator waits share the remaining inspection budget", async () => {
+test("effort snapshot has its own 30s observation deadline, including locator retries", async () => {
+  let now = 0;
+  const clock = spyOn(Date, "now").mockImplementation(() => now);
   const timeouts: number[] = [];
   const container = {
     evaluate: async (_read: unknown, arg: unknown, options: { timeout: number }) => {
       expect(arg).toBeUndefined();
       expect(options.timeout).toBeGreaterThan(0);
       timeouts.push(options.timeout);
+      now += timeouts.length === 1 ? 29_900 : 50;
       return { min: "0", max: "3", value: "3", locks: Array(timeouts.length === 1 ? 3 : 4).fill("false") };
     },
   };
-  expect(await readChatGptEffortSnapshot(container as never, 1_000))
-    .toEqual({ min: 0, max: 3, value: 3, available: [true, true, true, true] });
-  expect(timeouts).toHaveLength(2);
-  expect(timeouts[0]).toBeLessThanOrEqual(1_000);
-  expect(timeouts[1]!).toBeLessThan(timeouts[0]!);
+  try {
+    expect(await readChatGptEffortSnapshot(container as never))
+      .toEqual({ min: 0, max: 3, value: 3, available: [true, true, true, true] });
+    expect(timeouts).toEqual([30_000, 100]);
+  } finally { clock.mockRestore(); }
+});
+
+test("slow effort actions and the fallback each retain their full hydration allowance", async () => {
+  let now = 0, opened = false, fallback = false, hydratedAt = Infinity;
+  const clock = spyOn(Date, "now").mockImplementation(() => now);
+  const timeouts: number[] = [];
+  const menu = { isVisible: async () => { now += 29_000; return true; } };
+  const surface = { filter() { return this; }, locator() { return this; }, isVisible: async () => {
+    now += fallback ? 59_000 : 60_000;
+    return fallback && now >= hydratedAt;
+  } };
+  const control = observeControl({
+    getAttribute: async (name: string) => name === "aria-expanded" ? String(opened)
+      : name === "aria-controls" ? "owned-menu" : null,
+    click: async ({ timeout }: { timeout: number }) => { timeouts.push(timeout); now += 59_000; opened = true; },
+    dispatchEvent: async (_event: string, _detail: unknown, { timeout }: { timeout: number }) => {
+      timeouts.push(timeout); now += 59_000; opened = true; fallback = true; hydratedAt = now + 29_000 + 118_000;
+    },
+  });
+  const page = { locator: (selector: string) => selector === '[id="owned-menu"]' ? menu : surface,
+    keyboard: { press: async () => { opened = false; } } };
+  try {
+    const result = await activateChatGptEffortMenu(page as never, control as never);
+    expect(result.method).toBe("pointerdown");
+    expect(timeouts).toEqual([60_000, 60_000]);
+    expect(now).toBe(414_000);
+  } finally { clock.mockRestore(); }
+});
+
+test("unopened effort menus stop each attempt after 30s", async () => {
+  let now = 0, opened = false, menuReads = 0;
+  const clock = spyOn(Date, "now").mockImplementation(() => now);
+  const menu = { isVisible: async () => { menuReads++; now += 15_000; return false; } };
+  const surface = { filter() { return this; }, locator() { return this; }, isVisible: async () => false };
+  const action = async () => { now += 59_000; opened = true; };
+  const control = observeControl({
+    getAttribute: async (name: string) => name === "aria-expanded" ? String(opened)
+      : name === "aria-controls" ? "owned-menu" : null,
+    click: action, dispatchEvent: action,
+  });
+  const page = { locator: (selector: string) => selector === '[id="owned-menu"]' ? menu : surface,
+    keyboard: { press: async () => { opened = false; } } };
+  try {
+    await expect(activateChatGptEffortMenu(page as never, control as never)).rejects.toThrow("did not expose");
+    expect(menuReads).toBe(4);
+    expect(now).toBe(178_000);
+  } finally { clock.mockRestore(); }
+});
+
+test("effort closing permits a 29s owner transition without toggling the picker", async () => {
+  let now = 0, closing = false, opened = true, toggles = 0;
+  const clock = spyOn(Date, "now").mockImplementation(() => now);
+  const control = observeControl({
+    getAttribute: async (name: string) => {
+      if (name !== "aria-expanded") return null;
+      if (closing) { now += 14_500; if (now >= 29_000) opened = false; }
+      return String(opened);
+    },
+    dispatchEvent: async () => { toggles++; },
+  });
+  const page = { keyboard: { press: async () => { closing = true; } } };
+  try {
+    await closeChatGptEffortMenu(page as never, control as never);
+    expect(now).toBe(29_000);
+    expect(toggles).toBe(0);
+  } finally { clock.mockRestore(); }
 });
 
 test("effort activation fails closed when neither event exposes a structural surface", async () => {
@@ -273,7 +351,7 @@ test("effort activation fails closed when neither event exposes a structural sur
     keyboard: { press: async () => {} },
   };
 
-  await expect(activateChatGptEffortMenu(page as never, control as never, { settleMs: 0 }))
+  await expect(activateChatGptEffortMenu(page as never, observeControl(control) as never, { settleMs: 0 }))
     .rejects.toThrow("did not expose its owned menu or structural slider");
 });
 
@@ -405,8 +483,33 @@ function reasoningPicker(options: { max?: string; locks?: Array<string | null>; 
       if (options.loseSelectionOnClose) value = 0;
     } },
   };
-  return { page, composer, control, keys, value: () => value };
+  observeControl(control);
+  return { page, composer, control, menu, container, slider, keys, value: () => value };
 }
+
+test("capability control, menu, container, semantic input and effort reads have independent limits", async () => {
+  let now = 0, controlReads = 0, menuReads = 0;
+  const clock = spyOn(Date, "now").mockImplementation(() => now);
+  const fixture = reasoningPicker();
+  fixture.control.isVisible = async () => { if (++controlReads === 1) now += 119_000; return true; };
+  fixture.menu.isVisible = async () => { if (++menuReads === 2) now += 29_000; return true; };
+  fixture.container.waitFor = async (options: { state: string; timeout?: number }) => {
+    expect(options).toEqual({ state: "visible", timeout: 120_000 }); now += 119_000;
+  };
+  fixture.slider.waitFor = async (options: { state: string; timeout?: number }) => {
+    expect(options).toEqual({ state: "attached", timeout: 120_000 }); now += 119_000;
+  };
+  const evaluate = fixture.container.evaluate;
+  fixture.container.evaluate = async (read, ...args: unknown[]) => {
+    expect(args).toEqual([undefined, { timeout: 30_000 }]);
+    return evaluate(read);
+  };
+  try {
+    expect(await detectChatGptAccountCapabilities(fixture.page as never))
+      .toEqual({ solAvailable: true, extraHighAvailable: true, proAvailable: true });
+    expect(now).toBe(386_000);
+  } finally { clock.mockRestore(); }
+});
 
 test("a late model control within the inspection budget is not recorded as Luna-only", async () => {
   const fixture = reasoningPicker();
@@ -453,25 +556,31 @@ test("capabilities read range and ticks together instead of combining different 
     .resolves.toEqual({ solAvailable: true, extraHighAvailable: true, proAvailable: false });
 });
 
-test("effort confirmation tolerates disappearing Pro only while the requested effort remains selected and unlocked", async () => {
+test("send preflight tolerates disappearing Pro only while the requested effort remains selected and unlocked", async () => {
   for (const locked of [false, true]) {
     const fixture = reasoningPicker({ maxAfterClose: "3", locksAfterClose: ["false", "false", "false", String(locked)] });
     const worker = Object.assign(Object.create(ChatGptBrowserWorker.prototype), { activeComposer: async () => fixture.composer }) as any;
-    const result = worker.selectModelAndEffort(fixture.page, "gpt-5.6-sol", "xhigh", {
+    const result = await worker.selectModelAndEffort(fixture.page, "gpt-5.6-sol", "xhigh", {
       localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: true,
     });
-    if (locked) await expect(result).rejects.toThrow();
-    else expect((await result).selection.label).toBe("Extra High");
+    const failure = await worker.assertSelectedEffort(fixture.page, result).then(() => undefined, (error: unknown) => error);
+    if (locked) expect(failure).toMatchObject({ retryable: false });
+    else {
+      expect(failure).toBeUndefined();
+      expect(result.selection.label).toBe("Extra High");
+    }
     expect(fixture.keys).toEqual(["ArrowRight", "ArrowRight", "ArrowRight"]);
   }
 });
 
-test("effort confirmation rejects a newly locked selection even when the range and value are unchanged", async () => {
+test("send preflight rejects a newly locked selection even when the range and value are unchanged", async () => {
   const fixture = reasoningPicker({ locksAfterClose: ["false", "false", "true", "true", "true"] });
   const worker = Object.assign(Object.create(ChatGptBrowserWorker.prototype), { activeComposer: async () => fixture.composer }) as any;
-  await expect(worker.selectModelAndEffort(fixture.page, "gpt-5.6-sol", "high", {
+  const mode = await worker.selectModelAndEffort(fixture.page, "gpt-5.6-sol", "high", {
     localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: true,
-  })).rejects.toThrow();
+  });
+  const failure = await worker.assertSelectedEffort(fixture.page, mode).catch((error: unknown) => error);
+  expect(failure).toMatchObject({ retryable: false });
 });
 
 test("capabilities exclude the observed locked Plus upsell and reject unknown lock state", async () => {
@@ -482,7 +591,7 @@ test("capabilities exclude the observed locked Plus upsell and reject unknown lo
     locks: ["false", "false", "false", "false", "true"],
   }).page as never)).resolves.toEqual({ solAvailable: true, extraHighAvailable: true, proAvailable: false });
   for (const locks of [[], ["false", "false", "false", null], ["false", "false", "false", "unknown"]]) {
-    await expect(detectChatGptAccountCapabilities(reasoningPicker({ max: "3", locks }).page as never))
+    await expect(detectChatGptAccountCapabilities(reasoningPicker({ max: "3", locks }).page as never, { selectorTimeoutMs: 10 }))
       .rejects.toThrow("availability");
   }
 });
@@ -495,7 +604,7 @@ test("power picker omission of lock attributes requires its enabled structural o
   for (const options of [
     { power: false }, { power: true, disabled: "true" }, { power: true, disabled: "unknown" },
     { power: true, max: "3" },
-  ]) await expect(detectChatGptAccountCapabilities(reasoningPicker({ ...options, locks: Array(5).fill(null) }).page as never))
+  ]) await expect(detectChatGptAccountCapabilities(reasoningPicker({ ...options, locks: Array(5).fill(null) }).page as never, { selectorTimeoutMs: 10 }))
     .rejects.toThrow("availability");
 });
 
@@ -518,17 +627,21 @@ test("stale saved capabilities cannot activate a locked effort; High remains sel
   }
 });
 
-test("Pro selection verifies the persisted hidden slider through its visible owner, never model rows", async () => {
+test("Pro send preflight verifies the persisted hidden slider through its visible owner, never model rows", async () => {
   for (const loseSelectionOnClose of [false, true]) {
     const fixture = reasoningPicker({ delay: 50, loseSelectionOnClose });
     const worker = Object.assign(Object.create(ChatGptBrowserWorker.prototype), {
       activeComposer: async () => fixture.composer,
-    }) as { selectModelAndEffort(...args: unknown[]): Promise<{ selection: { label: string } }> };
-    const selection = worker.selectModelAndEffort(fixture.page, "gpt-5.6-sol", "max", {
+    }) as any;
+    const selection = await worker.selectModelAndEffort(fixture.page, "gpt-5.6-sol", "max", {
       localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: true,
     });
-    if (loseSelectionOnClose) await expect(selection).rejects.toMatchObject({ retryable: false });
-    else expect((await selection).selection.label).toBe("Pro");
+    const failure = await worker.assertSelectedEffort(fixture.page, selection).then(() => undefined, (error: unknown) => error);
+    if (loseSelectionOnClose) expect(failure).toMatchObject({ retryable: false });
+    else {
+      expect(failure).toBeUndefined();
+      expect(selection.selection.label).toBe("Pro");
+    }
     expect(fixture.keys).toEqual(["ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight"]);
     expect(fixture.value()).toBe(loseSelectionOnClose ? 0 : 4);
   }

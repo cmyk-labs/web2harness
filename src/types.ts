@@ -311,7 +311,7 @@ export interface CodexProviderConfig {
     threadEnvironmentStatePath?: string;
     /** Persisted exact-parent rolling checkpoints used only by Free/Luna turns. */
     lunaCheckpointStatePath?: string;
-    /** Optional explicit safety ceiling. Browser turns have no absolute deadline by default. */
+    /** Optional response-generation ceiling, starting at submission acceptance; absent by default. */
     turnTimeoutMs?: number;
     /**
      * Seconds of adapter silence before the Responses bridge cancels a turn as a hung upstream.

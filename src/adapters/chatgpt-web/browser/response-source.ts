@@ -31,9 +31,16 @@ const ancillaryTypes = new Set(["resume_conversation_token", "message_marker", "
 export class ChatGptResponseSource {
   private readonly decoder = new ServerSentEventDecoder((data, event) => {
     this.evidence?.capture(data, event);
-    if (this.failure) return;
-    // Projection failures must not abort framing/capture of later events in the same chunk.
-    try { this.event(data, event); } catch (error) { this.reject(this.errorReason(error)); }
+    // Framing/termination observation survives an unsupported semantic event. These facts do
+    // not repair the projection or authorize delivery; they prevent a parser failure from
+    // being mislabeled as a network interruption. Later identity/server errors still win.
+    try {
+      if (this.observedDone) throw new Error("response_after_termination");
+      if (event === "error") throw new Error("response_upstream_error");
+      const value: unknown = data === "[DONE]" ? undefined : JSON.parse(data);
+      this.observeBoundary(data, event, value);
+      if (!this.failure) this.event(data, event, value);
+    } catch (error) { this.reject(this.errorReason(error)); }
   });
   private readonly evidence?: ChatGptResponseEvidence;
   private decoderFailed = false;
@@ -45,6 +52,10 @@ export class ChatGptResponseSource {
   private inputSeen = false;
   private streamComplete = false;
   private done = false;
+  private observedDone = false;
+  private observedStreamComplete = false;
+  private observedPath = "";
+  private observedOperation = "add";
   private failure?: string;
   private frames = 0;
   constructor(private readonly binding: ChatGptResponseBinding, captureEvidence?: boolean | ChatGptResponseEvidenceLimits) {
@@ -61,7 +72,7 @@ export class ChatGptResponseSource {
     try {
       const { discardedData } = this.decoder.finish();
       this.evidence?.finish(discardedData);
-      if (discardedData && this.done) this.reject("response_after_termination");
+      if (discardedData && this.observedDone) this.reject("response_after_termination");
     } catch { this.evidence?.finish(true); this.reject("response_stream_malformed"); }
   }
   private errorReason(error: unknown): string {
@@ -69,14 +80,17 @@ export class ChatGptResponseSource {
   }
   takeEvidence() { return this.evidence?.take(this.binding); }
   clearEvidence(): void { this.evidence?.clear(); }
-  reject(reason: string): void { this.failure ??= reason; }
+  reject(reason: string): void {
+    if (!this.failure || (!responseSourceBlocksFallback({ state: "rejected", reason: this.failure })
+      && responseSourceBlocksFallback({ state: "rejected", reason }))) this.failure = reason;
+  }
   facts() { const result = this.result(); return { frames: this.frames, messageCount: this.messages.size, inputBound: this.inputSeen,
-    done: this.done, streamComplete: this.streamComplete, reason: result.state === "rejected" ? result.reason : this.failure, evidence: this.evidence?.summary(),
+    done: this.done, streamComplete: this.streamComplete, observedDone: this.observedDone, observedStreamComplete: this.observedStreamComplete,
+    reason: result.state === "rejected" ? result.reason : this.failure, evidence: this.evidence?.summary(),
     publicStates: [...this.messages.values()].filter(publicText).map(m => ({ channel: m.channel,
       finished: m.status === "finished_successfully", endTurn: m.endTurn === true,
       complete: m.complete === true, stopped: m.finishType === "stop",
-      // Missing metadata and explicit negative evidence are distinct diagnoses. Missing fields
-      // never authorize source delivery; unknown upstream strings never enter telemetry.
+      // Optional metadata absence differs from explicit negative completion evidence.
       completion: m.complete === undefined ? "missing" : m.complete ? "complete" : "incomplete",
       finish: m.finishType === undefined ? "missing" : m.finishType === "stop" ? "stop" : "other" })) }; }
 
@@ -91,23 +105,29 @@ export class ChatGptResponseSource {
       || (message.finishType !== undefined && message.finishType !== "stop")) {
       return { state: "rejected", reason: "response_message_incomplete" };
     }
-    // A public message with no known terminal state may be an unfinished later tool phase.
-    if ([...this.messages.values()].some(m => publicText(m) && m.status !== "finished_successfully")) {
-      return { state: "rejected", reason: "response_message_incomplete" };
-    }
     let ancestor: Message | undefined = message;
     const seen = new Set<string>();
     while (ancestor && ancestor.id !== this.binding.userMessageId && !seen.has(ancestor.id)) {
       seen.add(ancestor.id); ancestor = ancestor.parent ? this.messages.get(ancestor.parent) : undefined;
     }
     if (ancestor?.id !== this.binding.userMessageId) return { state: "rejected", reason: "response_parent_unbound" };
-    // Observed completed Web messages can omit these metadata fields. That is insufficient
-    // evidence for source delivery, not positive evidence of interruption. Only after binding
-    // and terminal status checks may the independent DOM completion/coverage validator decide.
-    // Explicit false/non-stop values above still forbid fallback even when another field is absent.
-    if (message.complete === undefined || message.finishType === undefined) {
-      return { state: "rejected", reason: "response_terminal_metadata_unavailable" };
+    // In the owned 2026-10-18 captures, public commentary remains in_progress without terminal
+    // metadata, then a descendant reasoning/final phase completes normally. Only this exact
+    // ancestor shape can be superseded by the proved final. A sibling/later message, explicit
+    // incomplete/aborted state, or a commentary claiming end_turn is not such evidence.
+    for (const prior of this.messages.values()) {
+      if (!publicText(prior)) continue;
+      if (prior.complete === false || (prior.finishType !== undefined && prior.finishType !== "stop")) {
+        return { state: "rejected", reason: "response_message_incomplete" };
+      }
+      if (prior.status === "finished_successfully") continue;
+      const superseded = prior.channel === "commentary" && prior.status === "in_progress"
+        && seen.has(prior.id) && prior.id !== message.id && prior.endTurn !== true
+        && prior.complete === undefined && prior.finishType === undefined;
+      if (!superseded) return { state: "rejected", reason: "response_message_incomplete" };
     }
+    // The bound final's successful status, end_turn and both stream terminators establish
+    // completion. Optional metadata need not repeat it; explicit negative values still reject.
     if (message.discarded || !message.parts) return { state: "rejected", reason: "response_content_unsupported" };
     // Rendering rich references requires their source metadata. Never leak unresolved private-use
     // markers as a successful plain-text answer; the independently checked DOM path may recover it.
@@ -125,19 +145,54 @@ export class ChatGptResponseSource {
       || (this.binding.conversationId && this.binding.conversationId !== id)) throw new Error("response_identity_mismatch");
     this.conversation = id;
   }
-  private event(data: string, event: string): void {
+  private observeBoundary(data: string, event: string, value: unknown): void {
+    if (this.observedDone) throw new Error("response_after_termination");
+    if (event === "error") throw new Error("response_upstream_error");
+    if (data === "[DONE]") { this.observedDone = true; return; }
+    if (!object(value)) return;
+    this.bindConversation(value.conversation_id);
+    if (value.error || value.error_code || value.type === "error") throw new Error("response_upstream_error");
+    if (value.type === "input_message"
+      && (value.input_message?.id !== this.binding.userMessageId || value.input_message?.author?.role !== "user")) {
+      throw new Error("response_identity_mismatch");
+    }
+    if (Object.hasOwn(value, "v")) {
+      if (typeof value.p === "string") this.observedPath = value.p;
+      if (typeof value.o === "string") this.observedOperation = value.o;
+      this.observePatchBoundary(this.observedPath, this.observedOperation, value.v, 0);
+    }
+    if (ancillaryTypes.has(value.type)) return;
+    if (value.type === "message_stream_complete") this.observedStreamComplete = true;
+  }
+  private observePatchBoundary(path: string, operation: string, value: unknown, depth: number): void {
+    if (depth > 16) return;
+    if (operation === "patch") {
+      if (!Array.isArray(value) || value.length > 4096) return;
+      for (const patch of value) {
+        if (object(patch) && typeof patch.p === "string" && typeof patch.o === "string") {
+          this.observePatchBoundary(`${path}${patch.p}`, patch.o, patch.v, depth + 1);
+        }
+      }
+    } else if (["add", "replace", "append"].includes(operation)) {
+      if (path === "/conversation_id") this.bindConversation(value);
+      if (path === "" && object(value)) {
+        this.bindConversation(value.conversation_id);
+        if (value.error || value.error_code || value.type === "error") throw new Error("response_upstream_error");
+      }
+    }
+  }
+  private event(data: string, event: string, value: unknown): void {
     if (this.done) throw new Error("response_after_termination");
     if (event === "error") throw new Error("response_upstream_error");
     if (data === "[DONE]") { this.done = true; return; }
-    const value: unknown = JSON.parse(data); this.frames++;
+    this.frames++;
     if (value === "v1" && this.frames === 1) return;
     if (!object(value)) throw new Error("response_encoding_unsupported");
     this.bindConversation(value.conversation_id);
     if (value.error || value.error_code || value.type === "error") throw new Error("response_upstream_error");
     if (ancillaryTypes.has(value.type)) return;
-    // Observed completed streams allow conversation_detail_metadata after this marker, then
-    // DONE. A new content/input mutation cannot repair a message after its completion boundary.
-    if (this.streamComplete) throw new Error("response_after_termination");
+    // A message marker is not the SSE response boundary. Continue projecting until DONE;
+    // result() requires both markers and the final state before any text can be delivered.
     if (value.type === "message_stream_complete") { this.streamComplete = true; return; }
     if (value.type === "input_message") {
       this.readMessage(value.input_message, false);
@@ -226,7 +281,9 @@ export class ChatGptResponseSource {
       if (key.includes("/")) {
         if (/^(content_references|citations)\//.test(key)) throw new Error("response_references_unsupported");
         if (/^(finish_details|parent_id|is_complete|is_visually_hidden_from_conversation)\//.test(key)) throw new Error("response_patch_unsupported");
-      } else this.metadata(m, { [key]: operation === "remove" ? undefined : value }, true);
+      } else if (operation === "remove" && key === "is_complete") m.complete = undefined;
+      else if (operation === "remove" && key === "finish_details") m.finishType = undefined;
+      else this.metadata(m, { [key]: operation === "remove" ? undefined : value }, true);
       return;
     }
     const scalar = { "/message/channel": "channel", "/message/status": "status", "/message/end_turn": "endTurn",

@@ -140,6 +140,72 @@ test("buffered replies recover an equivalent final wrapper without emitting part
   expect(() => liveBuffer.finish()).toThrow("could not be aligned");
 });
 
+test("buffered full coverage recovers split or merged ranges without rewriting emitted text", () => {
+  const a = { key: "a", tag: "div", html: "<div><p>Alpha.</p></div>", text: "Alpha.",
+    sourceStart: 0, sourceEnd: 6, streamable: true };
+  const b = { key: "b", tag: "p", html: "<p>Beta.</p>", text: "Beta.",
+    sourceStart: 8, sourceEnd: 13, streamable: false };
+  const merged = { ...a, html: "<div><p>Alpha.</p><p>Beta.</p></div>", text: "Alpha.Beta.", sourceEnd: 13, streamable: false };
+  for (const [before, after] of [[[a, b], [merged]], [[{ ...merged, streamable: true }], [a, b]]] as const) {
+    const buffered = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
+    buffered.observe([...before], 0);buffered.observe([...after], 1);
+    expect(buffered.preview()).toBe("Alpha.\n\nBeta.");
+    expect(buffered.deliveryState().emittedChars).toBe(0);
+    expect(buffered.finish()).toEqual({ markdown: "Alpha.\n\nBeta.", delta: "Alpha.\n\nBeta." });
+    expect(buffered.deliveryState().rebuilt).toBeTrue();
+    expect(buffered.finish().delta).toBe("");
+    const append = new ChatGptMarkdownBuffer(undefined, 0);
+    append.observe([...before], 0);append.observe([...after], 1);
+    expect(() => append.finish()).toThrow();
+  }
+  const unordered = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
+  unordered.observe([a, b], 0);unordered.observe([a, { ...b, sourceStart: 0 }], 1);
+  expect(() => unordered.finish()).toThrow();
+});
+
+test("pending wrapper merging preserves all blocks while the final formatted tail grows", () => {
+  const a = { key: "a", tag: "p", html: '<p><a href="https://example.com/a">Alpha</a></p>', text: "Alpha", streamable: false };
+  const b = { key: "b", tag: "p", html: "<p><strong>Bet</strong></p>", text: "Bet", streamable: false };
+  const merged = (html: string) => ({ key: "merged", tag: "div", html: `<div>${html}</div>`, text: "remounted", streamable: false });
+  for (const delivery of ["append", "buffered"] as const) {
+    const buffer = new ChatGptMarkdownBuffer(undefined, 0, delivery);
+    buffer.observe([a, b], 0);buffer.observe([merged(a.html + "<p><strong>Beta</strong> complete.</p>")], 1);
+    expect(buffer.finish().markdown).toBe("[Alpha](https://example.com/a)\n\n**Beta** complete.");
+    for (const html of [a.html, "<p><strong>Beta</strong></p>",
+      a.html.replace("/a", "/changed") + "<p><strong>Beta</strong></p>",
+      "<p><strong>Beta</strong></p>" + a.html, a.html + a.html + b.html]) {
+      const missing = new ChatGptMarkdownBuffer(undefined, 0, delivery);
+      missing.observe([a, b], 0);missing.observe([merged(html)], 1);
+      expect(() => missing.finish()).toThrow();
+      expect(missing.deliveryState().emittedChars).toBe(0);
+    }
+  }
+});
+
+test("pending table hydration preserves prior cells, links and row order", () => {
+  const table = (key: string, row: string, tail: string, extra = "") => ({ key, tag: "table", text: "table", streamable: false,
+    html: `<table><thead><tr><th>Item</th><th>Value</th></tr></thead><tbody><tr><td>${row}</td><td><strong>${tail}</strong></td></tr>${extra}</tbody></table>` });
+  const link = '<a href="https://example.com/one">One</a>';
+  const before = table("old", link, "Par");
+  const wrapped = (segment: typeof before) => ({ ...segment, tag: "div", html: `<div><div>${segment.html}</div><button>Copy table</button></div>` });
+  const complete = table("new", link, "Paragraph", "<tr><td>Two</td><td>Second</td></tr>");
+  for (const next of [table("new", link, "Paragraph"), complete, wrapped(complete)]) {
+    const buffer = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
+    buffer.observe([before], 0);buffer.observe([next], 1);
+    expect(buffer.finish().markdown).toContain("**Paragraph**");
+  }
+  for (const next of [table("new", link.replace("/one", "/two"), "Paragraph"), table("new", "Changed", "Paragraph"),
+    table("new", link, "Other"), table("new", "", "Paragraph"), table("new", link, "Paragraph").html.replace("<th>Value</th>", ""),
+    wrapped(table("new", link.replace("/one", "/two"), "Paragraph")),
+    wrapped({ ...complete, html: "<p>Uncovered prefix</p>" + complete.html }),
+    wrapped({ ...complete, html: complete.html + "<p>Uncovered suffix</p>" }),
+    wrapped({ ...complete, html: complete.html + complete.html })]) {
+    const buffer = new ChatGptMarkdownBuffer(undefined, 0, "buffered");buffer.observe([before], 0);
+    buffer.observe([typeof next === "string" ? { ...before, key: "new", html: next } : next], 1);
+    expect(() => buffer.finish()).toThrow();
+  }
+});
+
 test("buffered recovery rejects lost prefixes, pending tails, changed links, reorder and duplicate output", () => {
   const parts = [
     { key: "a", tag: "p", html: '<p><a href="https://example.com/a">Alpha</a></p>', text: "Alpha", linkTargets: ["https://example.com/a"], streamable: true },
@@ -171,6 +237,10 @@ test("missing pending blocks never become a successful truncated answer in eithe
       buffer.observe([a, b, c], 0);
       buffer.observe(missing, 1);
       expect(buffer.needsCoverageRecovery()).toBeTrue();
+      const evidence = buffer.failureEvidence();
+      expect(evidence?.format).toBe("chatgpt-public-markdown-buffer");
+      expect(evidence?.pending.map(s => s.text)).toEqual(["Pending", "Last"]);
+      if (evidence) evidence.pending.length = 0; // The artifact cannot mutate the live ledger.
       expect(() => buffer.finish()).toThrow("missing previously observed pending content");
       buffer.observe(missing, 2);
       expect(() => buffer.finish()).toThrow();

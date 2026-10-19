@@ -1365,7 +1365,7 @@ class BrowserHost {
       };
       const onDestroyed = () => finish(new Error("ChatGPT closed during hard refresh"));
       const timeout = setTimeout(() => {
-        finish(new Error("ChatGPT hard refresh did not finish within 60 seconds"));
+        finish(new Error(`ChatGPT hard refresh did not finish within ${timeoutMs / 1_000} seconds`));
         if (!contents.isDestroyed()) contents.stop();
       }, timeoutMs);
       timeout.unref?.();
@@ -1387,15 +1387,19 @@ class BrowserHost {
     });
   }
 
-  async refreshChatGptHomeDocument() {
+  async refreshChatGptHomeDocument(options = {}) {
     // A navigation from the idle host already creates a fresh ChatGPT document. Reload only an
     // existing Temporary Chat document so the helper observes one authoritative SPA bootstrap.
     if (isTemporaryChatUrl(this.view.webContents.getURL())) {
-      await this.hardRefreshHome();
+      options.onStage?.("page-load");
+      await this.hardRefreshHome(120_000);
     } else {
-      await this.hardRefreshHome(BROWSER_NAVIGATION_TIMEOUT_MS, TEMPORARY_CHAT_URL);
+      options.onStage?.("page-load");
+      await this.hardRefreshHome(120_000, TEMPORARY_CHAT_URL);
     }
-    await this.waitForAuthenticated(60_000);
+    if (options.abortSignal?.aborted) throw new DOMException("Session inspection aborted", "AbortError");
+    options.onStage?.("controls");
+    await this.waitForAuthenticated(120_000);
   }
 
   bindChatGptBackendRecovery() {
@@ -2992,6 +2996,22 @@ class BrowserHost {
     this.setState({ authenticated: false, loading: false, status: "signed-out", message: "Sign in to ChatGPT" });
   }
 
+  async waitForPasskeyBrowserStage(contents, action, label) {
+    let timer;
+    try {
+      const result = await Promise.race([action(), new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`Passkey ${label} timed out after 120000ms`));
+          if (this.view?.webContents === contents && !contents.isDestroyed()) contents.stop();
+        }, 120_000);
+      })]);
+      if (this.view?.webContents !== contents || contents.isDestroyed()) {
+        throw new Error("Passkey sign-in lost its owned browser surface");
+      }
+      return result;
+    } finally { clearTimeout(timer); }
+  }
+
   async installPasskeyLogin(transfer) {
     requireAutomaticBrowserInspection(this, "Automated ChatGPT session import");
     if (!transfer || typeof transfer !== "object" || typeof transfer.cleanup !== "function") {
@@ -3011,18 +3031,18 @@ class BrowserHost {
       for (const cookie of state.cookies) await contents.session.cookies.set(cookie);
       contents.session.flushStorageData();
       await contents.session.cookies.flushStore();
-      await contents.loadURL(TEMPORARY_CHAT_URL);
+      await this.waitForPasskeyBrowserStage(contents, () => contents.loadURL(TEMPORARY_CHAT_URL), "page load");
       if (state.localStorage.length > 0) {
         const entries = javaScriptLiteral(state.localStorage);
-        await contents.executeJavaScript(`(() => {
+        await this.waitForPasskeyBrowserStage(contents, () => contents.executeJavaScript(`(() => {
           if (location.origin !== ${JSON.stringify(CHATGPT_ORIGIN)}) {
             throw new Error("Passkey storage import reached an unexpected origin");
           }
           for (const entry of ${entries}) localStorage.setItem(entry.name, entry.value);
-        })()`, true);
-        await contents.loadURL(TEMPORARY_CHAT_URL);
+        })()`, true), "storage verification");
+        await this.waitForPasskeyBrowserStage(contents, () => contents.loadURL(TEMPORARY_CHAT_URL), "page load");
       }
-      result = await this.waitForAuthenticated(60_000);
+      result = await this.waitForAuthenticated(120_000);
       await this.runSessionInspection(false);
       this.activateHomeSurface();
       this.show();
@@ -3471,20 +3491,24 @@ class BrowserHost {
     }
   }
 
-  async inspectSession(detectCapabilities = false) {
+  async inspectSession(detectCapabilities = false, options = {}) {
     requireAutomaticBrowserInspection(this, "ChatGPT session and capability inspection");
     if (this.manualOperation === INTERACTION_MODE_CHANGE_OPERATION) {
-      return await this.runSessionInspection(detectCapabilities);
+      return await this.runSessionInspection(detectCapabilities, options);
     }
-    return await this.withManualOperation("session inspection", () => this.runSessionInspection(detectCapabilities));
+    options.onStage?.("connection");
+    return await this.withManualOperation("session inspection", () => this.runSessionInspection(detectCapabilities, options));
   }
 
-  async runSessionInspection(detectCapabilities = false) {
+  async runSessionInspection(detectCapabilities = false, options = {}) {
     requireAutomaticBrowserInspection(this, "ChatGPT session and capability inspection");
     const connectorName = this.connectorName();
     const initialUrl = this.view.webContents.getURL();
     const startedIdle = initialUrl === IDLE_BROWSER_URL;
-    if (detectCapabilities) await this.refreshChatGptHomeDocument();
+    if (options.abortSignal?.aborted) throw new DOMException("Session inspection aborted", "AbortError");
+    if (detectCapabilities) {
+      await this.refreshChatGptHomeDocument(options);
+    }
     const result = await this.runBrowserHelperOperation({
       helper: this.helper,
       descriptorPath: this.descriptorPath,
@@ -3492,6 +3516,8 @@ class BrowserHost {
       operation: "inspect",
       payload: { detectCapabilities },
       logger: this.logger,
+      onStage: options.onStage,
+      abortSignal: options.abortSignal,
     });
     const inspected = result?.value;
     if (!inspected || inspected.authenticated !== true || inspected.temporary !== true || typeof inspected.url !== "string") {
@@ -3504,7 +3530,10 @@ class BrowserHost {
     if (detectCapabilities && (inspected.proAvailable || inspected.extraHighAvailable) && !inspected.solAvailable) {
       throw new Error("Browser helper returned contradictory ChatGPT capability evidence");
     }
-    if (startedIdle) await this.returnToIdle();
+    if (startedIdle) {
+      options.onStage?.("page-load");
+      await this.returnToIdle();
+    }
     return inspected;
   }
 

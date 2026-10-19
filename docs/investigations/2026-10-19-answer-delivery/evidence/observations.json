@@ -1,0 +1,157 @@
+{
+  "kind": "redacted-derived-observation-archive",
+  "date": "2026-10-19",
+  "timezone": "Asia/Shanghai",
+  "rawReplayAvailable": false,
+  "firstResearch": {
+    "originRecords": [
+      "R08",
+      "R09"
+    ],
+    "model": "gpt-6-thinking",
+    "effort": "max",
+    "durationSeconds": 496.871,
+    "maxUnchangedTextSeconds": 242.303,
+    "unchangedTextCharacters": 898,
+    "stopVisibleDuringUnchangedInterval": true,
+    "changedDomStates": 196,
+    "intermediateEndTurn": false,
+    "finalEndTurn": true,
+    "finalDone": true,
+    "naturalResumeCompleted": true,
+    "manualResend": false,
+    "finalRepresentationsCharacters": {
+      "innerText": 7044,
+      "textContent": 14174,
+      "outerHTML": 189382,
+      "publicFallbackMarkdown": 8928,
+      "wholeAnswerCopy": 18988
+    },
+    "copyDefectsObserved": [
+      "Mermaid CSS included",
+      "Mermaid source missing",
+      "three code language labels missing"
+    ],
+    "separateMermaidCopyCharacters": 418,
+    "separateMermaidCopyLines": 16,
+    "referenceMarkers": 18,
+    "privateUseCharacters": 120,
+    "imagesWereFaviconsOnly": true
+  },
+  "sixScenarios": {
+    "originRecords": [
+      "R10",
+      "R11",
+      "V04"
+    ],
+    "kind": "derived-browser-observation-summary",
+    "date": "2026-10-19",
+    "scope": "Direct Chrome observation; not Web2Harness end-to-end acceptance. Not raw replay evidence.",
+    "model": "gpt-6-thinking",
+    "effort": "max",
+    "durationDefinition": "Generation POST start to request network end in seconds",
+    "longCode": {
+      "sourceAssignmentLines": 120,
+      "initialDomAssignmentLines": 120,
+      "domAssignmentLinesAfterMenuOpen": 57,
+      "finalAnswerEndMarkerStillPresent": true
+    },
+    "stop": {
+      "requestedItems": 300,
+      "observedLastPartialItem": 20,
+      "settledDomTextLength": 631,
+      "copyAndRegenerateVisible": true,
+      "freshCompletionNotification": false
+    },
+    "limitations": [
+      "No complete raw network or DOM archive",
+      "CSV download to local disk not verified",
+      "No Web2Harness native or multi-agent acceptance",
+      "Historical failures not closed"
+    ],
+    "runs": [
+      {
+        "scenario": "data-analysis-and-rich-content",
+        "frames": 294,
+        "done": true,
+        "streamComplete": true,
+        "finalStatus": "finished_successfully",
+        "endTurn": true,
+        "tools": [
+          "python",
+          "python"
+        ],
+        "publicMarkdownLength": 3733,
+        "durationSec": 148.262,
+        "networkEnd": "net::ERR_ABORTED"
+      },
+      {
+        "scenario": "long-follow-up",
+        "frames": 101,
+        "done": true,
+        "streamComplete": true,
+        "finalStatus": "finished_successfully",
+        "endTurn": true,
+        "tools": [],
+        "publicMarkdownLength": 3506,
+        "durationSec": 62.175,
+        "networkEnd": "net::ERR_ABORTED"
+      },
+      {
+        "scenario": "regenerate",
+        "frames": 78,
+        "done": true,
+        "streamComplete": true,
+        "finalStatus": "finished_successfully",
+        "endTurn": true,
+        "tools": [],
+        "publicMarkdownLength": 3450,
+        "durationSec": 59.961,
+        "networkEnd": "net::ERR_ABORTED"
+      },
+      {
+        "scenario": "edit-branch-with-tool-error-recovery",
+        "frames": 36,
+        "done": true,
+        "streamComplete": true,
+        "finalStatus": "finished_successfully",
+        "endTurn": true,
+        "tools": [
+          "python",
+          "python"
+        ],
+        "publicMarkdownLength": 255,
+        "durationSec": 20.534,
+        "networkEnd": "net::ERR_ABORTED"
+      },
+      {
+        "scenario": "intentional-stop",
+        "frames": 40,
+        "done": false,
+        "streamComplete": false,
+        "finalStatus": "in_progress",
+        "endTurn": null,
+        "tools": [],
+        "publicMarkdownLength": 603,
+        "durationSec": 38.744,
+        "networkEnd": "net::ERR_ABORTED"
+      },
+      {
+        "scenario": "follow-up-after-stop",
+        "frames": 17,
+        "done": true,
+        "streamComplete": true,
+        "finalStatus": "finished_successfully",
+        "endTurn": true,
+        "tools": [],
+        "publicMarkdownLength": 22,
+        "durationSec": 4.364,
+        "networkEnd": "net::ERR_ABORTED"
+      }
+    ],
+    "requestIdsOmitted": true,
+    "secondPhaseChangedDomStates": 186,
+    "sameAnswerRootRemountObserved": false,
+    "arbitraryParagraphMergeSplitObserved": false
+  }
+}

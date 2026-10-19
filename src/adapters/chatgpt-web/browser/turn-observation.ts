@@ -2,7 +2,7 @@
 
 import { chatGptExternalProgressIsLive, type ChatGptExternalTurnProgressSnapshot } from "../tools/turn-progress";
 
-export const CHATGPT_RESPONSE_DOM_GRACE_MS = 60_000;
+export const CHATGPT_RESPONSE_DOM_GRACE_MS = 120_000;
 
 export const CHATGPT_EMPTY_RESPONSE_GRACE_MS = 10_000;
 
@@ -305,7 +305,7 @@ export const MAX_CHATGPT_INTERNAL_OBSERVATION_FAULTS = 8;
  * bounds the silence since the last recorded activity rather than the turn's total duration, so a
  * long turn that keeps calling tools is never penalised for taking a long time.
  */
-export const CHATGPT_EXTERNAL_PROGRESS_STALL_CEILING_MS = 10 * 60_000;
+export const CHATGPT_EXTERNAL_PROGRESS_STALL_CEILING_MS = 15 * 60_000;
 
 /** Tolerated clock difference between the recording daemon and the observing helper process. */
 export const CHATGPT_EXTERNAL_PROGRESS_CLOCK_SKEW_MS = 5_000;

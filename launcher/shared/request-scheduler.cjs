@@ -5,12 +5,9 @@
 const { randomUUID } = require("node:crypto");
 const { validMcpRemoteFailure, mcpRemoteErrorInfo } = require("./mcp-remote-error.cjs");
 
-const DEFAULT_REQUEST_SCHEDULING = Object.freeze({
-  maxConcurrent: 4,
-  queueTimeoutMinutes: 15,
-  minSendIntervalSeconds: 3,
-});
-const QUEUE_TIMEOUT_CHOICES = Object.freeze([5, 10, 15, 30, 60]);
+const { requestScheduling } = require("./runtime-parameter-options.json");
+const DEFAULT_REQUEST_SCHEDULING = Object.freeze(requestScheduling.defaults);
+const QUEUE_TIMEOUT_CHOICES = Object.freeze(requestScheduling.queueTimeoutChoices);
 const TERMINAL = new Set(["succeeded", "failed", "cancelled", "timed-out"]);
 const PHASES = new Set(["preparing", "running", "waiting-user", "waiting-tools"]);
 

@@ -252,7 +252,7 @@ test("macOS passkey sign-in is additive to the unchanged embedded login action",
   assert.match(preloadSource, /continuePasskeyLogin:[\s\S]*?launcher:browser-passkey-login-continue/);
   assert.match(electronMain, /launcher:browser-passkey-login[\s\S]*?browserHost\.openPasskeyLogin\(\)/);
   assert.match(electronMain, /loginWithPasskey: \(\) => runtimeHost\.capturePasskeyLogin\(\)/);
-  assert.match(browserHostSource, /await this\.waitForAuthenticated\(60_000\)[\s\S]*?runSessionInspection\(false\)/);
+  assert.match(browserHostSource, /await this\.waitForAuthenticated\(120_000\)[\s\S]*?runSessionInspection\(false\)/);
 });
 
 test("Context file transport is opt-in under experiments, without a startup modal", () => {

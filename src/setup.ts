@@ -45,6 +45,7 @@ import { normalizeContextPreferences } from "../launcher/shared/context-preferen
 import { rejectContextWindowEdits } from "../launcher/shared/context-budgets.cjs";
 import { VERSION } from "./version";
 import { assertDevRuntimeIsolation, canonicalDevPath } from "./dev/isolation";
+import { operationStage, operationStageRelay, operationStageSync } from "./runtime/operation-stage";
 
 export interface SetupOptions {
   mode: RuntimeMode;
@@ -231,7 +232,8 @@ export function setupProxyIsReady(
     && health.accepting_turns === true;
 }
 
-async function waitForProxy(config: AppConfig, timeoutMs = 10_000): Promise<void> {
+async function waitForProxy(config: AppConfig, timeoutMs = 120_000): Promise<void> {
+  return operationStage("component-ready", async () => {
   const deadline = Date.now() + timeoutMs;
   let lastError = "not reachable";
   while (Date.now() < deadline) {
@@ -256,6 +258,7 @@ async function waitForProxy(config: AppConfig, timeoutMs = 10_000): Promise<void
     await new Promise(resolveWait => setTimeout(resolveWait, 250));
   }
   throw new Error(`Responses proxy did not become ready: ${lastError}`);
+  });
 }
 
 function baseConfig(
@@ -362,10 +365,12 @@ async function inspectLauncherCapabilities(
     refreshAccountCapabilities,
     config.browserInteractionMode,
   );
+  const onStage = operationStageRelay();
   const inspected = await inspectLauncherBrowserHost(config.browserHostDescriptorPath!, {
     detectCapabilities,
     expectedProfile,
-  });
+    onStage,
+  }).finally(() => onStage(null));
   return {
     solAvailable: detectCapabilities ? inspected.solAvailable === true : existing!.solAvailable,
     extraHighAvailable: detectCapabilities ? inspected.extraHighAvailable === true : existing!.extraHighAvailable === true,
@@ -445,7 +450,7 @@ async function bootstrapTunnelProfile(config: AppConfig): Promise<void> {
     // `runtimes connect` writes the native profile and returns once its managed runtime is healthy.
     // Readiness follows after a successful control-plane poll, so setup proves it separately before
     // stopping the validation runtime and handing the profile to the external service.
-    connectTunnel(config);
+    operationStageSync("connection", () => connectTunnel(config));
     const status = await waitForTunnelReady(config);
     if (!status.ok) throw new Error(`Tunnel runtime did not become healthy and ready: ${status.detail}`);
   } catch (error) {
@@ -524,10 +529,10 @@ export function preflightSetup(options: SetupOptions): void {
 }
 
 export async function setup(options: SetupOptions): Promise<SetupResult> {
-  const { existing, config, launcherOwned } = prepareSetup(options);
-  preflightCodexIntegration(config, {
+  const { existing, config, launcherOwned } = operationStageSync("config", () => prepareSetup(options));
+  operationStageSync("config", () => preflightCodexIntegration(config, {
     replaceExistingRoute: options.replaceCodexRoute,
-  });
+  }));
   const refreshTunnelWorker = tunnelWorkerRuntimeChanged(existing, config);
   if (existing && options.restartService) config.controlToken = randomBytes(32).toString("base64url");
   const beforeService = getServiceStatus();
@@ -609,7 +614,7 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
     );
   }
   if (beforeService.loaded && preliminaryChange && existing) await assertServiceIdle(existing);
-  await configureTunnel(config, existing, options);
+  await operationStage("config", () => configureTunnel(config, existing, options));
 
   const changedWhileLoaded = Boolean(existing && beforeService.loaded && meaningfulRuntimeChange(existing, config));
   if (changedWhileLoaded && !options.restartService) {
@@ -622,8 +627,8 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
   if (!beforeService.loaded) await assertPortAvailable(config.host, config.port);
 
   if (!launcherOwned) {
-    saveConfig(config);
-    installService(config);
+    operationStageSync("config", () => saveConfig(config));
+    operationStageSync("config", () => installService(config));
     if (changedWhileLoaded && options.restartService && existing) await restartService(existing);
     await waitForProxy(config);
   }
@@ -661,16 +666,16 @@ export async function setup(options: SetupOptions): Promise<SetupResult> {
   if (launcherOwned && (beforeService.installed || beforeService.loaded)) {
     await uninstallService(existing!);
   }
-  if (launcherOwned) saveConfig(config);
+  if (launcherOwned) operationStageSync("config", () => saveConfig(config));
   // Keep the previous terminal runtime intact through the ownership handoff. A later launcher
   // setup removes it once the launcher-owned configuration is already the established baseline.
   const migratingTerminalRuntime = Boolean(
     launcherOwned && existing && existing.browserHost !== "launcher",
   );
   if (!migratingTerminalRuntime) removeLegacyRuntimeArtifacts(config);
-  installCodexIntegration(config, {
+  operationStageSync("config", () => installCodexIntegration(config, {
     replaceExistingRoute: options.replaceCodexRoute,
-  });
+  }));
 
   return {
     mode: config.mode,
@@ -720,7 +725,7 @@ export async function setupDevProfile(options: SetupOptions): Promise<DevProfile
     });
   }
   assertDevRuntimeIsolation(config);
-  preflightCodexIntegration(config);
+  operationStageSync("config", () => preflightCodexIntegration(config));
   if (config.browserInteractionMode === "automatic") {
     const capabilities = await inspectLauncherCapabilities(
       config,
@@ -734,13 +739,13 @@ export async function setupDevProfile(options: SetupOptions): Promise<DevProfile
   }
 
   Object.assign(config, normalizeContextPreferences(config));
-  await configureTunnel(config, existing, options);
+  await operationStage("config", () => configureTunnel(config, existing, options));
   assertDevRuntimeIsolation(config);
   await assertPortAvailable(config.host, config.port);
   // The launcher supervises the same Responses daemon and optional tunnel as production.
   const tunnelReady = config.mode === "mcp-bridge" ? false : null;
-  saveConfig(config);
-  installCodexIntegration(config);
+  operationStageSync("config", () => saveConfig(config));
+  operationStageSync("config", () => installCodexIntegration(config));
   return {
     mode: config.mode,
     configPath: getConfigPath(),

@@ -178,6 +178,7 @@ Start with the user guide. Go directly to troubleshooting for a failure, and con
 | Source development, contributions and review, isolated tests, naming, and documentation maintenance | [Development manual](docs/development.md) |
 | Builds, packages, acceptance, publication, rollback, and security maintenance | [Release manual](docs/release.md) |
 | Capability cases, manual acceptance records and case extensions | [Acceptance tests](docs/acceptance-tests.md) |
+| Dated answer-delivery findings, historical failures, and supporting evidence | [Investigation archive · 2026-10-19](docs/investigations/2026-10-19-answer-delivery/README.md) |
 
 See [Contributing and review](docs/development.md#contributing) for submissions, [Report a vulnerability](docs/release.md#vulnerability-reporting) for private reports, and the [repository instructions](AGENTS.md) for automated work.
 

@@ -467,7 +467,7 @@ test("a stalled home load releases connector verification without calling its he
   const operation = assert.rejects(fixture.verifyConnector("fixture"), /hard refresh did not finish/);
   await flush();
   assert.equal(fixture.manualOperation, "connector verification");
-  t.mock.timers.tick(60_000);
+  t.mock.timers.tick(120_000);
   await operation;
   assert.equal(fixture.manualOperation, null);
   assert.equal(fixture.state.status, "error");
@@ -511,7 +511,7 @@ test("connector verification releases its manual-operation lock when renderer in
   const operation = assert.rejects(fixture.verifyConnector("fixture"), /login was not completed before the timeout/);
   await flush();
   assert.equal(fixture.manualOperation, "connector verification");
-  t.mock.timers.tick(60_000);
+  t.mock.timers.tick(120_000);
   await operation;
   assert.equal(fixture.manualOperation, null);
   assert.equal(helpers, 0);

@@ -73,14 +73,14 @@ test("redacted user, hidden reasoning, tool and metadata bodies retain an explic
 });
 
 test.each([
-  ["complete missing", { finish_details: { type: "stop" } }, "missing", "stop", "response_terminal_metadata_unavailable"],
+  ["complete missing", { finish_details: { type: "stop" } }, "missing", "stop", undefined],
   ["complete false", { is_complete: false, finish_details: { type: "stop" } }, "incomplete", "stop", "response_message_incomplete"],
-  ["finish missing", { is_complete: true }, "complete", "missing", "response_terminal_metadata_unavailable"],
+  ["finish missing", { is_complete: true }, "complete", "missing", undefined],
   ["length limit", { is_complete: true, finish_details: { type: "length" } }, "complete", "other", "response_message_incomplete"],
-] as const)("incomplete diagnostics replay %s without weakening delivery", (_name, metadata, completion, finish, reason) => {
+] as const)("completion diagnostics replay %s with the same delivery decision", (_name, metadata, completion, finish, reason) => {
   const source = capture(["v1", input, envelope(message({ status: "finished_successfully", end_turn: true,
-    content: { content_type: "text", parts: ["not deliverable"] }, metadata: { parent_id: binding.userMessageId, ...metadata } })), ...tail]);
-  expect(source.result()).toEqual({ state: "rejected", reason });
+    content: { content_type: "text", parts: ["answer"] }, metadata: { parent_id: binding.userMessageId, ...metadata } })), ...tail]);
+  expect(source.result()).toMatchObject(reason ? { state: "rejected", reason } : { state: "complete", text: "answer" });
   expect(source.facts()).toMatchObject({ reason, publicStates: [{ completion, finish }] });
   expect(replayChatGptResponseEvidence(source.takeEvidence()!)).toMatchObject({ state: "replayed", result: source.result(),
     facts: { reason, publicStates: [{ completion, finish }] } });
@@ -169,10 +169,14 @@ test("observed hidden thought/code and tool terminal patches replay ordering wit
   expect(source.result()).toMatchObject({ state: "complete", text: "exact public" });
 });
 
-test("terminal mutation after message_stream_complete remains a replayable rejection", () => {
+test("message-marker tail changes replay before DONE and reject after DONE", () => {
   const source = capture([...frames().slice(0, -2), delta("late mutation"), ...tail.slice(1)]);
-  expect(source.result()).toEqual({ state: "rejected", reason: "response_after_termination" });
+  expect(source.result()).toMatchObject({ state: "complete" });
+  expect((source.result() as { text: string }).text.endsWith("late mutation")).toBeTrue();
   expect(replayChatGptResponseEvidence(source.takeEvidence()!)).toMatchObject({ state: "replayed", result: source.result() });
+  const afterDone = capture([...frames(), delta("late mutation")]);
+  expect(afterDone.result()).toEqual({ state: "rejected", reason: "response_after_termination" });
+  expect(replayChatGptResponseEvidence(afterDone.takeEvidence()!)).toMatchObject({ state: "replayed", result: afterDone.result() });
 });
 
 test.each(["future-SECRET_EVENT", "error"])("unverified or error event names cannot retain otherwise public payloads: %s", event => {

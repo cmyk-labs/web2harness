@@ -56,7 +56,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
     ChatGptBrowserWorker.prototype.run = async function(turn) {
       if (isChatGptResponseFailureCode(turn.traceId)) throw chatGptResponseFailure(turn.traceId);
       if (turn.traceId === "chatgpt_preparation_unsubmitted") {
-        if (turn.preparationDeadline !== 123456789) throw new Error("Shared preparation deadline lost in IPC");
+        if ("preparationDeadline" in turn) throw new Error("Shared preparation deadline must not cross IPC");
         throw preparationError(turn.traceId);
       }
       if (this.config.useSavedChats !== true) throw new Error("Saved chat preference lost in helper IPC");
@@ -70,6 +70,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
       if (prepared.files?.[0]?.filename !== "input.txt" || prepared.files[0].data !== "aGVsbG8=") throw new Error("Input file bytes lost in IPC");
       await turn.onSendActivated();
       turn.onSubmitted();
+      await turn.onResponseCompleted();
       turn.onReasoningSummary("Reading project");
       turn.onReasoningSummary(" files", true);
       turn.onTextDelta("done");
@@ -128,6 +129,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
   const checkpoints: unknown[] = [];
   let sendActivated = false;
   let submitted = false;
+  let completedResponses = 0;
   let released = false;
   const client = new LauncherBrowserHelperClient(config);
   try {
@@ -160,6 +162,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
       }),
       onSendActivated: () => { sendActivated = true; },
       onSubmitted: () => { submitted = true; },
+      onResponseCompleted: () => { completedResponses++; },
       onReasoningSummary: (text, continuation) => reasoning.push({ text, continuation: continuation === true }),
       onTextDelta: text => deltas.push(text),
       captureLunaCheckpoint: true,
@@ -173,6 +176,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
     expect(deltas).toEqual(["done"]);
     expect(sendActivated).toBe(true);
     expect(submitted).toBe(true);
+    expect(completedResponses).toBe(1);
     expect(checkpoints).toEqual([{
       answerHash: "a".repeat(64),
       checkpoint: {
@@ -185,7 +189,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
       },
     }]);
     expect(released).toBe(true);
-    await rejects(client.run({ traceId: "chatgpt_preparation_unsubmitted", preparationDeadline: 123456789,
+    await rejects(client.run({ traceId: "chatgpt_preparation_unsubmitted",
       modelId: "gpt-6-sol", capabilities: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: false, proAvailable: false },
       prepare: async () => ({ text: "inspect", images: [], release() {} }), onTextDelta() {} }),
     { name: "ChatGptWebAdapterError", code: "chatgpt_preparation_unsubmitted", status: 502, retryable: false });

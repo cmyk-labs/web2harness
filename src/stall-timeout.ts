@@ -2,10 +2,10 @@
  * Bridge upstream stall budget: seconds of silence (no adapter events) before the
  * Responses bridge emits `response.incomplete` / `upstream_stall_timeout`.
  *
- * Raised from 90s so long reasoning + large tool writes are not cut mid-turn.
+ * A progress-free stage gets fifteen minutes, independent of other stages.
  * Hung streams still die; they just get a more realistic window.
  */
-export const DEFAULT_STALL_TIMEOUT_SEC = 300;
+export const DEFAULT_STALL_TIMEOUT_SEC = 900;
 
 // Keep a malformed or accidentally enormous configuration within a practical recovery budget.
 export const MAX_STALL_TIMEOUT_SEC = 3_600;

@@ -53,3 +53,24 @@ test("health probes do not contact non-loopback or credential-bearing URLs", asy
     assert.equal((await probeTunnelTransport(url)).observed, false);
   }
 });
+
+test("logs and metrics each own a ten-second timer through body consumption", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now });
+  const calls = [];
+  t.mock.method(global, "fetch", async (url, { signal }) => {
+    calls.push({ route: url.pathname, signal });
+    return { ok: true, text: () => new Promise((resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      setTimeout(() => resolve(url.pathname === "/api/logs" ? '{"events":[]}' : metric(now / 1000)), 9_500);
+    }) };
+  });
+  const pending = probeTunnelTransport("http://127.0.0.1:12345");
+  await Promise.resolve();
+  assert.equal(calls.length, 2);
+  assert.notEqual(calls[0].signal, calls[1].signal);
+  t.mock.timers.tick(9_500);
+  assert.equal((await pending).ok, true);
+  assert.equal(calls.some(call => call.signal.aborted), false);
+  t.mock.timers.tick(500);
+  assert.equal(calls.some(call => call.signal.aborted), false);
+});

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import type { Page, Locator } from "playwright-core";
-import { ChatGptPreparationBudget, CHATGPT_PREPARATION_BUDGET_MS, CHATGPT_UNSUBMITTED_PREPARATION,
+import { ChatGptPreparationRecovery, CHATGPT_UNSUBMITTED_PREPARATION,
   preparationError, proveUnsubmittedPreparation, waitForChatGptReadiness, type ChatGptReadinessSnapshot } from "../../../../src/adapters/chatgpt-web/browser/page-readiness";
 import { ChatGptBrowserWorker, type BrowserTurn } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { ChatGptExternalTurnProgress } from "../../../../src/adapters/chatgpt-web/tools/turn-progress";
@@ -169,17 +169,12 @@ test("prepared alone never authorizes recovery; missing or positive submission e
   expect(proveUnsubmittedPreparation(empty, { ...unsent, progress: { revision: 1, lastToolBatchRevision: 0, activeToolCalls: 0 } })).toBeFalse();
 });
 
-test("navigation and both observations share one deadline and one consumed recovery", () => {
-  const budget = new ChatGptPreparationBudget();
-  expect(budget.start(10)).toBe(10 + CHATGPT_PREPARATION_BUDGET_MS);
-  expect(budget.start(30_010)).toBe(90_010);
-  expect(budget.recover(30_010)).toBeTrue();
-  expect(budget.recover(31_010)).toBeFalse();
-  expect(budget.start(80_010)).toBe(90_010);
-  const timedOut = new ChatGptPreparationBudget(); timedOut.start(10);
-  expect(timedOut.recover(90_010)).toBeFalse();
-  const closed = new ChatGptPreparationBudget(); closed.start(10); closed.closedAt = 20;
-  expect(closed.recover(30)).toBeFalse();
+test("preparation recovery is count-bounded without a shared elapsed-time allowance", () => {
+  const recovery = new ChatGptPreparationRecovery();
+  expect(recovery.recover()).toBeTrue();
+  expect(recovery.recover()).toBeFalse();
+  const closed = new ChatGptPreparationRecovery(); closed.closedAt = 20;
+  expect(closed.recover()).toBeFalse();
 });
 
 test("actual Responses failure frames keep page errors, generic 503, overload, auth and limits distinct", async () => {
@@ -230,7 +225,7 @@ test("real queue releases failed preparation before re-admission, preserves budg
   const directory = mkdtempSync(join(tmpdir(), "cgw-preparation-"));
   const queue = await StandaloneRequestQueue.open(join(directory, "state.json"));
   await queue.updateSettings({ maxConcurrent: 1, queueTimeoutMinutes: 5, minSendIntervalSeconds: 1 });
-  const admissions: string[] = []; const settled: string[] = []; const deadlines: number[] = [];
+  const admissions: string[] = []; const settled: string[] = [];
   let calls = 0;
   const progress = new ChatGptExternalTurnProgress();
   const worker = Object.assign(Object.create(ChatGptBrowserWorker.prototype), {
@@ -245,7 +240,7 @@ test("real queue releases failed preparation before re-admission, preserves budg
       return result;
     } }),
     runExclusive: async (turn: BrowserTurn) => {
-      calls++; deadlines.push(turn.preparationDeadline!);
+      calls++; expect("preparationDeadline" in turn).toBeFalse();
       if (calls === 1) throw preparationError(CHATGPT_UNSUBMITTED_PREPARATION);
       await turn.onSendActivated?.(); return "done";
     },
@@ -259,18 +254,17 @@ test("real queue releases failed preparation before re-admission, preserves budg
   try {
     expect(await worker.run(turn)).toBe("done");
     expect(admissions.length).toBe(2); expect(new Set(admissions).size).toBe(2);
-    expect(settled).toEqual(admissions); expect(deadlines[0]).toBe(deadlines[1]);
+    expect(settled).toEqual(admissions);
     await rejects(worker.run({ ...turn, traceId: "reconnected" }));
     expect(calls).toBe(2);
     const originalBudget = (worker as any).preparationBudgets.get(key);
-    originalBudget.deadline = Date.now() - 1;
     const retryId = createHash("sha256").update(`${key}:retry:1`).digest("hex");
     expect(await worker.run({ ...turn, traceId: "authorized-model-retry", allowPreparationRecovery: false,
       scheduling: { ...turn.scheduling!, id: retryId } })).toBe("done");
     expect(calls).toBe(3);
     expect((worker as any).preparationBudgets.get(key)).toBe(originalBudget);
     expect(originalBudget.recoveries).toBe(1);
-    expect(originalBudget.deadline).toBeLessThan(Date.now());
+    expect(originalBudget.closedAt).toBeDefined();
     for (const scenario of ["generic-retry", "send-started", "tool-accepted", "release-failed", "cancelled", "exhausted"] as const) {
       const scenarioKey = createHash("sha256").update(scenario).digest("hex");
       let attempts = 0;

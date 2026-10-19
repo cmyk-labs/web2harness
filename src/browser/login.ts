@@ -12,6 +12,7 @@ import {
   detectChatGptAccountCapabilities,
 } from "./session";
 import type { ChatGptWebAccountCapabilities } from "../models/chatgpt-web-models";
+import { operationStage } from "../runtime/operation-stage";
 
 export interface BrowserLoginResult {
   storageStatePath: string;
@@ -49,10 +50,26 @@ interface LoginVerificationMarker {
   proAvailable?: boolean;
 }
 
-const SYSTEM_LOGIN_TIMEOUT_MS = 10 * 60_000;
+const SYSTEM_LOGIN_TIMEOUT_MS = 15 * 60_000;
+export const LOGIN_BROWSER_STARTUP_TIMEOUT_MS = 60_000;
+export const LOGIN_PAGE_LOAD_TIMEOUT_MS = 120_000;
+export const LOGIN_VERIFICATION_TIMEOUT_MS = 120_000;
 const SYSTEM_LOGIN_STOP_TIMEOUT_MS = 5_000;
 const LOGIN_STORAGE_ROOT_DOMAINS = ["chatgpt.com", "openai.com"] as const;
 const CHATGPT_ORIGIN = new URL(CHATGPT_TEMPORARY_CHAT_URL).origin;
+
+async function verifyLoginResult<T>(action: () => Promise<T>): Promise<T> {
+  return operationStage("verification", async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([action(), new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Login result verification timed out")), LOGIN_VERIFICATION_TIMEOUT_MS);
+      })]);
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+}
 
 function browserProcessExited(browser: ChildProcess): boolean {
   return browser.exitCode !== null || browser.signalCode !== null;
@@ -157,21 +174,24 @@ async function inspectStoredState(
   config: AppConfig,
   storageState: NonNullable<BrowserContextOptions["storageState"]>,
 ): Promise<ChatGptWebAccountCapabilities & { url: string }> {
-  const verifierBrowser = await chromium.launch({
+  const verifierBrowser = await operationStage("browser-startup", () => chromium.launch({
     executablePath: config.chromeExecutablePath,
     headless: false,
     ignoreDefaultArgs: ["--password-store=basic", "--use-mock-keychain"],
     args: ["--no-first-run", "--no-default-browser-check"],
-  });
+    timeout: LOGIN_BROWSER_STARTUP_TIMEOUT_MS,
+  }));
   try {
     const verifierContext = await verifierBrowser.newContext({ storageState });
     try {
       const verifierPage = await verifierContext.newPage();
-      await verifierPage.goto(CHATGPT_TEMPORARY_CHAT_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
-      await verifierPage.locator(CHATGPT_COMPOSER_SELECTOR).filter({ visible: true }).first().waitFor({ state: "visible", timeout: 60_000 });
-      await assertAuthenticatedChatGptPage(verifierPage);
-      await assertTemporaryChatPage(verifierPage);
-      return { ...await detectChatGptAccountCapabilities(verifierPage), url: verifierPage.url() };
+      await operationStage("page-load", () => verifierPage.goto(CHATGPT_TEMPORARY_CHAT_URL, { waitUntil: "domcontentloaded", timeout: LOGIN_PAGE_LOAD_TIMEOUT_MS }));
+      await operationStage("controls", () => verifierPage.locator(CHATGPT_COMPOSER_SELECTOR).filter({ visible: true }).first().waitFor({ state: "visible", timeout: LOGIN_VERIFICATION_TIMEOUT_MS }));
+      return await verifyLoginResult(async () => {
+        await assertAuthenticatedChatGptPage(verifierPage);
+        await assertTemporaryChatPage(verifierPage);
+        return { ...await detectChatGptAccountCapabilities(verifierPage), url: verifierPage.url() };
+      });
     } finally {
       await verifierContext.close();
     }
@@ -217,12 +237,6 @@ export async function captureSystemBrowserLogin(
   if (!Number.isFinite(timeoutMs) || timeoutMs < 1) {
     throw new Error("Passkey sign-in timeout must be a positive finite number");
   }
-  const deadline = Date.now() + timeoutMs;
-  const remainingTime = () => {
-    const remaining = deadline - Date.now();
-    if (remaining < 1) throw new Error("Timed out waiting for passkey sign-in");
-    return remaining;
-  };
 
   const profileParent = dirname(config.storageStatePath);
   mkdirSync(profileParent, { recursive: true, mode: 0o700 });
@@ -245,25 +259,28 @@ export async function captureSystemBrowserLogin(
       "--no-default-browser-check",
       CHATGPT_TEMPORARY_CHAT_URL,
     ], { env: process.env, stdio: "ignore" });
-    let continuationRequested = false;
     let timeout: ReturnType<typeof setTimeout> | undefined;
+    let waiting = true;
+    let onExit: ((code: number | null, signal: NodeJS.Signals | null) => void) | undefined;
+    let onError: ((error: Error) => void) | undefined;
     try {
-      await new Promise<void>((resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error("Timed out waiting for passkey sign-in")), remainingTime());
+      await operationStage("human-login", () => new Promise<void>((resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error("Timed out waiting for passkey sign-in")), timeoutMs);
         void options.continuation.then(() => {
-          continuationRequested = true;
-          if (!loginBrowser.kill() && !browserProcessExited(loginBrowser)) {
-            reject(new Error("The dedicated Chrome login process refused the Continue request"));
-          }
+          if (waiting) resolve();
         }, reject);
-        loginBrowser.once("error", reject);
-        loginBrowser.once("exit", (code, signal) => {
-          if (continuationRequested) resolve();
-          else if (signal) reject(new Error(`Dedicated Chrome login exited from signal ${signal}`));
+        onError = reject;
+        onExit = (code, signal) => {
+          if (signal) reject(new Error(`Dedicated Chrome login exited from signal ${signal}`));
           else if (code === 0) reject(new Error("Dedicated Chrome closed before Continue was selected"));
           else reject(new Error(`Dedicated Chrome login exited with status ${code ?? 1}`));
-        });
-      });
+        };
+        loginBrowser.once("error", onError);
+        loginBrowser.once("exit", onExit);
+      }));
+      waiting = false;
+      if (timeout) clearTimeout(timeout);
+      await stopOwnedLoginBrowser(loginBrowser);
     } catch (error) {
       try {
         await stopOwnedLoginBrowser(loginBrowser);
@@ -274,7 +291,10 @@ export async function captureSystemBrowserLogin(
       }
       throw error;
     } finally {
+      waiting = false;
       if (timeout) clearTimeout(timeout);
+      if (onExit) loginBrowser.off("exit", onExit);
+      if (onError) loginBrowser.off("error", onError);
     }
 
     // Authentication happens before Playwright ever owns this profile. Chrome does not load
@@ -282,7 +302,7 @@ export async function captureSystemBrowserLogin(
     // the disposable profile's tab-session files first, so restoring cookies cannot reopen the
     // authenticated or identity-provider pages during the offline capture.
     removeTemporaryChromeTabSessions(profileDir);
-    context = await chromium.launchPersistentContext(profileDir, {
+    context = await operationStage("browser-startup", () => chromium.launchPersistentContext(profileDir, {
       executablePath: config.chromeExecutablePath,
       headless: true,
       chromiumSandbox: true,
@@ -301,8 +321,8 @@ export async function captureSystemBrowserLogin(
         "--no-default-browser-check",
         "--restore-last-session",
       ],
-      timeout: Math.min(30_000, remainingTime()),
-    });
+      timeout: LOGIN_BROWSER_STARTUP_TIMEOUT_MS,
+    }));
     await context.setOffline(true);
     await context.route("**/*", route => route.fulfill({
       status: 200,
@@ -310,14 +330,14 @@ export async function captureSystemBrowserLogin(
       body: "<!doctype html><meta charset=\"utf-8\"><title>Private login-state capture</title>",
     }));
     const page = context.pages()[0] ?? await context.newPage();
-    await page.goto(CHATGPT_TEMPORARY_CHAT_URL, {
+    await operationStage("page-load", () => page.goto(CHATGPT_TEMPORARY_CHAT_URL, {
       waitUntil: "domcontentloaded",
-      timeout: Math.min(60_000, remainingTime()),
-    });
+      timeout: LOGIN_PAGE_LOAD_TIMEOUT_MS,
+    }));
     if (new URL(page.url()).origin !== CHATGPT_ORIGIN) {
       throw new Error("Offline passkey-state capture reached an unexpected origin");
     }
-    const storageState = sanitizeBrowserLoginStorageState(await context.storageState());
+    const storageState = sanitizeBrowserLoginStorageState(await verifyLoginResult(() => context!.storageState()));
     if (storageState.cookies.length === 0) {
       throw new Error("The dedicated Chrome profile contains no ChatGPT/OpenAI cookies");
     }

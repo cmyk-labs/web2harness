@@ -2,11 +2,15 @@
   "defaults": {
     "retainedTabTarget": 5,
     "idleTabMinutes": 30,
-    "stallMinutes": 5,
-    "attachmentMinutes": 2,
+    "stallMinutes": 15,
+    "attachmentMinutes": 5,
     "maxRetries": 3,
     "manualSubmitSeconds": 60,
     "manualCompactionSubmitSeconds": 120
+  },
+  "requestScheduling": {
+    "defaults": { "maxConcurrent": 4, "queueTimeoutMinutes": 30, "minSendIntervalSeconds": 3 },
+    "queueTimeoutChoices": [5, 10, 15, 30, 60]
   },
   "choices": {
     "retainedTabTarget": [5, 8, 12, 16],

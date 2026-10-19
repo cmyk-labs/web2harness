@@ -1,7 +1,7 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { chromium, type Page } from "playwright-core";
 import { ChatGptBrowserWorker } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
-import { activateChatGptEffortMenu, chatGptEffortSlider, detectChatGptAccountCapabilities,
+import { activateChatGptEffortMenu, closeChatGptEffortMenu, chatGptEffortSlider, detectChatGptAccountCapabilities,
   readChatGptEffortSnapshot } from "../../../../src/browser/session";
 
 // Local DOM only. chromium.launch owns a fresh temporary profile for each test;
@@ -110,10 +110,21 @@ test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`effort snapshot bounds locat
 for (const delayed of [true, false])
 test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`requested Sol xhigh ${delayed ? "survives delayed slider hydration" : "fails on missing slider without downgrade"}`, async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
+  let clock: ReturnType<typeof spyOn<typeof Date, "now">> | undefined;
   try {
     const page = await browser.newPage();
     await installHydratingEffortPicker(page, delayed ? { delayMs: 150 } : {});
     const worker = Object.create(ChatGptBrowserWorker.prototype) as any;
+    if (!delayed) {
+      // Expire host-side hydration observations without sleeping through two 120s
+      // attempts, after the composer is ready. Chrome still runs real input/DOM checks.
+      await page.exposeFunction("expireHydrationClock", () => {
+        let now = Date.now();
+        clock = spyOn(Date, "now").mockImplementation(() => now += 120_000);
+      });
+      await page.locator("button").evaluate(control => control.addEventListener("click",
+        () => (window as any).expireHydrationClock(), { once: true }));
+    }
     const started = performance.now();
     const result = worker.selectModelAndEffort(page, "gpt-5.6-sol", "xhigh", {
       localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: false,
@@ -125,15 +136,15 @@ test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`requested Sol xhigh ${delaye
       const error = await result.catch((error: unknown) => error);
       expect(error).toBeInstanceOf(Error);
       expect(error.message).toContain("did not expose its owned menu or structural slider");
-      expect(performance.now() - started).toBeLessThan(10_000);
+      expect(performance.now() - started).toBeLessThan(45_000);
     }
     expect(await page.locator('[role="menuitemradio"][aria-checked="true"]').textContent()).toBe("GPT-5.6 Sol");
     expect(await page.evaluate(() => (window as any).fixture)).toMatchObject({
       arrows: delayed ? ["ArrowRight", "ArrowRight", "ArrowRight"] : [], modelClicks: 0, submissions: 0,
     });
     expect(await page.locator("#prompt-textarea").innerText()).toBe("Draft");
-  } finally { await browser.close(); }
-}, 20_000);
+  } finally { clock?.mockRestore(); await browser.close(); }
+}, 60_000);
 
 for (const picker of ["classic", "power", "track"])
 test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`model selection reuses the ${picker} picker without racing Escape cleanup`, async () => {
@@ -167,13 +178,17 @@ test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`model selection reuses the $
           document.querySelectorAll('[role=menuitemradio]').forEach((e,i)=>e.setAttribute('aria-checked',String(i===1)));
           document.querySelector('#models').hidden=true;
         };
-        document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();setTimeout(close,150);}});
+        document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();setTimeout(close,650);}});
       </script>`);
     const worker = Object.create(ChatGptBrowserWorker.prototype) as any;
     const result = await worker.selectModelAndEffort(page, "gpt-5.6-sol", "xhigh", {
       localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: true,
     }, undefined, false, "5.6");
     expect(result.selection.label).toBe("5.6 Sol Extra High");
+    expect(await page.evaluate(() => (window as any).pickerOpens)).toBe(1);
+    // Prompt preparation normally separates selection from final send preflight.
+    await page.waitForTimeout(700);
+    await worker.assertSelectedEffort(page, result);
     expect(await page.evaluate(() => (window as any).pickerOpens)).toBe(2);
     expect(await page.locator('#prompt-textarea').innerText()).toBe("Draft");
   } finally { await browser.close(); }
@@ -212,13 +227,45 @@ test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`real slider ${scenario} keep
     } else {
       const worker = Object.create(ChatGptBrowserWorker.prototype) as any;
       const effort = scenario === "pro-disappears" ? "max" : scenario === "locked" ? "high" : "xhigh";
-      const result = worker.selectModelAndEffort(page, "gpt-5.6-sol", effort, {
+      const result = await worker.selectModelAndEffort(page, "gpt-5.6-sol", effort, {
         localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: true,
       });
-      if (scenario === "shrink") expect((await result).selection.label).toBe("Extra High");
-      else await expect(result).rejects.toMatchObject({ retryable: false });
+      const failure = await worker.assertSelectedEffort(page, result).then(() => undefined, (error: unknown) => error);
+      if (scenario === "shrink") {
+        expect(failure).toBeUndefined();
+        expect(result.selection.label).toBe("Extra High");
+      } else expect(failure).toMatchObject({ retryable: false });
     }
     expect(await page.locator('#prompt-textarea').innerText()).toBe("Draft");
     await page.close();
   } finally { await browser.close(); }
 }, 120_000);
+
+test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)("picker observation avoids default attribute waits and allows normal owner remount latency", async () => {
+  const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
+  try {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(30_000);
+    await page.setContent('<form><button id="owner" type="button" aria-controls="picker" aria-expanded="false">Effort</button></form><div role="menu" id="picker" hidden><div data-model-reasoning-effort-slider style="width:200px;height:20px"><span role="slider"></span></div></div>');
+    const missing = page.locator('#missing-owner'), started = performance.now();
+    const openError = await activateChatGptEffortMenu(page, missing, { settleMs: 100 }).catch(error => error);
+    expect(openError).toBeInstanceOf(Error);
+    const closeError = await closeChatGptEffortMenu(page, missing, { settleMs: 100 }).catch(error => error);
+    expect(closeError.message).toContain('owner state');
+    expect(performance.now() - started).toBeLessThan(2_000);
+    await page.locator('#owner').evaluate(button => {
+      button.addEventListener('click', () => {
+        const parent = button.parentElement!, replacement = button.cloneNode(true) as HTMLElement;
+        button.remove();
+        setTimeout(() => {
+          replacement.setAttribute('aria-expanded', 'true');
+          parent.append(replacement);
+          document.getElementById('picker')!.removeAttribute('hidden');
+        }, 4_000);
+      });
+    });
+    const activation = await activateChatGptEffortMenu(page, page.locator('#owner'));
+    expect(activation.method).toBe('click');
+    expect(await activation.menu.getAttribute('id')).toBe('picker');
+  } finally { await browser.close(); }
+}, 20_000);

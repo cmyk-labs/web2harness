@@ -16,7 +16,8 @@ interface CompactionTransaction extends CompactionTransactionHandle {
   traceId: string;
   summary?: string;
   waiter?: TransactionWaiter;
-  timer?: ReturnType<typeof setTimeout>;
+  signal: AbortSignal;
+  onAbort: () => void;
 }
 
 function opaqueId(prefix: "control" | "handoff"): string {
@@ -27,21 +28,21 @@ function opaqueId(prefix: "control" | "handoff"): string {
 export class CompactionTransactionStore {
   private readonly transactions = new Map<string, CompactionTransaction>();
 
-  begin(traceId: string, ttlMs: number): CompactionTransactionHandle {
+  begin(traceId: string, signal: AbortSignal): CompactionTransactionHandle {
     if (!traceId.trim()) throw new Error("compaction transaction trace id is required");
-    if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
-      throw new Error("compaction transaction TTL must be a positive finite number");
-    }
+    signal.throwIfAborted();
+    // The owning stages control lifetime. A creation-time TTL would consume valid queue,
+    // preparation, generation, or settlement time before the corresponding stage starts.
     const transaction: CompactionTransaction = {
       token: opaqueId("control"),
       handoffId: opaqueId("handoff"),
       traceId,
+      signal,
+      onAbort: () => this.finishError(transaction, signal.reason instanceof Error
+        ? signal.reason : new DOMException("compaction transaction aborted", "AbortError")),
     };
-    transaction.timer = setTimeout(() => {
-      this.finishError(transaction, new Error("compaction transaction timed out"));
-    }, ttlMs);
-    transaction.timer.unref?.();
     this.transactions.set(transaction.token, transaction);
+    signal.addEventListener("abort", transaction.onAbort, { once: true });
     return { token: transaction.token, handoffId: transaction.handoffId };
   }
 
@@ -56,8 +57,6 @@ export class CompactionTransactionStore {
     if (!normalized) throw new Error("compaction handoff summary is empty");
     transaction.summary = normalized;
     console.info(`[chatgpt-web] broker trace=${transaction.traceId} accepted structured compaction handoff`);
-    if (transaction.timer) clearTimeout(transaction.timer);
-    transaction.timer = undefined;
     if (transaction.waiter) this.consume(transaction);
   }
 
@@ -89,8 +88,7 @@ export class CompactionTransactionStore {
     if (!transaction) return;
     if (transaction.summary !== undefined) {
       this.transactions.delete(token);
-      if (transaction.timer) clearTimeout(transaction.timer);
-      transaction.timer = undefined;
+      transaction.signal.removeEventListener("abort", transaction.onAbort);
       this.detachWaiter(transaction);
       transaction.waiter = undefined;
       return;
@@ -117,6 +115,7 @@ export class CompactionTransactionStore {
     const summary = transaction.summary;
     const waiter = transaction.waiter;
     this.transactions.delete(transaction.token);
+    transaction.signal.removeEventListener("abort", transaction.onAbort);
     this.detachWaiter(transaction);
     transaction.waiter = undefined;
     waiter?.resolve(summary);
@@ -125,8 +124,7 @@ export class CompactionTransactionStore {
 
   private finishError(transaction: CompactionTransaction, error: Error): void {
     if (!this.transactions.delete(transaction.token)) return;
-    if (transaction.timer) clearTimeout(transaction.timer);
-    transaction.timer = undefined;
+    transaction.signal.removeEventListener("abort", transaction.onAbort);
     const waiter = transaction.waiter;
     this.detachWaiter(transaction);
     transaction.waiter = undefined;

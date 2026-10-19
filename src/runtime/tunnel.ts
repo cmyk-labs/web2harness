@@ -6,6 +6,7 @@ import { unzipSync } from "fflate";
 import type { AppConfig, BrowserInteractionMode, TunnelConfig } from "../config";
 import { atomicWriteFile, getConfigDir } from "../config";
 import { runCommand, runChecked } from "./process";
+import { operationStage, operationStageSync } from "./operation-stage";
 
 export const TUNNEL_VERSION = "0.0.12";
 const MIGRATABLE_TUNNEL_VERSIONS = new Set(["0.0.10"]);
@@ -43,7 +44,8 @@ function platformAsset(): string {
   return `tunnel-client-v${TUNNEL_VERSION}-${os}-${arch}.zip`;
 }
 
-async function fetchBytes(url: string, timeoutMs = 120_000): Promise<Uint8Array> {
+async function fetchBytes(url: string, timeoutMs = 300_000): Promise<Uint8Array> {
+  return operationStage("download", async () => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -60,6 +62,7 @@ async function fetchBytes(url: string, timeoutMs = 120_000): Promise<Uint8Array>
   } finally {
     clearTimeout(timeout);
   }
+  });
 }
 
 function parseExpectedChecksum(text: string, asset: string): string {
@@ -116,7 +119,7 @@ export async function installTunnelClient(): Promise<string> {
       throw new Error(`Existing tunnel-client is not executable: ${executable}`);
     }
     const action = tunnelClientInstallAction(manifest.tunnelClientVersion);
-    const installedVersion = runChecked(executable, ["--version"], { timeout: 10_000 });
+    const installedVersion = operationStageSync("verification", () => runChecked(executable, ["--version"], { timeout: 120_000 }));
     if (!installedVersion.stdout.includes(manifest.tunnelClientVersion)
       && !installedVersion.stderr.includes(manifest.tunnelClientVersion)) {
       throw new Error(`Existing tunnel-client did not report version ${manifest.tunnelClientVersion}`);
@@ -147,7 +150,7 @@ export async function installTunnelClient(): Promise<string> {
   atomicWriteFile(stagedExecutable, binary);
   try {
     if (process.platform !== "win32") chmodSync(stagedExecutable, 0o700);
-    const version = runChecked(stagedExecutable, ["--version"], { timeout: 10_000 });
+    const version = operationStageSync("verification", () => runChecked(stagedExecutable, ["--version"], { timeout: 120_000 }));
     if (!version.stdout.includes(TUNNEL_VERSION) && !version.stderr.includes(TUNNEL_VERSION)) {
       throw new Error(`Installed tunnel-client did not report version ${TUNNEL_VERSION}`);
     }
@@ -479,6 +482,7 @@ export async function waitForTunnelReady(
   config: AppConfig,
   timeoutMs = TUNNEL_READY_TIMEOUT_MS,
 ): Promise<TunnelRuntimeStatus> {
+  return operationStage("component-ready", async () => {
   const deadline = Date.now() + timeoutMs;
   let status = await tunnelStatus(config);
   while (!status.ok && status.retryable !== false && Date.now() < deadline) {
@@ -486,4 +490,5 @@ export async function waitForTunnelReady(
     status = await tunnelStatus(config);
   }
   return status;
+  });
 }

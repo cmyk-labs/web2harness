@@ -1,6 +1,6 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { ChatGptBrowserWorker, browserStageTimeouts } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
@@ -16,7 +16,7 @@ test.each(["preflight-failed", "ready-changed", "unknown", "confirmed", "duplica
         baseUrl: `browser://${root}`, chatgptWeb: { localToolsEnabled: false, solAvailable: true,
           extraHighAvailable: true, proAvailable: false, storageStatePath: join(root, "auth.json"),
           browserDiagnosticsPath: join(root, "diagnostics") } });
-      const order: string[] = [], settlements: any[] = [], stages: Array<[string, number]> = [];
+      const order: string[] = [], settlements: any[] = [], stages: Array<[string, number | undefined]> = [];
       let inputs = 0, activated = 0, released = 0;
       const absent: any = { filter() { return this; }, last() { return this; }, isVisible: async () => false };
       const page: any = Object.assign(new EventEmitter(), { isClosed: () => false,
@@ -72,8 +72,8 @@ test.each(["preflight-failed", "ready-changed", "unknown", "confirmed", "duplica
       expect(activated).toBe(unsent ? 0 : 1);
       expect(settlements).toEqual([{ id: "owned-task", secret: "fixture-secret", permit: "owned-permit",
         outcome: unsent ? "not-sent" : scenario === "duplicate-ack" ? "confirmed" : scenario }]);
-      expect(stages).toContainEqual(["send_preflight", browserStageTimeouts.effortSelection]);
-      if (scenario !== "preflight-failed") expect(stages).toContainEqual(["send", browserStageTimeouts.send]);
+      expect(stages).toContainEqual(["send_preflight", undefined]);
+      if (scenario !== "preflight-failed") expect(stages).toContainEqual(["send", undefined]);
       if (!unsent) expect(order.slice(0, 4)).toEqual(["family", "ready", "activated", "input"]);
       expect(released).toBe(1);
     } finally {
@@ -146,7 +146,7 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
     };
     if (state === "late-timeout") {
       const realStage = worker.runStage.bind(worker);
-      worker.runStage = (trace: string, stage: string, ms: number, ...rest: any[]) => realStage(trace, stage, stage === "send" ? 300 : ms, ...rest);
+      worker.runStage = (trace: string, stage: string, ms: number | undefined, ...rest: any[]) => realStage(trace, stage, stage === "send_acknowledgement" ? 300 : ms, ...rest);
     }
     worker.requestQueueTarget = async () => ({ request: async (action: string, body: any) => {
       if (action === "send-begin") return { allowed: true, permit: "source-permit" };
@@ -155,19 +155,24 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
     } });
     worker.submissionDomState = async () => { throw Error("DOM unavailable: source must supply completion"); };
     const deltas: string[] = [];
+    let completedResponses = 0;
     const result = worker.runBrowserTurnObserved({ traceId: `source-${state}`, modelId: "gpt-5.6-sol", reasoning: "xhigh",
       capabilities: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: false },
       queueTicket: { id: "source-task", secret: "source-secret" }, abortSignal: cancel.signal,
       prepare: async () => ({ text: "input", images: [], release() {} }), onTextDelta: (delta: string) => deltas.push(delta),
+      onResponseCompleted: () => { completedResponses++; },
     }, undefined, page);
     if (["complete", "late-accepted", "late-timeout"].includes(state)) { expect(await result).toBe(text); expect(deltas).toEqual([text]); }
     else if (state === "incomplete") { await expect(result).rejects.toMatchObject({ code: "chatgpt_response_source_invalid" }); expect(deltas).toEqual([]); }
     else if (state === "cancelled") { await expect(result).rejects.toThrow(); expect(deltas).toEqual([]); }
     else { await expect(result).rejects.toMatchObject({ code: "chatgpt_send_outcome_unknown" }); expect(deltas).toEqual([]); }
     expect(presses).toBe(1);
+    expect(completedResponses).toBe(["complete", "late-accepted", "late-timeout"].includes(state) ? 1 : 0);
     expect(receipts).toEqual([{ id: "source-task", secret: "source-secret", permit: "source-permit",
       outcome: ["complete", "incomplete", "late-accepted", "late-timeout"].includes(state) ? "confirmed" : "unknown" }]);
-    const artifacts = readdirSync(join(root, "diagnostics")).filter(name => name.startsWith("response-source-"));
+    const archives = readdirSync(join(root, "diagnostics")).filter(name => name.startsWith("response-source-"));
+    const artifacts = archives.filter(name => existsSync(join(root, "diagnostics", name, "response-source.private.json")));
+    if (state === "cancelled") expect(archives).toEqual([]);
     if (["incomplete", "duplicate-request", "disconnected"].includes(state)) {
       expect(artifacts).toHaveLength(1);
       const artifact = JSON.parse(readFileSync(join(root, "diagnostics", artifacts[0]!, "response-source.private.json"), "utf8"));
@@ -200,4 +205,25 @@ test("cancelling during send activation never releases a delayed click", async (
     if (dirname(resolve(root)) !== resolve(tmpdir()) || !basename(root).startsWith("web2harness-send-cancel-")) throw Error("Unexpected fixture directory");
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("missing send activation acknowledgement times out without a late click", async () => {
+  let clicks = 0;
+  let acknowledge!: () => void;
+  const acknowledgement = new Promise<void>(resolve => { acknowledge = resolve; });
+  const button = { waitFor: async () => {}, isEnabled: async () => true, click: async () => { clicks++; } };
+  const absent: any = { filter() { return this; }, last() { return this; }, isVisible: async () => false };
+  const page = { isClosed: () => false, locator: () => absent, evaluate: async () => ({}) };
+  const worker = { activeComposer: async () => ({ locator: () => ({ locator: () => button }) }) };
+  const originalTimeout = globalThis.setTimeout;
+  const timer = spyOn(globalThis, "setTimeout").mockImplementation(((fn: (...args: any[]) => void, ms: number, ...args: any[]) =>
+    originalTimeout(fn, ms === 60_000 ? 10 : ms, ...args)) as typeof setTimeout);
+  try {
+    const send = (ChatGptBrowserWorker.prototype as any).sendAttachedPrompt.call(worker, page, {},
+      undefined, undefined, undefined, { onSendActivated: () => acknowledgement });
+    await expect(send).rejects.toMatchObject({ name: "ChatGptBrowserObservationTimeoutError" });
+    acknowledge();
+    await new Promise(resolve => originalTimeout(resolve, 0));
+    expect(clicks).toBe(0);
+  } finally { timer.mockRestore(); }
 });

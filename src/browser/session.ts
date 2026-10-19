@@ -29,10 +29,20 @@ export const CHATGPT_EFFORT_ITEM_SELECTOR = '[role="menuitemradio"]';
 export const CHATGPT_EFFORT_SLIDER_CONTAINER_SELECTOR = '[data-model-reasoning-effort-slider], [data-model-picker-power-slider]';
 export const CHATGPT_EFFORT_SLIDER_SELECTOR = '[data-model-reasoning-effort-slider] [role="slider"], [data-model-picker-power-slider] [role="slider"]';
 export const CHATGPT_EFFORT_SLIDER_MAX_OPTIONS = 5;
+export const CHATGPT_MODEL_CONTROL_HYDRATION_MS = 120_000;
+export const CHATGPT_UI_ACTION_TIMEOUT_MS = 60_000;
+export const CHATGPT_MODEL_CONTROL_SETTLE_MS = 30_000;
 
 /** Current pickers split the model version and effort across the active header and slider. */
 export async function readChatGptModelAnnouncements(slider: Locator): Promise<string[]> {
-  return slider.evaluate(element => {
+  return (await readChatGptModelSnapshot(slider))?.descriptions ?? [];
+}
+
+/** Observe one picker revision without auto-waiting for a menu that may have closed. */
+export async function readChatGptModelSnapshot(slider: Locator) {
+  return slider.evaluateAll(elements => {
+    if (elements.length !== 1) return undefined;
+    const element = elements[0]!;
     const doc = element.ownerDocument;
     const descriptions = (element.closest('[role="menuitem"]')?.getAttribute("aria-describedby") ?? "")
       .split(/\s+/).filter(Boolean).map(id => doc.getElementById(id)?.textContent ?? "");
@@ -60,7 +70,8 @@ export async function readChatGptModelAnnouncements(slider: Locator): Promise<st
       }
       descriptions.push(words.join(" "));
     }
-    return descriptions;
+    return { descriptions, min: element.getAttribute("aria-valuemin"),
+      max: element.getAttribute("aria-valuemax"), value: element.getAttribute("aria-valuenow") };
   });
 }
 
@@ -109,12 +120,25 @@ function effortMenuSelectorForId(menuId: string): string {
   return `[id=${JSON.stringify(menuId)}]`;
 }
 
-export async function chatGptEffortMenuForControl(page: Page, control: Locator): Promise<Locator> {
-  const menuId = await control.getAttribute("aria-controls").catch(() => null);
-  if (menuId) return page.locator(effortMenuSelectorForId(menuId));
-  const controlId = await control.getAttribute("id").catch(() => null);
-  if (controlId) return page.locator(`[role="menu"][aria-labelledby~=${JSON.stringify(controlId)}]`).filter({ visible: true });
+async function readEffortOwner(control: Locator) {
+  return control.evaluateAll(elements => {
+    if (elements.length !== 1) return undefined;
+    const element = elements[0]!;
+    return { id: element.id, menuId: element.getAttribute("aria-controls"),
+      expanded: element.getAttribute("aria-expanded"), state: element.getAttribute("data-state") };
+  });
+}
+
+function effortMenuForOwner(page: Page, owner: NonNullable<Awaited<ReturnType<typeof readEffortOwner>>>): Locator {
+  if (owner.menuId) return page.locator(effortMenuSelectorForId(owner.menuId));
+  if (owner.id) return page.locator(`[role="menu"][aria-labelledby~=${JSON.stringify(owner.id)}]`).filter({ visible: true });
   return page.locator(CHATGPT_EFFORT_MENU_SELECTOR).filter({ visible: true });
+}
+
+export async function chatGptEffortMenuForControl(page: Page, control: Locator): Promise<Locator> {
+  const owner = await readEffortOwner(control);
+  if (!owner) throw new Error("ChatGPT effort picker owner state is unavailable");
+  return effortMenuForOwner(page, owner);
 }
 
 async function visibleEffortSurface(
@@ -123,10 +147,9 @@ async function visibleEffortSurface(
 ): Promise<Omit<ChatGptEffortActivation, "method"> | undefined> {
   // The exit animation keeps a closed menu's slider visible after Escape. Read the
   // owner state first: selecting that outgoing range races its removal from the DOM.
-  const expanded = await control.getAttribute("aria-expanded").catch(() => null);
-  const state = await control.getAttribute("data-state").catch(() => null);
-  if (expanded === "false" || state === "closed") return undefined;
-  const menu = await chatGptEffortMenuForControl(page, control);
+  const owner = await readEffortOwner(control);
+  if (!owner || owner.expanded === "false" || owner.state === "closed") return undefined;
+  const menu = effortMenuForOwner(page, owner);
   const surface = chatGptEffortSlider(page);
   // An open menu is not yet a usable effort picker: hydration can leave its slider absent.
   // Returning early made the next snapshot wait on a stale locator for the default 30 seconds.
@@ -150,10 +173,20 @@ async function waitForEffortSurface(
   } while (true);
 }
 
+async function waitForEffortMenuOpen(page: Page, control: Locator, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    const owner = await readEffortOwner(control);
+    if (owner && owner.expanded !== "false" && owner.state !== "closed"
+      && await effortMenuForOwner(page, owner).isVisible().catch(() => false)) return true;
+    if (Date.now() >= deadline) return false;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  } while (true);
+}
+
 async function clearGhostEffortState(page: Page, control: Locator): Promise<void> {
-  const expanded = await control.getAttribute("aria-expanded").catch(() => null);
-  const state = await control.getAttribute("data-state").catch(() => null);
-  if (expanded === "true" || state === "open") {
+  const owner = await readEffortOwner(control);
+  if (owner?.expanded === "true" || owner?.state === "open") {
     await page.keyboard.press("Escape").catch(() => {});
   }
 }
@@ -166,12 +199,16 @@ export async function activateChatGptEffortMenu(
   const openSurface = await visibleEffortSurface(page, control);
   if (openSurface) return { method: "already-open", ...openSurface };
 
-  const settleMs = options.settleMs ?? 3_000;
+  const settleMs = options.settleMs ?? CHATGPT_MODEL_CONTROL_HYDRATION_MS;
+  const menuSettleMs = options.settleMs ?? CHATGPT_MODEL_CONTROL_SETTLE_MS;
+  const actionTimeout = options.settleMs === undefined ? CHATGPT_UI_ACTION_TIMEOUT_MS : Math.max(1, settleMs);
+  const waitForOpenedSurface = async () => await waitForEffortMenuOpen(page, control, menuSettleMs)
+    ? waitForEffortSurface(page, control, settleMs) : undefined;
   await clearGhostEffortState(page, control);
   // This control opens an in-document menu. Its owned surface below proves readiness;
   // waiting for unrelated navigation can time out after the click already succeeded.
-  await control.click({ force: true, noWaitAfter: true, timeout: Math.max(1, settleMs) });
-  const clickedSurface = await waitForEffortSurface(page, control, settleMs);
+  await control.click({ force: true, noWaitAfter: true, timeout: actionTimeout });
+  const clickedSurface = await waitForOpenedSurface();
   if (clickedSurface) return { method: "click", ...clickedSurface };
 
   await clearGhostEffortState(page, control);
@@ -180,8 +217,8 @@ export async function activateChatGptEffortMenu(
     buttons: 1,
     pointerType: "mouse",
     isPrimary: true,
-  });
-  const pointerSurface = await waitForEffortSurface(page, control, settleMs);
+  }, { timeout: actionTimeout });
+  const pointerSurface = await waitForOpenedSurface();
   if (pointerSurface) return { method: "pointerdown", ...pointerSurface };
   throw new Error(
     "ChatGPT effort control did not expose its owned menu or structural slider after click and primary pointerdown",
@@ -194,9 +231,11 @@ export async function activateChatGptEffortMenu(
 export async function closeChatGptEffortMenu(
   page: Page, control: Locator, options: { settleMs?: number } = {},
 ): Promise<void> {
-  const settleMs = options.settleMs ?? 1_000;
-  const closed = async () => await control.getAttribute("aria-expanded") === "false"
-    && await control.getAttribute("data-state") !== "open";
+  const settleMs = options.settleMs ?? CHATGPT_MODEL_CONTROL_SETTLE_MS;
+  const closed = async () => {
+    const owner = await readEffortOwner(control);
+    return owner?.expanded === "false" && owner.state !== "open";
+  };
   const waitClosed = async () => {
     const deadline = Date.now() + settleMs;
     do {
@@ -206,13 +245,14 @@ export async function closeChatGptEffortMenu(
     } while (true);
   };
   if (await closed()) return;
-  if (await control.getAttribute("aria-expanded") !== "true") throw new Error("ChatGPT effort picker owner state is unavailable");
+  if ((await readEffortOwner(control))?.expanded !== "true") throw new Error("ChatGPT effort picker owner state is unavailable");
   await page.keyboard.press("Escape");
   if (await waitClosed()) return;
   // Recheck immediately before acting: Escape may have committed after the wait.
   if (await closed()) return;
-  if (await control.getAttribute("aria-expanded") !== "true") throw new Error("ChatGPT effort picker owner changed while closing");
-  await control.dispatchEvent("pointerdown", { button: 0, buttons: 1, pointerType: "mouse", isPrimary: true });
+  if ((await readEffortOwner(control))?.expanded !== "true") throw new Error("ChatGPT effort picker owner changed while closing");
+  await control.dispatchEvent("pointerdown", { button: 0, buttons: 1, pointerType: "mouse", isPrimary: true },
+    { timeout: options.settleMs === undefined ? CHATGPT_UI_ACTION_TIMEOUT_MS : Math.max(1, settleMs) });
   if (!await waitClosed()) throw new Error("ChatGPT effort picker did not close; model selection was not confirmed");
 }
 
@@ -239,7 +279,7 @@ export function parseChatGptEffortSliderState(
 
 export async function readChatGptEffortSnapshot(
   sliderContainer: Locator,
-  timeoutMs = 1_000,
+  timeoutMs = CHATGPT_MODEL_CONTROL_SETTLE_MS,
 ): Promise<ChatGptEffortSliderState & { available: boolean[] }> {
   const deadline = Date.now() + timeoutMs;
   do {
@@ -308,7 +348,7 @@ export async function detectChatGptAccountCapabilities(
   const composer = composers;
   const composerForm = composer.locator("xpath=ancestor::form[1]");
   const effortButton = composerForm.locator(CHATGPT_EFFORT_CONTROL_SELECTOR).filter({ visible: true });
-  const deadline = Date.now() + (options.selectorTimeoutMs ?? 30_000);
+  const deadline = Date.now() + (options.selectorTimeoutMs ?? CHATGPT_MODEL_CONTROL_HYDRATION_MS);
   const stableAbsenceMs = options.stableAbsenceMs ?? 3_000;
   let absenceSince: number | undefined;
   let presenceObservations = 0;
@@ -342,16 +382,19 @@ export async function detectChatGptAccountCapabilities(
   }
   const menu = page.locator(CHATGPT_EFFORT_MENU_SELECTOR).last();
   const menuVisible = await menu.isVisible().catch(() => false);
-  const menuExpanded = await effortButton.getAttribute("aria-expanded").catch(() => null);
-  if (!menuVisible && menuExpanded !== "true") await effortButton.press("Enter");
+  const menuExpanded = (await readEffortOwner(effortButton))?.expanded;
+  if (!menuVisible && menuExpanded !== "true") await effortButton.press("Enter", { timeout: CHATGPT_UI_ACTION_TIMEOUT_MS });
   try {
+    if (!await waitForEffortMenuOpen(page, effortButton, options.selectorTimeoutMs ?? CHATGPT_MODEL_CONTROL_SETTLE_MS)) {
+      throw new Error("ChatGPT account capability picker did not open its owned menu");
+    }
     const { sliderContainer, slider } = chatGptEffortSlider(page);
-    const timeout = options.selectorTimeoutMs ?? 70_000;
+    const timeout = options.selectorTimeoutMs ?? CHATGPT_MODEL_CONTROL_HYDRATION_MS;
     // Model radio rows can hydrate before the effort control. They carry no evidence
     // of the account's reasoning range, so an absent slider must fail, not cache false.
     await sliderContainer.waitFor({ state: "visible", timeout });
     await slider.waitFor({ state: "attached", timeout });
-    const { available } = await readChatGptEffortSnapshot(sliderContainer);
+    const { available } = await readChatGptEffortSnapshot(sliderContainer, options.selectorTimeoutMs ?? CHATGPT_MODEL_CONTROL_SETTLE_MS);
     return { solAvailable: true, extraHighAvailable: available[3] === true, proAvailable: available[4] === true };
   } finally {
     await page.keyboard.press("Escape").catch(() => {});

@@ -1,0 +1,97 @@
+{
+  "kind": "allowlisted-existing-verification-results",
+  "archivedOn": "2026-10-19",
+  "rerunForArchive": false,
+  "sameTask": {
+    "originRecords": [
+      "R03",
+      "V01"
+    ],
+    "client": "codex-cli 0.162.0-alpha.17.2",
+    "model": "chatgpt-web/gpt-6-sol",
+    "effort": "xhigh",
+    "sandbox": {
+      "type": "read-only"
+    },
+    "approval": "never",
+    "elapsedSeconds": 947.844,
+    "toolRounds": 7,
+    "commands": 35,
+    "commandsExit0": 34,
+    "commandsExitNonzero": 1,
+    "turnErrors": 0,
+    "terminal": "turn.completed",
+    "finalChars": 4564,
+    "finalMatchesNativeRollout": true,
+    "finalMatchesCliEvent": true,
+    "finalMatchesTaskComplete": true,
+    "finalSha256": "68c7dc80116f87126df0288564530cc64ac5f61ea3dcb9789725be9e1df02b6c"
+  },
+  "parallelTask": {
+    "originRecords": [
+      "R04",
+      "V02"
+    ],
+    "durationSeconds": 4286.756,
+    "exitCode": 1,
+    "terminal": "turn.failed",
+    "childCount": 3,
+    "modelCorrect": true,
+    "spawnCount": 3,
+    "waitCount": 23,
+    "closeCount": 5,
+    "finalMatchesAll": false,
+    "passed": false,
+    "taskCompleted": false,
+    "nativeRetryCount": 44,
+    "parentReportExists": false,
+    "errorFreeTransport": false,
+    "queue": {
+      "records": 139,
+      "succeeded": 128,
+      "failed": 10,
+      "intentionalCancelled": 1,
+      "failureReasons": {
+        "chatgpt_response_source_invalid": 5,
+        "browser_stream_inconsistent": 4,
+        "upstream_server_error": 1
+      },
+      "peakConcurrent": 4,
+      "active": 0,
+      "waiting": 0,
+      "paused": null,
+      "waitFreeObserved": true,
+      "models": [
+        "gpt-6-sol/xhigh"
+      ]
+    }
+  },
+  "cancellationPredicate": {
+    "originRecords": [
+      "V03"
+    ],
+    "kind": "observed-cancel-state-predicate-check",
+    "domCompletionPredicate": true,
+    "incompleteTransportBlocksFallback": false,
+    "scope": "pure predicates, not live Web2Harness acceptance",
+    "inputKind": "reduced representative state, not raw DOM",
+    "input": {
+      "responsePresent": true,
+      "running": false,
+      "currentText": "STOPCASE-BEGIN partial answer",
+      "completionActionVisible": true,
+      "handoffCompletionVisible": false
+    }
+  },
+  "observationSourcePreservation": {
+    "originRecords": [
+      "V05"
+    ],
+    "scope": "six-scenario observation before docs archiving",
+    "filesBefore": 900,
+    "filesAfter": 900,
+    "changed": [],
+    "headUnchanged": true,
+    "statusUnchanged": true
+  }
+}

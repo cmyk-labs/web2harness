@@ -1,0 +1,152 @@
+{
+  "kind": "dated-investigation-provenance",
+  "date": "2026-10-19",
+  "timezone": "Asia/Shanghai",
+  "head": "71eefe428cc99f8c84fd5ca7540f1bd4301637ea",
+  "rawBrowserReplayAvailable": false,
+  "statement": "Hashes establish content identity, not truth or complete replay. Original private logs, authentication and browser state are excluded. Derived summaries are labeled as such.",
+  "records": [
+    {
+      "id": "R01",
+      "path": "dev-notes/incidents/2026-10-17-production-subagents-queue.md",
+      "kind": "historical investigation, not raw replay",
+      "sha256": "f4467e581082cd8064584a798947f35ba8601fdca3a9d862aae8ed19e252dba4",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "R02",
+      "path": "dev-notes/worklog/2026-10-18-two-thread-fix-coverage.md",
+      "kind": "historical version and failure correlation",
+      "sha256": "716d0590745a61a68951cf84fadb1c3aa90f1328b2f673ea8176e39796ea512f",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "R03",
+      "path": "dev-notes/worklog/2026-10-18-thread-01a14d08-retest.md",
+      "kind": "authenticated same-task DEV record",
+      "sha256": "6c37a1b2e112b1983d6ed8a601dd192e5eb1e54df635a7a743ad1aa47e0c14cc",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "R04",
+      "path": "dev-notes/worklog/2026-10-18-parallel-review.md",
+      "kind": "authenticated parallel DEV record, overall failed",
+      "sha256": "e9f3369f22d35fb38b6b34e31351bdc48c8ef3dba3cf31e3db242ebe9b73a6de",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "R05",
+      "path": "dev-notes/changes/2026-10-18-body-delivery-repair.md",
+      "kind": "prior implemented repair decisions",
+      "sha256": "3f00315c56e292a2e7c4c1b695157930d58562c6d8ab4b9a1e6211873a96ac52",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "R06",
+      "path": "dev-notes/worklog/2026-10-19-body-delivery-acceptance.md",
+      "kind": "prior checks and unresolved live failures",
+      "sha256": "41fb5cfc06c55eb2e0238a09275fce4a70f46e93ea52e15f1cfdf3aaf166f7e1",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "R07",
+      "path": "dev-notes/changes/2026-10-19-independent-operation-timeouts.md",
+      "kind": "implemented independent timer decisions",
+      "sha256": "7b39b72bf91f638314b93e7d41d623b2f22c728e95b3c6dbbbc4151eee63f8a9",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "R08",
+      "path": "dev-notes/changes/2026-10-19-final-answer-extraction-observation.md",
+      "kind": "first direct browser observation, written record",
+      "sha256": "f5d289e91d501f95e1c20141cdccfa38a818ab42f956b0817622a46523e925a2",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "R09",
+      "path": "dev-notes/worklog/2026-10-19-chrome-body-delivery-observation.md",
+      "kind": "first observation process and limitations",
+      "sha256": "f16bbba5b253ce2b969ac29f6b0246cefd072f59559234e6cba59a4589f8c3ad",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "R10",
+      "path": "dev-notes/changes/2026-10-19-web-observation-design-review.md",
+      "kind": "six-scenario observations and source comparison",
+      "sha256": "04446973352925bfca707fea1deaf71406d0407a35d21270273e452a9072aeeb",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "R11",
+      "path": "dev-notes/worklog/2026-10-19-body-delivery-expanded-tests.md",
+      "kind": "six-scenario scope and limitations",
+      "sha256": "87f1d160975afa3cbfcbea9b60c2bd93e78e09d68a26058c88a4f0788eb47815",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "V01",
+      "path": "output/2026-10-18-thread-01a14d08-retest/delivery-summary.json",
+      "kind": "derived verification output",
+      "sha256": "7a83da5939173a7f95909273a757db93b1747340780bf11c0040726fde039eb1",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "V02",
+      "path": "output/2026-10-18-parallel-review/verification.json",
+      "kind": "derived verification output",
+      "sha256": "cf8a4c56bb3369b15c63bcbedf70eb680c263fef5f10888294ed07eb357baedb",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "V03",
+      "path": "output/2026-10-19-body-delivery-expanded-tests/cancel-predicate-check.json",
+      "kind": "existing pure-predicate result",
+      "sha256": "5b78d81a44d898017e934479e278ee51ddd8ba16ad9bfbf425810b62136b24d4",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "V04",
+      "path": "output/2026-10-19-body-delivery-expanded-tests/observed-runs-summary.json",
+      "kind": "derived observation summary, not raw replay",
+      "sha256": "9f28c9d2454c3ace2754379210a0a5564b52b308c53a1b3881050e29254e3364",
+      "availability": "local ignored original; not distributed with a clone"
+    },
+    {
+      "id": "V05",
+      "path": "output/2026-10-19-body-delivery-expanded-tests/project-mid-summary.json",
+      "kind": "source preservation summary from observation, before archiving",
+      "sha256": "7f13e5cbe908dc001747f261bc274eb8e54f9dbf681132ad5ec35a86b9db521f",
+      "availability": "local ignored original; not distributed with a clone"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "f89e6751681f4616dcb35604526ff83702c9140f5473f58c44cbe0dd28bbaca8"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "sha256": "cb81962bbee3592a6eadc57feea1ff9d3a489c2fde6330f9ff98172331553568"
+    },
+    {
+      "path": "evidence.md",
+      "sha256": "7abe407a4c9ef9a054feda33d8d5729e145c10c7c8ea1a51bfa1e71f70e50f3a"
+    },
+    {
+      "path": "evidence.zh-CN.md",
+      "sha256": "675631e25ee33df4c203ef66e8479b696c54e6270d0ecb7e7a2df99e4727d727"
+    },
+    {
+      "path": "evidence/observations.json",
+      "sha256": "1f946f4b84855e4dbb6a0b8445c779916476d0a1ff47e410d32e8860bdb23b2a"
+    },
+    {
+      "path": "evidence/validation-summary.json",
+      "sha256": "ad05ed2e6fb0a05d4f89cad0ab01a0b4f3e9a0010e5afb8be3b5e21c71b38ee5"
+    },
+    {
+      "path": "evidence/source-snapshot.json",
+      "sha256": "05bfddfdb0c3b498254a1e353c3ccb30eab1dea9426df1d477ec542afc93f314"
+    }
+  ]
+}

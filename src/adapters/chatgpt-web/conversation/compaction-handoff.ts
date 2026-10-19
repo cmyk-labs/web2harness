@@ -7,7 +7,7 @@ import type {
 } from "../../../types";
 import { extractChatGptCompactionSourceRevision } from "../prompt/environment";
 import type { ChatGptBrowserWorker } from "../browser/browser-worker";
-import { ChatGptCompactionHandoffAccepted } from "../adapter-error";
+import { ChatGptCompactionHandoffAccepted, ChatGptWebAdapterError } from "../adapter-error";
 import type { CompactionTransactionHandle } from "./compaction-transaction";
 import type { ChatGptWebCapabilities } from "../model";
 import {
@@ -130,10 +130,64 @@ function currentToolResults(
   return results;
 }
 
-export const MAX_COMPACTION_HANDOFF_TIMEOUT_MS = 5 * 60_000;
+export const COMPACTION_GENERATION_TIMEOUT_MS = 15 * 60_000;
+export const COMPACTION_SETTLEMENT_TIMEOUT_MS = 120_000;
+export const COMPACTION_OWNER_RELEASE_TIMEOUT_MS = 120_000;
 
-function boundedCompactionTimeout(timeoutMs: number): number {
-  return Math.min(timeoutMs, MAX_COMPACTION_HANDOFF_TIMEOUT_MS);
+/** Queue and preparation own their budgets; generation starts only at submission. */
+export class CompactionStageTimers {
+  private readonly deadline = new AbortController();
+  readonly signal: AbortSignal;
+  private timer?: ReturnType<typeof setTimeout>;
+  private stage?: "generation" | "settlement" | "prior_owner_release";
+
+  constructor(signal?: AbortSignal) {
+    this.signal = signal ? AbortSignal.any([signal, this.deadline.signal]) : this.deadline.signal;
+  }
+
+  startGeneration(): void {
+    if (this.stage === "generation" || this.stage === "settlement") return;
+    this.arm("generation", COMPACTION_GENERATION_TIMEOUT_MS);
+  }
+
+  startSettlement(): void {
+    if (this.stage === "settlement") return;
+    this.arm("settlement", COMPACTION_SETTLEMENT_TIMEOUT_MS);
+  }
+
+  startOwnerRelease(): void {
+    this.arm("prior_owner_release", COMPACTION_OWNER_RELEASE_TIMEOUT_MS);
+  }
+
+  dispose(): void {
+    clearTimeout(this.timer);
+    this.timer = undefined;
+  }
+
+  private arm(stage: NonNullable<CompactionStageTimers["stage"]>, timeoutMs: number): void {
+    if (this.signal.aborted) return;
+    this.dispose();
+    this.stage = stage;
+    this.timer = setTimeout(() => this.deadline.abort(new ChatGptWebAdapterError(
+      `ChatGPT compaction ${stage} timed out after ${timeoutMs}ms`,
+      { status: 409, errorType: "invalid_request_error", code: "compaction_handoff_timeout", retryable: false },
+    )), timeoutMs);
+    this.timer.unref?.();
+  }
+}
+
+export async function withCompactionOwnerRelease<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const stage = new CompactionStageTimers(signal);
+  stage.startOwnerRelease();
+  try {
+    stage.signal.throwIfAborted();
+    return await withCompactionAbort(operation(stage.signal), stage.signal);
+  } finally {
+    stage.dispose();
+  }
 }
 
 function abortReason(signal: AbortSignal): Error {
@@ -167,7 +221,7 @@ export async function settleActiveCompactionSource(
   broker: TurnBroker,
   signal?: AbortSignal,
 ): Promise<{ answer: string; compactionInstructionDelivered: boolean }> {
-  return source.runExclusive(async () => {
+  return withCompactionOwnerRelease(signal => source.runExclusive(async () => {
     if (signal?.aborted) {
       source.cancel(abortReason(signal));
       throw abortReason(signal);
@@ -214,7 +268,7 @@ export async function settleActiveCompactionSource(
     } finally {
       if (token) await broker.revoke(token);
     }
-  });
+  }), signal);
 }
 
 export async function settleActiveZeroRiskCompactionSource(
@@ -223,57 +277,67 @@ export async function settleActiveZeroRiskCompactionSource(
   broker: TurnBrokerOwner,
   signal?: AbortSignal,
 ): Promise<string | undefined> {
-  return source.runExclusive(async () => {
-    if (signal?.aborted) {
-      source.cancel(abortReason(signal));
-      throw abortReason(signal);
-    }
-    if (!source.isActive() || source.runtime.mode !== "tools" || !source.runtime.manualControl) {
-      throw new Error("The active Zero Risk compaction source has no manual MCP tool boundary");
-    }
-    const outstanding = source.outstanding();
-    const results = currentToolResults(parsed, source);
-    if (results.size !== outstanding.length) {
-      throw new Error(
-        `Codex supplied ${results.size} of ${outstanding.length} required tool results for Zero Risk compaction`,
-      );
-    }
-    let token: string | undefined;
-    try {
-      token = await source.runtime.token;
-      const interruptedQueued = await broker.requestCompaction(
-        token,
-        interruptedByZeroRiskCompaction(),
-      );
-      for (const [index, request] of outstanding.entries()) {
-        const result = results.get(request.callId)!;
-        const canonical = toolResult(result);
-        await broker.completeTool(
-          token,
-          request.callId,
-          interruptedQueued === 0 && index === outstanding.length - 1
-            ? withZeroRiskCompactionInstruction(canonical)
-            : canonical,
-        );
-        source.runtime.externalProgress.recordToolResult();
-        source.markResultDelivered(request.callId);
+  const stages = new CompactionStageTimers(signal);
+  stages.startOwnerRelease();
+  signal = stages.signal;
+  try {
+    return await withCompactionAbort(source.runExclusive(async () => {
+      if (signal?.aborted) {
+        source.cancel(abortReason(signal));
+        throw abortReason(signal);
       }
-      const browserOutcome = await withCompactionAbort(source.browserOutcome, signal);
-      if (browserOutcome.type === "error") throw browserOutcome.error;
-      await withCompactionAbort(source.physicalSettlement, signal);
-      const instructionDelivered = outstanding.length > 0
-        || await broker.compactionDeliveryCount(token) > 0;
-      if (!instructionDelivered) return undefined;
-      const summary = browserOutcome.answer.trim();
-      if (!summary) throw new Error("The active Zero Risk response returned an empty compaction summary");
-      return summary;
-    } catch (error) {
-      if (signal?.aborted) source.cancel(abortReason(signal));
-      throw error;
-    } finally {
-      if (token) await broker.revoke(token);
-    }
-  });
+      if (!source.isActive() || source.runtime.mode !== "tools" || !source.runtime.manualControl) {
+        throw new Error("The active Zero Risk compaction source has no manual MCP tool boundary");
+      }
+      const outstanding = source.outstanding();
+      const results = currentToolResults(parsed, source);
+      if (results.size !== outstanding.length) {
+        throw new Error(
+          `Codex supplied ${results.size} of ${outstanding.length} required tool results for Zero Risk compaction`,
+        );
+      }
+      let token: string | undefined;
+      try {
+        token = await source.runtime.token;
+        const interruptedQueued = await broker.requestCompaction(
+          token,
+          interruptedByZeroRiskCompaction(),
+        );
+        if (interruptedQueued > 0) stages.startGeneration();
+        for (const [index, request] of outstanding.entries()) {
+          const result = results.get(request.callId)!;
+          const canonical = toolResult(result);
+          await broker.completeTool(
+            token,
+            request.callId,
+            interruptedQueued === 0 && index === outstanding.length - 1
+              ? withZeroRiskCompactionInstruction(canonical)
+              : canonical,
+          );
+          source.runtime.externalProgress.recordToolResult();
+          source.markResultDelivered(request.callId);
+          if (index === outstanding.length - 1) stages.startGeneration();
+        }
+        const browserOutcome = await withCompactionAbort(source.browserOutcome, signal);
+        if (browserOutcome.type === "error") throw browserOutcome.error;
+        stages.startSettlement();
+        await withCompactionAbort(source.physicalSettlement, signal);
+        const instructionDelivered = outstanding.length > 0
+          || await broker.compactionDeliveryCount(token) > 0;
+        if (!instructionDelivered) return undefined;
+        const summary = browserOutcome.answer.trim();
+        if (!summary) throw new Error("The active Zero Risk response returned an empty compaction summary");
+        return summary;
+      } catch (error) {
+        if (signal?.aborted) source.cancel(abortReason(signal));
+        throw error;
+      } finally {
+        if (token) await broker.revoke(token);
+      }
+    }), signal);
+  } finally {
+    stages.dispose();
+  }
 }
 
 export async function requestRetainedCompactionHandoff(
@@ -284,16 +348,12 @@ export async function requestRetainedCompactionHandoff(
   capabilities: ChatGptWebCapabilities,
   traceId: string,
   signal?: AbortSignal,
-  timeoutMs = MAX_COMPACTION_HANDOFF_TIMEOUT_MS,
+  retainOwnershipUntil: (settlement: Promise<void>) => void = () => {},
 ): Promise<string> {
   const conversationKey = source.conversationKey();
   if (!conversationKey) throw new Error("The completed ChatGPT source has no retained conversation identity");
-  const operationTimeoutMs = boundedCompactionTimeout(timeoutMs);
-  const deadline = new AbortController();
-  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
-  const operationSignal = signal
-    ? AbortSignal.any([signal, deadline.signal])
-    : deadline.signal;
+  const stages = new CompactionStageTimers(signal);
+  const operationSignal = stages.signal;
   const browserAbort = new AbortController();
   const abortBrowser = () => browserAbort.abort(operationSignal.reason);
   let transaction: CompactionTransactionHandle | undefined;
@@ -305,9 +365,7 @@ export async function requestRetainedCompactionHandoff(
     const transactionReady = new Promise<CompactionTransactionHandle>(resolve => { resolvePrepared = resolve; });
     let preparing: Promise<{ text: string; images: []; release: () => void }> | undefined;
     const prepare = () => preparing ??= (async () => {
-      deadlineTimer = setTimeout(() => deadline.abort(new Error(`ChatGPT compaction handoff timed out after ${operationTimeoutMs}ms`)), operationTimeoutMs);
-      deadlineTimer.unref?.();
-      transaction = await broker.beginCompactionTransaction(traceId, operationTimeoutMs);
+      transaction = await broker.beginCompactionTransaction(traceId, operationSignal);
       if (operationSignal.aborted) { broker.abortCompactionTransaction(transaction.token); operationSignal.throwIfAborted(); }
       resolvePrepared(transaction);
       return { text: structuredCompactionHandoffInstruction(transaction), images: [] as [], release: () => {} };
@@ -324,10 +382,14 @@ export async function requestRetainedCompactionHandoff(
       modelFamily: parsed._chatgptModelFamily,
       reasoning: parsed.options.reasoning,
       usagePurpose: "compaction",
+      compaction: true,
       // The retained connector exposes only the one-shot control token embedded above. It does
       // not receive an ordinary Codex tool environment for this checkpoint message.
       capabilities: { ...capabilities, localToolsEnabled: false },
       nativeConnector: true,
+      onSubmitted: () => stages.startGeneration(),
+      // Worker contract: generation is complete before extraction and physical cleanup.
+      onResponseCompleted: () => stages.startSettlement(),
       prepare,
       prepareResume: prepare,
       conversationKey,
@@ -335,6 +397,9 @@ export async function requestRetainedCompactionHandoff(
       abortSignal: browserAbort.signal,
       onTextDelta: () => {},
     });
+    retainOwnershipUntil(browser.then(() => undefined, () => undefined));
+    // A completed browser response still owes the exact structured control handoff.
+    void browser.then(() => stages.startSettlement(), () => {}).catch(() => {});
     const browserFailure = browser.then<never>(
       () => new Promise<never>(() => {}),
       error => { throw error; },
@@ -346,6 +411,7 @@ export async function requestRetainedCompactionHandoff(
       ]),
       operationSignal,
     );
+    stages.startSettlement();
     // The one-shot control submission is the terminal event for this purpose-built response.
     // ChatGPT may render no assistant text after a tool-only response, and therefore no Copy
     // action. End our owned turn explicitly and wait for the launcher/helper cleanup handshake.
@@ -356,6 +422,7 @@ export async function requestRetainedCompactionHandoff(
     );
     return summary;
   } finally {
+    stages.startSettlement();
     browserAbort.abort();
     if (transaction) broker.abortCompactionTransaction(transaction.token);
     if (browser) {
@@ -368,7 +435,7 @@ export async function requestRetainedCompactionHandoff(
       ).catch(() => {});
     }
     operationSignal.removeEventListener("abort", abortBrowser);
-    clearTimeout(deadlineTimer);
+    stages.dispose();
   }
 }
 
@@ -466,9 +533,9 @@ export function runStructuredCompactionOnce(
   const previousOwner = structuredCompactionOwners.get(owner.ownerKey);
   const physicalSettlements: Promise<void>[] = previousOwner ? [previousOwner] : [];
   const promise = Promise.resolve().then(async () => {
-    if (previousOwner) await withCompactionAbort(previousOwner, abort.signal);
+    if (previousOwner) await withCompactionOwnerRelease(signal => withCompactionAbort(previousOwner, signal), abort.signal);
     if (abort.signal.aborted) throw abortReason(abort.signal);
-    return start(abort.signal, settlement => { physicalSettlements.push(settlement); });
+    return start(abort.signal, settlement => { physicalSettlements.push(settlement.catch(() => {})); });
   });
   // Return a deadline failure promptly, while its physical browser owner still blocks retries
   // and cancel-all completion. A cancelled queued run must also retain its predecessor's gate.

@@ -337,6 +337,29 @@ test("a code toolbar before body hydration is not pending answer text", async ()
   expect(rawBuffer.finish().markdown).toContain('raw code without CODE');
 });
 
+test("empty renderer placeholders never stabilize a growing remounted table", async () => {
+  const table = (tail: string) => `<table><thead><tr><th>Item</th><th>Result</th></tr></thead><tbody><tr><td>One</td><td><strong>${tail}</strong></td></tr></tbody></table>`;
+  const html = `<section id="turn"><div class="markdown"><p>Intro</p>${table("Par")}<div><span></span><span></span></div></div></section>`;
+  const [first, stable, complete] = await snapshots(html, [() => {}, document => {
+    document.querySelector("table")!.outerHTML = table("Paragraph");
+    document.querySelector(".markdown")!.insertAdjacentHTML("beforeend", "<p>Done</p>");
+  }]);
+  expect(first!.markdownSegments.find(s => s.tag === "table")!.streamable).toBeFalse();
+  expect(stable!.markdownSegments.find(s => s.tag === "table")!.streamable).toBeFalse();
+  expect(complete!.markdownSegments.find(s => s.tag === "table")!.streamable).toBeTrue();
+  for (const delivery of ["append", "buffered"] as const) {
+    const buffer = new ChatGptMarkdownBuffer(undefined, 0, delivery);
+    buffer.observe(first!.markdownSegments, 0);buffer.observe(stable!.markdownSegments, 1000);
+    expect(buffer.deliveryState().committedSegments).toBe(1);
+    buffer.observe(complete!.markdownSegments, 2000);
+    expect(buffer.finish().markdown).toContain("**Paragraph**");
+    expect(buffer.finish().delta).toBe("");
+  }
+  // A structural rule is real Markdown content even though its textContent is empty.
+  const ruled = await snapshot(`<section id="turn"><div class="markdown">${table("Complete")}<hr></div></section>`);
+  expect(ruled.markdownSegments.find(s => s.tag === "table")!.streamable).toBeTrue();
+});
+
 test("writing card controls cannot rewrite delivered content, but edited email text still can", async () => {
   const html = (toolbar: string, body = "Hello <strong>Alex</strong>.") => `<section id="turn"><div class="markdown">
     <p data-start="0" data-end="10">Drafts</p>

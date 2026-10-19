@@ -1,0 +1,34 @@
+{
+  "kind": "dated-investigation-supplement",
+  "date": "2026-10-19",
+  "rawReplayAvailable": false,
+  "statement": "Selected fields were transcribed from browser tool observations. Hashes establish file identity, not wire replay or end-to-end acceptance.",
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "c29b2a1e425d124d0347d031234c9c535dce33450d8c3c56a344edcab78d6ccd"
+    },
+    {
+      "path": "README.zh-CN.md",
+      "sha256": "f0e79479f1e23a00379d463c55bbce5b7c3dfa1ed9edc66aa9905252030fdb7b"
+    },
+    {
+      "path": "observations.json",
+      "sha256": "777c03a19948be2ca066698395cf53d2629122ca696d4e5852714acaaf0c166e"
+    }
+  ],
+  "source": [
+    {
+      "path": "src/adapters/chatgpt-web/browser/response-source.ts",
+      "sha256": "621b6fa3f28eb2fbb8e4d6372a65e46f753cdf452adb114805cceecaa2e9c1c1"
+    },
+    {
+      "path": "src/adapters/chatgpt-web/browser/response-evidence.ts",
+      "sha256": "815a21f7d7be9f182d94472f71af919bd9e22053e05a1574c522041ead5fa53e"
+    }
+  ],
+  "priorArchiveProvenance": {
+    "path": "../2026-10-19-answer-delivery/evidence/provenance.json",
+    "sha256": "b062bcd468cd44b7649af63eba7b775d7369aedebe428a7befab4a736c8ebef5"
+  }
+}

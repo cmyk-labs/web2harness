@@ -1,7 +1,7 @@
 import type { Page } from "playwright-core";
 import { withChatGptBrowserObservationTimeout } from "./turn-observation";
 
-export const CHATGPT_SEND_RECONCILIATION_MS = 5_000;
+export const CHATGPT_SEND_RECONCILIATION_MS = 30_000;
 export interface SendAcceptanceSnapshot {
   armed: boolean;
   matchedRequests: number;

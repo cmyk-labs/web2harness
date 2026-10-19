@@ -556,13 +556,13 @@ test("Zero Risk compaction accommodates extended manual submission without leaki
       return { deadlineAt: new Date(Date.now() + 600_000).toISOString() };
     },
     async waitSent() {
-      // The real outer watchdog must leave enough room for the owner's ten-minute
-      // submission window, even when the descriptor still has older defaults.
-      expect(timers.mock.calls.some(([, delay]) => typeof delay === "number" && delay > 600_000)).toBeTrue();
+      // Human submission owns its window; generation has not started yet.
+      expect(timers.mock.calls.some(([, delay]) => delay === 900_000)).toBeFalse();
       broker.startSafeTurn(exactBinding!.request_id);
     },
     waitTerminal: noManualTerminal,
     async markStarted() {
+      expect(timers.mock.calls.some(([, delay]) => delay === 900_000)).toBeTrue();
       await finishHandoff(broker,
         exactBinding!.request_id,
         "Zero Risk checkpoint summary",

@@ -76,7 +76,7 @@ test("launcher state persists onboarding, language, and autostart atomically", (
     const store = createStateStore(file);
     assert.deepEqual(store.read(), {
       version: 1,
-      requestScheduling: { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3 },
+      requestScheduling: { maxConcurrent: 4, queueTimeoutMinutes: 30, minSendIntervalSeconds: 3 },
       requestSchedulingRevision: 1,
       ...normalizeRuntimeParameters(),
       contextWindows: { fast: 80000, standard: 272000 },
@@ -113,7 +113,7 @@ test("launcher state persists onboarding, language, and autostart atomically", (
     });
     assert.deepEqual(createStateStore(file).read(), {
       version: 1,
-      requestScheduling: { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3 },
+      requestScheduling: { maxConcurrent: 4, queueTimeoutMinutes: 30, minSendIntervalSeconds: 3 },
       requestSchedulingRevision: 1,
       ...normalizeRuntimeParameters(),
       contextWindows: { fast: 80000, standard: 272000 },
@@ -223,7 +223,7 @@ test("persisted sidebar corruption is repaired without changing the rest of laun
     }));
     assert.deepEqual(createStateStore(file).read(), {
       version: 1,
-      requestScheduling: { maxConcurrent: 4, queueTimeoutMinutes: 15, minSendIntervalSeconds: 3 },
+      requestScheduling: { maxConcurrent: 4, queueTimeoutMinutes: 30, minSendIntervalSeconds: 3 },
       requestSchedulingRevision: 1,
       ...normalizeRuntimeParameters(),
       contextWindows: { fast: 80000, standard: 272000 },

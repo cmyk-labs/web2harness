@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import { ChatGptResponseStream } from "../../../../src/adapters/chatgpt-web/browser/response-stream";
 import { responseSourceBlocksFallback } from "../../../../src/adapters/chatgpt-web/browser/response-source";
 import { replayChatGptResponseEvidence } from "../../../../src/adapters/chatgpt-web/browser/response-replay";
+import { safeDetail } from "../../../../launcher/shared/diagnostic-event.cjs";
 
 const input = { id: "input-current", author: { role: "user" }, content: { content_type: "text", parts: ["test prompt"] } };
 const frames = ["v1", { type: "input_message", input_message: input, conversation_id: "current" },
@@ -33,6 +34,49 @@ class Session extends EventEmitter {
 }
 const page = (session: Session): any => Object.assign(new EventEmitter(), { context: () => ({ newCDPSession: async () => session }) });
 
+test("request binding shares exact composer space equivalence and reports payload-free rejection reasons", async () => {
+  for (const observed of ["test  prompt", "test \u00a0prompt", "test\u00a0 prompt"]) {
+    const session = new Session(), source = new ChatGptResponseStream();
+    await source.attach(page(session));source.activate("test  prompt", "current");session.request("owned-frame", "owned-request", observed);
+    expect(source.snapshot().matchedRequests).toBe(1);await source.detach();
+  }
+  for (const [expected, observed] of [["test prompt", "test\u00a0prompt"], ["test  prompt", "test\t prompt"],
+    ["test\u00a0 prompt", "test  prompt"], ["test  prompt", "test prompt"], ["test  prompt", "different"]]) {
+    const session = new Session(), source = new ChatGptResponseStream();
+    await source.attach(page(session));source.activate(expected!, "current");session.request("owned-frame", "owned-request", observed!);
+    expect(source.snapshot().matchedRequests).toBe(0);
+    expect(source.snapshot().traffic).toEqual([{ method: "POST", endpoint: "generation", bound: false, reason: "request_prompt_unmatched" }]);
+    expect(safeDetail({ traffic: source.snapshot().traffic })).toEqual({ traffic: source.snapshot().traffic });
+    await source.detach();
+  }
+});
+
+test("request binding recognizes one Markdown serialization layer without losing literal content", async () => {
+  const samples = [
+    ["<context_json>\n{\"path\":\"C:\\\\fixture\\\\a_b.txt\",\"value\":\"**bold**\"}\n</context_json>",
+      String.raw`\<context\_json>` + "\n" + String.raw`{"path":"C:\\\\fixture\\\\a\_b.txt","value":"\*\*bold\*\*"}` + "\n" + String.raw`\</context\_json>`],
+    ["[item](https://example.invalid/a_b)", String.raw`\[item\]([https://example.invalid/a_b](https://example.invalid/a_b))`],
+    ["https://example.invalid/a\\\\", String.raw`[https://example.invalid/a\\\\](https://example.invalid/a\\\\)`],
+  ];
+  for (const [expected, submitted] of samples) {
+    const session = new Session(), source = new ChatGptResponseStream();
+    await source.attach(page(session));source.activate(expected!, "current");session.request("owned-frame", "owned-request", submitted!);
+    expect(source.snapshot().matchedRequests).toBe(1);await source.detach();
+  }
+  for (const [expected, submitted] of [
+    ["https://example.invalid/a", "[https://example.invalid/a](https://different.invalid/a)"],
+    [String.raw`C:\\fixture\a_b`, String.raw`C:\fixture\a_b`],
+    ["a_b", String.raw`a\\_b`],
+    ["<context>\nkeep  spaces", String.raw`\<context>` + "\nkeep spaces"],
+    ["<context>\nkeep\tspace", String.raw`\<context>` + "\nkeep space"],
+    ["<context>\noriginal", String.raw`\<context>` + "\nchanged"],
+  ]) {
+    const session = new Session(), source = new ChatGptResponseStream();
+    await source.attach(page(session));source.activate(expected!, "current");session.request("owned-frame", "owned-request", submitted!);
+    expect(source.snapshot().matchedRequests).toBe(0);await source.detach();
+  }
+});
+
 test("CDP preserves buffered/live chunk order and accepts application completion before fetch cancellation", async () => {
   const session = new Session(), source = new ChatGptResponseStream();
   let activate!: (value: { bufferedData: string }) => void;
@@ -58,6 +102,29 @@ test("short completed responses can use getResponseBody on the same request with
   expect(source.result()).toMatchObject({ state: "complete" });
   expect(session.calls.filter(c => c === "Network.getResponseBody")).toHaveLength(1);
   expect(session.calls.every(c => ["Page.getFrameTree", "Network.enable", "Network.streamResourceContent", "Network.getResponseBody"].includes(c))).toBe(true);
+  await source.detach();
+});
+
+test("a normally finished request recovers missed live chunks from its own body once", async () => {
+  const session = new Session(), source = new ChatGptResponseStream();
+  await source.attach(page(session)); source.activate("test prompt", "current");
+  session.request(); session.response(); await flush();
+  session.data(wire(frames.slice(0, 2))); await session.complete(); await session.complete();
+  expect(source.result()).toMatchObject({ state: "complete", text: "Exact **answer**\n\nRepeated\n\nRepeated" });
+  expect(session.calls.filter(c => c === "Network.getResponseBody")).toHaveLength(1);
+  expect(source.snapshot()).toMatchObject({ matchedRequests: 1, bodyRecoveryAttempted: true });
+  await source.detach();
+});
+
+test("completed framing plus unsupported semantics is not mislabeled as network truncation", async () => {
+  const session = new Session(), source = new ChatGptResponseStream();
+  await source.attach(page(session)); source.activate("test prompt");
+  session.request(); session.response(); await flush();
+  session.data(wire([...frames.slice(0, 3), { type: "unknown-control" }, ...frames.slice(3)]));
+  await session.complete(true);
+  expect(source.result()).toEqual({ state: "rejected", reason: "response_event_unsupported" });
+  expect(source.snapshot()).toMatchObject({ transportFailed: true, projection: { observedDone: true, observedStreamComplete: true } });
+  expect(session.calls).not.toContain("Network.getResponseBody");
   await source.detach();
 });
 

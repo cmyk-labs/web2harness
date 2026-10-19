@@ -178,6 +178,7 @@ bun run dev:launcher
 | 源码开发、贡献评审、隔离测试、命名与文档维护 | [开发手册](docs/development.zh-CN.md) |
 | 构建、打包、验收、发布、回滚与安全维护 | [发布手册](docs/release.zh-CN.md) |
 | 能力用例、人工验收记录与扩展方式 | [能力验收用例](docs/acceptance-tests.zh-CN.md) |
+| 正文交付调查、历史失败、分析结论与对应证据 | [调查归档 · 2026-10-19](docs/investigations/2026-10-19-answer-delivery/README.zh-CN.md) |
 
 提交变更见[参与贡献与评审](docs/development.zh-CN.md#contributing)；私密报告见[报告漏洞](docs/release.zh-CN.md#vulnerability-reporting)；自动化代理遵守[仓库协作规则](AGENTS.zh-CN.md)。
 

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { MAX_INPUT_FILE_BYTES, parseInputFile, validateInputFilename } from "./file-input";
 import {
   attachmentUrl, InputReferenceError, publicHttpsAttachmentTransport,
-  throwIfReferenceAborted, withReferenceSignal, type InputReferenceTransport,
+  referenceTimeout, throwIfReferenceAborted, withReferenceSignal, type InputReferenceTransport,
 } from "./input-reference-network";
 
 export { InputReferenceError } from "./input-reference-network";
@@ -29,7 +29,7 @@ export interface ResolveInputReferencesOptions {
   reserveBytes?: (additionalBytes: number) => void;
   /** Trusted injection only. Production defaults to direct, public-address-pinned HTTPS. */
   transport?: InputReferenceTransport;
-  /** May lower, never raise, local budgets. */
+  /** May lower, never raise, local budgets. timeoutMs caps EACH phase, not the request. */
   limits?: { fileBytes?: number; totalBytes?: number; references?: number; timeoutMs?: number };
 }
 
@@ -235,12 +235,11 @@ export async function resolveInputReferences<T>(body: T, options: ResolveInputRe
   const maxFile = limit(options.limits?.fileBytes, MAX_INPUT_FILE_BYTES);
   const maxTotal = limit(options.limits?.totalBytes, 50_000_000);
   const maxReferences = limit(options.limits?.references, 10);
-  const timeoutMs = limit(options.limits?.timeoutMs, 30_000);
+  const timeoutMs = limit(options.limits?.timeoutMs, 120_000);
   if (references.length > maxReferences) throw new InputReferenceError("attachment_limit_exceeded", "Too many attachment references", 413);
   const inlineBytes = inspectInputAttachments(body).inlineBytes;
   if (inlineBytes >= maxTotal) throw new InputReferenceError("attachment_limit_exceeded", "Inline attachments leave no byte budget for remote attachments", 413);
-  const timer = AbortSignal.timeout(timeoutMs);
-  const signal = AbortSignal.any([options.signal, timer]);
+  const signal = options.signal;
   const transport = options.transport ?? publicHttpsAttachmentTransport;
   let total = inlineBytes;
   const replacements = new Map<InputReference, JsonObject>();
@@ -252,10 +251,13 @@ export async function resolveInputReferences<T>(body: T, options: ResolveInputRe
       for (let hop = 0; hop <= 3; hop++) {
         throwIfReferenceAborted(signal);
         if (!authorized.has(url.href)) throw new InputReferenceError("attachment_not_authorized", "Attachment redirect is not authorized by the active task");
-        const download = await withReferenceSignal(transport(url, signal).then(result => {
+        const download = await withReferenceSignal(transport(url, signal, {
+          dnsMs: Math.min(timeoutMs, 30_000), headersMs: Math.min(timeoutMs, 60_000),
+        }).then(result => {
           if (signal.aborted) { result.cancel(); throwIfReferenceAborted(signal); }
           return result;
         }), signal);
+        let bodyTimeout: ReturnType<typeof referenceTimeout> | undefined;
         try {
           if ([301, 302, 303, 307, 308].includes(download.status)) {
             if (hop === 3) throw new InputReferenceError("attachment_redirect_limit", "Attachment redirect limit exceeded");
@@ -278,11 +280,12 @@ export async function resolveInputReferences<T>(body: T, options: ResolveInputRe
             throw new InputReferenceError("attachment_limit_exceeded", "Attachment Content-Length exceeds the byte budget or is invalid", 413);
           }
           const chunks: Buffer[] = [];
+          bodyTimeout = referenceTimeout(signal, timeoutMs);
           let size = 0;
           let chunkCount = 0;
           const iterator = download.body[Symbol.asyncIterator]();
           while (true) {
-            const part = await withReferenceSignal(iterator.next(), signal);
+            const part = await withReferenceSignal(iterator.next(), bodyTimeout.signal);
             if (part.done) break;
             if (++chunkCount > 65_536) throw new InputReferenceError("attachment_limit_exceeded", "Attachment body exceeds the streaming fragment budget", 413);
             if (!(part.value instanceof Uint8Array)) throw new InputReferenceError("invalid_attachment_content", "Invalid attachment body chunk");
@@ -296,7 +299,7 @@ export async function resolveInputReferences<T>(body: T, options: ResolveInputRe
             chunks.push(Buffer.from(part.value));
           }
           if (!size || (length !== null && Number(length) !== size)) throw new InputReferenceError("invalid_attachment_content", "Attachment body is empty or does not match Content-Length");
-          throwIfReferenceAborted(signal);
+          throwIfReferenceAborted(bodyTimeout.signal);
           const bytes = Buffer.concat(chunks, size);
           const data = bytes.toString("base64");
           if (reference.block.type === "input_image") {
@@ -318,7 +321,7 @@ export async function resolveInputReferences<T>(body: T, options: ResolveInputRe
           }
           finished = true;
           break;
-        } finally { download.cancel(); }
+        } finally { bodyTimeout?.dispose(); download.cancel(); }
       }
       if (!finished) throw new InputReferenceError("attachment_redirect_limit", "Attachment redirect limit exceeded");
     }

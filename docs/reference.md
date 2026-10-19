@@ -72,7 +72,7 @@ Edit the independent **Runtime parameters → Request scheduling** page and choo
 | Parameter | Default | Choices | Application |
 | --- | --- | --- | --- |
 | Concurrent Web turns | 4 | 1–5 | Applies to new dispatches; lowering it does not terminate running work |
-| Queue timeout | 15 minutes | 5, 10, 15, 30, 60 minutes | Determines the deadline of newly queued requests only |
+| Queue timeout | 30 minutes | 5, 10, 15, 30, 60 minutes | Determines the deadline of newly queued requests only |
 | Minimum send interval | 3 seconds | Integer 1–60 seconds | Controls actual automatic-send permits, not manual clicks |
 
 Sessions, models, main agents and child agents sharing one Launcher browser environment use the same queue. DEV and production are independent. Standalone managed Chrome uses a separate profile-owned queue with the same scheduler implementation, defaults and ranges; it does not join or control the Launcher queue. Fair dispatch rotates sessions and prioritizes requests waiting at least 60 seconds. Each queue allows at most 64 waiting requests and a 256 MiB estimated waiting-body budget, separate from the [HTTP body budget](#http-body-limits). Neither budget is a process memory cap or a Codex child-agent limit. Resource overflow fails explicitly.
@@ -85,23 +85,51 @@ Launcher redacted receipts live in the application home's `runtime/request-queue
 
 ### Browser retention and execution parameters
 
-The same **Runtime parameters** form also saves the following Launcher-owned settings. Defaults are unchanged. They share the scheduling form's explicit save, draft recovery, revision conflict checks and saved/applied feedback.
+The same **Runtime parameters** form also saves the following Launcher-owned settings. Explicitly saved user values are preserved when defaults change. They share the scheduling form's explicit save, draft recovery, revision conflict checks and saved/applied feedback.
 
 | Setting | Default | Choices | Scope |
 | --- | --- | --- | --- |
 | Tab retention target | 5 tabs | 5, 8, 12, 16 | When a new task needs a tab, reclaim an older eligible idle tab at this target. Running and tool-wait tabs remain protected; this is not an execution concurrency limit or a strict total cap. |
 | Idle tab retention | 30 minutes | 5, 15, 30, 60, 120 | Completed tabs without pending tool results. Time starts from task activity, not viewing or selecting the tab. |
-| Web inactivity timeout | 5 minutes | 2, 5, 10, 15, 30 | Adapter silence watchdog; not the total duration of a task. |
-| Attachment processing timeout | 2 minutes | 2, 3, 5, 10 | Automatic mode only. Upload and processing confirmation, with corresponding extended substep waits. Confirmed upload failures still stop before Send. |
+| Web inactivity timeout | 15 minutes | 2, 5, 10, 15, 30 | Adapter silence watchdog; not the total duration of a task. |
+| Attachment processing timeout | 5 minutes | 2, 3, 5, 10 | Automatic mode only. Per-file upload/processing confirmation. Input readiness, card visibility and send readiness have independent limits. Confirmed upload failures still stop before Send. |
 | Failure retry limit | 3 retries | 0, 1, 2, 3 | Collapsed Advanced settings. Additional attempts after the first, only for explicitly retryable failures. Zero disables those retries; transport reconnects are not new attempts. |
 | Manual request submission timeout | 60 seconds | 60, 120, 300 | Manual mode only; time to paste, send and confirm submission. |
-| Manual compaction submission timeout | 120 seconds | 120, 300, 600 | Manual mode only; the enclosing compaction wait accommodates this submission period. |
+| Manual compaction submission timeout | 120 seconds | 120, 300, 600 | Manual mode only; independent of the subsequent compaction generation period. |
 
 Execution values are captured for new requests; an existing retry sequence keeps its original limit. Retention duration is captured when a tab next becomes retained; editing it does not shorten existing deadlines. Manual submission retries keep the original deadline, which ends once submission is confirmed. Waiting-for-tool-result tabs retain their separate 24-hour protection and the total task-tab ceiling remains 32. Reclaiming a tab does not delete ChatGPT history or sign out, but continuation may need to rebuild its page/context.
 
 Values and per-field `user`/`default` sources live in `launcher-state.json`. Only valid values explicitly marked `user` survive default migrations; absent or other sources use current defaults. The private, process-bound Launcher descriptor publishes validated execution settings to the shared runtime for subsequent requests without a service restart. In Launcher mode these controls own the effective `stallTimeoutSec`; standalone managed Chrome retains its existing config/defaults and does not read another Launcher's settings.
 
 **Restore defaults** remains a draft until saved. Saving it restores `default` provenance for these execution settings, including values already equal to the current default, so later default migrations apply. Editing an individual setting afterwards marks only that setting `user`; matching the default number does not imply default provenance. Unsaved drafts retain this intent.
+
+<a id="independent-operation-timeouts"></a>
+
+### Independent operation timeouts
+
+Automatic browser workflows do not have a shared preparation or whole-task deadline. Each operation below starts its own clock when it begins; time spent in earlier operations is not subtracted. Cancellation, process exit and connection loss still stop owned work. Compound callers await their bounded child operations without an additional shorter cap.
+
+| Operation | Default limit |
+| --- | --- |
+| Queue admission | 30 minutes; no Web execution slot while queued |
+| Browser connection, page navigation, composer readiness | 120 seconds each |
+| Model control hydration / menu state / final family confirmation | 120 / 30 / 15 seconds |
+| Ordinary UI action / onboarding action | 60 seconds each |
+| Composer locate / Escape, focus, select-all, delete / empty-state verification | 60 / 30 each / 60 seconds |
+| Prompt write / readback / exact-text confirmation | 60 / 60 / 30 seconds |
+| File input readiness / upload and processing / attachment card / send readiness | 60 seconds / 5 minutes per file / 120 seconds per card / 120 seconds |
+| Send visible / enabled / click / acknowledgement / late reconciliation | 60 / 120 / 60 / 120 / 30 seconds; never automatically click again after an uncertain send |
+| Internal Send activation acknowledgement | 60 seconds; expiry prevents a later click |
+| Missing response DOM / response-stream tail / Markdown recovery | 120 / 30 / 30 seconds |
+| Compaction generation / settlement / previous owner release | 15 minutes / 120 seconds / 120 seconds; generation starts at confirmed submission |
+| Remote attachment DNS / connection and headers / body | 30 / 60 / 120 seconds; every file and redirect receives fresh applicable limits |
+| Helper startup / helper process cleanup | 30 / 120 seconds; browser operations retain their own limits |
+| Passkey browser startup / page load / human confirmation / result verification | 60 seconds / 120 seconds / 15 minutes / 120 seconds |
+| Maintenance configuration item / downloaded file / component readiness / verification | 60 seconds / 5 minutes / 120 seconds / 120 seconds |
+| Tunnel log inspection / metrics inspection | 10 seconds each |
+| WebSocket cleanup | 30 seconds per connection, concurrently |
+
+The 15-minute inactivity watchdog is reset by meaningful adapter progress; it is not a total duration allowance. Ordinary generation has no absolute default deadline. An explicitly configured `chatgptWeb.turnTimeoutMs` limits generation starting at submission, excluding preparation and compaction, whose stages are timed separately. Recovery attempt counts, explicit user settings, native tools and native `wait` semantics are unchanged.
 
 <a id="standalone-request-queue"></a>
 
@@ -163,7 +191,7 @@ These fields support runtime integration and diagnostics. Prefer setup over edit
 | `host` | `127.0.0.1` | Only this IPv4 loopback address is accepted for the Responses listener. |
 | `port` | `17841` in the regular profile | Integer from `1` to `65535`; DEV selects its own port. The local Responses base is `http://127.0.0.1:<port>/v1`. |
 | `contextWindow` | `256000` | Positive safe integer for the generic provider configuration. Web model catalog windows and preflight budgets are resolved per route; this field does not override the [model budget policy](#context-budgets). |
-| `stallTimeoutSec` | Unset; effective default `300` seconds | Positive finite number. The bridge rounds upward and clamps to `1`–`3600` seconds of adapter silence before reporting `upstream_stall_timeout`. This is not a total turn duration limit. |
+| `stallTimeoutSec` | Unset; effective default `900` seconds | Positive finite number. The bridge rounds upward and clamps to `1`–`3600` seconds of adapter silence before reporting `upstream_stall_timeout`. This is not a total turn duration limit. |
 | `chromeExecutablePath` | macOS: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; Windows: `%PROGRAMFILES%\Google\Chrome\Application\chrome.exe` with `C:\Program Files` fallback; Linux: `/usr/bin/google-chrome` | Nonempty executable path used by the managed browser/login path; override through `--chrome`. |
 | `headed` | `true` | Boolean controlling the managed browser's visible-window setting. |
 | `storageStatePath` | `<home>/browser/storage-state.json` | Nonempty session-file path for the managed browser. The launcher's persistent browser partition has its own session storage. |
@@ -400,7 +428,7 @@ Queue/lane/steering limits fail explicitly (`websocket_queue_full`, `websocket_s
 
 Remote `input_image.image_url` and `input_file.file_url` are resolved only after shared history/context/model/effort/tool/control validation. The server derives exact URL grants from validated task input and binds them to task/provider/account scope; arbitrary metadata is not a grant. Preparation retains unresolved original references without DNS/HTTP; generation resolves before normal attachment validation. Native passthrough bypasses this Web-only path.
 
-Only public HTTPS on port 443 is supported. All DNS answers must be public; the socket is pinned to a checked address with hostname/TLS verification. No authorization headers, cookies, browser identity, ambient credentials or proxies are forwarded. Each redirect requires a separate exact scoped URL grant. Inline and remote image/file attachments in the expanded request share a limit of 10 attachments and 50,000,000 total content bytes, including both inline and downloaded bytes; each attachment is limited to 20,000,000 bytes. Repeated inline files with the same filename and data count once; images and URL references are counted individually. Downloads have a 30-second overall deadline and at most three redirects; shared request allocation reservations and cancellation also apply. The resolver can enforce lower download budgets but cannot raise built-in ceilings.
+Only public HTTPS on port 443 is supported. All DNS answers must be public; the socket is pinned to a checked address with hostname/TLS verification. No authorization headers, cookies, browser identity, ambient credentials or proxies are forwarded. Each redirect requires a separate exact scoped URL grant. Inline and remote image/file attachments in the expanded request share a limit of 10 attachments and 50,000,000 total content bytes, including both inline and downloaded bytes; each attachment is limited to 20,000,000 bytes. Repeated inline files with the same filename and data count once; images and URL references are counted individually. DNS, connection/headers and each file body have independent 30-, 60- and 120-second limits. Each of at most three redirects starts fresh limits; shared request allocation reservations and cancellation also apply. The resolver can enforce lower download budgets but cannot raise built-in ceilings.
 
 Original bytes and supported specific MIME types are preserved. Ambiguous octet-stream/ZIP MIME, unsupported charset/HTTP compression and raw audio/video are rejected. `unsupported_provider_file_reference` applies to provider `file_id` in both preparation and generation: no compatible authenticated Codex/ChatGPT file service is established. The API Files endpoint alone is not that contract. No transcription, frame extraction or guessed endpoint is used as an equivalent fallback. See [attachment boundaries](native-tools-compatibility.md#data-contracts).
 

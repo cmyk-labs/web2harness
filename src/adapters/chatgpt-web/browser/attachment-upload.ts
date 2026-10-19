@@ -2,13 +2,22 @@
 import type { Page } from "playwright-core";
 import { StringDecoder } from "node:string_decoder";
 import { ChatGptWebAdapterError } from "../adapter-error";
+import { withChatGptBrowserObservationTimeout } from "./turn-observation";
 
 /** Observe only processing requests for files attached by this turn, on its owned frame. */
 export async function observeChatGptAttachmentUploads(page: Page, names: string[]) {
-  const session = await page.context().newCDPSession(page);
+  let abandoned = false;
+  const opening = page.context().newCDPSession(page).then(async session => {
+    if (abandoned) {
+      await withChatGptBrowserObservationTimeout(session.detach(), 30_000).catch(() => {});
+      throw new Error("Upload observer initialization expired");
+    }
+    return session;
+  });
+  const session = await withChatGptBrowserObservationTimeout(opening, 30_000).catch(error => { abandoned = true; throw error; });
   const origin = new URL(page.url()).origin;
-  const { frameTree } = await session.send("Page.getFrameTree").catch(async error => {
-    await session.detach().catch(() => {});
+  const { frameTree } = await withChatGptBrowserObservationTimeout(session.send("Page.getFrameTree"), 30_000).catch(async error => {
+    await withChatGptBrowserObservationTimeout(session.detach(), 30_000).catch(() => {});
     throw error;
   });
   const expected = new Set(names);
@@ -16,18 +25,19 @@ export async function observeChatGptAttachmentUploads(page: Page, names: string[
   const streams = new Map<string, { name: string; fileId?: string; decoder: StringDecoder; pending: string; buffered?: string[]; activation?: Promise<void> }>();
   let failure: Error | undefined;
   let disposed = false;
-  let resolve!: () => void;
-  let reject!: (error: Error) => void;
-  const ready = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
-  // Uploads can fail before the caller finishes waiting for the attachment cards.
-  void ready.catch(() => {});
+  const files = new Map([...expected].map(name => {
+    let resolve!: () => void, reject!: (error: Error) => void;
+    const ready = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+    void ready.catch(() => {});
+    return [name, { ready, resolve, reject }] as const;
+  }));
   const fail = (message: string, status = 502) => {
     if (disposed || failure) return;
     failure = new ChatGptWebAdapterError(
       `ChatGPT attachment upload failed before the prompt was sent: ${message}. The original prompt and attachments were preserved.`,
       { status, errorType: "server_error", code: "chatgpt_attachment_upload_failed", retryable: false },
     );
-    reject(failure);
+    for (const file of files.values()) file.reject(failure);
   };
   const consume = (id: string, data: string, final = false) => {
     const stream = streams.get(id);
@@ -47,7 +57,7 @@ export async function observeChatGptAttachmentUploads(page: Page, names: string[
       if (/\.(error|failed|cancelled|unknown)$/.test(name)) return fail(`processing event ${name}`);
       if (name === "file.processing.completed") {
         completed.add(stream.name);
-        if ([...expected].every(name => completed.has(name))) resolve();
+        files.get(stream.name)?.resolve();
         return;
       }
     }
@@ -112,18 +122,33 @@ export async function observeChatGptAttachmentUploads(page: Page, names: string[
   session.on("event", onEvent);
   const dispose = async () => {
     disposed = true;
+    for (const [name, file] of files) if (!completed.has(name)) {
+      file.reject(new DOMException("Upload observation disposed", "AbortError"));
+    }
     session.off("event", onEvent);
-    await session.detach().catch(() => {});
+    await withChatGptBrowserObservationTimeout(session.detach(), 30_000).catch(() => {});
   };
-  try { await session.send("Network.enable"); } catch (error) { await dispose(); throw error; }
+  try { await withChatGptBrowserObservationTimeout(session.send("Network.enable"), 30_000); } catch (error) { await dispose(); throw error; }
   return {
     throwIfFailed: () => { if (failure) throw failure; },
-    wait: (signal?: AbortSignal) => new Promise<void>((yes, no) => {
-      const abort = () => no(signal?.reason ?? new DOMException("Upload observation aborted", "AbortError"));
-      if (signal?.aborted) { abort(); return; }
-      signal?.addEventListener("abort", abort, { once: true });
-      ready.then(yes, no).finally(() => signal?.removeEventListener("abort", abort));
-    }),
+    wait: async (signal?: AbortSignal, timeoutMs = 300_000) => {
+      const controller = new AbortController();
+      const waiting = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+      try {
+        await Promise.all([...files.values()].map(file => new Promise<void>((yes, no) => {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const finish = (error?: unknown) => {
+            clearTimeout(timer); waiting.removeEventListener("abort", abort);
+            if (error !== undefined) no(error); else yes();
+          };
+          const abort = () => finish(waiting.reason ?? new DOMException("Upload observation aborted", "AbortError"));
+          if (waiting.aborted) { abort(); return; }
+          timer = setTimeout(() => finish(new Error(`ChatGPT attachment processing timed out after ${timeoutMs}ms`)), timeoutMs);
+          waiting.addEventListener("abort", abort, { once: true });
+          file.ready.then(() => finish(), finish);
+        })));
+      } finally { controller.abort(); }
+    },
     dispose,
   };
 }

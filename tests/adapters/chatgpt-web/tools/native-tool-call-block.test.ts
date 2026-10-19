@@ -250,7 +250,7 @@ describe("parseNativeToolCallReply", () => {
     expect(parsed.issues[0]!.problem).toContain("cmd");
   });
 
-  test("malformed JSON and unclosed fences are block-level issues", () => {
+  test("malformed JSON and invalid block shapes remain issues at EOF", () => {
     const parsed = parseNativeToolCallReply(
       "```codex_tool_calls\n{\"calls\":[}\n```\n```codex_tool_calls\n{}",
       TOOLS,
@@ -258,7 +258,7 @@ describe("parseNativeToolCallReply", () => {
     expect(parsed.calls).toHaveLength(0);
     const problems = parsed.issues.map(issue => issue.problem);
     expect(problems.some(problem => problem.includes("not valid JSON"))).toBe(true);
-    expect(problems.some(problem => problem.includes("never closed"))).toBe(true);
+    expect(problems.some(problem => problem.includes("block must be"))).toBe(true);
   });
 
   test("an empty call list is flagged", () => {
@@ -266,6 +266,19 @@ describe("parseNativeToolCallReply", () => {
     expect(parsed.calls).toHaveLength(0);
     expect(parsed.issues).toHaveLength(1);
     expect(parsed.issues[0]!.problem).toContain("no calls");
+  });
+
+  test("completed EOF closes a tool fence only when its entire body is valid", () => {
+    const body = '{"calls":[{"name":"exec_command","arguments":{"cmd":"echo literal_backslash \\\\ done"}}]}';
+    const eof = parseNativeToolCallReply("Running.\n```codex_tool_calls\n" + body, TOOLS);
+    expect(eof).toEqual(parseNativeToolCallReply("Running.\n```codex_tool_calls\n" + body + "\n```", TOOLS));
+    expect(eof.issues).toEqual([]);
+    expect(eof.calls).toHaveLength(1);
+    expect(eof.visibleText).toBe("Running.");
+    for (const invalid of [body.slice(0, -1), body + "\nextra prose", body.replace("exec_command", "unknown_tool"),
+      body.replace('"cmd":', '"missing_required":')]) {
+      expect(parseNativeToolCallReply("```codex_tool_calls\n" + invalid, TOOLS).issues.length).toBeGreaterThan(0);
+    }
   });
 
   test("a plain json fence with no marker is never a tool call", () => {

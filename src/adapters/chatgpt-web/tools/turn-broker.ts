@@ -444,10 +444,10 @@ export class TurnBroker implements TurnBrokerOwner {
 
   async beginCompactionTransaction(
     traceId: string,
-    ttlMs = 120_000,
+    signal: AbortSignal,
   ): Promise<CompactionTransactionHandle> {
     await this.start();
-    return this.compactionTransactions.begin(traceId, ttlMs);
+    return this.compactionTransactions.begin(traceId, signal);
   }
 
   waitForCompactionHandoff(token: string, signal?: AbortSignal): Promise<string> {

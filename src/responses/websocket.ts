@@ -1,11 +1,13 @@
 import type { ServerWebSocket, WebSocketHandler } from "bun";
 import { WebSocketSteering, type SteeringJob, type SteerTarget, type SteerValidation } from "./websocket-steering";
+import { operationStage } from "../runtime/operation-stage";
 export type { SteerTarget, SteerValidation } from "./websocket-steering";
 
 type JsonObject = Record<string, unknown>;
 type Socket = ServerWebSocket<ResponsesWebSocketData>;
 type PendingFrame = { text: string; bytes: number; resolve(): void; reject(error: Error): void };
-type ActiveResponse = { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array> };
+type ActiveResponse = { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; cancellation?: Promise<void> };
+type ConnectionTasks = { tasks: Set<Promise<void>>; failures: unknown[]; cleanup?: Promise<void> };
 type QueuedResponse = SteeringJob & { bytes: number };
 type Lane = { streamId?: string; queue: QueuedResponse[]; active?: ActiveResponse; ready: boolean };
 
@@ -155,8 +157,46 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
   if (limits.maxActiveResponses > 16 || limits.maxNamedLanes > 32) throw new Error("Responses WebSocket protocol lane limits exceeded");
   const sockets = new Set<Socket>();
   const activeTasks = new Set<Promise<void>>();
-  const controlTasks = new Set<Promise<void>>();
+  // Keep disconnected ownership until cleanup actually finishes, including after a timeout.
+  const connections = new Map<Socket, ConnectionTasks>();
   let draining = false;
+
+  function owner(ws: Socket): ConnectionTasks {
+    let connection = connections.get(ws);
+    if (!connection) { connection = { tasks: new Set(), failures: [] }; connections.set(ws, connection); }
+    return connection;
+  }
+
+  async function waitForConnection(connection: ConnectionTasks): Promise<void> {
+    while (connection.tasks.size) await Promise.allSettled([...connection.tasks]);
+    if (connection.failures.length) throw new AggregateError(connection.failures,
+      "Responses WebSocket cleanup failed: " + connection.failures.map(error => String(error)).join("; "));
+  }
+
+  function cancelReader(ws: Socket, active: ActiveResponse, reason?: Error): Promise<void> | undefined {
+    if (!active.reader) return;
+    if (!active.cancellation) {
+      const connection = owner(ws);
+      const task = active.reader.cancel(reason).catch(error => { if (ws.data.closed) connection.failures.push(error); })
+        .finally(() => connection.tasks.delete(task));
+      connection.tasks.add(task);
+      active.cancellation = task;
+    }
+    return active.cancellation;
+  }
+
+  function settleClosedConnection(ws: Socket): void {
+    const connection = owner(ws);
+    let timer: ReturnType<typeof setTimeout>;
+    connection.cleanup = operationStage("websocket-close", () => Promise.race([
+      waitForConnection(connection),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Responses WebSocket connection cleanup timed out after 30000 ms")), 30_000);
+      }),
+    ]).finally(() => clearTimeout(timer)));
+    // Observe failures now; settled() propagates them to the server after every connection settles.
+    void connection.cleanup.then(() => connections.delete(ws), () => {});
+  }
 
   function releaseSocket(ws: Socket): void {
     const data = ws.data;
@@ -168,7 +208,7 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
     data.steering?.close();
     for (const lane of data.lanes.values()) {
       lane.active?.controller.abort(error);
-      void lane.active?.reader?.cancel(error).catch(() => {});
+      if (lane.active) void cancelReader(ws, lane.active, error);
       lane.queue.length = 0; lane.ready = false;
     }
     data.ready.length = 0; data.queuedRequests = 0; data.queuedBytes = 0;
@@ -176,6 +216,7 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
     data.blocked = undefined;
     for (const pending of data.pending.splice(0)) pending.reject(error);
     data.pendingBytes = 0;
+    settleClosedConnection(ws);
   }
 
   function closeSocket(ws: Socket, code: number, reason: string): void {
@@ -220,12 +261,13 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
   }
 
   function reject(ws: Socket, status: number, code: string, message: string, param?: string, streamId?: string): void {
-    trackControl(send(ws, errorEvent(status, code, message, param), streamId));
+    trackControl(ws, send(ws, errorEvent(status, code, message, param), streamId));
   }
 
-  function trackControl(promise: Promise<void>): void {
-    const task = promise.catch(() => {}).finally(() => controlTasks.delete(task));
-    controlTasks.add(task);
+  function trackControl(ws: Socket, promise: Promise<void>): void {
+    const connection = owner(ws);
+    const task = promise.catch(() => {}).finally(() => connection.tasks.delete(task));
+    connection.tasks.add(task);
   }
 
   function request(data: ResponsesWebSocketData, body: JsonObject, signal: AbortSignal): Request {
@@ -253,14 +295,17 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
         data.queuedRequests--; data.queuedBytes -= job.bytes;
         const active = { controller: new AbortController() };
         lane.active = active; data.inFlight++;
+        const connection = owner(ws);
         const task = run(ws, job, active, lane.streamId)
           .catch(() => { if (!data.closed) closeSocket(ws, 1011, "Responses transport failed"); })
           .finally(() => {
             lane.active = undefined; data.inFlight--;
             activeTasks.delete(task);
+            connection.tasks.delete(task);
             markReady(data, lane); schedule(ws);
           });
         activeTasks.add(task);
+        connection.tasks.add(task);
       }
     } finally { data.scheduling = false; }
   }
@@ -294,7 +339,7 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
       if (Buffer.byteLength(JSON.stringify(job.body)) > limits.maxMessageBytes) throw new Error("Steering continuation too large");
       const response = await options.dispatch(request(data, job.body, active.controller.signal), job.prepareOnly ? { prepareOnly: true } : undefined);
       if (active.controller.signal.aborted) {
-        await response.body?.cancel();
+        await response.body?.cancel().catch(error => { owner(ws).failures.push(error); });
         return;
       }
       if (!response.ok) terminal = await readHttpError(response, active, limits.maxEventBytes);
@@ -328,7 +373,7 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
     } finally {
       data.steering?.stopAccepting(job);
       if (active.reader) {
-        try { await active.reader.cancel(); } catch { /* Closed/failed reader. */ }
+        await cancelReader(ws, active);
         active.reader.releaseLock();
       }
     }
@@ -363,7 +408,7 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
       let event: unknown;
       try { event = JSON.parse(message); } catch { reject(ws, 400, "invalid_json", "Invalid JSON in WebSocket frame."); return; }
       if (object(event) && event.type === "response.steer") {
-        if (ws.data.steering) trackControl(ws.data.steering.accept(event).catch(() => { if (!ws.data.closed) closeSocket(ws, 1011, "Steering transport failed"); }));
+        if (ws.data.steering) trackControl(ws, ws.data.steering.accept(event).catch(() => { if (!ws.data.closed) closeSocket(ws, 1011, "Steering transport failed"); }));
         return;
       }
       if (!object(event) || event.type !== "response.create") {
@@ -426,7 +471,11 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
       draining = true;
       for (const ws of [...sockets]) closeSocket(ws, 1001, "Responses server is shutting down");
     },
-    /** The owner supplies its shutdown deadline; a dispatcher must honor Request.signal. */
-    async settled(): Promise<void> { while (activeTasks.size || controlTasks.size) await Promise.allSettled([...activeTasks, ...controlTasks]); },
+    /** Closed connections each own 30 seconds; never discard pending tasks on timeout. */
+    async settled(): Promise<void> {
+      const results = await Promise.allSettled([...connections.values()].map(connection => connection.cleanup ?? waitForConnection(connection)));
+      const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected").map(result => result.reason);
+      if (failures.length) throw new AggregateError(failures, "Responses WebSocket cleanup failed: " + failures.map(error => String(error)).join("; "));
+    },
   };
 }

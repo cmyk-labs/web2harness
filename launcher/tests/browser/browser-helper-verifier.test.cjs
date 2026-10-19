@@ -4,6 +4,71 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { verifyConnectorWithBrowserHelper } = require("../../electron/browser/browser-helper-verifier.cjs");
+const { EventEmitter } = require("node:events");
+const { PassThrough, Writable } = require("node:stream");
+const vm = require("node:vm");
+
+function stagedHelper(t) {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let request;
+  const child = Object.assign(new EventEmitter(), { pid: 4321, exitCode: null, signalCode: null,
+    stdout: new PassThrough(), stderr: new PassThrough() });
+  child.stdin = new Writable({ write(bytes, _encoding, done) {
+    const message = JSON.parse(bytes.toString());
+    if (message.type === "shutdown") { child.exitCode = 0; child.emit("exit", 0, null); }
+    else request = message;
+    done();
+  } });
+  child.kill = () => { child.signalCode = "SIGTERM"; child.emit("exit", null, "SIGTERM"); return true; };
+  const filename = require.resolve("../../electron/browser/browser-helper-verifier.cjs");
+  const sandbox = { module: { exports: {} }, process, setTimeout, clearTimeout, DOMException,
+    require: id => id === "node:child_process" ? { spawn: () => child }
+      : id.startsWith(".") ? require(path.resolve(path.dirname(filename), id)) : require(id) };
+  vm.runInNewContext(fs.readFileSync(filename, "utf8"), sandbox, { filename });
+  const pending = sandbox.module.exports.runBrowserHelperOperation({
+    helper: { executable: "fixture", script: "fixture" }, descriptorPath: "/fixture", appName: "Fixture", operation: "inspect",
+  });
+  void pending.catch(() => {});
+  const send = value => child.stdout.write(`${JSON.stringify(value)}\n`);
+  send({ type: "ready" });
+  return { pending, child, send: value => send({ id: request.id, ...value }) };
+}
+
+test("helper connection, controls and each inspection get fresh timers beyond ninety seconds", async t => {
+  const f = stagedHelper(t);
+  for (const [sequence, stage, elapsed] of [[1, "connection", 119000], [2, "controls", 119000], [3, "inspection", 59000], [4, "inspection", 59000]]) {
+    f.send({ type: "stage", sequence, stage });
+    t.mock.timers.tick(elapsed);
+    assert.equal(f.child.exitCode, null);
+  }
+  f.send({ type: "result", value: { authenticated: true } });
+  assert.equal((await f.pending).value.authenticated, true);
+  assert.equal(f.child.exitCode, 0);
+});
+
+test("running transfers timeout ownership to the worker without a maintenance or generation cap", async t => {
+  const f = stagedHelper(t);
+  f.send({ type: "stage", sequence: 1, stage: "running" });
+  t.mock.timers.tick(31 * 60_000);
+  assert.equal(f.child.exitCode, null);
+  f.send({ type: "error", message: "worker primitive timed out" });
+  await assert.rejects(f.pending, /worker primitive timed out/);
+});
+
+test("a live but stalled helper times out its stage", async t => {
+  const f = stagedHelper(t);
+  f.send({ type: "stage", sequence: 1, stage: "inspection" });
+  t.mock.timers.tick(60_000);
+  await assert.rejects(f.pending, /inspection stage timed out/);
+  assert.equal(f.child.exitCode, 0);
+});
+
+test("helper process loss fails immediately, independently of its stage timer", async t => {
+  const lost = stagedHelper(t);
+  lost.child.exitCode = 17;
+  lost.child.emit("exit", 17, null);
+  await assert.rejects(lost.pending, /exited with status 17/);
+});
 
 test("launcher verification delegates exact connector selection to the browser helper protocol", async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "codex-browser-helper-verify-"));

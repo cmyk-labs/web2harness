@@ -1,0 +1,142 @@
+{
+  "kind": "working-tree-source-identity-and-excerpts",
+  "capturedForArchive": "2026-10-19",
+  "head": "71eefe428cc99f8c84fd5ca7540f1bd4301637ea",
+  "includesUncommittedChanges": true,
+  "fullSourcesCopied": false,
+  "excerptNewlines": "normalized to LF; file hashes cover original bytes",
+  "files": [
+    {
+      "id": "S01",
+      "path": "src/adapters/chatgpt-web/browser/turn-observation.ts",
+      "sha256": "305033dab427ffda0bfcceca8f76bba9b56d01a17fb3020ac75a97f115e79a30",
+      "excerpts": [
+        {
+          "startLine": 94,
+          "endLine": 108,
+          "sha256": "cfe22df376595a6855aeb5238ed79b51d46cda289552e0d736d91299d96f9327",
+          "text": "export function chatGptTurnIsComplete(state: {\n  responsePresent: boolean;\n  running: boolean;\n  currentText: string;\n  currentHtml?: string;\n  completionActionVisible: boolean;\n  handoffCompletionVisible?: boolean;\n}): boolean {\n  return state.responsePresent\n    && !state.running\n    && ((state.currentText.length > 0 && state.completionActionVisible)\n      || state.handoffCompletionVisible === true);\n}\n\nexport type ChatGptSubmissionEvidence = \"user_turn\" | \"assistant_turn\" | \"generation_running\" | \"mcp_tool_call\" | \"response_stream\";"
+        },
+        {
+          "startLine": 173,
+          "endLine": 210,
+          "sha256": "467796b79920b6ac716bb50e3b0a8c7d69cc108cf5be4fc64996f905d9695485",
+          "text": "    state: Parameters<typeof chatGptTurnIsComplete>[0] & {\n      externalToolCallsInFlight?: boolean;\n    },\n    now = Date.now(),\n  ): boolean {\n    const signature = `${state.currentText}\\0${state.currentHtml ?? state.currentText}`;\n    // An outstanding tool call proves the model has more to say, whatever the rendered message\n    // currently looks like. Completing here would return a truncated answer and retire the turn\n    // while its own tool calls were still in flight.\n    if (state.externalToolCallsInFlight) {\n      this.candidate = undefined;\n      this.missingPostToolAnswerSince = undefined;\n      return false;\n    }\n    if (this.postToolAnswerBaselineText === state.currentText && !state.handoffCompletionVisible) {\n      this.candidate = undefined;\n      if (!chatGptTurnIsComplete(state)) {\n        this.missingPostToolAnswerSince = undefined;\n        return false;\n      }\n      this.missingPostToolAnswerSince ??= now;\n      if (now - this.missingPostToolAnswerSince >= this.missingPostToolAnswerMs) {\n        throw new Error(\"ChatGPT completed without producing a final answer after its last Codex tool call\");\n      }\n      return false;\n    }\n    this.missingPostToolAnswerSince = undefined;\n    if (!chatGptTurnIsComplete(state)) {\n      this.candidate = undefined;\n      return false;\n    }\n    if (this.candidate?.signature !== signature) {\n      this.candidate = { signature, since: now };\n      return false;\n    }\n    return now - this.candidate.since >= this.stableMs;\n  }\n}"
+        }
+      ]
+    },
+    {
+      "id": "S02",
+      "path": "src/adapters/chatgpt-web/browser/response-source.ts",
+      "sha256": "621b6fa3f28eb2fbb8e4d6372a65e46f753cdf452adb114805cceecaa2e9c1c1",
+      "excerpts": [
+        {
+          "startLine": 14,
+          "endLine": 26,
+          "sha256": "4df6ce9d1934fd17c86fac2db5d4a051a3f16bf016cd3b58b77ca19a8aea851e",
+          "text": "// Unsupported presentation/observation can use the independent DOM validator. Positive evidence\n// of a different request, unfinished final or server failure must never be hidden by that fallback.\nexport function responseSourceBlocksFallback(result: ChatGptResponseSourceResult): boolean {\n  return result.state === \"rejected\" && [\"response_identity_mismatch\", \"response_parent_unbound\",\n    \"response_after_termination\", \"response_upstream_error\", \"response_message_incomplete\",\n    \"response_final_message_ambiguous\", \"response_transport_rejected\", \"response_request_ambiguous\"].includes(result.reason);\n}\n\nconst object = (value: unknown): value is Json => !!value && typeof value === \"object\" && !Array.isArray(value);\nconst publicText = (m: Message) => m.role === \"assistant\" && [\"final\", \"commentary\"].includes(m.channel as string)\n  && m.recipient === \"all\" && !m.hidden && m.contentType === \"text\";\nconst ancillaryTypes = new Set([\"resume_conversation_token\", \"message_marker\", \"server_ste_metadata\",\n  \"conversation_detail_metadata\", \"title_generation\", \"conversation_title\", \"moderation\"]);"
+        },
+        {
+          "startLine": 43,
+          "endLine": 51,
+          "sha256": "0775dcadec8b5132c6b81855efb2948fd7c61585550536b550020c87232e6062",
+          "text": "    } catch (error) { this.reject(this.errorReason(error)); }\n  });\n  private readonly evidence?: ChatGptResponseEvidence;\n  private decoderFailed = false;\n  private readonly messages = new Map<string, Message>();\n  private current?: Message;\n  private path = \"\";\n  private operation = \"add\";\n  private conversation?: string;"
+        },
+        {
+          "startLine": 203,
+          "endLine": 210,
+          "sha256": "4c82264eaca8f7bb98db665d9eeaccebc4c3a0a6c92be78597d95504c557aebc",
+          "text": "    }\n    if (value.message) { this.readMessage(value.message); return; }\n    if (Object.hasOwn(value, \"v\")) {\n      if (typeof value.p === \"string\") this.path = value.p;\n      if (typeof value.o === \"string\") this.operation = value.o;\n      this.apply(this.path, this.operation, value.v, 0); return;\n    }\n    throw new Error(\"response_event_unsupported\");"
+        }
+      ]
+    },
+    {
+      "id": "S03",
+      "path": "src/adapters/chatgpt-web/browser/response-stream.ts",
+      "sha256": "e502ac2a903c8f042387e873e8657a95136f07722b3c01e2afec6a7ace240a18",
+      "excerpts": [
+        {
+          "startLine": 24,
+          "endLine": 35,
+          "sha256": "ac189f452d5bf264df3b1490847d034a7a245eaaa314677281541a651de3356e",
+          "text": "\nfunction inspectRequestBinding(request: { method: string; url: string; postData?: string },\n  prompt: string, conversationId?: string): { binding?: ChatGptResponseBinding; reason?: string } {\n  try {\n    const url = new URL(request.url);\n    if (request.method !== \"POST\" || url.origin !== \"https://chatgpt.com\"\n      || !/^\\/backend-api\\/(?:f\\/)?conversation$/.test(url.pathname)) return { reason: \"request_route_unmatched\" };\n    if (!request.postData) return { reason: \"request_body_unavailable\" };\n    if (request.postData.length > 2_000_000) return { reason: \"request_body_size_limit\" };\n    const body = JSON.parse(request.postData);\n    if (body.action !== \"next\") return { reason: \"request_action_unmatched\" };\n    if (!Array.isArray(body.messages) || body.messages.length !== 1) return { reason: \"request_messages_unmatched\" };"
+        },
+        {
+          "startLine": 188,
+          "endLine": 194,
+          "sha256": "814b22537ff5d8cc9942241a968e408169e02c9a1b057eb0f1dc2ebade94781c",
+          "text": "        this.source.push(bytes); this.source.finish(); this.refreshAccepted();\n      }\n      const facts = this.source?.facts();\n      // A late site fetch cancellation after application termination is normal. Observation\n      // termination is independent of successful body projection (e.g. unknown event forms).\n      if (failed && (!facts?.observedDone || !facts.observedStreamComplete)) this.unavailable ??= \"response_transport_incomplete\";\n    } catch {"
+        }
+      ]
+    },
+    {
+      "id": "S04",
+      "path": "src/adapters/chatgpt-web/browser/response-dom.ts",
+      "sha256": "54ec3323aa2c86ae49e016a367ac5fd8d9fb59f3aaa75eee64dff01ea25d4bf1",
+      "excerpts": [
+        {
+          "startLine": 343,
+          "endLine": 351,
+          "sha256": "14016ba318fb27e67a4d4758e7e6611dd73f46cea7153334b87b6862a51a8f52",
+          "text": "      // These are embedded renderers, not Markdown answer text. Their loading labels, controls\n      // and plot axes change independently of generation (including after a later paragraph).\n      // Keep their UI out of both the emitted HTML and the text consistency fingerprint.\n      // Also remove the media already excluded by chatGptHtmlToMarkdown, so their\n      // accessibility labels cannot become consistency fingerprints for untransmitted text.\n      // Ordinary code blocks, surrounding prose and the original observed DOM remain intact.\n      for (const widget of Array.from(content.querySelectorAll(\n        \".chart-widget-container, [data-code-block-preview-pane], script, style, svg, img, picture, source\",\n      ))) widget.remove();"
+        },
+        {
+          "startLine": 364,
+          "endLine": 378,
+          "sha256": "eaf05ba71f2d1e9f173b7bfde1b5ec72fe49a79697608c2c2f3d699ff6e15ba2",
+          "text": "      }\n      // The new renderer wraps code in DIVs, including a localized toolbar that can\n      // disappear on completion. Project only the code into PRE before fingerprinting\n      // and Markdown conversion; otherwise the toolbar changes the committed text and\n      // Turndown collapses code newlines as if they were ordinary inline whitespace.\n      const codeBlockSelector = 'pre, [data-markdown-copy=\"code-block\"]';\n      for (const block of Array.from(content.querySelectorAll(codeBlockSelector))) {\n        if (block.parentElement?.closest(codeBlockSelector)) continue;\n        const codes = block.querySelectorAll(\"code\");\n        // A streaming code renderer can expose its language toolbar before CODE hydrates.\n        // The toolbar is never answer content, including while the body is still absent.\n        if (codes.length === 0) {\n          for (const toolbar of Array.from(block.querySelectorAll('[data-markdown-copy=\"exclude\"]'))) toolbar.remove();\n          continue;\n        }"
+        }
+      ]
+    },
+    {
+      "id": "S05",
+      "path": "src/adapters/chatgpt-web/markdown.ts",
+      "sha256": "d461878ba06a4c2a3c82008afdc9968e6caaea2562918feb5e299474bbbda789",
+      "excerpts": [
+        {
+          "startLine": 17,
+          "endLine": 25,
+          "sha256": "16767f0748a117daa320cee3af27de08574be78c6eb7c4dd4e0a19cf7e924248",
+          "text": "turndown.addRule(\"removeImages\", {\n  filter: node => [\"IMG\", \"PICTURE\", \"SOURCE\"].includes(node.nodeName),\n  replacement: () => \"\",\n});\nturndown.addRule(\"removeSvg\", {\n  filter: node => node.nodeName === \"SVG\",\n  replacement: () => \"\",\n});\nturndown.addRule(\"preserveCodexPlanBlockTags\", {"
+        },
+        {
+          "startLine": 537,
+          "endLine": 551,
+          "sha256": "5372230c460c4e9e825aab811d0ef257773c05a7b71c78dbbaa1babc846de52a",
+          "text": "  private coveredBufferedSnapshot(): ChatGptMarkdownBuffer | undefined {\n    if (this.delivery !== \"buffered\" || this.emittedChars !== 0) return undefined;\n    const known = this.projectPending();\n    if (!known) return undefined;\n    const candidate = new ChatGptMarkdownBuffer(this.transform, this.stabilityMs);\n    let previousStart: number | undefined;\n    for (const segment of this.observed) {\n      if (segment.sourceStart !== undefined) {\n        if (previousStart !== undefined && segment.sourceStart <= previousStart) return undefined;\n        previousStart = segment.sourceStart;\n      }\n      candidate.commit(segment);\n    }\n    return candidate.markdown.startsWith(known) ? candidate : undefined;\n  }"
+        }
+      ]
+    },
+    {
+      "id": "S06",
+      "path": "src/adapters/chatgpt-web/browser/browser-worker.ts",
+      "sha256": "d2802a9d9c1d7f3b171782e603d635ef625c1ceb2d1850f9e4dd1ba5367550ee",
+      "excerpts": [
+        {
+          "startLine": 3395,
+          "endLine": 3401,
+          "sha256": "db3ecfa3cf1189b937739046be37908f6b4748d1f840ec6035368d82e8043b2d",
+          "text": "      : turn.capabilities;\n    const requestedMode = resolveChatGptWebModelMode(turn.modelId, turn.reasoning, browserCapabilities);\n    // Source delivery is buffered before the first outward byte. MCP and Luna retain their own\n    // completion/streaming contracts; this path never replaces a broker-authorized handoff.\n    const useResponseSource = !requestedMode.localTools && !turn.captureLunaCheckpoint;\n    const prepare = reuseConversation ? turn.prepareResume : turn.prepare;\n    if (!prepare) throw new Error(\"The retained ChatGPT conversation has no continuation prompt\");"
+        },
+        {
+          "startLine": 3906,
+          "endLine": 3926,
+          "sha256": "249d64d548bba375bd5c459ff332d021a8295d8b6537db67fdcdef523345e4b2",
+          "text": "        if (turn.abortSignal?.aborted) {\n          const stop = page.locator(CHATGPT_STOP_BUTTON_SELECTOR).last();\n          if (await stop.isVisible().catch(() => false)) await stop.press(\"Enter\").catch(() => {});\n          throw new DOMException(\"ChatGPT web turn aborted\", \"AbortError\");\n        }\n        if (deadline !== undefined && Date.now() >= deadline) {\n          throw chatGptResponseFailure(\"chatgpt_response_timeout\");\n        }\n        await throwIfChatGptSessionFailureAlert(page);\n        if (useResponseSource) {\n          const source = checkedSource();\n          if (source.state === \"complete\") {\n            const rejection = await submissionRejection.failure();\n            if (rejection) throw rejection;\n            await responseCompleted();\n            finalText = source.text;\n            if (finalText.trim() === \"api_tool unavailable\") throw new Error(\"ChatGPT selected mode rejected the Codex Native MCP tool (api_tool unavailable)\");\n            turn.onTextDelta(finalText);\n            diagnosticEvent(\"info\", \"browser.response_source_committed\", { chars: finalText.length, source: responseSource.snapshot() });\n            break;\n          }"
+        },
+        {
+          "startLine": 4050,
+          "endLine": 4092,
+          "sha256": "998e69ee416596f26eeda12b5db59257d3ede6e7cac2b594e56c03e0fc679d36",
+          "text": "          const completionReady = completionTracker.update({\n            responsePresent: snapshot.responsePresent,\n            running,\n            currentText: snapshot.visibleText,\n            currentHtml: snapshot.fullHtml,\n            completionActionVisible: snapshot.completionActionVisible,\n            externalToolCallsInFlight,\n            handoffCompletionVisible: completionAnnouncementKey !== undefined\n              && await hasFreshCompletionAnnouncement(page, completionAnnouncementKey),\n          });\n          if (!completionReady) {\n            completionFenceRevision = undefined;\n            completionFenceWait.reset();\n          }\n          if (completionReady) {\n            await responseCompleted();\n            if (useResponseSource) {\n              const source = checkedSource();\n              if (source.state === \"complete\") continue; // Commit through the source branch above.\n              if (source.state === \"collecting\" && responseSource.snapshot().matchedRequests > 0) {\n                sourceFinalWaitDeadline ??= Date.now() + 30_000;\n                if (Date.now() < sourceFinalWaitDeadline) {\n                  await new Promise(resolveSleep => setTimeout(resolveSleep, 100));\n                  continue;\n                }\n              }\n              if (markdownObservationError) throwMarkdownConsistencyError(markdownObservationError);\n              diagnosticEvent(\"info\", \"browser.response_source_fallback\", {\n                reason: source.state === \"rejected\" ? source.reason : \"response_source_unavailable\", source: responseSource.snapshot(),\n              });\n            }\n            if (markdownBuffer.needsCoverageRecovery()) {\n              markdownCoverageDeadline ??= Date.now() + 30_000;\n              if (Date.now() < markdownCoverageDeadline) {\n                responseDomCache.key = undefined;\n                responseDomCache.snapshot = undefined;\n                await new Promise(resolveSleep => setTimeout(resolveSleep, 250));\n                continue;\n              }\n              // preview throws the original coverage error before any completion fence commits.\n              try { markdownBuffer.preview(); } catch (error) { throwMarkdownConsistencyError(error); }\n            } else {\n              markdownCoverageDeadline = undefined;"
+        }
+      ]
+    },
+    {
+      "id": "S07",
+      "path": "launcher/shared/chatgpt-answer-dom.cjs",
+      "sha256": "1113c026d6f71bdd7a7707329dda7549e685ef444344974f8198cf54705c1495",
+      "excerpts": []
+    }
+  ]
+}

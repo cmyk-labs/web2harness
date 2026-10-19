@@ -66,6 +66,7 @@ import { toolIdentityKey, type AdapterEvent, type CodexParsedRequest } from "./t
 import type { CodexProviderConfig } from "./types";
 import type { ProviderAdapter } from "./adapters/base";
 import { VERSION } from "./version";
+import { operationStage, subscribeOperationStages } from "./runtime/operation-stage";
 
 type HttpTrackedEndpoint = "models" | "responses" | "compact" | "search" | "unspecified" | NativeImageEndpoint;
 
@@ -1037,6 +1038,7 @@ export function startServer(
   }
   let draining = false;
   let shutdownPromise: Promise<void> | undefined;
+  const shutdownCompletionObservers = new Set<(failed: boolean) => void>();
   let successfulModelCatalogRequests = 0;
   let lastSuccessfulModelCatalogRequestAt: string | null = null;
   let modelCatalogRequests = 0;
@@ -1256,6 +1258,36 @@ export function startServer(
             { status: 409 },
           );
         }
+        if (req.headers.get("accept") === "application/x-ndjson") {
+          let dispose = () => {};
+          const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              const encoder = new TextEncoder();
+              let closed = false;
+              const send = (value: unknown) => { if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(value)}\n`)); };
+              const complete = (failed: boolean) => {
+                if (closed) return;
+                send({ type: "result", status: failed ? "failed" : "ok", pid: process.pid });
+                dispose();
+                controller.close();
+              };
+              send({ type: "accepted", pid: process.pid });
+              const unsubscribe = subscribeOperationStages(send);
+              const onAbort = () => dispose();
+              dispose = () => {
+                closed = true;
+                unsubscribe();
+                shutdownCompletionObservers.delete(complete);
+                req.signal.removeEventListener("abort", onAbort);
+              };
+              shutdownCompletionObservers.add(complete);
+              req.signal.addEventListener("abort", onAbort, { once: true });
+              setTimeout(shutdown, 0);
+            },
+            cancel() { dispose(); },
+          });
+          return new Response(stream, { headers: { "content-type": "application/x-ndjson", "cache-control": "no-store" } });
+        }
         setTimeout(shutdown, 0);
         return Response.json({ status: "ok", accepting_turns: false, ...current });
       }
@@ -1366,22 +1398,19 @@ export function startServer(
   function shutdown(): void {
     if (shutdownPromise) return;
     draining = true;
+    // Signals may arrive during native HTTP work. Cancel those owned requests,
+    // but do not let an unresponsive upstream delay the independent cleanup owners.
+    void httpTurns.cancelAll(new DOMException("Server shutting down", "AbortError"));
     responsesWs.closeAll();
     modelCatalogFetches.close();
     chatGptTurnSessions.clear();
     flushResponseState();
     shutdownPromise = (async () => {
-      let transportTimer: ReturnType<typeof setTimeout> | undefined;
-      const transportSettled = await Promise.race([
-        responsesWs.settled().then(() => true),
-        new Promise<boolean>(resolve => { transportTimer = setTimeout(() => resolve(false), 5_000); }),
-      ]);
-      clearTimeout(transportTimer);
-      if (!transportSettled) console.warn("[web2harness] Responses WebSocket cleanup exceeded the shutdown deadline");
-      const results = await Promise.allSettled([
+      const transportResults = await Promise.allSettled([responsesWs.settled()]);
+      const results = [...transportResults, ...await Promise.allSettled([
         closeChatGptBrowserWorkers(),
-        closeTurnBrokers(),
-      ]);
+        operationStage("cleanup", () => closeTurnBrokers()),
+      ])];
       const failures = results
         .filter((result): result is PromiseRejectedResult => result.status === "rejected")
         .map(result => result.reason);
@@ -1391,10 +1420,16 @@ export function startServer(
           console.error(`[web2harness] shutdown cleanup failed: ${failure instanceof Error ? failure.message : String(failure)}`);
         }
       }
-      await server.stop(true);
-    })().catch(error => {
+      const flushControlResponse = shutdownCompletionObservers.size > 0;
+      for (const complete of [...shutdownCompletionObservers]) complete(failures.length > 0);
+      // The authenticated streaming route requires an idle server. Signal shutdown
+      // has no such precondition and must close remaining HTTP sockets after cleanup.
+      await server.stop(!flushControlResponse);
+    })().catch(async error => {
       process.exitCode = 1;
       console.error(`[web2harness] server shutdown failed: ${error instanceof Error ? error.message : String(error)}`);
+      for (const complete of [...shutdownCompletionObservers]) complete(true);
+      await server.stop(true);
     });
   }
   process.once("SIGINT", shutdown);

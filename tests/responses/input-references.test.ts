@@ -261,7 +261,12 @@ test("abort before downloading, abort stalled chunks, timeout and late transport
     await new Promise(resolve => setTimeout(resolve, 25));
     return { status: 200, headers: new Headers(), body: (async function* () {})(), cancel() { closed++; } };
   };
-  await rejects(resolveInputReferences(body(image()), { ...f.options, transport: late, limits: { timeoutMs: 5 } }), code("attachment_timeout"));
+  // A trusted injected transport owns its DNS/headers timers; the resolver still
+  // releases late results after caller cancellation. Real phase timeout coverage uses HTTPS IO injection.
+  const lateAbort = new AbortController();
+  const latePending = resolveInputReferences(body(image()), { ...f.options, transport: late, signal: lateAbort.signal });
+  lateAbort.abort();
+  await rejects(latePending, code("attachment_cancelled"));
   await new Promise(resolve => setTimeout(resolve, 30));
   expect(closed).toBe(3);
 });

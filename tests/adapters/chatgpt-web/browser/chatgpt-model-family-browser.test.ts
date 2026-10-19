@@ -1,9 +1,42 @@
 // Reproduction contributed by @alexalok in PR #730.
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { chromium } from "playwright-core";
 import { ChatGptBrowserWorker } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { CHATGPT_WEB_MODEL_ID } from "../../../../src/adapters/chatgpt-web/model";
 import { readChatGptUsageModel } from "../../../../src/adapters/chatgpt-web/limits";
+import { assertChatGptModelFamily, selectChatGptModelFamily } from "../../../../src/adapters/chatgpt-web/browser/model-selection";
+import { chatGptEffortSlider } from "../../../../src/browser/session";
+
+test("family selection gives each action, advanced view and final confirmation its own allowance", async () => {
+  for (const confirmed of [true, false]) {
+    let now = 0, observations = 0;
+    const clock = spyOn(Date, "now").mockImplementation(() => now);
+    const action = async (options: { timeout: number }) => {
+      expect(options.timeout).toBe(60_000); now += 59_000;
+    };
+    const trigger = { filter() { return this; }, count: async () => 1, click: action };
+    const powerView = { count: async () => 1, getAttribute: async () => "simple", locator: () => trigger };
+    const option = {
+      count: async () => 1, getAttribute: async () => "false", click: action,
+      waitFor: async (options: unknown) => { expect(options).toEqual({ state: "visible", timeout: 30_000 }); now += 29_000; },
+      evaluateAll: async (read: (rows: unknown[]) => unknown) => {
+        now += ++observations === 1 ? 14_000 : 500;
+        return read([{ getAttribute: () => String(confirmed && observations > 1) }]);
+      },
+    };
+    const menu = { menu: { getByRole: () => option, locator: () => powerView } };
+    try {
+      const result = selectChatGptModelFamily(menu as never, "6", async () => { now += 119_000; return menu as never; });
+      if (confirmed) {
+        expect(await result).toBe(menu as never);
+        expect(now).toBe(280_500);
+      } else {
+        await expect(result).rejects.toMatchObject({ code: "model_version_unavailable", retryable: false });
+        expect(now).toBe(281_000);
+      }
+    } finally { clock.mockRestore(); }
+  }
+});
 
 // Mirrors ChatGPT's power picker as captured live on 2026-09-29 (English, Pro account): the slider
 // announcement reads only "Pro, 5 of 5." and the model version appears in the "Select model"
@@ -171,3 +204,26 @@ test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)("localized generation control
       .rejects.toThrow("did not expose its assistant turn");
   } finally { await browser.close(); }
 }, 30_000);
+
+test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)("model observation respects its settle budget when a picker closes or remounts", async () => {
+  const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
+  try {
+    const page = await browser.newPage();
+    page.setDefaultTimeout(30_000);
+    await page.setContent(`<div role="menu"><div role="menuitemradio" aria-checked="true">Latest</div>
+      <div role="menuitem" aria-describedby="status"><span id="status">6 Extra High</span>
+      <div data-model-picker-power-slider style="height:20px;width:200px" hidden>
+        <span role="slider" aria-valuemin="0" aria-valuemax="4" aria-valuenow="3"></span>
+      </div></div></div>`);
+    const menu = { method: "already-open", menu: page.getByRole("menu"), ...chatGptEffortSlider(page) } as const;
+    const started = performance.now();
+    const missing = await assertChatGptModelFamily(menu, "6", "xhigh", 3, 150).catch(error => error);
+    expect(missing).toMatchObject({ code: "model_version_unavailable" });
+    expect(performance.now() - started).toBeLessThan(2_000);
+    await page.evaluate(() => setTimeout(() => document.querySelector('[data-model-picker-power-slider]')!.removeAttribute('hidden'), 100));
+    await assertChatGptModelFamily(menu, "6", "xhigh", 3, 1_000);
+    await page.locator('#status').evaluate(element => { element.textContent = '5.6 Extra High'; });
+    const changed = await assertChatGptModelFamily(menu, "6", "xhigh", 3).catch(error => error);
+    expect(changed).toMatchObject({ code: "model_version_unavailable" });
+  } finally { await browser.close(); }
+}, 10_000);

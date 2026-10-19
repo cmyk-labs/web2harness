@@ -1,25 +1,49 @@
 import type { CDPSession, Page } from "playwright-core";
-import { ChatGptResponseSource, type ChatGptResponseBinding, type ChatGptResponseSourceResult } from "./response-source";
+import { ChatGptResponseSource, responseSourceBlocksFallback, type ChatGptResponseBinding, type ChatGptResponseSourceResult } from "./response-source";
 import { withChatGptBrowserObservationTimeout } from "./turn-observation";
 import type { ChatGptResponseEvidenceLimits } from "./response-evidence";
+import { chatGptPromptTextEquivalent } from "./composer";
 
-const normalize = (text: string) => text.replace(/\r\n?/g, "\n").trim();
+const normalize = (text: string) => text.replace(/\r\n?/g, "\n");
+
+function submittedPromptEquivalent(expected: string, submitted: string): boolean {
+  if (chatGptPromptTextEquivalent(expected, submitted)) return true;
+  // The Markdown composer serializes plain text with punctuation escapes and automatic
+  // links. Undo one serialization layer, then require the entire original prompt again.
+  // Do not rewrite the submitted request, collapse whitespace, or discard link destinations.
+  const unescape = (text: string) => text.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/g, "$1");
+  const text = submitted.replace(/\[(https?:\/\/(?:\\.|[^\[\]\\\r\n])*)\]\(((?:\\.|[^()\\\r\n])*)\)/g,
+    (link, label: string, destination: string) => unescape(label) === unescape(destination) ? label : link);
+  return chatGptPromptTextEquivalent(expected, unescape(text));
+}
+
 export function chatGptResponseRequestBinding(request: { method: string; url: string; postData?: string },
   prompt: string, conversationId?: string): ChatGptResponseBinding | undefined {
+  return inspectRequestBinding(request, prompt, conversationId).binding;
+}
+
+function inspectRequestBinding(request: { method: string; url: string; postData?: string },
+  prompt: string, conversationId?: string): { binding?: ChatGptResponseBinding; reason?: string } {
   try {
     const url = new URL(request.url);
     if (request.method !== "POST" || url.origin !== "https://chatgpt.com"
-      || !/^\/backend-api\/(?:f\/)?conversation$/.test(url.pathname) || !request.postData || request.postData.length > 2_000_000) return;
+      || !/^\/backend-api\/(?:f\/)?conversation$/.test(url.pathname)) return { reason: "request_route_unmatched" };
+    if (!request.postData) return { reason: "request_body_unavailable" };
+    if (request.postData.length > 2_000_000) return { reason: "request_body_size_limit" };
     const body = JSON.parse(request.postData);
-    if (body.action !== "next" || !Array.isArray(body.messages) || body.messages.length !== 1) return;
+    if (body.action !== "next") return { reason: "request_action_unmatched" };
+    if (!Array.isArray(body.messages) || body.messages.length !== 1) return { reason: "request_messages_unmatched" };
     const message = body.messages[0];
-    if (message?.author?.role !== "user" || typeof message.id !== "string" || !message.id || message.id.length > 256
-      || !Array.isArray(message.content?.parts)
-      || !message.content.parts.some((part: unknown) => typeof part === "string" && normalize(part) === normalize(prompt))) return;
-    if (body.conversation_id != null && (typeof body.conversation_id !== "string" || body.conversation_id.length > 256)) return;
-    if (conversationId && body.conversation_id !== conversationId) return;
-    return { userMessageId: message.id, ...(body.conversation_id ? { conversationId: body.conversation_id } : {}) };
-  } catch { return; }
+    if (message?.author?.role !== "user" || typeof message.id !== "string" || !message.id || message.id.length > 256) return { reason: "request_user_unmatched" };
+    const textParts = Array.isArray(message.content?.parts)
+      ? message.content.parts.filter((part: unknown): part is string => typeof part === "string") : [];
+    if (!textParts.length || !submittedPromptEquivalent(normalize(prompt), normalize(textParts.join("")))) {
+      return { reason: "request_prompt_unmatched" };
+    }
+    if (body.conversation_id != null && (typeof body.conversation_id !== "string" || body.conversation_id.length > 256)) return { reason: "request_conversation_invalid" };
+    if (conversationId && body.conversation_id !== conversationId) return { reason: "request_conversation_unmatched" };
+    return { binding: { userMessageId: message.id, ...(body.conversation_id ? { conversationId: body.conversation_id } : {}) } };
+  } catch { return { reason: "request_encoding_invalid" }; }
 }
 
 /** Passive observation of one actual submission on one owned page. Never sends/replays a request.
@@ -42,13 +66,16 @@ export class ChatGptResponseStream {
   private responseReceived = false;
   private status?: number;
   private finished = false;
+  private settling = false;
   private attempted = 0;
-  private readonly traffic = new Map<string, { method: string; endpoint: string; status?: number; failed?: boolean; bound?: boolean }>();
+  private readonly traffic = new Map<string, { method: string; endpoint: string; status?: number; failed?: boolean; bound?: boolean; reason?: string }>();
   private droppedTraffic = 0;
   private pageExceptions = 0;
   private errorPage?: Page;
   private errorListener?: () => void;
   private bodyFallback = false;
+  private bodyRecoveryAttempted = false;
+  private transportFailed = false;
 
   constructor(private readonly options: { captureEvidence?: boolean | ChatGptResponseEvidenceLimits } = {}) {}
 
@@ -82,8 +109,10 @@ export class ChatGptResponseStream {
           if (this.traffic.size < 32) this.traffic.set(event.requestId, { method: ["POST", "GET", "PUT", "DELETE", "OPTIONS"].includes(event.request.method) ? event.request.method : "other", endpoint });
           else this.droppedTraffic++;
         }
-        const binding = chatGptResponseRequestBinding(event.request, this.prompt, this.expectedConversation);
-        const facts = this.traffic.get(event.requestId); if (facts) facts.bound = !!binding;
+        const inspected = inspectRequestBinding(event.request, this.prompt, this.expectedConversation);
+        const binding = inspected.binding;
+        const facts = this.traffic.get(event.requestId);
+        if (facts) { facts.bound = !!binding; if (endpoint === "generation" && !binding) facts.reason = inspected.reason; }
         if (!binding) return;
         this.attempted++;
         if (this.requestId) { this.unavailable = "response_request_ambiguous"; return; }
@@ -119,37 +148,54 @@ export class ChatGptResponseStream {
       });
       session.on("Network.loadingFinished", event => {
         if (generation !== this.generation || event.requestId !== this.requestId) return;
-        void (this.activation ?? Promise.resolve()).then(async () => {
-          if (generation !== this.generation) return;
-          if (this.unavailable === "response_stream_unavailable" && this.binding && this.status === 200) {
-            // A short response can finish before streaming activates. Read that exact response;
-            // this command does not make a network request or regenerate a model answer.
-            const body = await withChatGptBrowserObservationTimeout(session.send("Network.getResponseBody", { requestId: event.requestId }), 2_000);
-            if (generation !== this.generation) return;
-            this.source?.clearEvidence();
-            this.source = new ChatGptResponseSource(this.binding, this.options.captureEvidence);
-            this.bodyFallback = true;
-            this.unavailable = undefined;
-            this.source.push(Buffer.from(body.body, body.base64Encoded ? "base64" : "utf8"));
-            this.refreshAccepted();
-          }
-          this.source?.finish(); this.finished = true;
-        }).catch(() => { if (generation === this.generation) { this.unavailable ??= "response_body_unavailable"; this.finished = true; } });
+        void this.completeTransport(session, event.requestId, generation, false);
       });
       session.on("Network.loadingFailed", event => {
         if (generation === this.generation) { const facts = this.traffic.get(event.requestId); if (facts) facts.failed = true; }
         if (generation !== this.generation || event.requestId !== this.requestId) return;
-        void (this.activation ?? Promise.resolve()).then(() => {
-          if (generation !== this.generation) return;
-          // The site cancels its fetch after application-level completion. Preserve a proved
-          // complete message; a cancellation before the terminators remains a failure.
-          this.source?.finish(); this.finished = true;
-          const facts = this.source?.facts();
-          if (!facts?.done || !facts.streamComplete) this.unavailable ??= "response_transport_incomplete";
-        });
+        void this.completeTransport(session, event.requestId, generation, true);
       });
       await withChatGptBrowserObservationTimeout(session.send("Network.enable", { maxPostDataSize: 2_000_000 }), 1_000);
     } catch { this.unavailable ??= "response_observer_unavailable"; await this.detach(); }
+  }
+
+  private async completeTransport(session: CDPSession, requestId: string, generation: number, failed: boolean): Promise<void> {
+    if (generation !== this.generation || this.settling) return;
+    this.settling = true;
+    try {
+      await this.activation;
+      if (generation !== this.generation || this.finished) return;
+      this.transportFailed = failed;
+      this.source?.finish();
+      const projection = this.source?.result();
+      // A completed HTTP response may outlive a missed CDP activation/chunk. Read only that
+      // response, once. Unsupported semantics and positive failure evidence are not retried
+      // or overwritten. In particular an aborted partial fetch cannot authorize a body read.
+      if (!failed && !this.bodyRecoveryAttempted && this.binding && this.status === 200
+        && (!projection || !responseSourceBlocksFallback(projection))
+        && (this.unavailable === "response_stream_unavailable"
+          || (!this.unavailable && projection?.state === "collecting"))) {
+        this.bodyRecoveryAttempted = true;
+        const body = await withChatGptBrowserObservationTimeout(session.send("Network.getResponseBody", { requestId }), 2_000);
+        if (generation !== this.generation) return;
+        if (typeof body.body !== "string" || body.body.length > 24 * 1024 * 1024) throw Error("Response body unavailable");
+        const bytes = Buffer.from(body.body, body.base64Encoded ? "base64" : "utf8");
+        if (bytes.length > 16 * 1024 * 1024) throw Error("Response body unavailable");
+        this.source?.clearEvidence();
+        this.source = new ChatGptResponseSource(this.binding, this.options.captureEvidence);
+        this.bodyFallback = true;
+        this.unavailable = undefined;
+        this.source.push(bytes); this.source.finish(); this.refreshAccepted();
+      }
+      const facts = this.source?.facts();
+      // A late site fetch cancellation after application termination is normal. Observation
+      // termination is independent of successful body projection (e.g. unknown event forms).
+      if (failed && (!facts?.observedDone || !facts.observedStreamComplete)) this.unavailable ??= "response_transport_incomplete";
+    } catch {
+      if (generation === this.generation) this.unavailable ??= "response_body_unavailable";
+    } finally {
+      if (generation === this.generation) this.finished = true;
+    }
   }
 
   activate(prompt: string, conversationId?: string): void {
@@ -165,6 +211,8 @@ export class ChatGptResponseStream {
   }
   submissionAccepted(): boolean { return this.accepted; }
   result(): ChatGptResponseSourceResult {
+    const projection = this.source?.result();
+    if (projection && responseSourceBlocksFallback(projection)) return projection;
     if (this.unavailable) return { state: "rejected", reason: this.unavailable };
     if (!this.source) return { state: "collecting" };
     const result = this.source.result();
@@ -173,7 +221,8 @@ export class ChatGptResponseStream {
   }
   snapshot() { return { armed: this.prompt !== undefined, matchedRequests: this.attempted,
     responseReceived: this.responseReceived, status: this.status, accepted: this.accepted, finished: this.finished,
-    reason: this.unavailable, projection: this.source?.facts(), traffic: [...this.traffic.values()], droppedTraffic: this.droppedTraffic, pageExceptions: this.pageExceptions }; }
+    reason: this.unavailable, transportFailed: this.transportFailed, bodyRecoveryAttempted: this.bodyRecoveryAttempted,
+    projection: this.source?.facts(), traffic: [...this.traffic.values()], droppedTraffic: this.droppedTraffic, pageExceptions: this.pageExceptions }; }
   /** Private artifact, never normal logs. Export once on failure BEFORE detach. Default off.
    * The worker owns private-file policy/lifecycle; this observer performs no filesystem writes.
    */

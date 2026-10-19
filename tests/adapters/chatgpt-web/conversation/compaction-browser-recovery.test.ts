@@ -18,7 +18,7 @@ test.each([[true, false, true], [false, false, true], [true, true, true], [true,
   const progress = tools ? new ChatGptExternalTurnProgress() : undefined;
   const recoveryCallbacks: unknown[] = [];
   const actions: string[] = [];
-  const sendBudgets: number[] = [];
+  const sendBudgets: Array<number | undefined> = [];
   let stage = "";
   let released = false;
   let activated = 0;
@@ -26,7 +26,7 @@ test.each([[true, false, true], [false, false, true], [true, true, true], [true,
   const page = Object.assign(new EventEmitter(), { evaluate: async () => ({}), isClosed: () => false, mainFrame: () => frame });
   const worker = Object.assign(Object.create(ChatGptBrowserWorker.prototype), {
     config: { appName: "Codex Native2", browserDiagnosticsPath: diagnostics, ...(owned ? { browserHostDescriptorPath: "owned-descriptor" } : {}) },
-    runStage: async (_trace: string, name: string, timeout: number, action: (signal: AbortSignal) => Promise<unknown>) => {
+    runStage: async (_trace: string, name: string, timeout: number | undefined, action: (signal: AbortSignal) => Promise<unknown>) => {
       stage = name;
       if (name === "send" || name.endsWith("_send")) sendBudgets.push(timeout);
       return action(new AbortController().signal);
@@ -99,7 +99,8 @@ test.each([[true, false, true], [false, false, true], [true, true, true], [true,
       `effort:${effort}`,
       tools ? "attach:tools" : "attach:plain", "files", "send", "observe",
     ]);
-    expect(sendBudgets).toEqual([20_000]);
+    // Send activation and acknowledgement own their budgets inside the browser operation.
+    expect(sendBudgets).toEqual([undefined]);
     expect(released).toBe(true);
     expect(activated).toBe(1);
     expect(page.listenerCount("request")).toBe(0);

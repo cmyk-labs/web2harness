@@ -1,0 +1,534 @@
+{
+  "kind": "complete-event-order-public-projection",
+  "date": "2026-10-19",
+  "wireBytesObserved": 30778,
+  "wireSaved": false,
+  "eventCount": 26,
+  "truncated": false,
+  "projection": "All 26 event positions retained. User/system/non-public bodies, resume token, renderer code/constants/widgets and nonessential metadata omitted. Original SSE bytes and original chunk framing are not preserved.",
+  "omittedRendererPatchCount": 14,
+  "identityRemapping": "Deterministic aliases preserve equality and ancestry; original IDs omitted.",
+  "binding": {
+    "userMessageId": "observed-id-2",
+    "conversationId": "observed-id-1"
+  },
+  "records": [
+    {
+      "sequence": 1,
+      "event": "delta_encoding",
+      "value": "v1"
+    },
+    {
+      "sequence": 2,
+      "event": "message",
+      "value": {
+        "type": "resume_conversation_token",
+        "conversation_id": "observed-id-1"
+      }
+    },
+    {
+      "sequence": 3,
+      "event": "message",
+      "value": {
+        "type": "input_message",
+        "conversation_id": "observed-id-1",
+        "input_message": {
+          "id": "observed-id-2",
+          "author": {
+            "role": "user"
+          },
+          "channel": null,
+          "recipient": "all",
+          "status": "finished_successfully",
+          "end_turn": null,
+          "content": {
+            "content_type": "text",
+            "parts": []
+          },
+          "metadata": {
+            "parent_id": "observed-id-3"
+          }
+        }
+      }
+    },
+    {
+      "sequence": 4,
+      "event": "delta",
+      "value": {
+        "p": "",
+        "o": "add",
+        "c": 0,
+        "v": {
+          "message": {
+            "id": "observed-id-4",
+            "author": {
+              "role": "system"
+            },
+            "channel": null,
+            "recipient": "all",
+            "status": "finished_successfully",
+            "end_turn": null,
+            "content": {
+              "content_type": "text",
+              "parts": []
+            },
+            "metadata": {
+              "parent_id": "observed-id-2",
+              "is_visually_hidden_from_conversation": true,
+              "model_slug": "gpt-6-thinking"
+            }
+          },
+          "conversation_id": "observed-id-1",
+          "error": null,
+          "error_code": null
+        }
+      }
+    },
+    {
+      "sequence": 5,
+      "event": "delta",
+      "value": {
+        "c": 1,
+        "v": {
+          "message": {
+            "id": "observed-id-5",
+            "author": {
+              "role": "system"
+            },
+            "channel": null,
+            "recipient": "all",
+            "status": "finished_successfully",
+            "end_turn": null,
+            "content": {
+              "content_type": "text",
+              "parts": []
+            },
+            "metadata": {
+              "parent_id": "observed-id-4",
+              "is_visually_hidden_from_conversation": true,
+              "model_slug": "gpt-6-thinking"
+            }
+          },
+          "conversation_id": "observed-id-1",
+          "error": null,
+          "error_code": null
+        }
+      }
+    },
+    {
+      "sequence": 6,
+      "event": "message",
+      "value": {
+        "type": "message_marker",
+        "conversation_id": "observed-id-1"
+      }
+    },
+    {
+      "sequence": 7,
+      "event": "delta",
+      "value": {
+        "c": 2,
+        "v": {
+          "message": {
+            "id": "observed-id-6",
+            "author": {
+              "role": "assistant"
+            },
+            "channel": null,
+            "recipient": "all",
+            "status": "finished_successfully",
+            "end_turn": false,
+            "content": {
+              "content_type": "reasoning_recap"
+            },
+            "metadata": {
+              "parent_id": "observed-id-5",
+              "model_slug": "gpt-6-thinking"
+            }
+          },
+          "conversation_id": "observed-id-1",
+          "error": null,
+          "error_code": null
+        }
+      }
+    },
+    {
+      "sequence": 8,
+      "event": "message",
+      "value": {
+        "type": "message_marker",
+        "conversation_id": "observed-id-1"
+      }
+    },
+    {
+      "sequence": 9,
+      "event": "message",
+      "value": {
+        "type": "message_marker",
+        "conversation_id": "observed-id-1"
+      }
+    },
+    {
+      "sequence": 10,
+      "event": "delta",
+      "value": {
+        "c": 3,
+        "v": {
+          "message": {
+            "id": "observed-id-7",
+            "author": {
+              "role": "assistant"
+            },
+            "channel": "final",
+            "recipient": "all",
+            "status": "in_progress",
+            "end_turn": null,
+            "content": {
+              "content_type": "text",
+              "parts": [
+                "REPLAY-BEGIN\n\n中文🙂𠮷é\n\n在面向不同设备的"
+              ]
+            },
+            "metadata": {
+              "parent_id": "observed-id-6",
+              "model_slug": "gpt-6-thinking",
+              "citations": [],
+              "model_dil_v2": {
+                "fallbackMarkdown": "REPLAY-BEGIN\n\n中文🙂𠮷é\n\n在面向不同设备的",
+                "fallbackMarkdownVersion": 1
+              }
+            }
+          },
+          "conversation_id": "observed-id-1",
+          "error": null,
+          "error_code": null
+        }
+      }
+    },
+    {
+      "sequence": 11,
+      "event": "delta",
+      "value": {
+        "o": "patch",
+        "v": [
+          {
+            "p": "/message/content/parts/0",
+            "o": "append",
+            "v": "正文展示中，清晰的行距、稳定的字形和自然的换行都十分重要。读"
+          },
+          {
+            "p": "/message/metadata/model_dil_v2/fallbackMarkdown",
+            "o": "append",
+            "v": "正文展示中，清晰的行距、稳定的字形和自然的换行都十分重要。读"
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 12,
+      "event": "delta",
+      "value": {
+        "v": [
+          {
+            "p": "/message/content/parts/0",
+            "o": "append",
+            "v": "者应当能够轻松区分标题、普通文字与结构化内容"
+          },
+          {
+            "p": "/message/metadata/model_dil_v2/fallbackMarkdown",
+            "o": "append",
+            "v": "者应当能够轻松区分标题、普通文字与结构化内容"
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 13,
+      "event": "delta",
+      "value": {
+        "v": [
+          {
+            "p": "/message/content/parts/0",
+            "o": "append",
+            "v": "，不会因为屏幕宽度变化而丢失信息。中英文"
+          },
+          {
+            "p": "/message/metadata/model_dil_v2/fallbackMarkdown",
+            "o": "append",
+            "v": "，不会因为屏幕宽度变化而丢失信息。中英文"
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 14,
+      "event": "delta",
+      "value": {
+        "v": [
+          {
+            "p": "/message/content/parts/0",
+            "o": "append",
+            "v": "混排时，字符间距需要保持协调；遇到表情符号、生僻汉字或组合重音符号，也应保留"
+          },
+          {
+            "p": "/message/metadata/model_dil_v2/fallbackMarkdown",
+            "o": "append",
+            "v": "混排时，字符间距需要保持协调；遇到表情符号、生僻汉字或组合重音符号，也应保留"
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 15,
+      "event": "delta",
+      "value": {
+        "v": [
+          {
+            "p": "/message/content/parts/0",
+            "o": "append",
+            "v": "原始顺序与外观。较长的句子可以通过合理的标点组织节奏，避免密集堆叠造成阅读"
+          },
+          {
+            "p": "/message/metadata/model_dil_v2/fallbackMarkdown",
+            "o": "append",
+            "v": "原始顺序与外观。较长的句子可以通过合理的标点组织节奏，避免密集堆叠造成阅读"
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 16,
+      "event": "delta",
+      "value": {
+        "v": [
+          {
+            "p": "/message/content/parts/0",
+            "o": "append",
+            "v": "困难。每个信息区域都应具有明确边界，让视线沿着页面从上到下顺畅移动。页面内容既要便于"
+          },
+          {
+            "p": "/message/metadata/model_dil_v2/fallbackMarkdown",
+            "o": "append",
+            "v": "困难。每个信息区域都应具有明确边界，让视线沿着页面从上到下顺畅移动。页面内容既要便于"
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 17,
+      "event": "delta",
+      "value": {
+        "v": [
+          {
+            "p": "/message/content/parts/0",
+            "o": "append",
+            "v": "快速浏览，也应支持逐字核对，保证复制后仍能准确对应原文。无论采用深色还是浅色显示方式，重点都在于稳定、完整和易读。\n\n| 编号 | 值 |\n|---|---|\n| 1 |"
+          },
+          {
+            "p": "/message/metadata/model_dil_v2/fallbackMarkdown",
+            "o": "append",
+            "v": "快速浏览，也应支持逐字核对，保证复制后仍能准确对应原文。无论采用深色还是浅色显示方式，重点都在于稳定、完整和易读。\n\n| 编号 | 值 |\n|--------|--------|\n| 1 |  |"
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 18,
+      "event": "delta",
+      "value": {
+        "v": [
+          {
+            "p": "/message/content/parts/0",
+            "o": "append",
+            "v": " 甲 |\n| 2 | 乙 |\n\n```python\ndef add(a, b):\n    return a + b\n```\n\n```mermaid"
+          },
+          {
+            "p": "/message/metadata/model_dil_v2/fallbackMarkdown",
+            "o": "replace",
+            "v": "REPLAY-BEGIN\n\n中文🙂𠮷é\n\n在面向不同设备的正文展示中，清晰的行距、稳定的字形和自然的换行都十分重要。读者应当能够轻松区分标题、普通文字与结构化内容，不会因为屏幕宽度变化而丢失信息。中英文混排时，字符间距需要保持协调；遇到表情符号、生僻汉字或组合重音符号，也应保留原始顺序与外观。较长的句子可以通过合理的标点组织节奏，避免密集堆叠造成阅读困难。每个信息区域都应具有明确边界，让视线沿着页面从上到下顺畅移动。页面内容既要便于快速浏览，也应支持逐字核对，保证复制后仍能准确对应原文。无论采用深色还是浅色显示方式，重点都在于稳定、完整和易读。\n\n| 编号 | 值 |\n|--------|--------|\n| 1 | 甲 |\n| 2 | 乙 |\n\n```python\ndef add(a, b):\n    return a + b\n```\n\n```mermaid\n\n```"
+          },
+          {
+            "p": "/message/metadata/content_references",
+            "o": "add",
+            "v": [
+              {
+                "type": "client_defined_widget",
+                "category": "code_block",
+                "data": {
+                  "content": "def add(a, b):\n    return a + b",
+                  "language": "python",
+                  "widget_type": "code_block"
+                },
+                "matched_text": "```python\ndef add(a, b):\n    return a + b\n```",
+                "start_idx": 330,
+                "end_idx": 375,
+                "safe_urls": [],
+                "refs": [],
+                "alt": null,
+                "prompt_text": null
+              },
+              {
+                "type": "client_defined_widget",
+                "category": "code_block",
+                "data": {
+                  "content": "",
+                  "language": "mermaid",
+                  "widget_type": "code_block"
+                },
+                "matched_text": "```mermaid\n\n```",
+                "start_idx": 377,
+                "end_idx": 392,
+                "safe_urls": [],
+                "refs": [],
+                "alt": null,
+                "prompt_text": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 19,
+      "event": "delta",
+      "value": {
+        "v": [
+          {
+            "p": "/message/content/parts/0",
+            "o": "append",
+            "v": "\nflowchart LR\n    A[输入] --> B[输出]\n```\n\nREPLAY-END"
+          },
+          {
+            "p": "/message/metadata/content_references/1/data/content",
+            "o": "append",
+            "v": "flowchart LR\n    A[输入] --> B[输出]"
+          },
+          {
+            "p": "/message/metadata/content_references/1/matched_text",
+            "o": "replace",
+            "v": "```mermaid\nflowchart LR\n    A[输入] --> B[输出]\n```"
+          },
+          {
+            "p": "/message/metadata/content_references/1/end_idx",
+            "o": "replace",
+            "v": 424
+          },
+          {
+            "p": "/message/metadata/model_dil_v2/fallbackMarkdown",
+            "o": "replace",
+            "v": "REPLAY-BEGIN\n\n中文🙂𠮷é\n\n在面向不同设备的正文展示中，清晰的行距、稳定的字形和自然的换行都十分重要。读者应当能够轻松区分标题、普通文字与结构化内容，不会因为屏幕宽度变化而丢失信息。中英文混排时，字符间距需要保持协调；遇到表情符号、生僻汉字或组合重音符号，也应保留原始顺序与外观。较长的句子可以通过合理的标点组织节奏，避免密集堆叠造成阅读困难。每个信息区域都应具有明确边界，让视线沿着页面从上到下顺畅移动。页面内容既要便于快速浏览，也应支持逐字核对，保证复制后仍能准确对应原文。无论采用深色还是浅色显示方式，重点都在于稳定、完整和易读。\n\n| 编号 | 值 |\n|--------|--------|\n| 1 | 甲 |\n| 2 | 乙 |\n\n```python\ndef add(a, b):\n    return a + b\n```\n\n```mermaid\nflowchart LR\n    A[输入] --> B[输出]\n```\n\nREPLAY-END"
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 20,
+      "event": "delta",
+      "value": {
+        "v": [
+          {
+            "p": "/message/status",
+            "o": "replace",
+            "v": "finished_successfully"
+          },
+          {
+            "p": "/message/end_turn",
+            "o": "replace",
+            "v": true
+          },
+          {
+            "p": "/message/metadata",
+            "o": "append",
+            "v": {
+              "is_complete": true,
+              "finish_details": {
+                "type": "stop",
+                "stop_tokens": [
+                  200002
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 21,
+      "event": "message",
+      "value": {
+        "type": "message_marker",
+        "conversation_id": "observed-id-1"
+      }
+    },
+    {
+      "sequence": 22,
+      "event": "delta",
+      "value": {
+        "p": "/message/metadata/conversation_followup_suggestions_eligible",
+        "o": "replace",
+        "v": true
+      }
+    },
+    {
+      "sequence": 23,
+      "event": "message",
+      "value": {
+        "type": "server_ste_metadata",
+        "conversation_id": "observed-id-1"
+      }
+    },
+    {
+      "sequence": 24,
+      "event": "message",
+      "value": {
+        "type": "message_stream_complete",
+        "conversation_id": "observed-id-1"
+      }
+    },
+    {
+      "sequence": 25,
+      "event": "message",
+      "value": {
+        "type": "conversation_detail_metadata",
+        "conversation_id": "observed-id-1"
+      }
+    },
+    {
+      "sequence": 26,
+      "event": "message",
+      "value": "[DONE]"
+    }
+  ],
+  "browserObservation": {
+    "requestId": "observed-generation-request",
+    "model": "gpt-6-thinking",
+    "effort": "max",
+    "durationSeconds": 60.852372,
+    "domCompletionNotice": "回答已完成",
+    "networkTerminal": "net::ERR_ABORTED",
+    "getResponseBodyAfterCompletion": "No data found for resource with given identifier",
+    "publicFallbackUtf16Length": 438,
+    "publicFallbackCodePoints": 436,
+    "publicFallbackUtf8Bytes": 973,
+    "referenceChecks": [
+      {
+        "language": "python",
+        "start": 330,
+        "end": 375,
+        "utf16Matches": false,
+        "codePointMatches": true,
+        "utf8ByteMatches": false,
+        "actualUtf16Start": 332
+      },
+      {
+        "language": "mermaid",
+        "start": 377,
+        "end": 424,
+        "utf16Matches": false,
+        "codePointMatches": true,
+        "utf8ByteMatches": false,
+        "actualUtf16Start": 379
+      }
+    ]
+  }
+}

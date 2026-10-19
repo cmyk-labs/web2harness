@@ -2,7 +2,8 @@ const { spawn } = require("node:child_process");
 const { randomBytes } = require("node:crypto");
 const { createInterface } = require("node:readline");
 
-const BROWSER_HELPER_OPERATION_TIMEOUT_MS = 90_000;
+const { OPERATION_STAGE_TIMEOUTS } = require("../../shared/operation-stages.cjs");
+const HELPER_STAGES = new Set(["running", "connection", "controls", "inspection", "cleanup"]);
 
 function waitForExit(child, timeoutMs) {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
@@ -38,7 +39,7 @@ function writeMessage(child, message) {
 async function stopChild(child) {
   if (child.exitCode !== null || child.signalCode !== null) return;
   await writeMessage(child, { type: "shutdown" }).catch(() => {});
-  if (await waitForExit(child, 5_000)) return;
+  if (await waitForExit(child, OPERATION_STAGE_TIMEOUTS.cleanup)) return;
   if (!child.kill("SIGTERM") && child.exitCode === null && child.signalCode === null) {
     throw new Error("Browser helper verification process refused termination");
   }
@@ -47,7 +48,7 @@ async function stopChild(child) {
   }
 }
 
-async function runBrowserHelperOperation({ helper, descriptorPath, appName, operation, payload = {}, logger, onStarted }) {
+async function runBrowserHelperOperation({ helper, descriptorPath, appName, operation, payload = {}, logger, onStarted, onStage, abortSignal }) {
   if (!helper || typeof helper.executable !== "string" || typeof helper.script !== "string") {
     throw new Error("Browser helper verification command is invalid");
   }
@@ -57,6 +58,7 @@ async function runBrowserHelperOperation({ helper, descriptorPath, appName, oper
   if (!["verify", "inspect", "smoke", "limits"].includes(operation)) {
     throw new Error(`Unsupported browser helper operation: ${String(operation)}`);
   }
+  if (abortSignal?.aborted) throw new DOMException("Browser helper operation aborted", "AbortError");
   const id = `${operation}-${randomBytes(12).toString("hex")}`;
   const child = spawn(helper.executable, [helper.script], {
     env: {
@@ -70,6 +72,8 @@ async function runBrowserHelperOperation({ helper, descriptorPath, appName, oper
   let completed = false;
   let sent = false;
   let timer;
+  let lastSequence = 0;
+  let onAbort;
   const output = createInterface({ input: child.stdout });
   const errors = createInterface({ input: child.stderr });
   errors.on("line", (line) => logger?.info("browser.connector_helper", { message: line.slice(0, 2_000) }));
@@ -82,6 +86,18 @@ async function runBrowserHelperOperation({ helper, descriptorPath, appName, oper
       if (error) reject(error);
       else resolve(value);
     };
+    const stage = (name) => {
+      clearTimeout(timer);
+      // Maintenance leaf operations own their timers. Do not cap a composite
+      // workflow (or a generation making progress) from outside the worker.
+      timer = name === "running" ? undefined
+        : setTimeout(() => finish(new Error(`Browser helper ${operation} ${name} stage timed out`)), OPERATION_STAGE_TIMEOUTS[name]);
+      try { onStage?.(name); }
+      catch (error) { finish(error); }
+    };
+    onAbort = () => finish(new DOMException("Browser helper operation aborted", "AbortError"));
+    abortSignal?.addEventListener("abort", onAbort, { once: true });
+    stage("startup");
     // A callback on write() does not consume the stream's separate `error` event. On Windows,
     // closing the helper's read side can therefore surface ERROR_BROKEN_PIPE/EOF as an uncaught
     // exception in Electron's main process even when the write promise is already handled.
@@ -95,6 +111,7 @@ async function runBrowserHelperOperation({ helper, descriptorPath, appName, oper
       error instanceof Error ? error : new Error(String(error)),
     ));
     output.on("line", (line) => {
+      if (completed) return;
       let message;
       try { message = JSON.parse(line); }
       catch {
@@ -107,6 +124,7 @@ async function runBrowserHelperOperation({ helper, descriptorPath, appName, oper
           return;
         }
         sent = true;
+        stage("connection");
         try { onStarted?.({ id, pid: child.pid }); }
         catch (error) {
           finish(error instanceof Error ? error : new Error(String(error)));
@@ -122,6 +140,16 @@ async function runBrowserHelperOperation({ helper, descriptorPath, appName, oper
       }
       if (message?.id !== id) {
         finish(new Error("Browser helper verification response identity is invalid"));
+        return;
+      }
+      if (message.type === "stage") {
+        if (!sent || !HELPER_STAGES.has(message.stage)
+          || !Number.isSafeInteger(message.sequence) || message.sequence !== lastSequence + 1) {
+          finish(new Error("Browser helper verification stage ownership is invalid"));
+          return;
+        }
+        lastSequence = message.sequence;
+        stage(message.stage);
         return;
       }
       if (message.type === "result") {
@@ -142,10 +170,6 @@ async function runBrowserHelperOperation({ helper, descriptorPath, appName, oper
     child.once("exit", (code, signal) => finish(new Error(
       `Browser helper verification exited ${signal ? `from signal ${signal}` : `with status ${code ?? 1}`}`,
     )));
-    timer = setTimeout(
-      () => finish(new Error(`Browser helper ${operation} timed out`)),
-      BROWSER_HELPER_OPERATION_TIMEOUT_MS,
-    );
   });
 
   let value;
@@ -156,12 +180,14 @@ async function runBrowserHelperOperation({ helper, descriptorPath, appName, oper
     primaryError = error instanceof Error ? error : new Error(String(error));
   }
   try {
+    onStage?.("cleanup");
     await stopChild(child);
   } catch (cleanupError) {
     const cleanup = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
     if (primaryError) throw new Error(`${primaryError.message}; browser helper cleanup failed: ${cleanup}`);
     throw cleanupError;
   } finally {
+    abortSignal?.removeEventListener("abort", onAbort);
     output.close();
     errors.close();
   }

@@ -3,6 +3,8 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { createInterface } = require("node:readline");
+const { createOperationStageWatchdog } = require("../../shared/operation-stages.cjs");
 const { writePrivateFileAtomic } = require("../common/atomic-file.cjs");
 const { redactText } = require("../logging.cjs");
 const { probeTunnelTransport } = require("../../shared/tunnel-transport-health.cjs");
@@ -517,16 +519,33 @@ class RuntimeSupervisor {
       env: {
         ...process.env,
         WEB2HARNESS_BROWSER_HOST_DESCRIPTOR: this.browserDescriptorPath,
+        ...(name === "daemon" ? { WEB2HARNESS_STAGE_PIPE: "1" } : {}),
         ...(this.launcherProfile === "development" ? {
           WEB2HARNESS_DEV_HOME: this.coreHome,
           WEB2HARNESS_HOME: this.coreHome,
           CODEX_HOME: path.join(this.coreHome, "codex-home"),
         } : {}),
       },
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe", ...(name === "daemon" ? ["pipe"] : [])],
       windowsHide: true,
     });
     this[name] = child;
+    if (name === "daemon") {
+      child.operationStageEvents = [];
+      const stages = createInterface({ input: child.stdio[3] });
+      const publish = value => {
+        if (child.listenerCount("operation-stage")) child.emit("operation-stage", value);
+        else if (value?.event === "end") {
+          child.operationStageEvents = child.operationStageEvents.filter(event => event.id !== value.id);
+        } else child.operationStageEvents.push(value);
+      };
+      stages.on("line", line => {
+        try { publish(JSON.parse(line)); }
+        catch (error) { publish(error); }
+      });
+      child.stdio[3].on("error", publish);
+      child.once("close", () => stages.close());
+    }
     this.lastChildFailure[name] = null;
     this.lastChildOutput[name] = null;
     collectLines(child.stdout, (line) => {
@@ -621,7 +640,7 @@ class RuntimeSupervisor {
       && (!requireAccepting || body?.accepting_turns === true);
   }
 
-  async waitForProxy(config, timeoutMs = 20_000) {
+  async waitForProxy(config, timeoutMs = 120_000) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       const daemon = this.daemon;
@@ -759,7 +778,7 @@ class RuntimeSupervisor {
     }
   }
 
-  async probeTunnelMcpTransport(timeoutMs = 2_000) {
+  async probeTunnelMcpTransport(timeoutMs = 10_000) {
     return probeTunnelTransport(this.tunnelHealthBaseUrl, timeoutMs);
   }
 
@@ -1419,40 +1438,104 @@ class RuntimeSupervisor {
 
   async control(config, action, options = {}) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 5_000);
+    const stageShutdown = action === "shutdown" && Number.isSafeInteger(options.expectedPid);
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? (stageShutdown ? 120_000 : 5_000));
     try {
       const response = await fetch(`http://${config.host}:${config.port}/admin/${action}`, {
         method: "POST",
         headers: {
           authorization: `Bearer ${config.controlToken}`,
+          ...(stageShutdown ? { accept: "application/x-ndjson" } : {}),
           ...(options.body === undefined ? {} : { "content-type": "application/json" }),
         },
         ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
         signal: controller.signal,
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (stageShutdown && response.headers.get("content-type")?.includes("application/x-ndjson")) {
+        clearTimeout(timeout);
+        return await this.readShutdownProgress(response, options.expectedPid, controller);
+      }
       return await response.json();
     } finally {
       clearTimeout(timeout);
     }
   }
 
+  async readShutdownProgress(response, expectedPid, controller) {
+    let failure;
+    const watchdog = createOperationStageWatchdog(error => { failure = error; controller.abort(); }, { initialStage: "startup" });
+    const ownerProbe = setInterval(() => {
+      if (!processRunning(expectedPid)) {
+        failure = new Error("Daemon exited before shutdown completion was verified");
+        controller.abort();
+      }
+    }, 1_000);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let pending = "", accepted = false;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        pending += decoder.decode(value, { stream: !done });
+        let newline;
+        while ((newline = pending.indexOf("\n")) >= 0) {
+          const message = JSON.parse(pending.slice(0, newline));
+          pending = pending.slice(newline + 1);
+          if (message.type === "accepted" && message.pid === expectedPid && !accepted) accepted = true;
+          else if (accepted && message.type === "stage") watchdog.accept(message);
+          else if (accepted && message.type === "result" && message.pid === expectedPid) {
+            if (message.status !== "ok") throw new Error("Daemon shutdown cleanup failed");
+            return { status: "ok" };
+          } else throw new Error("Daemon shutdown progress ownership is invalid");
+        }
+        if (pending.length > MAX_CONTROL_OUTPUT_BYTES) throw new Error("Daemon shutdown progress record is too large");
+        if (done) throw new Error("Daemon shutdown ended without completion evidence");
+      }
+    } catch (error) { throw failure ?? error; }
+    finally {
+      watchdog.stop();
+      clearInterval(ownerProbe);
+      await reader.cancel().catch(() => {});
+    }
+  }
+
   async waitForChildExit(name, child, timeoutMs) {
     if (!child || child.exitCode !== null || child.signalCode !== null) return;
     await new Promise((resolve, reject) => {
-      const finish = () => {
+      let timeout;
+      let watchdog;
+      let settled = false;
+      const cleanup = () => {
         clearTimeout(timeout);
+        watchdog?.stop();
         child.off("exit", finish);
         child.off("close", finish);
+        child.off("operation-stage", onStage);
+      };
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
         resolve();
       };
-      const timeout = setTimeout(() => {
-        child.off("exit", finish);
-        child.off("close", finish);
-        reject(new Error(`${name} did not stop within ${timeoutMs}ms`));
-      }, timeoutMs);
+      const fail = error => { if (settled) return; settled = true; cleanup(); reject(error); };
+      const onStage = event => {
+        try {
+          if (event instanceof Error) throw event;
+          watchdog.accept(event);
+        } catch (error) { fail(error); }
+      };
       child.once("exit", finish);
       child.once("close", finish);
+      if (name === "daemon" && timeoutMs === undefined) {
+        watchdog = createOperationStageWatchdog(fail, { initialStage: "startup" });
+        child.on("operation-stage", onStage);
+        for (const event of child.operationStageEvents?.splice(0) ?? []) onStage(event);
+      } else {
+        timeout = setTimeout(() => fail(new Error(`${name} did not stop within ${timeoutMs}ms`)), timeoutMs);
+      }
+      if (child.exitCode !== null || child.signalCode !== null) finish();
     });
   }
 
@@ -1500,15 +1583,16 @@ class RuntimeSupervisor {
     );
   }
 
-  async shutdownDaemon(config, timeoutMs = 10_000) {
+  async shutdownDaemon(config, timeoutMs) {
     const child = this.daemon;
     if (!child || child.exitCode !== null || child.signalCode !== null) {
       this.daemon = null;
       return;
     }
-    const result = await this.control(config, "shutdown");
+    const result = await this.control(config, "shutdown", { expectedPid: child.pid });
     if (result.status !== "ok") throw new Error("daemon did not acknowledge graceful shutdown");
-    await this.waitForChildExit("daemon", child, timeoutMs);
+    // Cleanup is complete. This is only the final process-exit stage.
+    await this.waitForChildExit("daemon", child, timeoutMs ?? 30_000);
     await this.waitForPortRelease(config);
     this.daemon = null;
   }
@@ -1753,9 +1837,9 @@ class RuntimeSupervisor {
       let drained = false;
       try {
         drained = await this.acquireDrain(config);
-        const shutdown = await this.control(config, "shutdown");
+        const shutdown = await this.control(config, "shutdown", { expectedPid: state.daemonPid });
         if (shutdown.status !== "ok") throw new Error("stale daemon did not acknowledge graceful shutdown");
-        await this.waitForProcessExit("stale daemon", state.daemonPid);
+        await this.waitForProcessExit("stale daemon", state.daemonPid, 30_000);
         await this.waitForPortRelease(config);
       } catch (error) {
         if (drained) {
@@ -1865,7 +1949,7 @@ class RuntimeSupervisor {
     return result;
   }
 
-  async stopChild(name, timeoutMs = 10_000) {
+  async stopChild(name, timeoutMs = name === "daemon" ? undefined : 10_000) {
     const child = this[name];
     if (!child || child.exitCode !== null || child.signalCode !== null) {
       this[name] = null;

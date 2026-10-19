@@ -1,0 +1,46 @@
+{
+  "kind": "redacted-selected-field-transcription-and-derived-comparisons",
+  "date": "2026-10-19",
+  "timezone": "Asia/Shanghai",
+  "rawReplay": false,
+  "newGenerations": 0,
+  "projectEndToEndAcceptance": false,
+  "history": {
+    "observedEndpoint": "/backend-api/conversations/{task-conversation-id}",
+    "status": 200,
+    "messageCount": 24,
+    "hasPreviousPage": false,
+    "hasNextPage": false,
+    "reloadEventBufferTruncated": true,
+    "completeBodyReadInMemory": true,
+    "completeBodySaved": false
+  },
+  "publicFinals": [
+    {"alias":"media","status":"finished_successfully","end_turn":true,"is_complete":true,"finish_details":{"type":"stop","stop_tokens":[200002]},"model":"gpt-6-thinking","effort":"max","fallbackCharacters":3733},
+    {"alias":"tool-error-recovery","status":"finished_successfully","end_turn":true,"is_complete":true,"finish_details":{"type":"stop","stop_tokens":[200002]},"model":"gpt-6-thinking","effort":"max","fallbackCharacters":255},
+    {"alias":"cancelled-list","status":"finished_successfully","end_turn":true,"is_complete":true,"finish_details":{"type":"interrupted","reason":"client_stopped"},"model":"gpt-6-thinking","effort":"max","fallbackCharacters":633,"endMarkerPresent":false,"tail":"020｜清晰的成功标准能够帮助用户判断操作是否已经"},
+    {"alias":"post-stop-recovery","status":"finished_successfully","end_turn":true,"is_complete":true,"finish_details":{"type":"stop","stop_tokens":[200002]},"model":"gpt-6-thinking","effort":"max","fallbackCharacters":22,"text":"RECOVERY-OK\n7 + 9 = 16"}
+  ],
+  "media": {
+    "lengthMeasure": "JavaScript string.length",
+    "fallbackMarkdownVersion": 1,
+    "fallbackCharacters": 3733,
+    "joinedPartsCharacters": 4726,
+    "codeBlocksContainerType": "object",
+    "references": [
+      {"type":"client_defined_widget","category":"visualization","widget_type":"charts_widget_v2","language":"recharts-json","dataContentType":"object","chartRows":12,"start_idx":1324,"end_idx":1856,"matchedTextCharacters":532,"fallbackSliceMatches":true,"partsSliceMatches":false},
+      {"type":"client_defined_widget","category":"code_block","widget_type":"code_block","language":"python","dataContentType":"string","dataContentCharacters":1125,"start_idx":1912,"end_idx":3050,"matchedTextCharacters":1138,"fallbackSliceMatches":true,"partsSliceMatches":false},
+      {"type":"client_defined_widget","category":"code_block","widget_type":"code_block","language":"mermaid","dataContentType":"string","dataContentCharacters":258,"start_idx":3071,"end_idx":3344,"matchedTextCharacters":273,"fallbackSliceMatches":true,"partsSliceMatches":false}
+    ],
+    "csv": {"status":200,"mimeType":"text/csv","networkEncodedDataLength":638,"retrievedBodyBytes":0,"previewColumns":["Month","A","B","A_minus_B"],"previewDataRows":12,"previewFirstRow":[1,12,9,3],"previewLastRow":[12,36,27,9],"previewVerification":"visual screenshot inspected in browser tool; no local screenshot artifact","savedToDisk":false,"rawBytesVerified":false},
+    "png": {"status":200,"mimeType":"image/png","networkEncodedDataLength":76906,"retrievedBodyBytes":76399,"signatureHex":"89504e470d0a1a0a","width":1780,"height":967,"naturalWidth":1780,"naturalHeight":967,"savedToDisk":false}
+  },
+  "attribution": {
+    "cancelFinishTypeAlreadyRejectedBySource": true,
+    "richReferencesSupportedBySource": false,
+    "emptyCsvRetrievalProvesEmptyFile": false,
+    "saveDialogDismissalIsProductFailure": false,
+    "separateBrowserLoginRefusalIsProductFailure": false
+  },
+  "cleanup": {"csvViewerClosed":true,"temporaryNetworkCaptureDisabled":true,"taskConversationKept":true}
+}

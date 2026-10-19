@@ -5,6 +5,7 @@ import { expandUserPath } from "../config";
 import { processRunning } from "../runtime/process";
 import { diagnosticError, diagnosticEvent } from "../diagnostics";
 import { validateRuntimeParameters, type RuntimeParameters } from "../../launcher/shared/runtime-parameters.cjs";
+import { OPERATION_STAGE_TIMEOUTS, type OperationStage } from "../../launcher/shared/operation-stages.cjs";
 
 export const LAUNCHER_BROWSER_HOST_KIND = "web2harness-launcher";
 export const LAUNCHER_BROWSER_IDLE_URL = "data:text/html;charset=utf-8,%3C!doctype%20html%3E%3Chtml%3E%3Chead%3E%3Cmeta%20charset%3D%22utf-8%22%3E%3Ctitle%3ECodex%20Web%20GPT%3C%2Ftitle%3E%3C%2Fhead%3E%3Cbody%3E%3C%2Fbody%3E%3C%2Fhtml%3E#web2harness-browser-host";
@@ -179,8 +180,10 @@ export function readLauncherBrowserHostDescriptor(configuredPath: string): Launc
   return descriptor;
 }
 
-async function assertCdpReady(descriptor: LauncherBrowserHostDescriptor, timeoutMs: number): Promise<void> {
+async function assertCdpReady(descriptor: LauncherBrowserHostDescriptor, timeoutMs: number, abortSignal?: AbortSignal): Promise<void> {
   const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  abortSignal?.addEventListener("abort", onAbort, { once: true });
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${descriptor.endpoint}/json/version`, { signal: controller.signal });
@@ -190,9 +193,39 @@ async function assertCdpReady(descriptor: LauncherBrowserHostDescriptor, timeout
       throw new Error("CDP metadata did not expose a loopback WebSocket endpoint");
     }
   } catch (error) {
+    if (abortSignal?.aborted) throw new DOMException("Launcher browser connection aborted", "AbortError");
     throw new Error(`Launcher browser CDP endpoint is not ready: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
   } finally {
     clearTimeout(timer);
+    abortSignal?.removeEventListener("abort", onAbort);
+  }
+}
+
+async function launcherNativeStage<T>(
+  label: string, action: () => Promise<T>, timeoutMs: number,
+  abortSignal?: AbortSignal, retireLate?: (value: T) => Promise<unknown>,
+): Promise<T> {
+  if (abortSignal?.aborted) throw new DOMException("Launcher browser connection aborted", "AbortError");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  let abandoned = false;
+  const pending = action();
+  void pending.then(value => {
+    if (abandoned) void retireLate?.(value).catch(() => {});
+  }, () => {});
+  try {
+    return await Promise.race([pending, new Promise<never>((_, reject) => {
+      onAbort = () => { abandoned = true; reject(new DOMException("Launcher browser connection aborted", "AbortError")); };
+      abortSignal?.addEventListener("abort", onAbort, { once: true });
+      timer = setTimeout(() => {
+        abandoned = true;
+        reject(new Error(`Launcher browser ${label} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+      if (abortSignal?.aborted) onAbort();
+    })]);
+  } finally {
+    clearTimeout(timer);
+    if (onAbort) abortSignal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -234,17 +267,21 @@ export async function selectLauncherPage(
     // Target metadata belongs to the browser process. Evaluating every page here makes an
     // unrelated busy/paused renderer block acquisition of an already-responsive owned page.
     const inspected = await Promise.all(candidates.map(async candidate => {
-      const session = await candidate.context.newCDPSession(candidate.page).catch(() => undefined);
+      const session = await launcherNativeStage("CDP session creation", () => candidate.context.newCDPSession(candidate.page),
+        OPERATION_STAGE_TIMEOUTS.inspection, abortSignal,
+        late => launcherNativeStage("late CDP detach", () => late.detach(), OPERATION_STAGE_TIMEOUTS.inspection)).catch(() => undefined);
       if (!session) return { ...candidate, targetId: undefined };
       try {
-        const { targetInfo } = await session.send("Target.getTargetInfo");
+        const { targetInfo } = await launcherNativeStage("target inspection", () => session.send("Target.getTargetInfo"),
+          OPERATION_STAGE_TIMEOUTS.inspection, abortSignal);
         return { ...candidate, targetId: targetInfo.targetId };
       } catch {
         return { ...candidate, targetId: undefined };
       } finally {
-        await session.detach().catch(() => {});
+        await launcherNativeStage("CDP detach", () => session.detach(), OPERATION_STAGE_TIMEOUTS.inspection).catch(() => {});
       }
     }));
+    if (abortSignal?.aborted) throw new DOMException("Launcher browser connection aborted", "AbortError");
     const owned = inspected.filter(candidate => candidate.targetId === targetId);
     if (owned.length === 1) {
       return { context: owned[0].context, page: owned[0].page };
@@ -259,7 +296,7 @@ export async function selectLauncherPage(
 
 export async function connectLauncherBrowserHost(
   descriptorPath: string,
-  timeoutMs = 20_000,
+  timeoutMs = OPERATION_STAGE_TIMEOUTS.connection,
   surfaceId?: string,
   abortSignal?: AbortSignal,
 ): Promise<LauncherBrowserConnection> {
@@ -267,14 +304,16 @@ export async function connectLauncherBrowserHost(
     throw new DOMException("Launcher browser connection aborted", "AbortError");
   }
   const descriptor = readLauncherBrowserHostDescriptor(descriptorPath);
-  await assertCdpReady(descriptor, Math.min(timeoutMs, 5_000));
+  await assertCdpReady(descriptor, timeoutMs, abortSignal);
   let browser: Browser;
   try {
-    browser = await chromium.connectOverCDP(descriptor.endpoint, { timeout: timeoutMs });
+    browser = await launcherNativeStage("CDP connection", () => chromium.connectOverCDP(descriptor.endpoint, { timeout: timeoutMs }),
+      timeoutMs, abortSignal, late => launcherNativeStage("late browser cleanup", () => late.close(), OPERATION_STAGE_TIMEOUTS.cleanup));
   } catch (error) {
+    if (abortSignal?.aborted) throw new DOMException("Launcher browser connection aborted", "AbortError");
     throw new Error(`Could not connect Playwright to the launcher browser: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
   }
-  const closeOnAbort = () => { void browser.close().catch(() => {}); };
+  const closeOnAbort = () => { void launcherNativeStage("browser cleanup", () => browser.close(), OPERATION_STAGE_TIMEOUTS.cleanup).catch(() => {}); };
   abortSignal?.addEventListener("abort", closeOnAbort, { once: true });
   try {
     if (abortSignal?.aborted) {
@@ -289,7 +328,7 @@ export async function connectLauncherBrowserHost(
     );
     return { descriptor, browser, context, page };
   } catch (error) {
-    await browser.close().catch(() => {});
+    await launcherNativeStage("browser cleanup", () => browser.close(), OPERATION_STAGE_TIMEOUTS.cleanup).catch(() => {});
     throw error;
   } finally {
     abortSignal?.removeEventListener("abort", closeOnAbort);
@@ -302,6 +341,8 @@ export async function inspectLauncherBrowserHost(
     detectCapabilities?: boolean;
     expectedProfile?: LauncherBrowserHostProfile;
     timeoutMs?: number;
+    abortSignal?: AbortSignal;
+    onStage?: (stage: OperationStage) => void;
   } = {},
 ): Promise<{ solAvailable?: boolean; extraHighAvailable?: boolean; proAvailable?: boolean; url: string }> {
   const descriptor = readLauncherBrowserHostDescriptor(descriptorPath);
@@ -310,26 +351,82 @@ export async function inspectLauncherBrowserHost(
       `Launcher browser belongs to ${descriptor.profile}, but ${options.expectedProfile} was required`,
     );
   }
-  const timeoutMs = options.timeoutMs ?? (options.detectCapabilities
-    ? LAUNCHER_CAPABILITY_INSPECTION_TIMEOUT_MS
-    : LAUNCHER_SESSION_INSPECTION_TIMEOUT_MS);
+  if (options.abortSignal?.aborted) throw new DOMException("Session inspection aborted", "AbortError");
   const controller = new AbortController();
   let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
+  let lostOwner = false;
+  let stage: OperationStage = "connection";
+  let timeoutMs = options.timeoutMs ?? OPERATION_STAGE_TIMEOUTS.connection;
+  let timer: ReturnType<typeof setTimeout>;
+  const armStage = (nextStage: OperationStage) => {
+    clearTimeout(timer);
+    stage = nextStage;
+    if (stage !== "running") {
+      timeoutMs = options.timeoutMs ?? OPERATION_STAGE_TIMEOUTS[stage];
+      timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
+    }
+    options.onStage?.(stage);
+  };
+  const onAbort = () => controller.abort();
+  options.abortSignal?.addEventListener("abort", onAbort, { once: true });
+  const ownerProbe = setInterval(() => {
+    if (!processRunning(descriptor.pid)) { lostOwner = true; controller.abort(); }
+  }, 1_000);
   try {
+    armStage("connection");
     const response = await fetch(`${descriptor.control.endpoint}/v1/session/inspect`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${descriptor.control.token}`,
         "content-type": "application/json",
+        accept: "application/x-ndjson",
       },
       body: JSON.stringify({ detectCapabilities: options.detectCapabilities === true }),
       signal: controller.signal,
     });
-    const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+    let body: Record<string, unknown> = {};
+    if (response.ok && response.headers.get("content-type")?.includes("application/x-ndjson")) {
+      armStage("running");
+      if (!response.body) throw new Error("Launcher inspection stream is missing");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let pending = "";
+      let sequence = 0;
+      let finished = false;
+      try {
+        while (!finished) {
+          const { done, value } = await reader.read();
+          pending += decoder.decode(value, { stream: !done });
+          let newline;
+          while ((newline = pending.indexOf("\n")) >= 0) {
+            const line = pending.slice(0, newline);
+            pending = pending.slice(newline + 1);
+            const message = JSON.parse(line) as Record<string, unknown>;
+            if (message.type === "stage") {
+              if (message.sequence !== ++sequence || typeof message.stage !== "string"
+                || !["running", "startup", "connection", "controls", "inspection", "cleanup", "page-load"].includes(message.stage)) {
+                throw new Error("Launcher inspection stage ownership is invalid");
+              }
+              // The host and worker enforce their own primitive deadlines. These
+              // records describe progress, not a second enclosing client timer.
+            } else if (message.type === "result" && message.value && typeof message.value === "object") {
+              body = message.value as Record<string, unknown>;
+              finished = true;
+              break;
+            } else if (message.type === "error" && typeof message.message === "string") {
+              throw new Error(message.message);
+            } else throw new Error("Launcher inspection stream is invalid");
+          }
+          if (pending.length > 64 * 1024) throw new Error("Launcher inspection message is too large");
+          if (done && !finished) throw new Error("Launcher inspection ended without a result");
+        }
+      } finally {
+        await reader.cancel().catch(() => {});
+      }
+    } else {
+      armStage("inspection");
+      body = await response.json().catch(() => ({})) as Record<string, unknown>;
+    }
     if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : `HTTP ${response.status}`);
     if (body.authenticated !== true || body.temporary !== true || typeof body.url !== "string") {
       throw new Error("Launcher returned invalid ChatGPT session evidence");
@@ -350,17 +447,22 @@ export async function inspectLauncherBrowserHost(
       } : {}),
     };
   } catch (error) {
+    if (options.abortSignal?.aborted) throw new DOMException("Session inspection aborted", "AbortError");
     const detail = timedOut
-      ? `session inspection timed out after ${timeoutMs}ms`
-      : error instanceof Error ? error.message : String(error);
+      ? `session inspection timed out after ${timeoutMs}ms (${stage} stage)`
+      : lostOwner ? "launcher browser host process exited during inspection"
+        : error instanceof Error ? error.message : String(error);
     throw new Error(`Launcher ChatGPT session could not be verified: ${detail}`, { cause: error });
   } finally {
-    clearTimeout(timer);
+    clearTimeout(timer!);
+    clearInterval(ownerProbe);
+    options.abortSignal?.removeEventListener("abort", onAbort);
   }
 }
 
-export const LAUNCHER_SESSION_INSPECTION_TIMEOUT_MS = 30_000;
-export const LAUNCHER_CAPABILITY_INSPECTION_TIMEOUT_MS = 120_000;
+// A single inspection budget, not a cap on a multi-stage session/capability flow.
+export const LAUNCHER_SESSION_INSPECTION_TIMEOUT_MS = OPERATION_STAGE_TIMEOUTS.inspection;
+export const LAUNCHER_CAPABILITY_INSPECTION_TIMEOUT_MS = OPERATION_STAGE_TIMEOUTS.inspection;
 
 export type LauncherTurnActivity =
   | {

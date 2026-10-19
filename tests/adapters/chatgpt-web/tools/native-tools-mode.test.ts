@@ -376,6 +376,39 @@ describe("native-tools adapter emission", () => {
     }
   });
 
+  test.each(["plain-text", "tool-prose", "tool-call"])("disconnect during validated native emission replays one committed reply: %s", async point => {
+    const provider = nativeProvider(), turnId = `atomic_native_${point}_${Date.now()}`;
+    const worker = ChatGptBrowserWorker.forProvider(provider), originalRun = worker.run.bind(worker);
+    const withTools = point !== "plain-text", visible = "One visible reply.";
+    const answer = visible + (withTools ? '\n```codex_tool_calls\n{"calls":[{"name":"exec_command","arguments":{"cmd":"echo once"}}]}\n```' : "");
+    let starts = 0;
+    (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
+      starts++; await turn.prepare(); turn.onTextDelta(answer); return answer;
+    };
+    const disconnect = new AbortController(), first: AdapterEvent[] = [];
+    try {
+      const attempt = createChatGptWebAdapter(provider).runTurn!(wireRequest(turnId),
+        { headers: new Headers(), abortSignal: disconnect.signal }, event => {
+          first.push(event);
+          if (event.type === (point === "tool-call" ? "tool_call_start" : "text_delta")) {
+            disconnect.abort(); throw new DOMException("observer detached", "AbortError");
+          }
+        });
+      await expect(attempt).rejects.toMatchObject({ name: "AbortError" });
+      const replay: AdapterEvent[] = [];
+      await createChatGptWebAdapter(provider).runTurn!(wireRequest(turnId), { headers: new Headers() }, event => replay.push(event));
+      expect(starts).toBe(1);
+      expect(replay.filter(e => e.type === "text_delta")).toEqual([{ type: "text_delta", text: visible, phase: withTools ? "commentary" : "final_answer" }]);
+      expect(replay.filter(e => e.type === "tool_call_start")).toHaveLength(withTools ? 1 : 0);
+      expect(replay.filter(e => e.type === "done")).toHaveLength(1);
+      if (point === "tool-call") expect(replay.find(e => e.type === "tool_call_start")).toEqual(first.find(e => e.type === "tool_call_start"));
+      expect(replay.some(e => e.type === "error")).toBe(false);
+      const again: AdapterEvent[] = [];
+      await createChatGptWebAdapter(provider).runTurn!(wireRequest(turnId), { headers: new Headers() }, event => again.push(event));
+      expect(again).toEqual(replay); expect(starts).toBe(1);
+    } finally { (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = originalRun; }
+  });
+
   test("an unusable block fails retryably and the retry prompt carries corrective feedback", async () => {
     const provider = nativeProvider();
     const broken = "Checking an unvalidated call.\n```" + CODEX_TOOL_CALLS_FENCE + "\n"

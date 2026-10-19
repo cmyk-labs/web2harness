@@ -2,7 +2,7 @@
 
 import type { Locator } from "playwright-core";
 import { CHATGPT_COMPLETION_ACTION_SELECTOR } from "../../../browser/session";
-import type { ChatGptMarkdownSegment } from "../markdown";
+import { chatGptHtmlToMarkdown, type ChatGptMarkdownSegment } from "../markdown";
 import { chatGptBrowserTabClosedError } from "../adapter-error";
 import { CHATGPT_STOPPED_THINKING_LABELS } from "./ui-labels";
 import { CHATGPT_ANSWER_ROOT_SELECTOR } from "../../../../launcher/shared/chatgpt-answer-dom.cjs";
@@ -767,6 +767,18 @@ export async function readChatGptResponseDom(
     return absentResponseDomSnapshot();
   }
   const snapshot = observed.snapshot ?? cache?.snapshot ?? absentResponseDomSnapshot();
+  if (observed.snapshot) {
+    // The renderer appends empty layout/loading nodes after a still-growing table or
+    // paragraph. Their presence is not the following *content* boundary that permits
+    // streaming the previous block. Apply the same serializer used for actual delivery.
+    let followingContent = false;
+    for (let i = snapshot.markdownSegments.length - 1; i >= 0; i--) {
+      const segment = snapshot.markdownSegments[i]!;
+      segment.streamable &&= followingContent;
+      try { followingContent ||= !!chatGptHtmlToMarkdown(segment.html); }
+      catch { /* Unserializable content cannot prove a boundary; delivery still validates it. */ }
+    }
+  }
   if (observed.snapshot && cache) {
     cache.key = observed.key;
     cache.snapshot = observed.snapshot;

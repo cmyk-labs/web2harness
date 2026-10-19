@@ -56,7 +56,7 @@ test("replay retains one ticket and its first deadline; changed identity fails",
   assert.equal(f.add("queued").deadlineAt, first.deadlineAt);
   assert.equal(f.scheduler.snapshot().waiting, 1);
   assert.throws(() => f.add("queued", "different"), { code: "queue_identity_conflict" });
-  f.advance(14 * 60_000);
+  f.advance((DEFAULT_REQUEST_SCHEDULING.queueTimeoutMinutes - 1) * 60_000);
   assert.equal(f.add("queued").state, "timed-out");
   f.finish("running"); assert.equal(f.scheduler.snapshot().active, 0);
 });
