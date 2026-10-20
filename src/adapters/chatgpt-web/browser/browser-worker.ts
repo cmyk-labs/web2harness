@@ -3399,7 +3399,7 @@ export class ChatGptBrowserWorker {
     const submissionRejection = new ChatGptSubmissionRejectionObserver();
     const evidence = new ChatGptTurnEvidence();
     const streamEvidence = new ChatGptStreamEvidence(prepared.handoffBinding);
-    const responseSource = new ChatGptResponseStream({ captureEvidence: useResponseSource });
+    const responseSource = new ChatGptResponseStream({ captureEvidence: useResponseSource, savedChatReadback: this.config.useSavedChats });
     let readinessSnapshot: ChatGptReadinessSnapshot | undefined;
     let preparationFailed = false;
     try {
@@ -3815,7 +3815,7 @@ export class ChatGptBrowserWorker {
       let responseTurn: ChatGptAssistantTurnBinding | undefined;
       // Binding observes its own stages. Keeping it pending lets a complete public source
       // finish even when the renderer has not mounted an answer or its read is blocked.
-      const bindingObservation = new ChatGptPendingObservation<ChatGptAssistantTurnBinding | undefined>(Number.POSITIVE_INFINITY);
+      let bindingObservation = new ChatGptPendingObservation<ChatGptAssistantTurnBinding | undefined>(Number.POSITIVE_INFINITY);
       const bindAssistantTurn = () => this.waitForNewAssistantTurn(
         page,
         submissionBaseline,
@@ -3848,7 +3848,7 @@ export class ChatGptBrowserWorker {
           // Generation and extraction are different operations. Earlier generation time does
           // not spend the allowance for obtaining the completed answer.
           deadline = undefined;
-          extractionDeadline = Date.now() + CHATGPT_RESPONSE_EXTRACTION_TIMEOUT_MS;
+          extractionDeadline ??= Date.now() + CHATGPT_RESPONSE_EXTRACTION_TIMEOUT_MS;
           responsePhase = "extraction";
           diagnosticEvent("info", "browser.response_completed", { phase: "generation", outcome: "completed" });
           responseCompletion = Promise.resolve().then(() => turn.onResponseCompleted?.());
@@ -3909,6 +3909,10 @@ export class ChatGptBrowserWorker {
       let observedThisIteration = false;
       let completionFenceRevision: number | undefined;
       const completionFenceWait = new CompletionFenceWait();
+      const finalActivity = new ChatGptPendingObservation<boolean>(120_000);
+      let nextFinalActivityRead = 0;
+      let savedReadbackStarted = false;
+      let savedReadback: Promise<void> | undefined;
       for (;;) {
         // The heartbeat is a consumer callback, so it stays outside the observation-fault region:
         // a defect in the caller must not be retried as though the page could not be read.
@@ -3932,12 +3936,49 @@ export class ChatGptBrowserWorker {
           throw chatGptResponseFailure("chatgpt_response_timeout");
         }
         if (extractionDeadline !== undefined && Date.now() >= extractionDeadline) {
+          if (useResponseSource && responseSource.result().state === "awaiting_final") {
+            throw new ChatGptWebAdapterError("ChatGPT ended this turn without a verifiable public final answer. Existing tool results were preserved; no generation was resent.", {
+              status: 502, errorType: "upstream_error", code: "chatgpt_public_answer_missing", retryable: false,
+            });
+          }
           // Retain the existing read-only failed-answer page and bilingual recovery help.
           // The distinct cause/phase still identifies extraction expiry without a new UI protocol.
           throw chatGptMarkdownFailure(turn.uiLanguage, chatGptResponseFailure("chatgpt_response_extraction_timeout"));
         }
         if (useResponseSource) {
           const source = checkedSource();
+          if (source.state === "awaiting_final" && Date.now() >= nextFinalActivityRead) {
+            const activity = finalActivity.poll(async () => {
+              await throwIfChatGptSessionFailureAlert(page);
+              return page.locator(CHATGPT_STOP_BUTTON_SELECTOR).last().isVisible();
+            });
+            if (activity.state === "ready") {
+              nextFinalActivityRead = Date.now() + 1_000;
+              if (!activity.value && !chatGptExternalProgressSuppressesDomHealth(turn.externalProgress?.snapshot(), Date.now())) {
+                if (extractionDeadline === undefined) {
+                  deadline = undefined;
+                  extractionDeadline = Date.now() + CHATGPT_RESPONSE_EXTRACTION_TIMEOUT_MS;
+                  responsePhase = "extraction";
+                  diagnosticEvent("info", "browser.response_reconciliation", { reason: "public_final_pending", savedChat: this.config.useSavedChats });
+                }
+                if (this.config.useSavedChats && !savedReadbackStarted && savedChatId(page.url()) === source.conversationId) {
+                  savedReadbackStarted = true;
+                  // Reload only this already-saved, idle conversation once. Its normal GET is
+                  // observed passively; no bearer extraction, alternate tab, or new generation.
+                  savedReadback = page.reload({ waitUntil: "domcontentloaded", timeout: 120_000 })
+                    .then(() => {})
+                    .catch(() => { diagnosticEvent("warning", "browser.response_readback_unavailable", { reason: "saved_page_reload_failed" }); })
+                    .finally(() => {
+                      responseDomCache = { ownerKey: responseDomCache.ownerKey };
+                      responseObservation = new ChatGptPendingObservation(Number.POSITIVE_INFINITY);
+                      bindingObservation = new ChatGptPendingObservation(Number.POSITIVE_INFINITY);
+                      responseTurn = undefined;
+                      savedReadback = undefined;
+                    });
+                }
+              }
+            }
+          }
           if (responseSource.lifecycle().state === "complete") {
             observedThisIteration = true;
             await responseCompleted();
@@ -3956,6 +3997,10 @@ export class ChatGptBrowserWorker {
             diagnosticEvent("info", "browser.response_source_committed", { chars: finalText.length, source: responseSource.snapshot() });
             break;
           }
+        }
+        if (savedReadback) {
+          await new Promise(resolveSleep => setTimeout(resolveSleep, 250));
+          continue;
         }
         if (!responseTurn) {
           const binding = bindingObservation.poll(bindAssistantTurn);
@@ -4076,7 +4121,7 @@ export class ChatGptBrowserWorker {
             externalProgressLive,
             sourceAvailable: useResponseSource && responseSource.result().state === "collecting",
           });
-          if (domError) throw new Error(domError);
+          if (domError && !(useResponseSource && responseSource.result().state === "awaiting_final")) throw new Error(domError);
           const sourceCompletion = useResponseSource ? responseSource.lifecycle() : undefined;
           if (snapshot.messageId && sourceCompletion?.messageId && snapshot.messageId !== sourceCompletion.messageId) {
             throw chatGptMarkdownFailure(turn.uiLanguage, new Error("Complete DOM belongs to a different response message"));
@@ -4199,7 +4244,7 @@ export class ChatGptBrowserWorker {
             externalProgressLive,
             sourceAvailable: useResponseSource && responseSource.result().state === "collecting",
           });
-          if (domError) throw new Error(domError);
+          if (domError && !(useResponseSource && responseSource.result().state === "awaiting_final")) throw new Error(domError);
         }
         await new Promise(resolveSleep => setTimeout(resolveSleep, 250));
        } catch (error) {

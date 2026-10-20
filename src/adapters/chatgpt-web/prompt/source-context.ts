@@ -1,5 +1,6 @@
 import type { CodexSourceContext, CodexTool } from "../../../types";
 import { parseInputFile } from "../../../responses/file-input";
+import { parseInputAudio } from "../../../responses/audio-input";
 import { decodeCompactionSummary } from "../../../responses/compaction";
 import { decodeReasoningEnvelope } from "../../../responses/reasoning-envelope";
 import { createInputFile, type ChatGptInputFile } from "./file-attachments";
@@ -78,6 +79,12 @@ export function encodeSourceContext(
         const file = createInputFile(parseInputFile(block));
         if (!files.some(existing => existing.name === file.name)) files.push(file);
         const { file_data: _data, ...metadata } = block;
+        return { ...metadata, attachment_ref: file.name };
+      }
+      if (block.type === "input_audio") {
+        const file = createInputFile(parseInputAudio(block));
+        if (!files.some(existing => existing.name === file.name)) files.push(file);
+        const { audio_url: _url, ...metadata } = block;
         return { ...metadata, attachment_ref: file.name };
       }
       throw new Error(`Unsupported Codex content type: ${String(block.type)}; context was not sent`);

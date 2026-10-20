@@ -59,7 +59,7 @@ import {
 } from "./responses/compaction";
 import { parseRequest, validateRequestForPreparation } from "./responses/parser";
 import { InputReferenceError, inspectInputReferences, resolveInputReferences, type InputReferenceTransport } from "./responses/input-references";
-import { preflightContextCompatibility } from "./responses/context-compatibility";
+import { migrateVisibleReasoning, preflightContextCompatibility } from "./responses/context-compatibility";
 import { createChatGptStructuredOutputValidator } from "./adapters/chatgpt-web/output-validation";
 import { createResponsesWebSocketAdapter, type SteerTarget, type SteerValidation } from "./responses/websocket";
 import { copyPreviousResponseProvenance, expandPreviousResponseInput, flushResponseState, rememberResponseState, responseStateScope } from "./responses/state";
@@ -665,6 +665,26 @@ async function responseRequestFromBody(
       message: "Local continuation state for previous_response_id is unavailable. Resend the complete original history without previous_response_id; do not replay tool side effects or send only the latest message.",
     } }, { status: 400 });
   }
+  const migrationChoice = req.headers.get("x-web2harness-reasoning-migration");
+  if (migrationChoice !== null && migrationChoice !== "strict" && migrationChoice !== "visible-history") {
+    return Response.json({ error: { type: "invalid_request_error", code: "invalid_context_migration", retryable: false,
+      message: "X-Web2Harness-Reasoning-Migration must be strict or visible-history." } }, { status: 400 });
+  }
+  let migrationOriginalBody: unknown;
+  let resetReasoningItems = 0;
+  if (migrationChoice === "visible-history" && expanded && typeof expanded === "object" && !Array.isArray(expanded)) {
+    const migration = migrateVisibleReasoning((expanded as { input?: unknown }).input ?? []);
+    if (migration.resetItemCount) {
+      migrationOriginalBody = expanded;
+      resetReasoningItems = migration.resetItemCount;
+      expanded = { ...expanded, input: migration.input };
+      copyPreviousResponseProvenance(migrationOriginalBody, expanded);
+    }
+  }
+  const migrationHeaders: Record<string, string> = resetReasoningItems ? {
+    "X-Web2Harness-Reasoning-Migration": "visible-history",
+    "X-Web2Harness-Reasoning-Reset-Items": String(resetReasoningItems),
+  } : {};
   const contextCompatibility = preflightContextCompatibility(
     expanded && typeof expanded === "object" ? (expanded as { input?: unknown }).input ?? [] : [],
   );
@@ -706,7 +726,7 @@ async function responseRequestFromBody(
         if (validated._compactionRequest) return Response.json({ error: { type: "invalid_request_error", code: "unsupported_compaction_prewarm",
           message: "Compaction requires its dedicated operation.", retryable: false } }, { status: 400 });
         if (req.signal.aborted) throw new HttpBodyError("Request cancelled", 499);
-        return preparedResponse(expanded, validatedRoute.slug, continuationScope, options);
+        return preparedResponse(migrationOriginalBody ?? expanded, validatedRoute.slug, continuationScope, options);
       }
       const scope = {
         taskId: createHash("sha256").update(JSON.stringify([identity.threadId ?? crypto.randomUUID(), identity.turnId ?? ""])).digest("hex"),
@@ -720,6 +740,10 @@ async function responseRequestFromBody(
       expanded = resolved;
     }
     parsed = parseRequest(expanded);
+    if (resetReasoningItems && parsed.context.source) {
+      parsed.context.source.migration = { kind: "visible-history", resetReasoningItems,
+        notice: "The caller explicitly chose to restart reasoning from the preserved visible history. Source-backend encrypted reasoning was not imported. Preserve all task instructions, tools and results; do not repeat completed tool side effects to reconstruct reasoning." };
+    }
     route = routeChatGptWebRequest(parsed, config);
     if (!parsed._compactionRequest) validateChatGptWebRequestControls(parsed._rawBody);
     if (options.prepareOnly) createChatGptStructuredOutputValidator(parsed.options.outputFormat);
@@ -745,7 +769,7 @@ async function responseRequestFromBody(
   const compactionItem = compaction && parsed._compactionResponseFormat !== "message";
   const rememberCompletedResponse = (response: Record<string, unknown>): void => {
     if (!compaction) {
-      if (options.rememberState !== false) rememberResponseState(parsed._rawBody, response, {
+      if (options.rememberState !== false) rememberResponseState(migrationOriginalBody ?? parsed._rawBody, response, {
         force: true, memoryOnly: options.memoryOnlyState, scope: continuationScope,
       });
       return;
@@ -827,7 +851,7 @@ async function responseRequestFromBody(
   }
   if (options.prepareOnly) {
     if (req.signal.aborted) throw new HttpBodyError("Request cancelled", 499);
-    return preparedResponse(parsed._rawBody, route.slug, continuationScope, options);
+    return preparedResponse(migrationOriginalBody ?? parsed._rawBody, route.slug, continuationScope, options);
   }
   const adapter = adapterFactory(provider);
   const queue = new AsyncEventQueue<AdapterEvent>();
@@ -884,6 +908,7 @@ async function responseRequestFromBody(
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no",
+        ...migrationHeaders,
       },
     });
   }
@@ -898,7 +923,7 @@ async function responseRequestFromBody(
     ...(compactionItem ? { compaction: true } : {}),
   });
   rememberCompletedResponse(json);
-  return Response.json(json);
+  return Response.json(json, { headers: migrationHeaders });
 }
 
 export function compactRequest(

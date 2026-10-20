@@ -16,12 +16,14 @@ const wire = (values: unknown[]) => Buffer.from(values.map(v => `data: ${v === "
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 class Session extends EventEmitter {
   calls: string[] = [];
+  savedBody?: unknown;
   streaming: () => Promise<{ bufferedData: string }> = async () => ({ bufferedData: "" });
-  async send(method: string) {
+  async send(method: string, params?: { requestId?: string }) {
     this.calls.push(method);
     if (method === "Page.getFrameTree") return { frameTree: { frame: { id: "owned-frame" } } };
     if (method === "Network.streamResourceContent") return this.streaming();
-    if (method === "Network.getResponseBody") return { body: wire(frames).toString(), base64Encoded: false };
+    if (method === "Network.getResponseBody") return { body: params?.requestId === "readback"
+      ? JSON.stringify(this.savedBody) : wire(frames).toString(), base64Encoded: false };
     return {};
   }
   async detach() {}
@@ -34,6 +36,36 @@ class Session extends EventEmitter {
   async complete(failed = false) { this.emit(failed ? "Network.loadingFailed" : "Network.loadingFinished", { requestId: "owned-request", canceled: failed }); await flush(); }
 }
 const page = (session: Session): any => Object.assign(new EventEmitter(), { context: () => ({ newCDPSession: async () => session }) });
+
+test("saved readback observes only the bound conversation GET; temporary chats do not read history", async () => {
+  for (const [savedChatReadback, route] of [[false, "conversation"], [true, "conversation"],
+    [false, "conversations"], [true, "conversations"]] as const) {
+    const session = new Session(), source = new ChatGptResponseStream({ savedChatReadback, captureEvidence: true });
+    await source.attach(page(session)); source.activate("test prompt", "current");
+    session.request(); session.response(); await flush();
+    session.data(wire([frames[0], frames[1], ...frames.slice(3)])); await session.complete();
+    expect(source.result().state).toBe("awaiting_final");
+    const turn = { turn_exchange_id: "exchange", working_turn_id: "working" };
+    const answer = (frames[2] as any).v.message;
+    session.savedBody = route === "conversations" ? { conversation_id: "current", current_node: "answer", messages: [
+      { ...input, metadata: turn }, { ...answer, metadata: { ...answer.metadata, ...turn } },
+    ] } : { conversation_id: "current", current_node: "answer", mapping: {
+      [input.id]: { parent: null, message: input },
+      answer: { parent: input.id, message: answer },
+    } };
+    session.emit("Network.requestWillBeSent", { frameId: "owned-frame", requestId: "readback", request: {
+      method: "GET", url: `https://chatgpt.com/backend-api/${route}/current?num_turns=20&include_has_versions=true` } });
+    session.emit("Network.responseReceived", { requestId: "readback", response: { status: 200, mimeType: "application/json" } });
+    session.emit("Network.loadingFinished", { requestId: "readback" });
+    await flush();
+    expect(source.result().state).toBe(savedChatReadback ? "complete" : "awaiting_final");
+    expect(source.snapshot().readbackCount).toBe(savedChatReadback ? 1 : 0);
+    expect(source.snapshot().matchedRequests).toBe(1);
+    const evidence = source.takeEvidence();
+    if (savedChatReadback) expect(evidence?.savedReadback).toMatchObject({ state: "complete", messageId: "answer" });
+    await source.detach();
+  }
+});
 
 test("automatic resume uses a fresh transport cursor and a known message snapshot without duplicate body", async () => {
   const session = new Session(), source = new ChatGptResponseStream({ captureEvidence: true });

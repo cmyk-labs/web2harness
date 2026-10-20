@@ -85,6 +85,26 @@ test("an out-of-band input acknowledgement does not redirect the current assista
   expect(source.result()).toMatchObject({ state: "complete", text: "answer" });
 });
 
+test("an exact user snapshot binds the observed request without a separate input acknowledgement", () => {
+  // Authenticated DEV 2026-10-20: root user delta, hidden ancestry, final, and both
+  // terminal markers were present; the redundant input_message envelope was absent.
+  const root = { p: "", o: "add", c: 0, v: { message: user, conversation_id: binding.conversationId } };
+  const hidden = message({ id: "system", author: { role: "system" }, channel: null,
+    metadata: { parent_id: user.id, is_visually_hidden_from_conversation: true } });
+  const answer = message({ content: { content_type: "text", parts: ["exact answer"] }, metadata: { parent_id: hidden.id } });
+  const frames = ["v1", root, { c: 1, v: { message: hidden } }, { c: 2, v: { message: answer } }, ...end()];
+  for (const size of [1, 17, 4096]) {
+    expect(project(frames, size).result()).toMatchObject({ state: "complete", text: "exact answer" });
+  }
+  for (const wrongUser of [{ ...user, id: "foreign" }, { ...user, author: { role: "assistant" } }]) {
+    expect(project(["v1", { ...root, v: { ...root.v, message: wrongUser } }, ...frames.slice(2)]).result())
+      .toMatchObject({ state: "rejected", reason: "response_identity_incomplete" });
+  }
+  expect(project([...frames.slice(0, -1), {
+    type: "input_message", input_message: { ...user, id: "foreign" },
+  }, "[DONE]"]).result()).toMatchObject({ state: "rejected", reason: "response_identity_mismatch" });
+});
+
 test("private reasoning and tool bytes never reach an answer or telemetry", () => {
   const privateMessage = message({ id: "private", channel: "analysis", content: { content_type: "text", parts: ["PRIVATE_REASONING"] },
     status: "finished_successfully", end_turn: false });
@@ -117,7 +137,7 @@ test.each([[null], [undefined], ["opaque"]] as const)("non-public channel %s pre
     const final = { p: "", o: "add", c: 2, v: { conversation_id: binding.conversationId,
       message: message({ metadata: { parent_id: intermediate.id }, content: { content_type: "text", parts: ["Exact final"] } }) } };
     expect(project([...prefix, final, ...end()], chunk).result()).toMatchObject({ state: "complete", text: "Exact final" });
-    expect(project([...prefix, ...end()], chunk).result()).toMatchObject({ state: "rejected", reason: "response_final_message_ambiguous" });
+    expect(project([...prefix, ...end()], chunk).result()).toMatchObject({ state: "awaiting_final", ...binding });
     const foreign = { ...final, v: { ...final.v, message: message({ metadata: { parent_id: "unbound" } }) } };
     expect(project([...prefix, foreign, ...end()], chunk).result()).toMatchObject({ state: "rejected", reason: "response_parent_unbound" });
   }
@@ -127,7 +147,6 @@ test.each([
   ["DONE alone", ["[DONE]"], "response_identity_incomplete"],
   ["wrong input", [{ type: "input_message", input_message: { ...user, id: "old" }, conversation_id: binding.conversationId }], "response_identity_mismatch"],
   ["foreign conversation", [{ p: "", o: "add", v: { message: message(), conversation_id: "foreign" } }], "response_identity_mismatch"],
-  ["unknown channel without public final", [{ p: "", o: "add", v: { message: message({ channel: null }), conversation_id: binding.conversationId } }], "response_final_message_ambiguous"],
   ["unknown operation", [{ p: "/message/content/parts/0", o: "mystery", v: "text" }], "response_patch_unsupported"],
   ["server error", [{ error: { message: "private error" } }], "response_upstream_error"],
 ] as const)("%s cannot become a successful response", (_name, frames, reason) => {
@@ -139,7 +158,7 @@ test("transport end and stream DONE do not replace the final message's terminal 
   const content = { p: "/message/content/parts/0", o: "append", v: "answer" };
   expect(project([...begin(), content, "[DONE]"]).result()).toEqual({ state: "collecting" });
   expect(project([...begin(), content, { type: "message_stream_complete", conversation_id: binding.conversationId }, "[DONE]"]).result())
-    .toMatchObject({ state: "rejected", reason: "response_final_message_ambiguous" });
+    .toMatchObject({ state: "awaiting_final", ...binding });
   const partial = { ...terminal, v: [...terminal.v, { p: "/message/status", o: "replace", v: "finished_partial" }] };
   expect(project([...begin(), content, partial, { type: "message_stream_complete", conversation_id: binding.conversationId }, "[DONE]"]).result())
     .toMatchObject({ state: "rejected", reason: "response_message_incomplete" });

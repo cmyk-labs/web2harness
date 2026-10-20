@@ -51,6 +51,20 @@ function source(): Record<string, unknown> {
 }
 
 describe("native /models augmentation", () => {
+  test("automatic Web routes advertise audio without changing native modality declarations", () => {
+    const native = source();
+    const original = structuredClone(native);
+    for (const mode of ["native-tools", "mcp-bridge", "browser-only"] as const) {
+      const config = defaultConfig(mode);
+      config.subagentProtocol = "native";
+      const models = augmentNativeModelCatalog(native, config).models as Array<Record<string, unknown>>;
+      expect(models.slice(0, 3)).toEqual(original.models as Array<Record<string, unknown>>);
+      const web = models.slice(3);
+      expect(web.length).toBeGreaterThan(0);
+      expect(web.every(model => JSON.stringify(model.input_modalities) === JSON.stringify(["text", "image", "audio"]))).toBe(true);
+    }
+    expect(native).toEqual(original);
+  });
   test("native tools retain the official Code Mode contract without changing other transports", () => {
     for (const mode of ["native-tools", "mcp-bridge", "browser-only"] as const) {
       const catalog = augmentNativeModelCatalog(source(), defaultConfig(mode));

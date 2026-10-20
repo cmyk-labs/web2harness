@@ -2,6 +2,7 @@ import * as z from "zod/v4";
 
 const inputTextSchema = z.object({ type: z.literal("input_text"), text: z.string() });
 const plainTextSchema = z.object({ type: z.literal("text"), text: z.string() });
+const inputAudioBlockSchema = z.object({ type: z.literal("input_audio"), audio_url: z.string().min(1) }).loose();
 const inputImageBlockSchema = z.object({
   type: z.literal("input_image"),
   // codex-rs ImageDetail: auto|low|high|original (view_image --detail original).
@@ -21,15 +22,15 @@ const outputTextSchema = z.object({ type: z.literal("output_text"), text: z.stri
 const outputRefusalSchema = z.object({ type: z.literal("refusal"), refusal: z.string() });
 const summaryTextSchema = z.object({ type: z.literal("summary_text"), text: z.string() });
 const reasoningTextSchema = z.object({ type: z.literal("reasoning_text"), text: z.string() });
-// codex-rs FunctionCallOutputContentItem (protocol/src/models.rs): input_text | input_image | encrypted_content.
+// codex-rs FunctionCallOutputContentItem: input_text | input_image | input_audio | encrypted_content.
 const encryptedContentBlockSchema = z.object({ type: z.literal("encrypted_content"), encrypted_content: z.string() });
 
-const inputContentBlockSchema = z.union([inputTextSchema, plainTextSchema, inputImageBlockSchema, inputFileBlockSchema]);
+const inputContentBlockSchema = z.union([inputTextSchema, plainTextSchema, inputImageBlockSchema, inputFileBlockSchema, inputAudioBlockSchema]);
 const outputContentBlockSchema = z.union([outputTextSchema, plainTextSchema, outputRefusalSchema]);
 // Codex tool outputs can contain both input-shaped and output-shaped content blocks.
 const toolOutputContentBlockSchema = z.union([
   outputTextSchema, plainTextSchema, outputRefusalSchema,
-  inputTextSchema, inputImageBlockSchema, inputFileBlockSchema, encryptedContentBlockSchema,
+  inputTextSchema, inputImageBlockSchema, inputFileBlockSchema, inputAudioBlockSchema, encryptedContentBlockSchema,
 ]);
 const toolOutputSchema = z.union([z.string(), z.array(toolOutputContentBlockSchema)]);
 

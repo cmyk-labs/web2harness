@@ -114,6 +114,7 @@ export interface CodexSourceContext {
   input: unknown[] | string;
   tools?: unknown[];
   controls: Record<string, unknown>;
+  migration?: { kind: "visible-history"; resetReasoningItems: number; notice: string };
 }
 
 export interface CodexThinkingContent {

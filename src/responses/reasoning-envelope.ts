@@ -38,11 +38,13 @@ export function decodeReasoningEnvelope(encryptedContent: string): ReasoningEnve
     if (typeof obj.sig === "string") envelope.sig = obj.sig;
     if (Array.isArray(obj.red)) {
       const red = obj.red.filter((r): r is string => typeof r === "string");
-      if (red.length > 0) envelope.red = red;
+      envelope.red = red;
     }
     const txt = (parsed as { txt?: unknown }).txt;
-    if (typeof txt === "string" && txt.length > 0) envelope.txt = txt;
-    return envelope.sig || envelope.red || envelope.txt ? envelope : null;
+    if (typeof txt === "string") envelope.txt = txt;
+    // Field presence matters for lossless replay, including a signature over empty text.
+    // An empty value is not an absent field or an undecodable native encrypted payload.
+    return Object.keys(envelope).length > 0 ? envelope : null;
   } catch {
     return null;
   }

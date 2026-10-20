@@ -92,7 +92,7 @@ describe("original Codex context", () => {
 
   test("image overflow and unsupported content fail before dropping any context", () => {
     expect(() => compile({ input: [{ role: "user", content: Array.from({ length: CHATGPT_MAX_INPUT_IMAGES + 1 }, () => ({ type: "input_image", image_url: "data:image/png;base64,aA==" })) }] })).toThrow("No images were omitted");
-    expect(() => compile({ input: [{ type: "message", role: "user", content: [{ type: "input_audio", data: "opaque" }] }] })).toThrow("Unsupported Codex content type");
+    expect(() => compile({ input: [{ type: "message", role: "user", content: [{ type: "input_audio", data: "opaque" }] }] })).toThrow("audio_url");
     expect(() => compile({ input: [{ type: "future_protocol_item", value: "must not disappear" }] })).toThrow("Unsupported Codex input type");
     expect(() => compile({ input: [{ type: "reasoning", encrypted_content: "provider-private" }] })).toThrow("Opaque Codex");
   });

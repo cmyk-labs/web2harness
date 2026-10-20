@@ -134,6 +134,8 @@ Launcher 的脱敏队列回执保存在当前应用目录 `runtime/request-queue
 
 15 分钟无进展检测由有效适配器进展重置，不是任务总时长额度。普通生成默认没有绝对总时限；显式配置的 `chatgptWeb.turnTimeoutMs` 从提交确认开始限制生成，不包含准备阶段，也不覆盖使用独立阶段计时的压缩。恢复次数、用户显式设置、原生工具和原生 `wait` 语义保持不变。
 
+Web 上下文迁移须逐请求明确选择：`X-Web2Harness-Reasoning-Migration: visible-history` 从可见历史重新推理；缺省或 `strict` 保留严格密文检查。这不是原生密文解码，压缩历史、agent 消息和加密工具结果仍须完整原始来源。参见[上下文兼容说明](native-tools-compatibility.zh-CN.md)。流结束且无公开答案时，在活动停止后单独给予120秒只读复核，仍无答案则返回 `chatgpt_public_answer_missing`，不重发生成请求。
+
 <a id="standalone-request-queue"></a>
 
 ### 独立队列控制
@@ -375,7 +377,7 @@ Fast与非Fast标准上下文窗口默认分别为80,000/272,000 tokens；95%可
 | Pro 账户的 Sol Medium／High／可用 Extra High | 103,000 | 500,000 |
 | GPT-5.6 Sol Pro 或 GPT-6 Pro | 104,000 | 1,635,000 |
 
-输入必须同时满足所有适用限制。输入估算包含可见文本、上下文文件内容、所选 skill 附件、`8192` 平台预留以及图片预留。每张图片预留 `4096` token，`detail: "original"` 时预留 `8192`。字符与 token 限制相互独立：消息可能符合 token 预算，却超过字符上限。字符检查采用 JavaScript 字符串长度。
+输入必须同时满足所有适用限制。输入估算包含可见文本、上下文文件内容、所选 skill 附件、`8192` 平台预留以及图片预留。每张图片预留 `4096` token，`detail: "original"` 时预留 `8192`。编码音频字节不计为文本token；Web没有暴露其真实上下文成本，本地usage不包含这项未知成本，上传／内存及Web侧限制仍适用。字符与 token 限制相互独立：消息可能符合 token 预算，却超过字符上限。字符检查采用 JavaScript 字符串长度。
 
 Sol/Pro的单次可见文本规划预算独立于总上下文：无图片时，非Pro Instant为32807、非Pro思考为81807、Pro账户普通Sol为103000、Pro模型为104000 tokens。图片预留从中扣除。它们是传输规划边界，不是自动压缩阈值。
 
@@ -433,7 +435,9 @@ Web2Harness 从原生模型目录模板创建 Web 条目，再写入 Web 路由�
 
 仅支持公开 HTTPS 的 443 端口。所有 DNS 结果须为公网地址，socket 固定到已检查地址并验证主机名／TLS。不转发授权头、Cookie、浏览器身份、环境凭据或代理；每个重定向目标须有独立精确 URL 授权。展开请求中的内联与远程图片／文件附件合计最多 10 个、内容总计 50,000,000 字节，同时计入内联和下载字节；单附件最多 20,000,000 字节。同名且数据相同的重复内联文件只计一次，图片和 URL 引用逐项计数。DNS、连接／响应头及每个文件正文分别独立限时30、60、120秒，最多三次重定向各自重新计时，并受共享请求分配预留和取消约束。解析器可施加更低的下载预算，但不能提高内置上限。
 
-保留原字节及支持的明确 MIME。含糊的 octet-stream／ZIP MIME、不支持的字符集／HTTP 压缩及原始音视频被拒绝。provider `file_id` 在预填和生成均报 `unsupported_provider_file_reference`，因为尚无已确认兼容认证的 Codex／ChatGPT 文件服务；API Files 端点本身不是该契约。不以转录、抽帧或猜测端点作为等价回退。详见[附件边界](native-tools-compatibility.zh-CN.md#data-contracts)。
+保留原字节及支持的明确 MIME。含糊的 octet-stream／ZIP MIME、不支持的字符集／HTTP 压缩、不支持的音频格式及原始视频被拒绝。内联Codex input_audio支持WAV、MP3/MPEG、OGG Opus/Vorbis、FLAC、纯音频M4A/MP4与WebM，经原始字节附件链路传递，包括原生工具结果。公开HTTPS音频URL沿用同一授权下载器和无下载预填规则；裸PCM与独立AAC流仍不支持。provider `file_id` 在预填和生成均报 `unsupported_provider_file_reference`，因为尚无已确认兼容认证的 Codex／ChatGPT 文件服务；API Files 端点本身不是该契约。不以转录、抽帧或猜测端点作为等价回退。详见[附件边界](native-tools-compatibility.zh-CN.md#data-contracts)。
+
+自动Web模型行声明音频输入，使Codex能够传递音频工具结果；该声明启用传输，不证明Web处理或音频理解已通过。手动行仍仅文本，原生模型声明保持原样。详见[当前媒体验收限制](investigations/2026-10-20-capability-followup/README.zh-CN.md)。
 
 <a id="data-locations"></a>
 

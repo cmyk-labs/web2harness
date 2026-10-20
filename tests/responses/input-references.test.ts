@@ -285,7 +285,7 @@ test("MIME, byte signature, compression, raw audio/video and transport errors ne
     return result;
   };
   await rejects(resolveInputReferences(body(image()), { ...f.options, transport: compressed }), code("unsupported_attachment_encoding"));
-  for (const type of ["input_audio", "input_video", "audio", "video"]) {
+  for (const type of ["input_video", "audio", "video"]) {
     expect(() => validateRequestForPreparation(body({ type, data: "opaque", transcript: "not a substitute" }))).toThrow("not equivalent");
   }
   await rejects(resolveInputReferences(body(image()), { ...f.options, transport: async () => { throw new Error("https://private/token?secret"); } }),

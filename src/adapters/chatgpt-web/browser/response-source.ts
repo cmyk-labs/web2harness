@@ -10,6 +10,7 @@ type Message = { id: string; role: string; channel: unknown; recipient: unknown;
 export interface ChatGptResponseBinding { userMessageId: string; conversationId?: string }
 export type ChatGptResponseSourceResult =
   | { state: "collecting" }
+  | { state: "awaiting_final"; conversationId: string; userMessageId: string }
   | { state: "rejected"; reason: string; kind?: "invalid" | "unsupported" | "unavailable" }
   | { state: "complete"; text: string; messageId: string; conversationId: string };
 
@@ -115,24 +116,38 @@ export class ChatGptResponseSource {
       completion: m.complete === undefined ? "missing" : m.complete ? "complete" : "incomplete",
       finish: m.finishType === undefined ? "missing" : m.finishType === "stop" ? "stop" : "other" })) }; }
 
-  private completedMessage(): Message | Exclude<ChatGptResponseSourceResult, { state: "complete" }> {
+  private completedMessage(savedAncestors?: ReadonlySet<string>): Message | Exclude<ChatGptResponseSourceResult, { state: "complete" }> {
     if (this.failure) return { state: "rejected", reason: this.failure };
     if (!this.done || !this.streamComplete) return { state: "collecting" };
     if (!this.inputSeen || !this.conversation) return { state: "rejected", reason: "response_identity_incomplete" };
+    if ([...this.messages.values()].some(m => publicText(m) && (m.complete === false
+      || (m.finishType !== undefined && m.finishType !== "stop")
+      || (m.status !== undefined && m.status !== "in_progress" && m.status !== "finished_successfully")))) {
+      return { state: "rejected", reason: "response_message_incomplete" };
+    }
     const finals = [...this.messages.values()].filter(m => m.role === "assistant" && m.channel === "final"
       && m.recipient === "all" && !m.hidden && m.endTurn === true);
-    if (finals.length !== 1) return { state: "rejected", reason: "response_final_message_ambiguous" };
+    if (finals.length === 0) {
+      // An ended transport without a public final is not evidence of conflicting answers.
+      // Keep the exact turn identity for bounded, read-only reconciliation.
+      return { state: "awaiting_final", conversationId: this.conversation, userMessageId: this.binding.userMessageId };
+    }
+    if (finals.length > 1) return { state: "rejected", reason: "response_final_message_ambiguous" };
     const message = finals[0]!;
     if (message.status !== "finished_successfully" || message.complete === false
       || (message.finishType !== undefined && message.finishType !== "stop")) {
       return { state: "rejected", reason: "response_message_incomplete" };
     }
-    let ancestor: Message | undefined = message;
-    const seen = new Set<string>();
-    while (ancestor && ancestor.id !== this.binding.userMessageId && !seen.has(ancestor.id)) {
-      seen.add(ancestor.id); ancestor = ancestor.parent ? this.messages.get(ancestor.parent) : undefined;
+    const seen = new Set(savedAncestors);
+    if (savedAncestors) {
+      if (!seen.has(message.id) || !seen.has(this.binding.userMessageId)) return { state: "rejected", reason: "response_parent_unbound" };
+    } else {
+      let ancestor: Message | undefined = message;
+      while (ancestor && ancestor.id !== this.binding.userMessageId && !seen.has(ancestor.id)) {
+        seen.add(ancestor.id); ancestor = ancestor.parent ? this.messages.get(ancestor.parent) : undefined;
+      }
+      if (ancestor?.id !== this.binding.userMessageId) return { state: "rejected", reason: "response_parent_unbound" };
     }
-    if (ancestor?.id !== this.binding.userMessageId) return { state: "rejected", reason: "response_parent_unbound" };
     // In the owned 2026-10-18 captures, public commentary remains in_progress without terminal
     // metadata, then a descendant reasoning/final phase completes normally. Only this exact
     // ancestor shape can be superseded by the proved final. A sibling/later message, explicit
@@ -151,10 +166,14 @@ export class ChatGptResponseSource {
     return message;
   }
 
-  lifecycle(): { state: "unknown" | "generating" | "complete" | "interrupted" | "failed"; messageId?: string; conversationId?: string } {
+  lifecycle(): { state: "unknown" | "generating" | "awaiting_final" | "complete" | "interrupted" | "failed"; messageId?: string; conversationId?: string } {
+    if (this.completedContent?.state === "complete") return { state: "complete",
+      messageId: this.completedContent.messageId, conversationId: this.completedContent.conversationId };
+    if (this.completedContent && responseSourceBlocksFallback(this.completedContent)) return { state: "failed" };
     const message = this.completedMessage();
     if ("state" in message) {
       if (message.state === "rejected") return { state: message.reason === "response_message_incomplete" ? "interrupted" : "failed" };
+      if (message.state === "awaiting_final") return { state: "awaiting_final", conversationId: message.conversationId };
       return { state: this.inputSeen ? "generating" : "unknown" };
     }
     return { state: "complete", messageId: message.id, conversationId: this.conversation };
@@ -162,13 +181,78 @@ export class ChatGptResponseSource {
 
   result(): ChatGptResponseSourceResult {
     if (this.completedContent) return this.completedContent;
-    const message = this.completedMessage();
+    return this.projectResult();
+  }
+  private projectResult(savedAncestors?: ReadonlySet<string>): ChatGptResponseSourceResult {
+    const message = this.completedMessage(savedAncestors);
     if ("state" in message) return message;
     try {
       if (message.discarded && !message.fallback) throw Error("response_content_unsupported");
       return this.completedContent = { state: "complete", text: responseContent(message), messageId: message.id, conversationId: this.conversation! };
     } catch (error) {
       return this.completedContent = { state: "rejected", reason: this.errorReason(error), kind: "unsupported" };
+    }
+  }
+
+  /** Project only the active saved-chat branch bound to this submission.
+   * A readback never repairs positive stream errors or imports another user turn.
+   * Private ancestor bodies are discarded by readMessage, just as in stream projection.
+   */
+  reconcileSavedConversation(value: unknown): ChatGptResponseSourceResult {
+    const original = this.result();
+    if (original.state !== "awaiting_final") return original;
+    if (!object(value) || (value.conversation_id ?? value.id) !== original.conversationId
+      || typeof value.current_node !== "string") return original;
+    const branch: Json[] = [];
+    let savedAncestors: Set<string> | undefined;
+    if (object(value.mapping)) {
+      const seen = new Set<string>();
+      let id: unknown = value.current_node;
+      while (typeof id === "string" && !seen.has(id) && branch.length < 256) {
+        seen.add(id);
+        const node = value.mapping[id];
+        if (!object(node) || !object(node.message) || node.message.id !== id) return original;
+        const m = node.message;
+        if (m.author?.role === "user" && m.id !== this.binding.userMessageId) return original;
+        branch.push({ ...m, metadata: { ...m.metadata, parent_id: node.parent } });
+        if (id === this.binding.userMessageId) break;
+        id = node.parent;
+      }
+      if (branch.at(-1)?.id !== this.binding.userMessageId) return original;
+      branch.reverse();
+    } else if (Array.isArray(value.messages)) {
+      // The current endpoint returns an ordered active-branch window. Saving can omit and
+      // reparent private nodes, so stream parent IDs are not a cross-representation contract.
+      // Bind the exact submitted user and current leaf by the page's two turn identifiers.
+      const start = value.messages.findIndex(m => m?.id === this.binding.userMessageId && m.author?.role === "user");
+      if (start < 0 || value.messages.at(-1)?.id !== value.current_node) return original;
+      const user = value.messages[start], exchange = user.metadata?.turn_exchange_id, working = user.metadata?.working_turn_id;
+      if (typeof exchange !== "string" || !exchange || typeof working !== "string" || !working) return original;
+      savedAncestors = new Set();
+      for (const m of value.messages.slice(start)) {
+        if (!object(m) || typeof m.id !== "string" || (m !== user && m.author?.role === "user")
+          || m.metadata?.turn_exchange_id !== exchange || m.metadata?.working_turn_id !== working) return original;
+        if (savedAncestors.has(m.id)) return { state: "rejected", reason: "response_identity_mismatch" };
+        savedAncestors.add(m.id); branch.push(m);
+        if (branch.length > 256) return original;
+      }
+    } else return original;
+    const candidate = new ChatGptResponseSource({ ...this.binding, conversationId: original.conversationId });
+    candidate.conversation = original.conversationId;
+    try {
+      for (const m of branch) {
+        const known = this.messages.get(m.id);
+        if (known && known.role !== m.author?.role) return { state: "rejected", reason: "response_identity_mismatch" };
+        candidate.readMessage(m, false);
+      }
+      candidate.done = candidate.streamComplete = true;
+      const result = candidate.projectResult(savedAncestors);
+      // A public final followed by another active phase is not the branch's final answer.
+      if (result.state === "complete" && result.messageId !== value.current_node) return original;
+      if (result.state === "complete" || responseSourceBlocksFallback(result)) this.completedContent = result;
+      return result;
+    } catch (error) {
+      return { state: "rejected", reason: this.errorReason(error) };
     }
   }
 
@@ -266,6 +350,10 @@ export class ChatGptResponseSource {
     m.parent ??= previous?.parent;
     const updated = previous ? Object.assign(previous, m) : m;
     this.messages.set(m.id, updated);
+    // Some completed Web streams carry the request's exact user snapshot as a root
+    // delta without a separate input_message acknowledgement. Both identify the
+    // same bound request; neither an unrelated user nor assistant snapshot does.
+    if (m.id === this.binding.userMessageId && m.role === "user") this.inputSeen = true;
     if (selectCurrent) this.current = updated;
   }
   private content(m: Message, value: unknown): void {

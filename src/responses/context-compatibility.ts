@@ -65,6 +65,14 @@ function safeItemType(item: Record<string, unknown>): ContextCompatibilityItemTy
 }
 
 function actionFor(code: ContextCompatibilityCode): ContextCompatibilityIssue["nextAction"] {
+  if (code === "encrypted_reasoning") {
+    return {
+      code: "require_supported_context_export",
+      message: "Preserve the original context for lossless recovery. Alternatively, explicitly set "
+        + "X-Web2Harness-Reasoning-Migration: visible-history to restart reasoning from the visible history. "
+        + "This does not restore encrypted reasoning; other encrypted context still requires its original source.",
+    };
+  }
   if (code === "unsupported_encrypted_context") {
     return {
       code: "verify_protocol_support",
@@ -224,4 +232,23 @@ export function preflightContextCompatibility(input: unknown): ContextCompatibil
   return issueCount === 0
     ? { status: "compatible", issueCount: 0, issuesTruncated: false, issues: [] }
     : { status: "blocked", retryable: false, issueCount, issuesTruncated: issueCount > issues.length, issues };
+}
+
+/** An explicit request-level choice, never inferred from a model answer or plaintext neighbor.
+ * Only top-level native reasoning state may be reset. Every visible field and original input
+ * remains intact; unique compaction/agent/tool content and malformed encodings stay blocked.
+ */
+export function migrateVisibleReasoning(input: unknown): { input: unknown; resetItemCount: number } {
+  if (!Array.isArray(input)) return { input, resetItemCount: 0 };
+  let resetItemCount = 0;
+  const migrated = input.map(item => {
+    if (!record(item) || item.type !== "reasoning" || typeof item.encrypted_content !== "string"
+      || !item.encrypted_content || item.encrypted_content.startsWith(BRIDGE_REASONING_PREFIX)
+      || item.encrypted_content.startsWith(BRIDGE_COMPACTION_PREFIX)) return item;
+    const { encrypted_content: _opaque, ...visible } = item;
+    resetItemCount++;
+    return visible;
+  });
+  if (!resetItemCount || preflightContextCompatibility(migrated).status === "blocked") return { input, resetItemCount: 0 };
+  return { input: migrated, resetItemCount };
 }

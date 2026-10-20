@@ -19,6 +19,7 @@ import { compactionItemToText, isNativeTextCompaction } from "./compaction";
 import { previousResponseReplayPrefixLength } from "./state";
 import { decodeReasoningEnvelope } from "./reasoning-envelope";
 import { parseInputFile } from "./file-input";
+import { parseInputAudio } from "./audio-input";
 import { assertNoUnresolvedInputReferences, assertSupportedInputReferences, inputReferenceOf } from "./input-references";
 import { toolChoiceKind } from "./tool-choice";
 
@@ -29,6 +30,7 @@ function isObj(v: unknown): v is Record<string, unknown> {
 type InputBlock =
   | { type: "input_text"; text: string }
   | { type: "text"; text: string }
+  | { type: "input_audio"; audio_url: string }
   | { type: "input_image"; image_url?: string; file_id?: string; detail?: string }
   | { type: "input_file"; file_id?: string; filename?: string; file_data?: string; file_url?: string };
 
@@ -54,6 +56,8 @@ function inputContentParts(blocks: unknown[] | string | undefined, validationOnl
       }
     } else if (block.type === "input_file") {
       parts.push(parseInputFile(block));
+    } else if (block.type === "input_audio") {
+      parts.push(parseInputAudio(block));
     }
   }
   // Collapse to a plain string only for a single TEXT part; images must stay structured.
@@ -283,6 +287,9 @@ function outputToToolResultContent(output: string | unknown[] | undefined, valid
       hasAttachment = true;
     } else if (raw.type === "input_file") {
       parts.push(parseInputFile(raw));
+      hasAttachment = true;
+    } else if (raw.type === "input_audio") {
+      parts.push(parseInputAudio(raw));
       hasAttachment = true;
     } else if (raw.type === "encrypted_content") {
       // codex-rs FunctionCallOutputContentItem::EncryptedContent — opaque to routed models.

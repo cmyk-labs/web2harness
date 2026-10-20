@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { MAX_INPUT_FILE_BYTES, parseInputFile, validateInputFilename } from "./file-input";
+import { assertInlineAudioReference, isSupportedAudioMime, parseInputAudio } from "./audio-input";
 import {
   attachmentUrl, InputReferenceError, publicHttpsAttachmentTransport,
   referenceTimeout, throwIfReferenceAborted, withReferenceSignal, type InputReferenceTransport,
@@ -47,8 +48,15 @@ function record(value: unknown): value is JsonObject {
 
 /** Validates exactly one source; does not resolve, decode, omit or fabricate attachment data. */
 export function inputReferenceOf(block: JsonObject): { kind: "url"; url: string } | { kind: "provider_file"; fileId: string } | null {
-  if (["input_audio", "input_video", "audio", "video"].includes(String(block.type))) {
-    throw new InputReferenceError("unsupported_input_modality", "Unsupported Codex content type: raw audio/video input is not supported by this ChatGPT Web attachment path; transcripts or extracted frames are not equivalent");
+  if (block.type === "input_audio") {
+    if (typeof block.audio_url !== "string" || block.audio_url.startsWith("data:")) {
+      assertInlineAudioReference(block);
+      return null;
+    }
+    return { kind: "url", url: attachmentUrl(block.audio_url).href };
+  }
+  if (["input_video", "audio", "video"].includes(String(block.type))) {
+    throw new InputReferenceError("unsupported_input_modality", "Unsupported Codex content type: this raw media block is unsupported; audio must use Codex input_audio.audio_url. Transcripts or extracted frames are not equivalent");
   }
   if (block.type !== "input_image" && block.type !== "input_file") return null;
   const keys = block.type === "input_image" ? ["image_url", "file_id"] : ["file_data", "file_url", "file_id"];
@@ -100,15 +108,15 @@ function inspectInputAttachments(body: unknown): { references: InputReference[];
       if (reference) {
         references.push({ itemIndex, field, blockIndex, block, ...reference });
         attachmentCount++;
-      } else if (block.type === "input_image" || block.type === "input_file") {
-        const value = block.type === "input_image" ? block.image_url : block.file_data;
+      } else if (block.type === "input_image" || block.type === "input_file" || block.type === "input_audio") {
+        const value = block.type === "input_image" ? block.image_url : block.type === "input_audio" ? block.audio_url : block.file_data;
         if (typeof value !== "string") continue;
         // Estimate canonical base64 size without decoding. Normal parsing still validates data.
         const data = value.startsWith("data:") ? value.slice(value.indexOf(",") + 1) : value;
-        if (block.type === "input_file") {
+        if (block.type === "input_file" || block.type === "input_audio") {
           // The existing prompt path deduplicates identical filename + bytes. Preserve that
           // behavior rather than rejecting repeated inline files in replayed tool history.
-          const identity = createHash("sha256").update(String(block.filename)).update("\0").update(data).digest("hex");
+          const identity = createHash("sha256").update(block.type === "input_audio" ? String(block.audio_url) : String(block.filename)).update("\0").update(data).digest("hex");
           if (inlineFiles.has(identity)) continue;
           inlineFiles.add(identity);
         }
@@ -165,11 +173,12 @@ const fileExtensionsByMime = new Map([
 ]);
 const imageMimes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
-function mediaType(headers: Headers, image: boolean): string {
+function mediaType(headers: Headers, type: unknown): string {
   const header = headers.get("content-type") ?? "";
   const mime = header.split(";")[0]!.trim().toLowerCase();
   // Preserve the declared media type, rather than guessing an Office file from generic ZIP data.
-  if (!(image ? imageMimes.has(mime) : fileExtensionsByMime.has(mime))) {
+  if (!(type === "input_image" ? imageMimes.has(mime)
+    : type === "input_audio" ? isSupportedAudioMime(mime) : fileExtensionsByMime.has(mime))) {
     throw new InputReferenceError("unsupported_attachment_media_type", "Remote attachment must declare a supported, specific media type");
   }
   const parameters = header.split(";").slice(1);
@@ -273,7 +282,7 @@ export async function resolveInputReferences<T>(body: T, options: ResolveInputRe
             continue;
           }
           if (download.status !== 200) throw new InputReferenceError("attachment_download_failed", "Attachment download returned HTTP " + download.status, 502);
-          const mime = mediaType(download.headers, reference.block.type === "input_image");
+          const mime = mediaType(download.headers, reference.block.type);
           const length = download.headers.get("content-length");
           if (length !== null && (!/^\d+$/.test(length) || !Number.isSafeInteger(Number(length))
             || Number(length) > maxFile || Number(length) > maxTotal - total)) {
@@ -305,6 +314,10 @@ export async function resolveInputReferences<T>(body: T, options: ResolveInputRe
           if (reference.block.type === "input_image") {
             validateImageBytes(bytes, mime);
             replacements.set(reference, { ...reference.block, image_url: "data:" + mime + ";base64," + data });
+          } else if (reference.block.type === "input_audio") {
+            const audio_url = "data:" + mime + ";base64," + data;
+            parseInputAudio({ audio_url });
+            replacements.set(reference, { ...reference.block, audio_url });
           } else {
             const filename = filenameFor(reference, url, mime);
             // Preserve Office ZIP validation and all existing inline file controls.

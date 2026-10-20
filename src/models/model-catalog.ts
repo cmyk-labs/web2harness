@@ -123,7 +123,10 @@ export function buildChatGptWebModel(
     slug: route.slug,
     display_name: route.displayName,
     description: route.description,
-    input_modalities: route.interactionMode === "manual" ? ["text"] : ["text", "image"],
+    // Codex filters MCP/Code Mode audio results using this declaration before the
+    // bridge receives them. Automatic Web transport preserves original audio bytes;
+    // manual text-only transport cannot upload attachments.
+    input_modalities: route.interactionMode === "manual" ? ["text"] : ["text", "image", "audio"],
     visibility: route.legacy ? "hide" : "list",
     // These slugs are implemented by this local Responses-compatible bridge. Marking them false
     // makes Codex drop them from spawn_agent whenever openai_base_url points at the bridge.

@@ -11,8 +11,8 @@
  * Routed models cannot produce OpenAI's encrypted blob, so the proxy runs the model as a plain
  * summarizer and wraps the summary text in a transparent envelope: `ocx1:` + base64(utf8 summary).
  * Codex stores the item and replays it in later input; the parser decodes our envelope back into
- * plain text for routed models. Real OpenAI-encrypted blobs (no `ocx1:` prefix) are opaque —
- * routed models get a short "history was compacted" note instead.
+ * plain text for routed models. Real OpenAI-encrypted blobs (no `ocx1:` prefix) are opaque;
+ * Web context preflight rejects them before admission rather than treating a note as context.
  */
 
 export const BRIDGE_COMPACTION_PREFIX = "ocx1:";
@@ -74,7 +74,7 @@ export function decodeCompactionSummary(encryptedContent: string): string | null
 /** Render a replayed compaction item as plain user-visible text for a routed model. */
 export function compactionItemToText(encryptedContent: string | undefined): string {
   const decoded = typeof encryptedContent === "string" ? decodeCompactionSummary(encryptedContent) : null;
-  return decoded ? `${SUMMARY_PREFIX}\n\n${decoded}` : OPAQUE_COMPACTION_NOTE;
+  return decoded !== null ? `${SUMMARY_PREFIX}\n\n${decoded}` : OPAQUE_COMPACTION_NOTE;
 }
 
 /**

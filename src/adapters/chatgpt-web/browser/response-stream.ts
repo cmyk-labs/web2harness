@@ -78,8 +78,11 @@ export class ChatGptResponseStream {
   private bodyFallback = false;
   private bodyRecoveryAttempted = false;
   private transportFailed = false;
+  private readonly readbacks = new Map<string, { status?: number }>();
+  private readbackCount = 0;
+  private readbackResult?: ChatGptResponseSourceResult;
 
-  constructor(private readonly options: { captureEvidence?: boolean | ChatGptResponseEvidenceLimits; operationTimeoutMs?: number } = {}) {}
+  constructor(private readonly options: { captureEvidence?: boolean | ChatGptResponseEvidenceLimits; operationTimeoutMs?: number; savedChatReadback?: boolean } = {}) {}
   private get operationTimeoutMs() { return this.options.operationTimeoutMs ?? 120_000; }
 
   async attach(page: Page): Promise<void> {
@@ -102,9 +105,15 @@ export class ChatGptResponseStream {
         try {
           const url = new URL(event.request.url);
           if (url.origin === "https://chatgpt.com") {
+            const pending = this.source?.result();
+            if (this.options.savedChatReadback && event.request.method === "GET" && pending?.state === "awaiting_final"
+              && ["conversation", "conversations"].some(route =>
+                url.pathname === `/backend-api/${route}/${encodeURIComponent(pending.conversationId)}`)) {
+              this.readbacks.set(event.requestId, {});
+            }
             if (/^\/backend-api\/(?:f\/)?conversation$/.test(url.pathname)) endpoint = "generation";
             else if (/^\/backend-api\/(?:f\/)?conversation\/prepare$/.test(url.pathname)) endpoint = "prepare";
-            else if (/^\/backend-api\/(?:f\/)?conversation\//.test(url.pathname)) endpoint = "conversation";
+            else if (/^\/backend-api\/(?:f\/)?conversations?\//.test(url.pathname)) endpoint = "conversation";
             else if (/^\/backend-api\/files(?:\/|$)/.test(url.pathname)) endpoint = "upload";
           }
         } catch { /* Only allowlisted route classes enter diagnostics. */ }
@@ -141,6 +150,10 @@ export class ChatGptResponseStream {
       });
       session.on("Network.responseReceived", event => {
         if (generation === this.generation) { const facts = this.traffic.get(event.requestId); if (facts) facts.status = event.response.status; }
+        if (generation === this.generation) {
+          const readback = this.readbacks.get(event.requestId);
+          if (readback) readback.status = event.response.status;
+        }
         if (generation !== this.generation || event.requestId !== this.requestId) return;
         this.responseReceived = true; this.status = event.response.status;
         if (event.response.status !== 200 || !event.response.mimeType.includes("event-stream")) {
@@ -167,10 +180,14 @@ export class ChatGptResponseStream {
         } else this.consume(event.data);
       });
       session.on("Network.loadingFinished", event => {
+        if (generation === this.generation && this.readbacks.has(event.requestId)) {
+          void this.readSavedConversation(session, event.requestId, generation);
+        }
         if (generation !== this.generation || event.requestId !== this.requestId) return;
         void this.completeTransport(session, event.requestId, generation, false);
       });
       session.on("Network.loadingFailed", event => {
+        this.readbacks.delete(event.requestId);
         if (generation === this.generation) { const facts = this.traffic.get(event.requestId); if (facts) facts.failed = true; }
         if (generation !== this.generation || event.requestId !== this.requestId) return;
         this.transportFailed = true;
@@ -178,6 +195,23 @@ export class ChatGptResponseStream {
       });
       await withChatGptBrowserObservationTimeout(session.send("Network.enable", { maxPostDataSize: 2_000_000 }), this.operationTimeoutMs);
     } catch { this.unavailable ??= "response_observer_unavailable"; await this.detach(); }
+  }
+
+  private async readSavedConversation(session: CDPSession, requestId: string, generation: number): Promise<void> {
+    const readback = this.readbacks.get(requestId);
+    this.readbacks.delete(requestId);
+    if (readback?.status !== 200) return;
+    try {
+      const body = await withChatGptBrowserObservationTimeout(session.send("Network.getResponseBody", { requestId }), this.operationTimeoutMs);
+      if (generation !== this.generation || typeof body.body !== "string" || body.body.length > 24 * 1024 * 1024) return;
+      const bytes = Buffer.from(body.body, body.base64Encoded ? "base64" : "utf8");
+      if (bytes.length > 16 * 1024 * 1024) return;
+      const result = this.source?.reconcileSavedConversation(JSON.parse(bytes.toString("utf8")));
+      this.readbackCount++;
+      if (result?.state === "complete" || (result && responseSourceBlocksFallback(result))) this.readbackResult = result;
+    } catch {
+      // Missing/cache-evicted readback is an observation failure, not a new generation.
+    }
   }
 
   private async completeTransport(session: CDPSession, requestId: string, generation: number, failed: boolean): Promise<void> {
@@ -236,6 +270,7 @@ export class ChatGptResponseStream {
     const projection = this.source?.result();
     if (projection && responseSourceBlocksFallback(projection)) return projection;
     if (this.invalid) return { state: "rejected", reason: this.unavailable!, kind: "invalid" };
+    if (this.readbackResult) return this.readbackResult;
     if (projection?.state === "complete") return projection;
     if (this.unavailable) return { state: "rejected", reason: this.unavailable, kind: "unavailable" };
     if (!this.source) return { state: "collecting" };
@@ -245,14 +280,15 @@ export class ChatGptResponseStream {
   snapshot() { return { armed: this.prompt !== undefined, matchedRequests: this.attempted,
     responseReceived: this.responseReceived, status: this.status, accepted: this.accepted, finished: this.finished, resumed: this.resumed,
     reason: this.unavailable, transportFailed: this.transportFailed, bodyRecoveryAttempted: this.bodyRecoveryAttempted,
-    projection: this.source?.facts(), traffic: [...this.traffic.values()], droppedTraffic: this.droppedTraffic, pageExceptions: this.pageExceptions }; }
+    projection: this.source?.facts(), readbackCount: this.readbackCount,
+    traffic: [...this.traffic.values()], droppedTraffic: this.droppedTraffic, pageExceptions: this.pageExceptions }; }
   /** Private artifact, never normal logs. Export once on failure BEFORE detach. Default off.
    * The worker owns private-file policy/lifecycle; this observer performs no filesystem writes.
    */
   takeEvidence() {
     const observation = this.snapshot();
     const artifact = this.source?.takeEvidence();
-    return artifact ? { ...artifact, observation, bodyFallback: this.bodyFallback } : undefined;
+    return artifact ? { ...artifact, observation, bodyFallback: this.bodyFallback, savedReadback: this.readbackResult } : undefined;
   }
   async detach(): Promise<void> {
     this.generation++;

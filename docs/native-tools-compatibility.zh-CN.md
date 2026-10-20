@@ -29,11 +29,13 @@
 | 原始 hosted `web_search`／`web_search_preview` 声明 | Web Responses 解析器仍明确拒绝，并提示使用 Codex standalone 搜索路径。 | 不静默删除声明，也不翻译为虚构的本地工具；禁用搜索不是等价修复。 |
 | DOCX/XLSX/PPTX 输入 | 在既有 PDF／文本路径上增加 Office 原始字节上传、规范 MIME 和有界包结构校验。 | fixture 及共享 Responses 组件的认证 DEV 均通过，正确读出三个 Office 附件中的不同标识；属于组件验收，不是 Codex Office 工具端到端通过。 |
 | 远程图片／`input_file.file_url` | 新增绑定任务／provider／账号的精确 URL 授权，预检后有界解析公开 HTTPS。预填保留原引用，不下载。 | 七项共享边界测试及解析器／网络 fixture 通过。真实公开 PDF URL 组件验收**通过**，不代表远程图片 live 或 Codex 文件工具端到端验收。 |
-| provider `file_id` 与原始音频／视频 | 此 Web 附件路径明确不支持，包括预填阶段。 | 尚无已验证的 Codex／ChatGPT 文件 ID 下载端点或原始媒体处理契约；转录文本／抽帧不等于原输入。 |
+| Codex 原始 `input_audio` | 用户输入与原生工具结果中的内联 WAV、MP3/MPEG、OGG Opus/Vorbis、FLAC、纯音频 M4A/MP4、WebM 保留原始字节。 | 复用现有附件链路，不转成文字替代。格式／字节保真 fixture 通过，认证验收范围另行记录。任务授权的公开HTTPS音频URL复用现有下载器；裸PCM与原始视频仍不支持。 |
+| provider `file_id` | 预填与生成均明确不支持。 | 仍缺绑定来源 provider／账号的 Codex／ChatGPT 文件下载契约；公开 API Files 的凭据与端点是另一套服务绑定。 |
 | `text.format: json_object` | 解析格式要求，并将完整最终答案校验为 JSON 对象。 | 校验器／适配器 fixture 及共享 Responses 组件认证 DEV 已通过；不保证 Web 后端采用受约束解码。 |
 | 严格 JSON Schema | 保留既有 schema 校验，不强制转换、修补、注入默认值或删除额外属性。 | 属于提示加最终输出校验，不表示 Web 模型使用 API 的解码机制。 |
 | Web 无法落实的有效生成控制 | 在构造适配器前返回 HTTP 400 `unsupported_web_request_control`。 | 以显式边界替代静默接受；没有实现采样、Token 上限、后台任务或 API 服务档位。 |
 | 不透明加密上下文与跨后端 agent 消息 | 对展开后的原始输入进行有界预检，在浏览器工作前对不兼容输入返回 HTTP 400 `incompatible_web_context`。 | 有分类器及协作 fixture，服务器预检已接入；原生密文的跨后端可移植性仍未解决。 |
+| 桥自有透明上下文封装 | 保留显式存在的空文本、签名和数组，区分空压缩摘要与不可读密文。 | 79项上下文测试／416断言通过。修复的是可逆封装保真，不是解密原生密文，也不能从摘要恢复压缩前的完整历史。 |
 | Responses WebSocket | 共享调度支持具名／默认通道内 FIFO、有界跨通道并发及自然完成边界 steering。 | 共享 11 场景／274 断言通过。真实 CLI resume／interrupt／恢复及独立 prefill／steering 组件验收**通过**，CLI 流程 HTTP 回退为零。保留原失败证据，已发布 2.4.0 不变。 |
 | Web `generate:false` 请求状态预填 | 校验并在内存中保留展开输入后返回空 completed 响应，不下载 URL 引用。 | fixture 及真实独立通道预填**通过**：首个模型终态前完成，`output: []`。不执行模型／浏览器／工具，不宣称 KV 预热；provider 文件 ID仍不支持；原生上游预填为下文独立路径。 |
 | `previous_response_id` | 有界本地缓存按传入授权／账号／组织／项目摘要分区；WebSocket／预填历史及后代保持纯内存。 | 缓存作用域不是身份认证。丢失、过期、淘汰或重启须提交完整原历史，不重放工具；不保证持久性或上游缓存等价。 |
@@ -95,15 +97,21 @@ DOCX/XLSX/PPTX 按调用方原始字节传输，不抽取文本替代、不修�
 
 主线认证 DEV 组件验证通过共享 Responses 实现在 **81 秒**内完成，准确读出一个 DOCX、一个 XLSX、一个 PPTX 中的不同标识，并满足 `json_object` 输出校验。标识仅存在于附件中，没有放入提示词。这证明该共享组件路径的真实 Office 上传／读取和 JSON 输出通过，**不是** Codex Office 工具端到端执行结果，也不代表认证了所有 Office 结构或渲染细节。
 
-既有上传上限保持为单文件 20,000,000 字节、每条消息 10 个混合附件、合计 50,000,000 字节。Office 校验另外限制为最多 4,096 个条目、每条目解压后 50,000,000 字节、总解压量 100,000,000 字节、每份清单 1,000,000 字节。要求标准主部件路径及 UTF-8 清单。旧版 DOC/XLS/PPT、含宏格式、加密／分卷包、ZIP64 和不支持的结构会明确失败。二进制 Token 计数基于原始字节长度估算，不保证等同于提取后的 Token 数或模型容量。
+既有上传上限保持为单文件 20,000,000 字节、每条消息 10 个混合附件、合计 50,000,000 字节。Office 校验另外限制为最多 4,096 个条目、每条目解压后 50,000,000 字节、总解压量 100,000,000 字节、每份清单 1,000,000 字节。要求标准主部件路径及 UTF-8 清单。旧版 DOC/XLS/PPT、含宏格式、加密／分卷包、ZIP64 和不支持的结构会明确失败。二进制文档Token计数基于原始字节长度估算，不保证等同于提取后的Token数或模型容量。编码音频不计入这项文本Token估算：字节大小随编码变化，Web没有暴露随时长变化的真实上下文成本。音频仍受上传／内存及Web模型限制；本地usage不是完整的原生音频计量。
 
 ### 任务授权的附件引用
 
 Web 请求路径先校验展开历史、所选模型／推理强度、工具与控制，再解析远程图片或 `input_file.file_url`。共享服务器仅授权已校验任务输入中的精确引用，并绑定任务、所选 provider 路由及传入账号作用域。任意工具参数／元数据不会成为下载指令。预填只校验结构并保留原引用，不执行 DNS／HTTP；生成时先解析，再走普通附件校验。原生请求绕过此 Web 解析器。
 
-仅允许公开 HTTPS 的 443 端口。所有 DNS 结果须通过公网地址检查，实际连接固定到已检查地址，同时保留主机名／TLS 验证。不使用浏览器／provider 授权、Cookie、环境代理或凭据查找。每个重定向目标都须有独立的精确 URL 授权，重定向本身不授予权限。展开请求中的内联与远程图片／文件附件合计最多 10 个、总计 50,000,000 字节；总量同时计入内联内容字节和下载字节。单附件最多 20,000,000 字节，DNS、连接／响应头及每个文件正文分别独立限时30、60、120秒，最多三次重定向各自重新计时，并受共享请求分配预算和取消约束。保留支持的明确 MIME 与原字节；含糊 MIME、不支持的字符集／HTTP 压缩及原始音视频明确失败。
+仅允许公开 HTTPS 的 443 端口。所有 DNS 结果须通过公网地址检查，实际连接固定到已检查地址，同时保留主机名／TLS 验证。不使用浏览器／provider 授权、Cookie、环境代理或凭据查找。每个重定向目标都须有独立的精确 URL 授权，重定向本身不授予权限。展开请求中的内联与远程图片／文件附件合计最多 10 个、总计 50,000,000 字节；总量同时计入内联内容字节和下载字节。单附件最多 20,000,000 字节，DNS、连接／响应头及每个文件正文分别独立限时30、60、120秒，最多三次重定向各自重新计时，并受共享请求分配预算和取消约束。保留支持的明确 MIME 与原字节；含糊 MIME、不支持的字符集／HTTP 压缩、不支持的音频格式及原始视频明确失败。
 
-provider `file_id` 在预填和生成阶段仍不支持。公开 API Files 端点不能证明存在兼容 Codex OAuth／ChatGPT 后端的服务。补齐需要已验证服务来源、绑定账号的传入授权、重定向策略和相同资源上限。原始媒体也须有选定 Web 路由的上传／处理契约，转录或抽帧不能补齐此缺口。直接上传边界不限制 Codex 本地工具／技能操作文件。
+provider `file_id` 在预填和生成阶段仍不支持。公开 API Files 端点不能证明存在兼容 Codex OAuth／ChatGPT 后端的服务。补齐需要已验证服务来源、绑定账号的传入授权、重定向策略和相同资源上限。直接上传边界不限制 Codex 本地工具／技能操作文件。
+
+Codex `input_audio.audio_url` 现支持用户消息及 function/custom 工具结果中的受支持内联 base64 音频，包括 Codex 转换后的 MCP 音频。原始字节、MIME、顺序、元数据与 `call_id` 保持不变，提示通过名称引用二进制附件。沿用单文件20 MB、10附件及合计50 MB限制。MP4/WebM轨道检查区分纯音频与视频，实际解码／处理仍由Web服务负责。公开HTTPS音频URL复用图片／文件引用的任务授权、MIME／字节校验、独立阶段超时及无下载预填规则。裸PCM、独立AAC流与原始视频尚未实现；可用性还取决于账号及所选模型。[ChatGPT音频上传契约](https://help.openai.com/en/articles/8555545-uploading-files-and-audio-to-chatgpt)。
+
+自动Web模型目录声明文本、图片及音频输入，使Codex保留MCP／Code Mode音频；手动模式仍为仅文本，原生模型行保留原声明。[最新认证复验](investigations/2026-10-20-capability-followup/audio-automation.zh-CN.md)中，两份不同的22050Hz单声道PCM16 WAV分别通过普通BrowserWorker问题及真实Codex原生工具音频续答；原字节、实际附件/调用绑定、gpt-6-thinking/max及正确转录均有证据。本轮没有修改产品代码或增加等待，历史识别失败未复现，根因仍未定位；四项通过不代表所有音频格式、录音条件或模型完全等价。
+
+原生不透明reasoning／compaction不能仅靠保留可见历史或增加明文标记来迁移。加密agent／工具数据需要对应条目的完整原始明文；不透明模型状态需要受支持的来源导出或目标导入契约。已检索API描述服务端续传，不是客户端解密／导出操作。本桥保留原请求并报告不可读位置，不静默切换模型或丢弃状态。[Reasoning契约](https://developers.openai.com/api/docs/guides/reasoning)。
 
 见[引用解析](../src/responses/input-references.ts)、[固定地址 HTTPS 传输](../src/responses/input-reference-network.ts)及[共享边界 fixture](../tests/responses/server-input-references.test.ts)。
 
@@ -128,6 +136,10 @@ provider `file_id` 在预填和生成阶段仍不支持。公开 API Files 端�
 见[输出校验器](../src/adapters/chatgpt-web/output-validation.ts)、[请求控制](../src/adapters/chatgpt-web/request-controls.ts)、[服务器边界 fixture](../tests/responses/server-web-capabilities.test.ts)。
 
 ### 不透明上下文
+
+显式请求头 `X-Web2Harness-Reasoning-Migration: visible-history` 允许所选 Web 模型从可见历史重新推理：仅重置顶层原生 `reasoning.encrypted_content`，保留可见字段、工具声明／结果及未迁移的原始续接状态。模型上下文明示重置；成功 HTTP 响应返回该选择及 `X-Web2Harness-Reasoning-Reset-Items` 计数。缺省／`strict` 保持严格策略，未知值拒绝；WebSocket 使用初始连接头。压缩历史、agent／工具密文、嵌套密文和损坏的桥封装仍阻断。此选择会失去原加密推理的连续性，不是无损迁移，也不授权重执行工具副作用。参见[迁移回归](../tests/responses/reasoning-migration.test.ts)。下文禁止丢弃未知状态的要求，指未作此明确 reasoning 重置选择的默认行为。
+
+已接受的 Web 流结束却没有公开 final 时，先等待当前活动结束，再开始独立的120秒结果复核。保存会话最多刷新一次同一个空闲会话，被动读取页面正常发出的历史 GET；只有活动分支末端、绑定本次精确 user ID 的已完成公开 final 才能恢复。旧 `conversation/{id}` 接口通过 `mapping` 证明祖先关系；当前 `conversations/{id}` 接口通过活动 `messages` 窗口、精确 user/current-node ID 及一致的 `turn_exchange_id`／`working_turn_id` 绑定本轮。网页保存时会改变隐藏父节点，不能把这些父 ID 当作跨表示的身份不变量。临时会话不会因此开启保存或读取历史，不重发生成请求。身份冲突、显式中断和上游错误仍失败；到期无可验证 final 返回 `chatgpt_public_answer_missing`，不能用内部／工具消息补答案。参见[读回复核回归](../tests/adapters/chatgpt-web/browser/response-readback.test.ts)及[认证观察与回放限制](investigations/2026-10-20-capability-followup/recovery.zh-CN.md)。
 
 预检检查展开后的原始历史，包括 agent 消息、推理、各类压缩项、工具输出及显式加密参数元数据，返回有界且不含正文的问题位置和恢复指引。混合明文、相邻摘要或其他项上的空明文标记，均不能让密文变得可读。
 
@@ -171,7 +183,7 @@ Web `generate:false` 先校验并保留完整展开输入，再返回带可用 I
 
 | 改进 | 剩余边界 |
 | --- | --- |
-| 明确附件失败仅移除失败卡片，等待3秒后重传一次；HTTP 429立即返回 | 8项浏览器夹具通过。认证GPT-6 Web/xhigh完成一次局部重传、4命令、1原生补丁及断言；第二次上传在重传诊断后3.146秒开始。此前完整任务失败仍保留。合成429／503在Electron网络观察下变成HTTP0，因此这些运行证明普通失败恢复，不证明精确状态分类；429认证验收仍为证据不足。 |
+| 明确附件失败仅移除失败卡片，等待3秒后重传一次；HTTP 429立即返回 | 8项浏览器夹具及普通失败Web任务通过：4命令、1补丁及断言，3.146秒后重传。后续认证GPT-6 Web/xhigh真实HTTPS故障注入也通过：浏览器／CDP均收到429，只有1次上传，无Send／重传／工具执行，保留额度错误。Codex客户端重连未造成再次网页上传。证明的是注入额度路径，不是账号自然耗尽；此前合成状态0的失败仍保留。 |
 | 可选的清理前公开交付证据及有界WebSocket故障诊断 | 来源／交付／DOM正文及续接事实独立记录，不参与交付校验。首次真实测试的嵌套卡片缺陷已修复；后续已接受轮次没有新助手／来源事件，随后出现ERR_NETWORK_CHANGED，是否同源尚未证实。历史正文缺失／发送未知问题未宣称根治。 |
 | 先正常完成再提取最终正文；公开响应还原与有条件完整DOM读取分别提供有效性结果 | 已支持fallback v1及已知代码引用。虚拟代码视口、缺目标的引用和未知语义组件不能充当完整回答；历史失败原流仍缺失。 |
 | 单次触发 Send，加有界只读迟到回执核对 | 初次观察／发送阶段失败后最多30秒，仅有唯一匹配请求、HTTP 200、绑定输入的接受回执且来源身份完整时，才能确认原提交。不再次点击、重载、重绑定或重发；历史发送未知根因仍未证明。 |
@@ -200,6 +212,10 @@ Web `generate:false` 先校验并保留完整展开输入，再返回带可用 I
 <a id="evidence"></a>
 
 ## 证据与待验收项
+
+### 2026-10-20能力续项
+
+[续项证据记录](investigations/2026-10-20-capability-followup/README.zh-CN.md)区分已通过的认证HTTPS 429注入、用户快照确认修复、透明上下文保真、音频目录／传输检查与失败的媒体任务。DEV人工验证后403已解除，音频上传及回答正常结束，但理解失败；同一录音的普通问题对照给出错误转录，离线重新合成与原文件完全一致，已核验参考内容。原生图片v5生成一次PNG并经Codex返回一致原字节，但后续网页缺少公开final，图片完整任务仍失败。前期失败继续保留；原生不透明密文迁移及API托管服务契约仍未补齐。
 
 ### 2026-10-18 只读任务验收
 

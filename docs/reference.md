@@ -134,6 +134,8 @@ Automatic browser workflows do not have a shared preparation or whole-task deadl
 
 The 15-minute inactivity watchdog is reset by meaningful adapter progress; it is not a total duration allowance. Ordinary generation has no absolute default deadline. An explicitly configured `chatgptWeb.turnTimeoutMs` limits generation starting at submission, excluding preparation and compaction, whose stages are timed separately. Recovery attempt counts, explicit user settings, native tools and native `wait` semantics are unchanged.
 
+Web context migration is opt-in per request: `X-Web2Harness-Reasoning-Migration: visible-history` restarts reasoning from visible history; absent or `strict` retains strict encrypted-context checks. This does not decode native ciphertext. Compaction, agent messages and encrypted tool results still require their original complete source. See [context compatibility](native-tools-compatibility.md#data-contracts). An ended stream with no public answer receives a separate 120-second read-only reconciliation window after activity stops, then `chatgpt_public_answer_missing`; it does not resend the generation.
+
 <a id="standalone-request-queue"></a>
 
 ### Standalone queue controls
@@ -375,7 +377,7 @@ This is a local declared budget, not a guarantee of each web model's physical ca
 | Pro-account Sol Medium/High/available Extra High | 103,000 | 500,000 |
 | GPT-5.6 Sol Pro or GPT-6 Pro | 104,000 | 1,635,000 |
 
-An input must satisfy every applicable limit. Input estimates include visible text, context-file content, selected skill attachments, the `8192` platform reserve and image reserves. Each image reserves `4096` tokens, or `8192` for `detail: "original"`. Character and token limits are independent; a message can fit its token budget and still exceed its character cap. The character check uses JavaScript string length.
+An input must satisfy every applicable limit. Input estimates include visible text, context-file content, selected skill attachments, the `8192` platform reserve and image reserves. Each image reserves `4096` tokens, or `8192` for `detail: "original"`. Encoded audio bytes are not counted as text tokens; Web does not expose their actual context cost, so local usage excludes that unknown cost while upload/memory and Web-side limits still apply. Character and token limits are independent; a message can fit its token budget and still exceed its character cap. The character check uses JavaScript string length.
 
 Visible-text planning budgets are independent of the total window: without images, 32807 tokens for non-Pro Instant, 81807 for non-Pro thinking, 103000 for Pro-account ordinary Sol and 104000 for Pro. Image reserves are subtracted from these allowances. These are transport planning boundaries, not compaction triggers.
 
@@ -433,7 +435,9 @@ Remote `input_image.image_url` and `input_file.file_url` are resolved only after
 
 Only public HTTPS on port 443 is supported. All DNS answers must be public; the socket is pinned to a checked address with hostname/TLS verification. No authorization headers, cookies, browser identity, ambient credentials or proxies are forwarded. Each redirect requires a separate exact scoped URL grant. Inline and remote image/file attachments in the expanded request share a limit of 10 attachments and 50,000,000 total content bytes, including both inline and downloaded bytes; each attachment is limited to 20,000,000 bytes. Repeated inline files with the same filename and data count once; images and URL references are counted individually. DNS, connection/headers and each file body have independent 30-, 60- and 120-second limits. Each of at most three redirects starts fresh limits; shared request allocation reservations and cancellation also apply. The resolver can enforce lower download budgets but cannot raise built-in ceilings.
 
-Original bytes and supported specific MIME types are preserved. Ambiguous octet-stream/ZIP MIME, unsupported charset/HTTP compression and raw audio/video are rejected. `unsupported_provider_file_reference` applies to provider `file_id` in both preparation and generation: no compatible authenticated Codex/ChatGPT file service is established. The API Files endpoint alone is not that contract. No transcription, frame extraction or guessed endpoint is used as an equivalent fallback. See [attachment boundaries](native-tools-compatibility.md#data-contracts).
+Original bytes and supported specific MIME types are preserved. Ambiguous octet-stream/ZIP MIME, unsupported charset/HTTP compression, unsupported audio formats and raw video are rejected. Inline Codex input_audio supports WAV, MP3/MPEG, OGG Opus/Vorbis, FLAC, audio-only M4A/MP4 and WebM through the original-byte attachment path, including native tool results. Public HTTPS audio URLs use the same authorized resolver and no-download preparation; bare PCM and AAC-only streams remain unsupported. `unsupported_provider_file_reference` applies to provider `file_id` in both preparation and generation: no compatible authenticated Codex/ChatGPT file service is established. The API Files endpoint alone is not that contract. No transcription, frame extraction or guessed endpoint is used as an equivalent fallback. See [attachment boundaries](native-tools-compatibility.md#data-contracts).
+
+Automatic Web model entries declare audio input so Codex can forward audio tool results. This declaration enables transport; it does not establish successful Web processing or audio understanding. Manual entries remain text-only and native model declarations are preserved. See the [current media acceptance limits](investigations/2026-10-20-capability-followup/README.md).
 
 <a id="data-locations"></a>
 
