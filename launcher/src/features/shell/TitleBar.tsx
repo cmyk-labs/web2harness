@@ -6,20 +6,18 @@ export function TitleBar({
   copy,
   platform,
   devProfile,
-  draggable,
   sidebarOpen,
   toggleSidebar,
 }: {
   copy: Copy;
   platform: string;
   devProfile: boolean;
-  draggable: boolean;
   sidebarOpen: boolean;
   toggleSidebar: () => void;
 }) {
-  // Native window controls belong to the viewport, outside the centered canvas.
+  // Window controls and the shared drag region stay anchored to the viewport.
   return createPortal(
-    <header data-platform={platform} className={`app-titlebar${draggable ? " draggable" : ""}`}>
+    <header data-platform={platform} className="app-titlebar draggable">
       <div className="titlebar-left no-drag">
         <IconButton
           icon="sidebar"

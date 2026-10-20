@@ -100,30 +100,12 @@ code {
 }
 
 #root {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   isolation: isolate;
   background: var(--color-background-surface);
 }
 
-/* Continue the pane colors through any aspect-ratio surplus without stretching
-   or rearranging the design canvas. Keep native window chrome at the viewport. */
-#root:has(.workspace-shell.is-sidebar-open)::before {
-  content: "";
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: calc(max(0px, (100vw - 1120px) / 2) + var(--sidebar-width));
-  background: var(--color-background-sidebar);
-  pointer-events: none;
-  z-index: -1;
-}
-
-/* The native window scales this design canvas uniformly, including its layout viewport. */
+/* Fill the logical viewport; the native shell only scales down compact windows. */
 .app-root {
-  width: 1120px;
-  height: 720px;
-  flex: none;
   position: relative;
   transform: translateZ(0);
   isolation: isolate;
@@ -560,6 +542,7 @@ code {
   min-width: 0;
   min-height: 0;
   flex-direction: column;
+  padding-top: var(--height-titlebar);
   background: transparent;
 }
 
@@ -570,13 +553,9 @@ code {
   flex: 0 0 var(--height-titlebar);
   align-items: flex-end;
   gap: 3px;
-  padding: 4px 144px 0 8px;
+  padding: 4px 8px 0;
   border-bottom: 1px solid var(--color-border-light);
   background: var(--color-background-sidebar);
-}
-
-.app-shell:not(.is-sidebar-open) .browser-tab-strip {
-  padding-left: 112px;
 }
 
 .browser-tab {
@@ -647,12 +626,6 @@ code {
 .browser-tab > button svg {
   width: 12px;
   height: 12px;
-}
-
-.browser-tab-drag {
-  height: 100%;
-  min-width: 20px;
-  flex: 1;
 }
 
 .tab-spinner {
@@ -928,6 +901,10 @@ code {
 .content-scroll.is-narrow {
   width: 100%;
   max-width: calc(var(--settings-width) + 2 * var(--space-page));
+}
+
+.content-scroll:has(.log-viewer, .request-queue) {
+  max-width: none;
 }
 
 .content-scroll.is-fit {
@@ -2687,8 +2664,7 @@ code {
   }
 }
 
-/* Reserve native window controls without covering browser tabs. */
-[data-platform="darwin"] .browser-tab-strip { padding-right: 12px; }
+/* Keep browser tabs scrollable with visible focus and selection. */
 .browser-tab-strip { overflow-x: auto; scrollbar-width: none; }
 .browser-tab:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: -2px; }
 .browser-tab.is-active::before { background: var(--color-background-elevated); border-top: 2px solid var(--color-border-accent); }

@@ -55,13 +55,6 @@ test("embedded ChatGPT is measured only after its animated surface mounts", () =
   assert.match(appSource, /ref=\{browserSlotRef\}/);
 });
 
-test("native clicks reach browser tabs instead of the window drag region", () => {
-  assert.match(appSource, /draggable=\{surface !== "browser"\}/);
-  assert.match(appSource, /className=\{`app-titlebar\$\{draggable \? " draggable" : ""\}`\}/);
-  assert.match(stylesSource, /\.browser-tab\s*\{[^}]*-webkit-app-region:\s*no-drag;/s);
-  assert.match(appSource, /className="browser-tab-drag draggable"/);
-});
-
 test("renderer zoom scales the shell without moving or zooming the native ChatGPT surface", () => {
   assert.match(
     electronMain,

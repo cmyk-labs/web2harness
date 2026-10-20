@@ -3,7 +3,8 @@ const DESIGN_HEIGHT = 720;
 
 function windowLayoutScale(width, height) {
   if (![width, height].every(value => Number.isFinite(value) && value > 0)) return 1;
-  return Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT);
+  // Keep compact windows usable without magnifying the whole UI on large displays.
+  return Math.min(1, width / DESIGN_WIDTH, height / DESIGN_HEIGHT);
 }
 
 function fitWindowLayout(window) {

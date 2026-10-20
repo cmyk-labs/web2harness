@@ -30,13 +30,30 @@ test("previous default grows once while other saved sizes and later minimum choi
   assert.deepEqual(normalizeWindowState({ ...migrated, bounds: { width: 900, height: 600 } }).bounds, { width: 900, height: 600 });
 });
 
-test("layout scale preserves the design aspect ratio within default, minimum and maximized windows", () => {
+test("compact windows retain their existing fit scale", () => {
   const { windowLayoutScale, DESIGN_WIDTH, DESIGN_HEIGHT } = require("../../electron/window-layout.cjs");
-  for (const [width, height] of [[1000, 660], [900, 600], [1920, 1080], [500, 350]]) {
+  for (const [width, height] of [[1000, 660], [900, 600], [500, 350]]) {
     const scale = windowLayoutScale(width, height);
+    assert.equal(scale, Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT));
     assert.ok(DESIGN_WIDTH * scale <= width + 0.001);
     assert.ok(DESIGN_HEIGHT * scale <= height + 0.001);
     assert.ok(Math.abs((DESIGN_WIDTH * scale) / (DESIGN_HEIGHT * scale) - DESIGN_WIDTH / DESIGN_HEIGHT) < 1e-12);
+  }
+});
+
+test("large windows preserve normal text and titlebar sizes", () => {
+  const { windowLayoutScale, fitWindowLayout } = require("../../electron/window-layout.cjs");
+  for (const size of [[1120, 720], [1600, 900], [1920, 1080], [3440, 1440]]) {
+    assert.equal(windowLayoutScale(...size), 1);
+    let zoom, overlay;
+    fitWindowLayout({
+      isDestroyed: () => false,
+      getContentSize: () => size,
+      webContents: { isDestroyed: () => false, setZoomFactor: value => { zoom = value; } },
+      setTitleBarOverlay: value => { overlay = value; },
+    });
+    assert.equal(zoom, 1);
+    if (process.platform !== "darwin") assert.deepEqual(overlay, { height: 46 });
   }
 });
 

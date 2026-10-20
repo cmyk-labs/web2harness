@@ -18,6 +18,8 @@ const check = (name, value) => { assert.ok(value, name); checks.push(name); };
 try {
   const context = app.context();
   await context.route('https://**/*', route => route.abort());
+  await context.exposeBinding('__windowFixtureBounds', (_, bounds) => app.evaluate((_, bounds) => global.windowSessionFixture.setBounds(bounds), bounds));
+  await context.exposeBinding('__windowFixtureSurface', (_, active) => app.evaluate((_, active) => global.windowSessionFixture.setActive(active), active));
   const customizeFixture = () => {
     const f = window.__fixture;
     f.state.experimentalContextFiles = true;
@@ -28,6 +30,15 @@ try {
     f.snapshot.version = '2.1.0';
     f.browser.authenticated = false;
     f.browser.authenticationStatus = 'unknown';
+    window.codexWebLauncher.setBrowserBounds = async bounds => {
+      await window.__windowFixtureBounds(bounds);
+      f.browserBounds = bounds;
+      return true;
+    };
+    window.codexWebLauncher.setBrowserSurfaceActive = async active => {
+      await window.__windowFixtureSurface(active);
+      return f.browser;
+    };
     window.codexWebLauncher.setSidebarState = async ({ open, width }) => f.patch({ sidebarOpen: open, sidebarWidth: width });
     window.codexWebLauncher.checkAuthentication = async () => {
       f.calls.push(['checkAuthentication']);
@@ -62,10 +73,9 @@ try {
     });
     metrics.push({ native, layout });
     check(`${width}x${height}: native size matches requested size`, native.bounds.width === width && native.bounds.height === height);
-    check(`${width}x${height}: design canvas remains 1120x720`, Math.abs(layout.root.width - 1120) < 0.1 && Math.abs(layout.root.height - 720) < 0.1);
-    check(`${width}x${height}: entire canvas fits`, layout.root.x >= -1 && layout.root.y >= -1
-      && (layout.root.x + layout.root.width) * native.zoom <= native.content[0] + 2
-      && (layout.root.y + layout.root.height) * native.zoom <= native.content[1] + 2);
+    check(`${width}x${height}: application fills the logical viewport`, Math.abs(layout.root.x) < 1 && Math.abs(layout.root.y) < 1
+      && Math.abs(layout.root.width - layout.width) < 1 && Math.abs(layout.root.height - layout.height) < 1);
+    check(`${width}x${height}: compact scaling never magnifies controls`, native.zoom > 0 && native.zoom <= 1);
     check(`${width}x${height}: no compact drawer`, !layout.compact);
     return layout;
   };
@@ -102,16 +112,45 @@ try {
     await page.locator('.sidebar-nav').getByRole('button', { name: language === 'zh-CN' ? '概览' : 'Overview', exact: true }).click();
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].maximize());
     await page.waitForTimeout(500);
+    const native = await app.evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getAllWindows()[0];
+      return { content: w.getContentSize(), zoom: w.webContents.getZoomFactor(), maximized: w.isMaximized() };
+    });
     const chrome = await page.evaluate(() => {
       const bar = document.querySelector('.app-titlebar').getBoundingClientRect();
-      const root = document.getElementById('root');
+      const root = document.querySelector('.app-root').getBoundingClientRect();
+      const sidebar = document.querySelector('.app-sidebar').getBoundingClientRect();
+      const content = document.querySelector('.content-scroll');
       return { x: bar.x, y: bar.y, width: bar.width, viewport: innerWidth,
-        background: getComputedStyle(root).backgroundColor,
-        sidebarExtension: getComputedStyle(root, '::before').backgroundColor };
+        height: innerHeight, root: { x: root.x, y: root.y, width: root.width, height: root.height },
+        sidebar: sidebar.width, contentWidth: content.getBoundingClientRect().width, contentHeight: content.clientHeight,
+        devicePixelRatio,
+        font: getComputedStyle(content).fontSize, title: getComputedStyle(document.querySelector('h1')).fontSize };
     });
+    metrics.push({ name: `${language}: maximized`, native, layout: chrome });
     check(`${language}: maximized titlebar follows window edges`, Math.abs(chrome.x) < 1 && Math.abs(chrome.y) < 1 && Math.abs(chrome.width - chrome.viewport) < 1);
-    check(`${language}: maximized surplus continues pane colors`, chrome.background === 'rgb(27, 31, 36)' && chrome.sidebarExtension === 'rgb(21, 25, 30)');
+    check(`${language}: maximized application fills the window`, Math.abs(chrome.root.x) < 1 && Math.abs(chrome.root.y) < 1
+      && Math.abs(chrome.root.width - chrome.viewport) < 1 && Math.abs(chrome.root.height - chrome.height) < 1);
+    check(`${language}: large windows retain normal zoom and type`, native.zoom <= 1
+      && (native.content[0] < 1120 || native.content[1] < 720 || native.zoom === 1)
+      && chrome.font === '14px' && chrome.title === '24px' && Math.abs(chrome.sidebar - 252) < 1);
+    check(`${language}: overview expands within a readable width`, Math.abs(chrome.contentWidth - Math.min(chrome.viewport - 252, 1264)) < 2);
     await capture(`maximized-${language}.png`);
+    await page.locator('.sidebar-nav').getByRole('button', { name: language === 'zh-CN' ? '关于' : 'About', exact: true }).click();
+    await page.locator('.about-product').waitFor();
+    check(`${language}: About introduction fills its product section without overflow`, await page.locator('.about-product > p').evaluate(el =>
+      Math.abs(el.getBoundingClientRect().width - el.parentElement.getBoundingClientRect().width) < 1 && el.scrollWidth <= el.clientWidth));
+    await capture(`about-maximized-${language}.png`);
+    await page.locator('.sidebar-nav').getByRole('button', { name: language === 'zh-CN' ? '用量与诊断' : 'Usage & Diagnostics', exact: true }).click();
+    await page.getByRole('tab', { name: language === 'zh-CN' ? '运行日志' : 'Logs', exact: true }).click();
+    await page.locator('.log-viewer').waitFor();
+    check(`${language}: logs use the available width and height`, await page.locator('.content-scroll').evaluate(el => {
+      const workspace = document.querySelector('.workspace').getBoundingClientRect();
+      const pagination = el.querySelector('.log-pagination').getBoundingClientRect();
+      return Math.abs(el.getBoundingClientRect().width - workspace.width) < 1
+        && el.scrollWidth <= el.clientWidth && pagination.bottom <= innerHeight;
+    }));
+    await capture(`logs-maximized-${language}.png`);
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].unmaximize());
   }
   if (!sizingOnly) {
@@ -138,6 +177,86 @@ try {
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].unmaximize());
   await page.waitForTimeout(250);
   check('restore keeps the sidebar open', await page.locator('.app-sidebar').getAttribute('inert') === null);
+
+  await page.evaluate(() => {
+    const f = window.__fixture;
+    f.emitBrowser({ authenticated: true, authenticationStatus: 'authenticated', visible: true,
+      url: 'https://example.invalid/layout-fixture', activeTabId: 'layout-a',
+      tabs: ['a', 'b'].map((suffix, index) => ({
+        id: `layout-${suffix}`, title: `Layout fixture ${suffix.toUpperCase()}`, traceId: null,
+        status: 'ready', loading: false, active: index === 0, closable: index === 1,
+      })),
+    });
+    window.codexWebLauncher.selectBrowserTab = async id => {
+      f.calls.push(['selectBrowserTab', id]);
+      f.emitBrowser({ activeTabId: id, tabs: f.browser.tabs.map(tab => ({ ...tab, active: tab.id === id })) });
+      return f.browser;
+    };
+    window.codexWebLauncher.closeBrowserTab = async id => {
+      f.calls.push(['closeBrowserTab', id]);
+      const tabs = f.browser.tabs.filter(tab => tab.id !== id);
+      const activeId = (tabs.find(tab => tab.active) ?? tabs[0]).id;
+      f.emitBrowser({ activeTabId: activeId, tabs: tabs.map(tab => ({ ...tab, active: tab.id === activeId })) });
+      return f.browser;
+    };
+  });
+  await app.evaluate(() => global.windowSessionFixture.openPane());
+  await page.locator('.sidebar-nav').getByRole('button', { name: 'Browser', exact: true }).click();
+  await page.locator('.browser-viewport').waitFor();
+  const pane = context.pages().find(page => page.url().endsWith('#window-layout-pane'));
+  check('native browser fixture exists', Boolean(pane));
+  let clicks = 0;
+  const checkPane = async label => {
+    await page.waitForFunction(() => {
+      const rect = document.querySelector('.browser-viewport').getBoundingClientRect();
+      const sent = window.__fixture.browserBounds;
+      return sent && ['x', 'y', 'width', 'height'].every(key => Math.abs(sent[key] - rect[key]) < 0.5);
+    });
+    const rect = await page.locator('.browser-viewport').boundingBox();
+    const native = await app.evaluate(() => global.windowSessionFixture.state());
+    const chrome = await page.evaluate(() => {
+      const bar = document.querySelector('.app-titlebar');
+      const tabs = document.querySelector('.browser-tab-strip').getBoundingClientRect();
+      const toolbar = document.querySelector('.browser-toolbar').getBoundingClientRect();
+      return { titlebarBottom: bar.getBoundingClientRect().bottom, draggable: getComputedStyle(bar).webkitAppRegion,
+        tabsTop: tabs.top, tabsBottom: tabs.bottom, toolbarTop: toolbar.top, toolbarBottom: toolbar.bottom };
+    });
+    check(`${label}: browser controls follow the shared window titlebar`, chrome.draggable === 'drag'
+      && Math.abs(chrome.tabsTop - chrome.titlebarBottom) < 1
+      && Math.abs(chrome.toolbarTop - chrome.tabsBottom) < 1 && rect.y >= chrome.toolbarBottom - 1);
+    check(`${label}: native browser aligns with the renderer`, ['x', 'y', 'width', 'height'].every(key =>
+      Math.abs(native.bounds[key] - rect[key] * native.zoom) <= 2));
+    check(`${label}: browser uses the full remaining pane`, Math.abs(native.bounds.x + native.bounds.width - native.content[0]) <= 2
+      && Math.abs(native.bounds.y + native.bounds.height - native.content[1]) <= 2);
+    const suffix = clicks % 2 === 0 ? 'b' : 'a';
+    const tab = page.locator('.browser-tab').filter({ hasText: `Layout fixture ${suffix.toUpperCase()}` });
+    await tab.click();
+    check(`${label}: tab click selects the intended tab below the titlebar`, await tab.getAttribute('aria-selected') === 'true'
+      && await page.evaluate(id => window.__fixture.calls.some(call => call[0] === 'selectBrowserTab' && call[1] === id), `layout-${suffix}`));
+    await pane.getByRole('button', { name: 'Layout click target', exact: true }).click();
+    check(`${label}: native browser click reaches its target`, Number(await pane.locator('button').getAttribute('data-clicks')) === ++clicks);
+    metrics.push({ name: label, native, chrome, browserRect: rect });
+  };
+  await resize(MIN_WINDOW_BOUNDS.width, MIN_WINDOW_BOUNDS.height);
+  await checkPane('minimum window');
+  await resize(DEFAULT_WINDOW_STATE.bounds.width, DEFAULT_WINDOW_STATE.bounds.height);
+  await checkPane('normal window');
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].maximize());
+  await page.waitForTimeout(300);
+  await checkPane('maximized window');
+  await capture('browser-maximized.png');
+  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.waitForTimeout(300);
+  await checkPane('maximized without sidebar');
+  await capture('browser-maximized-without-sidebar.png');
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].unmaximize());
+  await page.waitForTimeout(300);
+  await checkPane('restored without sidebar');
+  await capture('browser-restored-without-sidebar.png');
+  await page.locator('.browser-tab').filter({ hasText: 'Layout fixture B' }).hover();
+  await page.getByRole('button', { name: 'Close tab', exact: true }).click();
+  check('restored without sidebar: tab close remains clickable', await page.locator('.browser-tab').count() === 1
+    && await page.evaluate(() => window.__fixture.calls.some(call => call[0] === 'closeBrowserTab' && call[1] === 'layout-b')));
   check('no renderer errors', errors.length === 0);
   await writeFile(resolve(out, 'results.json'), JSON.stringify({ kind: 'native Electron presentation fixture; mocked IPC, no authenticated DEV', checks, metrics, errors }, null, 2));
   console.log(JSON.stringify({ passed: checks.length, errors }));

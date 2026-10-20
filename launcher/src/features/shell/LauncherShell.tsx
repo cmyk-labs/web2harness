@@ -291,7 +291,6 @@ export function LauncherShell({
         copy={copy}
         platform={snapshot.platform}
         devProfile={devProfile}
-        draggable={surface !== "browser"}
         sidebarOpen={sidebarOpen}
         toggleSidebar={toggleSidebar}
       />

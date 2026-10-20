@@ -44,21 +44,25 @@
 
 ## 安装与启动
 
-应用默认以1000×660 DIP普通窗口打开，最小尺寸为900×600 DIP；显示器工作区更小时优先适配工作区。早期大窗口尺寸首次迁移时收敛到默认值；保存为上一版默认900×600的窗口一次调整为1000×660，其他已保存尺寸按新最小尺寸和屏幕边界约束，之后记住用户调整的普通尺寸与位置。启动不恢复最大化或全屏，窗口按钮仍可最大化、还原或收至任务栏。界面按1120×720设计画布整体等比缩放，文字、控件与间距一起变化，宽高比不同时用面板背景延续余量，标题栏沿窗口边缘对齐；缩小或还原不会自动关闭侧栏，手动开关状态会保存。原有长页面和日志区域仍可滚动。
+应用默认以1000×660 DIP普通窗口打开，最小尺寸为900×600 DIP；显示器工作区更小时优先适配工作区。早期大窗口尺寸首次迁移时收敛到默认值；保存为上一版默认900×600的窗口一次调整为1000×660，其他已保存尺寸按新最小尺寸和屏幕边界约束，之后记住用户调整的普通尺寸与位置。启动不恢复最大化或全屏，窗口按钮仍可最大化、还原或收至任务栏。界面铺满可用区域，小窗口保留基于1120×720的缩小适配；放大或最大化时，应用自动布局缩放上限为100%，新增空间用于展示内容，仍遵循正常系统显示缩放。侧栏和标题栏保持正常比例，长段落保留阅读宽度，日志、队列及浏览器可使用剩余区域。缩小或还原不会自动关闭侧栏，手动开关状态会保存。原有长页面和日志区域仍可滚动。
+
+所有工作区页面使用一致的顶部窗口标题栏。浏览器标签栏和地址操作栏位于其下，网页填满剩余区域。“关于”简介与产品信息区域同宽，并自然换行。
 
 ### 选择下载文件
 
+下表文件名中的`<version>`代表所选发布页显示的版本号，请下载该发布页内的对应文件。
+
 | 设备 | 安装包 |
 | --- | --- |
-| Windows x64 | `web2harness-1.0.0-win-x64.exe` |
-| macOS Apple silicon | `web2harness-1.0.0-mac-arm64.dmg` |
-| macOS Intel | `web2harness-1.0.0-mac-x64.dmg` |
-| Linux x64 | `web2harness-1.0.0-linux-x64.AppImage` |
-| Linux arm64 | `web2harness-1.0.0-linux-arm64.AppImage` |
+| Windows x64 | `web2harness-<version>-win-x64.exe` |
+| macOS Apple silicon | `web2harness-<version>-mac-arm64.dmg` |
+| macOS Intel | `web2harness-<version>-mac-x64.dmg` |
+| Linux x64 | `web2harness-<version>-linux-x64.AppImage` |
+| Linux arm64 | `web2harness-<version>-linux-arm64.AppImage` |
 
 使用同一发布页的 `checksums.txt` 核对下载文件。macOS 打开 DMG 后将 Web2Harness 复制到「应用程序」；Linux 为 AppImage 添加执行权限后，在受支持的桌面会话中启动。Windows 安装步骤见下文。
 
-macOS ZIP 用于更新及纯终端安装，使用 DMG 时无需额外下载。Source code 归档供开发者使用。高级用户可从[对应版本源码](https://github.com/cmyk-labs/web2harness/tree/v1.0.0/scripts)获取安装脚本，并显式设置 `WEB2HARNESS_REPOSITORY=cmyk-labs/web2harness`。macOS 终端脚本下载完整桌面 ZIP，但仅安装其中的运行时与许可，不安装桌面应用。桌面脚本安装预览版时，还需设置 `WEB2HARNESS_VERSION=1.0.0`，因为自动发现稳定版本不会选中预览版。
+macOS ZIP 用于更新及纯终端安装，使用 DMG 时无需额外下载。高级用户可从对应发布页的Source code归档获取安装脚本，并显式设置`WEB2HARNESS_REPOSITORY=cmyk-labs/web2harness`。macOS终端脚本下载完整桌面ZIP，但仅安装其中的运行时与许可，不安装桌面应用。桌面脚本安装预览版时，还需将`WEB2HARNESS_VERSION`设为该已发布预览版去掉前导`v`的版本号，因为自动发现稳定版本不会选中预览版。
 
 ### 已有源码目录
 

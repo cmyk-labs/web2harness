@@ -194,7 +194,6 @@ export function BrowserSurface({
             ) : null}
           </div>
         ))}
-        <div className="browser-tab-drag draggable" />
       </div>
       <div className="browser-toolbar">
         <div className="browser-history">

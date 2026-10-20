@@ -1,41 +1,41 @@
 ## 简体中文
 
-Web2Harness 2.4.0（`v2.4.0`）修复隐藏窗口无法唤起的问题，新增运行时回收和存储管理，并精简安装包。
+Web2Harness 2.5.0（`v2.5.0`）改进网页正文交付、原生工具与媒体兼容、操作超时和窗口布局。
 
-- **窗口唤起**：托盘、桌面快捷方式及第二实例打开请求直接恢复并显示主窗口；首次启动同时处理页面加载完成和显示就绪事件，避免只等待单次事件而一直隐藏。保留隐藏自启动和用户主动关闭到托盘的行为。
-- **旧版本回收**：后台保留当前运行时和最近一个有效回退版本，额外保留正在使用、配置或恢复事务引用的版本。未知、损坏或含不安全链接的目录不会自动删除；进程盘点不完整或安装恢复未完成时延期处理。
-- **存储与缓存**：在“用量与诊断 → 存储与缓存”查看占用，任务空闲时清理网页资源和代码缓存，保留登录 Cookie、Local Storage、IndexedDB 等必要站点数据；重复清理和忙碌时操作会被阻止。
-- **日志与安装包**：辅助日志统一纳入轮转和保留预算，并支持诊断导出。安装包保留英文、简体中文资源，移除经过审核的依赖测试文件；保留安装修复、运行和回退所需的独立运行时。
+- **最终正文交付**：等待本轮网页生成完成后读取完整最终回答；区分正常完成、取消、上游错误和缺少公开正文。保存会话可在原轮次内只读复核，不重新发送生成请求或重复工具。
+- **独立操作时限**：外层任务和各子步骤分别计时，取消跨步骤共享总预算；保留取消、队列归属与原始错误。
+- **上传恢复**：普通“上传未成功”会移除失败附件，等待3秒后重传一次；再次失败保留原始错误，明确的HTTP 429额度错误直接返回。
+- **原生能力**：增加Codex独立搜索路径、Office附件、原始音频传输和结构化结果校验，完善WebSocket预填、续接、取消及自然完成边界的追加指令。工具仍由Codex按任务权限和审批执行。
+- **媒体与工具续答**：实际验证原生下载图片后查看、WAV/MP3/M4A/WebM/OGG音频续答、双参考图编辑、严格Schema结果，以及工具等待期间追加任务要求。
+- **窗口布局**：小窗口保留缩小适配，大窗口增加内容空间而不放大控件；简介与信息区域同宽，浏览器标签栏和地址栏放到统一窗口标题栏下方。
 
 ### 验证范围与已知限制
 
-已完成核心/桌面完整自动验证、补充定向回归、双语及窄窗存储页面检查、真实 Electron 本地站点缓存与窗口检查，以及共享实现的独立 DEV 启动、存储接口和第二实例唤起检查。Cookie、Local Storage 和 IndexedDB 保留已在本地测试站点验证；DEV 未登录 ChatGPT，不能据此认定真实账号清理后登录保持已验收。发布冻结验证、五个原生构建目标和包冒烟结果以本版本 CI 为准，跳过项不计为通过。
+共享实现已具备隔离DEV的读取、补丁、命令、取消/续接、压缩、并行子任务及上述媒体能力证据，各项按原测试范围保留。最新界面通过113项双语布局和85项原生窗口展示检查。源码完整验证、各原生构建目标及新包完整性以本版本对应检查结果为准；跳过和未执行项不计为通过。
 
-同条件 Windows 开发测试包从 222.3 MiB 降至 212.8 MiB，减少约 9.46 MiB（4.26%）；正式包大小以本次资产为准，其他平台收益未作等量承诺。此开发测试包不作为发布制品。
+Web模型不等同于原生模型服务的全部协议能力。原生加密推理无损迁移、缺少实际服务绑定的provider文件ID及托管工具、裸PCM和原始视频仍不支持。所测Codex客户端会提前拒绝直接HTTPS图片输入，并可能省略原始FLAC；原生下载后查看图片和已验证音频格式有独立成功证据。JSON Schema采用提示与最终校验，不宣称网页后端提供API受约束解码。
 
-真实客户激活、覆盖升级后的窗口恢复、完整人工安装/卸载、其他平台交互与服务运行、认证 ChatGPT 缓存清理仍未完成验收。本次发布保留这些验证缺口，不以文件系统夹具或 CI 安装/启动冒烟替代。未改动的模型和工具能力复用既有有效证据，既有长上下文及跨平台账号交互等未执行项仍未被本轮验证。
+历史偶发发送、缺正文及音频识别失败保留为已知风险，不宣称全部根治。Windows物理输入、跨DPI、其他系统交互及实际安装/升级/卸载的覆盖须按独立验收记录审阅，展示夹具和构建成功不能替代这些验收。
 
-发布提供 Windows x64、macOS arm64/x64、Linux x64/arm64 的七个包及 `checksums.txt`，按目标原生构建并核验资产和 SHA-256。Windows 未做证书签名；macOS 为 ad-hoc 签名，未作 Developer ID 签名或公证。
-
-现有数据和配置沿用，缓存清理无需退出登录。自动回收只处理通过检查的旧运行时，不代表整个数据目录容量固定。遇到窗口仍无法显示，可从托盘退出后重新启动；升级或清理失败时保留日志，使用本版安装包修复，不要手动删除运行时、恢复记录或归属标记。
+正式发布目标为Windows x64、macOS arm64/x64、Linux x64/arm64的七个包及`checksums.txt`，须在对应原生平台构建。Windows未做证书签名；macOS为ad-hoc签名，未作Developer ID签名或公证。保留现有数据、配置及显式模型/强度选择，遇到错误请保留诊断日志，不手动删除认证或恢复记录。
 
 ## English
 
-Web2Harness 2.4.0 (`v2.4.0`) fixes hidden-window activation, adds runtime retention and storage management, and reduces package size.
+Web2Harness 2.5.0 (`v2.5.0`) improves final-answer delivery, native tool and media compatibility, operation timeouts, and window layout.
 
-- **Window activation**: Tray, desktop shortcut and second-instance requests directly restore and show the main window. Initial startup handles both page-load completion and display readiness instead of depending on one event. Hidden autostart and intentional close-to-tray behavior remain available.
-- **Old runtime cleanup**: Background maintenance retains the current runtime and one recent valid rollback, plus versions referenced by active processes, configuration or recovery transactions. Unknown, damaged or unsafely linked directories are not automatically removed. Incomplete process inventory or unfinished installation recovery defers cleanup.
-- **Storage and cache**: Usage & diagnostics → Storage & cache displays disk usage and clears web-resource and code caches while tasks are idle. Login cookies, Local Storage, IndexedDB and other necessary site data are retained. Concurrent cleanup and busy-state requests are rejected.
-- **Logs and packaging**: Auxiliary logs now share rotation and retention budgets and are included in diagnostic exports. Packages retain English and Simplified Chinese resources and remove audited dependency test files. Separate runtimes required for installation repair, execution and rollback remain included.
+- **Final-answer delivery**: Read the complete final answer after the current web generation finishes. Distinguish completion, cancellation, upstream errors and missing public answers. Saved conversations can be rechecked read-only within the same turn without resending generation or repeating tools.
+- **Independent operation limits**: Outer tasks and individual steps use separate timeouts instead of one shared cross-step deadline. Cancellation, queue ownership and original errors remain intact.
+- **Upload recovery**: Remove an ordinary failed attachment, wait three seconds and retry once. Preserve the original error after another failure; explicit HTTP 429 quota failures return directly.
+- **Native capabilities**: Add Codex standalone search, Office attachments, original-audio transport and structured-output validation; improve WebSocket prefill, continuation, cancellation and steering at natural completion boundaries. Codex continues to execute tools under the task's permissions and approvals.
+- **Media and tool continuation**: Live checks cover native image download followed by viewing, WAV/MP3/M4A/WebM/OGG audio continuation, editing with two reference images, strict Schema results and additional instructions during a pending tool call.
+- **Window layout**: Compact windows retain scaling down; larger windows add space without enlarging controls. About text uses its section width, and browser tabs and address controls sit beneath the shared window titlebar.
 
 ### Validation scope and known limitations
 
-Completed checks include full core/launcher automated verification, additional targeted regressions, bilingual and narrow-window storage UI checks, real Electron checks with a local test site, and isolated DEV checks of shared startup, storage IPC and second-instance activation. Cookie, Local Storage and IndexedDB retention was verified on the local test site. DEV was signed out of ChatGPT, so this does not establish authenticated-account retention after cleanup. Refer to this version's CI for freeze verification, five native build targets and package smoke; skipped checks are not passes.
+The shared implementation has isolated DEV evidence for read, patch, command execution, cancellation/continuation, compaction, parallel child tasks and the media paths above. Each result retains its original scope. The latest interface passed 113 bilingual layout checks and 85 native window presentation checks. Refer to this version's corresponding results for full source verification, native builds and new-package integrity; skipped or unexecuted checks are not passes.
 
-Under matching conditions, Windows development test packages decreased from 222.3 MiB to 212.8 MiB, about 9.46 MiB (4.26%). Published assets determine final sizes; equivalent savings are not claimed for other platforms. Those development-key packages are not release artifacts.
+Web models do not implement every native model-service protocol. Lossless migration of native encrypted reasoning, provider file IDs and hosted tools without actual service bindings, raw PCM and raw video remain unsupported. The tested Codex client rejects direct HTTPS image input before it reaches the bridge and can omit raw FLAC. Native download-then-view and the tested audio formats have separate successful evidence. JSON Schema uses prompting and final validation, not an assertion of API-constrained decoding by the web backend.
 
-Real customer activation, window recovery after an installed upgrade, full manual installation/uninstall, interactive behavior and services on other platforms, and authenticated ChatGPT cache cleanup remain unexecuted. This release retains those gaps; filesystem fixtures and CI installation/startup smoke do not replace them. Unchanged model and tool behavior reuses valid existing evidence. Previously unexecuted long-context and cross-platform account checks remain unverified.
+Historical intermittent send, missing-answer and audio-recognition failures remain known risks; they are not all claimed to be resolved. Review separate evidence for Windows physical input, cross-DPI behavior, other operating systems and actual installation/upgrade/uninstall. Presentation fixtures and successful builds do not establish those results.
 
-The release provides seven packages for Windows x64, macOS arm64/x64 and Linux x64/arm64, plus `checksums.txt`. Native builds verify the asset inventory and SHA-256 values. Windows packages are not certificate-signed; macOS uses ad-hoc signing without Developer ID signing or notarization.
-
-Existing data and configuration remain in use, and cache cleanup does not require signing out. Automatic reclamation applies only to verified old runtimes; it does not impose a fixed size on the entire data directory. If a window still cannot be shown, quit from the tray and reopen. Preserve logs after upgrade or cleanup failures and repair with this version's installer instead of manually deleting runtimes, recovery records or ownership markers.
+Formal release targets are seven packages for Windows x64, macOS arm64/x64 and Linux x64/arm64, plus `checksums.txt`, built on matching native platforms. Windows packages are not certificate-signed; macOS uses ad-hoc signing without Developer ID signing or notarization. Existing data, configuration and explicit model/effort selection remain in use. Preserve diagnostic logs after errors rather than manually deleting authentication or recovery records.

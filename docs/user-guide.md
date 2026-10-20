@@ -44,21 +44,25 @@ Ordinary users may install and use the application on their own workstation. Dev
 
 ## Install and start
 
-The application opens in a 1000×660 DIP normal window with a 900×600 DIP minimum; a smaller display work area takes precedence. The first sizing migration caps legacy large bounds at the default. Saved windows at the previous 900×600 default grow once to 1000×660; other saved sizes remain subject to the new minimum and screen bounds. Subsequent manual sizes and positions are remembered. Startup does not restore maximized or fullscreen mode; native controls still maximize, restore or minimize to the taskbar. The interface scales its 1120×720 design canvas uniformly, including text, controls and spacing, continuing the pane backgrounds through extra space when aspect ratios differ. The titlebar follows the window edges. Resizing or restoring does not close the sidebar; its manual state is saved. Existing long pages and log areas remain scrollable.
+The application opens in a 1000×660 DIP normal window with a 900×600 DIP minimum; a smaller display work area takes precedence. The first sizing migration caps legacy large bounds at the default. Saved windows at the previous 900×600 default grow once to 1000×660; other saved sizes remain subject to the new minimum and screen bounds. Subsequent manual sizes and positions are remembered. Startup does not restore maximized or fullscreen mode; native controls still maximize, restore or minimize to the taskbar. The interface fills the available area. Compact windows retain scaling against a 1120×720 baseline, while larger or maximized windows cap automatic app scaling at 100% and use the extra space for content. Normal system display scaling still applies. The sidebar and titlebar keep their normal proportions; long prose has a readable width, while logs, queues and the browser can use the remaining pane. Resizing or restoring does not close the sidebar; its manual state is saved. Existing long pages and log areas remain scrollable.
+
+All workspace pages share the top window titlebar. In Browser, the tab strip and address toolbar sit beneath it, and the web page fills the remaining area. The About introduction uses the same width as its product information section and wraps naturally.
 
 ### Select a download
 
+In the filenames below, `<version>` is the version shown on the selected release page. Download its matching asset.
+
 | Device | Installer |
 | --- | --- |
-| Windows x64 | `web2harness-1.0.0-win-x64.exe` |
-| macOS Apple silicon | `web2harness-1.0.0-mac-arm64.dmg` |
-| macOS Intel | `web2harness-1.0.0-mac-x64.dmg` |
-| Linux x64 | `web2harness-1.0.0-linux-x64.AppImage` |
-| Linux arm64 | `web2harness-1.0.0-linux-arm64.AppImage` |
+| Windows x64 | `web2harness-<version>-win-x64.exe` |
+| macOS Apple silicon | `web2harness-<version>-mac-arm64.dmg` |
+| macOS Intel | `web2harness-<version>-mac-x64.dmg` |
+| Linux x64 | `web2harness-<version>-linux-x64.AppImage` |
+| Linux arm64 | `web2harness-<version>-linux-arm64.AppImage` |
 
 Verify the download against `checksums.txt` in the same release. On macOS, open the DMG and copy Web2Harness to Applications. On Linux, grant the AppImage execute permission and launch it from a supported desktop session. Windows installation is described below.
 
-The macOS ZIPs support updates and terminal-only installation; they are not additional prerequisites for DMG users. Source code archives are for developers. Advanced users can obtain [installation scripts from the versioned source](https://github.com/cmyk-labs/web2harness/tree/v1.0.0/scripts). Set `WEB2HARNESS_REPOSITORY=cmyk-labs/web2harness` explicitly. The macOS terminal script downloads the complete desktop ZIP and installs only its embedded runtime and licenses; it does not install the desktop application. To use the preview with the desktop scripts, also set `WEB2HARNESS_VERSION=1.0.0`, since automatic stable-version discovery excludes previews.
+The macOS ZIPs support updates and terminal-only installation; they are not additional prerequisites for DMG users. Advanced users can obtain installation scripts from the matching release's Source code archive. Set `WEB2HARNESS_REPOSITORY=cmyk-labs/web2harness` explicitly. The macOS terminal script downloads the complete desktop ZIP and installs only its embedded runtime and licenses; it does not install the desktop application. To install a preview with the desktop scripts, also set `WEB2HARNESS_VERSION` to that published preview's version without the leading `v`, since automatic stable-version discovery excludes previews.
 
 ### Existing source checkout
 

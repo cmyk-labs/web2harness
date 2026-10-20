@@ -13,8 +13,6 @@
   scroll-padding-block: 24px;
 }
 
-.app-root.entry-screen { height: 720px; }
-
 .entry-screen > .entry-content {
   width: min(100%, 520px);
   flex: none;

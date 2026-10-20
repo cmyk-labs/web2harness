@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { runQueueSmoke } from './smoke-queue.mjs';
 import { runRuntimeParametersSmoke } from './smoke-runtime-parameters.mjs';
 import { runStorageSmoke } from './smoke-storage.mjs';
+import { runWindowLayoutSmoke } from './smoke-window-layout.mjs';
 import { resolve } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer as createHttpServer } from 'node:http';
@@ -23,7 +24,12 @@ const errors=[],checks=[];const check=(label,value)=>{assert.ok(value,label);che
 try{
 const context=await browser.newContext({viewport:{width:1440,height:1050},locale:'zh-CN'});
 await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
-await context.addInitScript(installWorkspaceFixture);if(process.env.WORKSPACE_SMOKE_SCOPE==='queue'){
+await context.addInitScript(installWorkspaceFixture);if(process.env.WORKSPACE_SMOKE_SCOPE==='layout'){
+ await runWindowLayoutSmoke({context,origin,out,check,errors});
+ check('Window layout renderer has no JavaScript errors',errors.length===0);
+ await writeFile(out+'/results.json',JSON.stringify({scope:'layout',passed:checks.length,checks,errors},null,2));
+ console.log(JSON.stringify({scope:'layout',passed:checks.length,errors}));
+}else if(process.env.WORKSPACE_SMOKE_SCOPE==='queue'){
  await runQueueSmoke({context,origin,out,check,errors});
  check('Queue renderer has no JavaScript errors',errors.length===0);
  await writeFile(out+'/results.json',JSON.stringify({scope:'queue',passed:checks.length,checks,errors},null,2));
@@ -892,7 +898,7 @@ for (const language of ['zh-CN', 'en']) {
     const label = `${language} ${size.width}x${size.height}`;
     check(`${label}: log pagination and readable body stay visible`,layout.paginationVisible&&layout.readableLogs);
     check(`${label}: no clipped controls or duplicate narrow width inset`,!layout.horizontalOverflow&&(size.width>1120||layout.fullWidth));
-    check(`${label}: sidebar retains the design canvas`,!layout.compact&&layout.fontSize==='14px');
+    check(`${label}: sidebar and readable type survive window resizing`,!layout.compact&&layout.fontSize==='14px');
     if (size.width===1120||size.width===720) await sizingPage.screenshot({path:out+`/logs-${language}-${size.width}.png`});
   }
   await sizingPage.getByRole('button', { name: language === 'zh-CN' ? '导出诊断包' : 'Export diagnostics', exact: true }).click();
