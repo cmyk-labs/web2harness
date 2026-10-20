@@ -8,6 +8,8 @@ The subsequent [recovery implementation and authenticated evidence](recovery.md)
 
 The later [audio automation retest](audio-automation.md) passed four cases across two recordings and ordinary/native tool-result paths without product-code changes. Earlier failures did not recur; their cause remains unidentified.
 
+The [five feasible native capabilities](five-native-capabilities.md) report records subsequent schema, remote-image, encoded-audio, image-edit and active-task steering acceptance after local checkpoint `9ca034d`. It corrects a direct remote-image assumption rejected by the actual Codex client, and separates native-client and environment failures from bridge defects.
+
 ## Evidence and attribution
 
 | Case | Observation | Result and scope |

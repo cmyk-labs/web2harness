@@ -30,8 +30,8 @@ export function About({
       <section className="about-product" aria-label={t("产品信息", "Product information")}>
         <EntryBrand version={snapshot.version} devProfile={snapshot.profile === "development"} />
         <p>{t(
-          "在 Codex 中使用 ChatGPT 网页版模型，包括账号有权使用的 Pro，支持原生工具调用、任务上下文、流式响应和图片输入。Fast 默认上下文窗口为80,000 tokens，非Fast及Pro默认为272,000 tokens，可在运行参数中调整，并可选实验性三倍预算。使用网页模型时，将遵循 ChatGPT 的网页端限制，且不会消耗 Codex 的配额。默认采用原生工具模式，无需 MCP 连接器或隧道。",
-          "Use ChatGPT web models, including Pro when available to your account, in Codex with native tool calls, task context, streaming, and image inputs. Default context windows are 80,000 tokens for Fast and 272,000 for Non-Fast and Pro, configurable in Runtime parameters with an optional experimental 3× budget. Web-model requests follow ChatGPT's web limits without consuming Codex quota. Native Tools is the default; no MCP connector or tunnel required.",
+          "在 Codex 中使用 ChatGPT 网页版模型，包括账号有权使用的 Pro，支持原生工具调用、任务上下文、流式响应和图片输入。可选实验性三倍上下文预算。使用网页模型时，将遵循 ChatGPT 的网页端限制，且不会消耗 Codex 的配额。默认采用原生工具模式，无需 MCP 连接器或隧道。",
+          "Use ChatGPT web models, including Pro when available to your account, in Codex with native tool calls, task context, streaming, and image inputs. Optional experimental 3× context budget. Web-model requests follow ChatGPT's web limits without consuming Codex quota. Native Tools is the default; no MCP connector or tunnel required.",
         )}</p>
         <dl className="about-metadata">
           <div><dt>{t("运行平台", "Platform")}</dt><dd>{platform}</dd></div>

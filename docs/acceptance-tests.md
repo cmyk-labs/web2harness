@@ -330,6 +330,8 @@ Diagnostic fixtures also cover observed `delta_encoding`/`message`/`delta` event
 
 Recorded scoped results for the reviewed unreleased candidate (2026-10-18): real CLI resume/interrupt/recovery passed with zero HTTP fallback, and public-PDF URL reading, independent prefill and natural-boundary steering passed through shared components. Original failed evidence is retained. These results do not certify remote-image live input, raw media, Codex file-tool end-to-end execution or every CAP-011 capability; see the [verified scopes](native-tools-compatibility.md#evidence).
 
+Later [authenticated native acceptance (2026-10-20)](investigations/2026-10-20-capability-followup/five-native-capabilities.md) passed CLI JSON Schema output, native public-image download → viewing → continuation, MP3/M4A/WebM/OGG tool-result audio, a native edit with two image references, and app-server `turn/steer` while a native tool was pending. Existing WAV evidence is reused. Direct HTTPS image input and raw FLAC encounter restrictions in the tested official Codex client before bridge input; retain those failed attempts separately. The feasible workflows do not certify the bridge's direct image-URL resolver, earlier-boundary steering, native ciphertext migration or generic hosted tools.
+
 Reuse CAP-001–003, CAP-009–010 and valid existing evidence where the same observations apply. Record tool events, settings, file/attachment hashes, transport and lifecycle outcomes, production boundary comparisons and all unexecuted or failed paths. See [capability boundaries](native-tools-compatibility.md).
 
 <a id="result-record"></a>

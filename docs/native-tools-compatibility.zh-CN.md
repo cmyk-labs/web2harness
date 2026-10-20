@@ -28,11 +28,11 @@
 | 原生搜索 | 在原生 `/alpha/search` 路径周围新增可恢复的 `standalone_web_search` 配置及搜索模型别名处理，保留 Codex 的 `web.run` 执行器和搜索设置。 | 配置／传输 fixture、合成上游 CLI fixture，以及 GPT-6 Sol／`xhigh`、限制 `learn.chatgpt.com` 域名的实时搜索认证 DEV 均已通过；有原生读取／修改／回读证据。 |
 | 原始 hosted `web_search`／`web_search_preview` 声明 | Web Responses 解析器仍明确拒绝，并提示使用 Codex standalone 搜索路径。 | 不静默删除声明，也不翻译为虚构的本地工具；禁用搜索不是等价修复。 |
 | DOCX/XLSX/PPTX 输入 | 在既有 PDF／文本路径上增加 Office 原始字节上传、规范 MIME 和有界包结构校验。 | fixture 及共享 Responses 组件的认证 DEV 均通过，正确读出三个 Office 附件中的不同标识；属于组件验收，不是 Codex Office 工具端到端通过。 |
-| 远程图片／`input_file.file_url` | 新增绑定任务／provider／账号的精确 URL 授权，预检后有界解析公开 HTTPS。预填保留原引用，不下载。 | 七项共享边界测试及解析器／网络 fixture 通过。真实公开 PDF URL 组件验收**通过**，不代表远程图片 live 或 Codex 文件工具端到端验收。 |
+| 远程图片／`input_file.file_url` | 新增绑定任务／provider／账号的精确 URL 授权，预检后有界解析公开 HTTPS。预填保留原引用，不下载。 | 解析器fixture及真实公开PDF组件验收通过；原生下载→`view_image`→续答也已[通过](investigations/2026-10-20-capability-followup/five-native-capabilities.zh-CN.md)。当前测试的Codex app-server会在本地拒绝直接HTTPS图片输入，原生下载流程不能代替桥内直接图片URL解析器的认证验收。 |
 | Codex 原始 `input_audio` | 用户输入与原生工具结果中的内联 WAV、MP3/MPEG、OGG Opus/Vorbis、FLAC、纯音频 M4A/MP4、WebM 保留原始字节。 | 复用现有附件链路，不转成文字替代。格式／字节保真 fixture 通过，认证验收范围另行记录。任务授权的公开HTTPS音频URL复用现有下载器；裸PCM与原始视频仍不支持。 |
 | provider `file_id` | 预填与生成均明确不支持。 | 仍缺绑定来源 provider／账号的 Codex／ChatGPT 文件下载契约；公开 API Files 的凭据与端点是另一套服务绑定。 |
 | `text.format: json_object` | 解析格式要求，并将完整最终答案校验为 JSON 对象。 | 校验器／适配器 fixture 及共享 Responses 组件认证 DEV 已通过；不保证 Web 后端采用受约束解码。 |
-| 严格 JSON Schema | 保留既有 schema 校验，不强制转换、修补、注入默认值或删除额外属性。 | 属于提示加最终输出校验，不表示 Web 模型使用 API 的解码机制。 |
+| 严格 JSON Schema | 保留既有 schema 校验，不强制转换、修补、注入默认值或删除额外属性。 | 真实原生CLI的`--output-schema`任务、命令执行及正确JSON结果已[通过](investigations/2026-10-20-capability-followup/five-native-capabilities.zh-CN.md)。仍属提示加最终输出校验，不表示Web后端具有API受约束解码。 |
 | Web 无法落实的有效生成控制 | 在构造适配器前返回 HTTP 400 `unsupported_web_request_control`。 | 以显式边界替代静默接受；没有实现采样、Token 上限、后台任务或 API 服务档位。 |
 | 不透明加密上下文与跨后端 agent 消息 | 对展开后的原始输入进行有界预检，在浏览器工作前对不兼容输入返回 HTTP 400 `incompatible_web_context`。 | 有分类器及协作 fixture，服务器预检已接入；原生密文的跨后端可移植性仍未解决。 |
 | 桥自有透明上下文封装 | 保留显式存在的空文本、签名和数组，区分空压缩摘要与不可读密文。 | 79项上下文测试／416断言通过。修复的是可逆封装保真，不是解密原生密文，也不能从摘要恢复压缩前的完整历史。 |
@@ -41,7 +41,7 @@
 | `previous_response_id` | 有界本地缓存按传入授权／账号／组织／项目摘要分区；WebSocket／预填历史及后代保持纯内存。 | 缓存作用域不是身份认证。丢失、过期、淘汰或重启须提交完整原历史，不重放工具；不保证持久性或上游缓存等价。 |
 | 原生阻塞 `wait` | Web 轮次及物理资源收尾后，主任务的原生等待不占 Web 执行名额。 | **既有行为**，不是本批新能力；此前认证多 agent 观察支持这一边界。 |
 
-Hosted 类型与真实 Codex 工具适用不同契约。原生图像生成／编辑已有转发路径，但路由存在本身不证明认证验收通过。将不支持的声明认定为缺少本地工具前，请先核对[逐工具条件性阻碍](#hosted-tools)。
+Hosted类型与真实Codex工具适用不同契约。原生图像生成及[双参考图编辑与原文件输出](investigations/2026-10-20-capability-followup/five-native-capabilities.zh-CN.md)已有认证证据，路由存在本身仍不充分。将不支持的声明认定为缺少本地工具前，请先核对[逐工具条件性阻碍](#hosted-tools)。
 
 源码归属：[工具解析器](../src/responses/parser.ts)、[Responses 服务](../src/server.ts)、[原生透传](../src/codex/native-passthrough.ts)、[原生工具调用契约](../src/adapters/chatgpt-web/tools/native-tool-call-block.ts)。
 
@@ -111,6 +111,8 @@ Codex `input_audio.audio_url` 现支持用户消息及 function/custom 工具结
 
 自动Web模型目录声明文本、图片及音频输入，使Codex保留MCP／Code Mode音频；手动模式仍为仅文本，原生模型行保留原声明。[最新认证复验](investigations/2026-10-20-capability-followup/audio-automation.zh-CN.md)中，两份不同的22050Hz单声道PCM16 WAV分别通过普通BrowserWorker问题及真实Codex原生工具音频续答；原字节、实际附件/调用绑定、gpt-6-thinking/max及正确转录均有证据。本轮没有修改产品代码或增加等待，历史识别失败未复现，根因仍未定位；四项通过不代表所有音频格式、录音条件或模型完全等价。
 
+后续[原生能力验收](investigations/2026-10-20-capability-followup/five-native-capabilities.zh-CN.md)新增MP3、M4A/AAC、WebM/Opus及OGG/Vorbis通过，均核实原生/网页原字节及正确转录。FLAC没有到达桥：当前原生Code Mode将其省略，已查官方Codex音频准备MIME清单也不含FLAC。桥内FLAC解析仍有离线覆盖，不能写成当前Codex端到端能力；未开发Codex分支、伪装MIME或以转录替代音频。
+
 原生不透明reasoning／compaction不能仅靠保留可见历史或增加明文标记来迁移。加密agent／工具数据需要对应条目的完整原始明文；不透明模型状态需要受支持的来源导出或目标导入契约。已检索API描述服务端续传，不是客户端解密／导出操作。本桥保留原请求并报告不可读位置，不静默切换模型或丢弃状态。[Reasoning契约](https://developers.openai.com/api/docs/guides/reasoning)。
 
 见[引用解析](../src/responses/input-references.ts)、[固定地址 HTTPS 传输](../src/responses/input-reference-network.ts)及[共享边界 fixture](../tests/responses/server-input-references.test.ts)。
@@ -174,6 +176,8 @@ Web `generate:false` 先校验并保留完整展开输入，再返回带可用 I
 前一 Web 轮次及物理资源收尾后，原生阻塞 `wait` **本来就不再占用**主任务的 Web 名额。后续再次调用模型时重新申请名额；子 agent 的 Web 请求独立计数。本地队列状态轮询与反复调用模型不同。“wait 不占 Web 名额”不等于所有轮询／模型轮次都免于队列准入。
 
 此前新增的两条“先做独立工作再等待”“减少短模型轮询”建议已按用户要求移除，本批不强加这些编排策略。必要的工具结果对应及轮次收尾规则仍保留。移除建议没有改变原生执行器、wait 参数、审批或沙箱。
+
+后续[原生app-server验收](investigations/2026-10-20-capability-followup/five-native-capabilities.zh-CN.md)验证了真实原生工具待返回时的`turn/steer`：追加输入、收据和活动轮次均为一次，实际文件创建/读回及最终回答包含新要求。这证明该原生客户端流程可通过Web路由完成，不表示能够中断正在生成的网页回答或支持更广泛的托管steering。
 
 <a id="reliability"></a>
 

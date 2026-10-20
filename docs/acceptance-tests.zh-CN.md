@@ -330,6 +330,8 @@ ZIP 不可读、哨兵泄漏、隐藏采集失败、日期边界错误或故障�
 
 已核查未发布候选的限定范围结果（2026-10-18）：真实 CLI resume／interrupt／恢复通过，HTTP 回退为零；公开 PDF URL 读取、独立 prefill 及自然边界 steering 共享组件通过。保留原失败证据，不据此认证远程图片 live、原始媒体、Codex 文件工具端到端或 CAP-011 全部能力。见[已验证范围](native-tools-compatibility.zh-CN.md#evidence)。
 
+后续[真实原生认证验收（2026-10-20）](investigations/2026-10-20-capability-followup/five-native-capabilities.zh-CN.md)通过CLI JSON Schema输出、原生公开图片下载→查看→续答、MP3/M4A/WebM/OGG工具音频结果、双参考图原生编辑，以及原生工具待返回时的app-server `turn/steer`；既有WAV证据复用。直接HTTPS图片输入和原始FLAC在到桥前受到当前官方Codex客户端限制，失败尝试单独保留。这些可行流程不认证桥内直接图片URL解析器、更早steering边界、原生密文迁移或通用托管工具。
+
 同一观察适用时复用 CAP-001～003、CAP-009～010 及有效既有证据。记录工具事件、设置、文件/附件哈希、传输与生命周期结果、生产边界对比及全部未执行/失败路径。详见[能力边界](native-tools-compatibility.zh-CN.md)。
 
 <a id="result-record"></a>
