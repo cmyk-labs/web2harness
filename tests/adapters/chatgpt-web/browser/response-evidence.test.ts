@@ -40,6 +40,21 @@ const namedFrames = (values: unknown[]): Array<{ value: unknown; event: "delta_e
   event: value === "v1" ? "delta_encoding"
     : value && typeof value === "object" && Object.hasOwn(value, "v") ? "delta" : "message" }));
 
+test("non-public text ancestors and patches replay without retaining their bodies", () => {
+  const intermediate = message({ id: "intermediate", channel: null, recipient: undefined,
+    status: "finished_successfully", end_turn: false,
+    content: { content_type: "text", parts: ["SECRET_INTERMEDIATE"] },
+    metadata: { parent_id: binding.userMessageId, is_complete: true } });
+  for (const chunk of [1, 17, 4096]) {
+    const source = capture(["v1", input, envelope(intermediate), delta("SECRET_APPEND"),
+      envelope(message({ metadata: { parent_id: intermediate.id } })), delta("Public final"), terminal, ...tail], true, chunk);
+    expect(source.result()).toMatchObject({ state: "complete", text: "Public final" });
+    const artifact = source.takeEvidence()!;
+    expect(JSON.stringify(artifact)).not.toContain("SECRET_");
+    expect(replayChatGptResponseEvidence(artifact, chunk)).toMatchObject({ state: "replayed", result: source.result() });
+  }
+});
+
 test("opt-in original event data replays exact tables, code and repetition at arbitrary UTF-8 boundaries", () => {
   for (const size of [1, 2, 17, 65536]) {
     const source = capture(frames(), true, size), result = source.result(), artifact = source.takeEvidence()!;
@@ -86,6 +101,19 @@ test.each([
     facts: { reason, publicStates: [{ completion, finish }] } });
 });
 
+test("URL moderation control replays while its opaque link-check payload stays private", () => {
+  const control = { type: "url_moderation", conversation_id: binding.conversationId,
+    message_id: "public-answer", url_moderation_result: { synthetic: "SECRET_LINK_CHECK" } };
+  const source = capture(frames([control])), result = source.result(), artifact = source.takeEvidence()!;
+  expect(result.state).toBe("complete");
+  expect(JSON.stringify(artifact)).not.toContain("SECRET_LINK_CHECK");
+  const record = artifact.records.find(r => r.kind === "projected" && r.data?.includes("url_moderation"));
+  expect(record?.data ? JSON.parse(record.data) : null).toEqual({
+    type: "url_moderation", conversation_id: binding.conversationId, message_id: "public-answer",
+  });
+  expect(replayChatGptResponseEvidence(artifact)).toMatchObject({ state: "replayed", result });
+});
+
 test("unknown event failure captures the remaining same-chunk terminal events without storing unknown secrets", () => {
   const source = capture(frames([{ type: "future-protocol", payload: "SECRET_UNKNOWN", private_header: "SECRET_TOKEN" }]), true, 65536);
   expect(source.result()).toEqual({ state: "rejected", reason: "response_event_unsupported" });
@@ -116,6 +144,26 @@ test("event and byte budgets retain a bounded prefix and never replay a truncate
     expect(artifact.records.length).toBeLessThanOrEqual(limits.maxEvents ?? 2048);
     expect(replayChatGptResponseEvidence(artifact)).toEqual({ state: "unavailable", reason: "evidence_incomplete" });
   }
+});
+
+test("returning to a prior context updates that message, including privacy revocation across aliases", () => {
+  const shared = envelope(message({ content: { content_type: "text", parts: ["REVOKE_ME"] } }));
+  const source = capture(["v1", input, { ...shared, c: 0 },
+    { ...envelope(message({ id: "analysis", channel: "analysis",
+      content: { content_type: "text", parts: ["PRIVATE_THOUGHT"] } })), c: 1 },
+    { c: 0, p: "/message/content/parts/0", o: "replace", v: "final replacement" }, terminal, ...tail]);
+  expect(source.result()).toMatchObject({ state: "complete", text: "final replacement" });
+  const artifact = source.takeEvidence()!;
+  expect(JSON.stringify(artifact)).not.toContain("PRIVATE_THOUGHT");
+  expect(replayChatGptResponseEvidence(artifact)).toMatchObject({ state: "replayed", result: source.result() });
+
+  const revoked = capture(["v1", input, { ...shared, c: 0 }, { ...shared, c: 1 },
+    { c: 0, p: "/message/unknown_visibility_update", o: "replace", v: true },
+    { c: 1, p: "/message/content/parts/0", o: "append", v: "SECRET_AFTER_UNKNOWN" }, ...tail]);
+  const privateEvidence = revoked.takeEvidence()!;
+  expect(JSON.stringify(privateEvidence)).not.toContain("REVOKE_ME");
+  expect(JSON.stringify(privateEvidence)).not.toContain("SECRET_AFTER_UNKNOWN");
+  expect(privateEvidence.summary.replayable).toBeFalse();
 });
 
 test("truncated SSE and malformed UTF-8 preserve a framing gap instead of a successful replay", () => {
@@ -235,7 +283,7 @@ test("named deltas project observed hidden context and recap bodies while preser
   const final = envelope(message({ metadata: { parent_id: "recap" } }));
   const source = captureNamed(namedFrames(["v1",
     { type: "resume_conversation_token", conversation_id: binding.conversationId, token: "SECRET_TOKEN" }, input,
-    { ...context, c: "SECRET_CURSOR" }, { v: recap.v, c: "SECRET_CURSOR" }, { v: final.v, c: "SECRET_CURSOR" },
+    { ...context, c: 0 }, { v: recap.v, c: 1 }, { v: final.v, c: 2 },
     delta("exact public text"), terminal, ...tail]), 1);
   const artifact = source.takeEvidence()!;
   expect(artifact.summary).toMatchObject({ withheld: 0, dropped: 0, replayable: true });

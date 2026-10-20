@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
 import type { Locator } from "playwright-core";
-import { ChatGptBrowserWorker, ChatGptCompletionTracker, ChatGptVisibleTraceTracker, CHATGPT_COMPLETION_SETTLE_MS } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
+import { ChatGptBrowserWorker, ChatGptCompletionTracker, ChatGptVisibleTraceTracker } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { ChatGptMarkdownBuffer, ChatGptMarkdownConsistencyError, type ChatGptMarkdownSegment } from "../../../../src/adapters/chatgpt-web/markdown";
 
 const smokeHtml = readFileSync(new URL("../../../fixtures/chatgpt-dil-smoke.html", import.meta.url), "utf8");
@@ -15,6 +15,8 @@ const powerActivityHtml = readFileSync(new URL("../../../fixtures/chatgpt-power-
 const activitySummariesHtml = readFileSync(new URL("../../../fixtures/chatgpt-activity-summaries.html", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 type Snapshot = {
   responsePresent: boolean;
+  contentState: "complete" | "partial" | "unsupported" | "absent";
+  contentReason?: string;
   visibleText: string;
   fullHtml: string;
   markdownSegments: ChatGptMarkdownSegment[];
@@ -22,17 +24,36 @@ type Snapshot = {
   traceBlocks: { kind: "answer" | "commentary" | "status"; text: string }[];
 };
 
+test("a tail marker does not make a virtualized code viewport a complete answer", async () => {
+  const lines = Array.from({ length: 57 }, (_, i) => '<div class="cm-line">value_' + i + ' = ' + i + '</div>').join("");
+  const partial = await snapshot('<section id="turn"><div class="markdown"><div class="cm-editor"><div class="cm-content">'
+    + lines + '</div></div><p>END-120</p></div></section>');
+  expect(partial.contentState).toBe("partial");
+  expect(partial.contentReason).toBe("virtualized_content");
+  expect(partial.visibleText).toEndWith("END-120");
+});
+
+test("complete DOM retains semantic images and separates decorations from unsupported components", async () => {
+  const wrap = (body: string) => '<section id="turn"><div class="markdown">' + body + '</div></section>';
+  const image = await snapshot(wrap('<p>Plot</p><img src="https://example.com/plot.png" alt="Plot"><p>Done</p>'));
+  expect(image.contentState).toBe("complete");
+  const buffer = new ChatGptMarkdownBuffer(undefined, "buffered");
+  buffer.observe(image.markdownSegments);
+  expect(buffer.finish().markdown).toContain("![Plot](https://example.com/plot.png)");
+  expect((await snapshot(wrap('<p>Answer <span aria-hidden="true"><svg></svg></span></p>'))).contentState).toBe("complete");
+  expect((await snapshot(wrap('<p>Answer</p><svg><text>semantic chart</text></svg>'))).contentState).toBe("unsupported");
+  expect((await snapshot('<section id="turn"></section>')).contentState).toBe("absent");
+});
+
 test("tool-only handoff completion still requires fresh UI evidence, a bound idle response and no MCP activity", () => {
-  const tracker = new ChatGptCompletionTracker(10);
-  const empty = { responsePresent: true, running: false, currentText: "", currentHtml: "", completionActionVisible: false };
-  expect(tracker.update(empty, 0)).toBeFalse();
-  expect(tracker.update(empty, 100)).toBeFalse();
-  const complete = { ...empty, handoffCompletionVisible: true };
-  expect(tracker.update({ ...complete, running: true }, 110)).toBeFalse();
-  expect(tracker.update({ ...complete, responsePresent: false }, 120)).toBeFalse();
-  expect(tracker.update({ ...complete, externalToolCallsInFlight: true }, 130)).toBeFalse();
-  expect(tracker.update(complete, 140)).toBeFalse();
-  expect(tracker.update(complete, 150)).toBeTrue();
+  const tracker = new ChatGptCompletionTracker();
+  const empty = { responsePresent: true, running: false, normalCompletion: false, completionRevision: 0 };
+  expect(tracker.update(empty)).toBeFalse();
+  const complete = { ...empty, normalCompletion: true, completionRevision: 1 };
+  expect(tracker.update({ ...complete, running: true })).toBeFalse();
+  expect(tracker.update({ ...complete, responsePresent: false })).toBeFalse();
+  expect(tracker.update({ ...complete, externalToolCallsInFlight: true })).toBeFalse();
+  expect(tracker.update(complete)).toBeTrue();
 });
 
 // Execute the production page callback, with only missing Domino browser APIs supplied.
@@ -67,8 +88,8 @@ async function snapshots(html: string, changes: Array<(document: Document) => vo
     });
     const errors: unknown[] = [];
     const locator = {
-      evaluate: async (callback: Function, options: unknown) => {
-        try { return runInContext(`(${callback.toString()})`, context)(window.document.getElementById("turn"), options); }
+      evaluateAll: async (callback: Function, options: unknown) => {
+        try { return runInContext(`(${callback.toString()})`, context)([window.document.getElementById("turn")], options); }
         catch (error) { errors.push(error); throw error; }
       },
       page: () => ({ isClosed: () => false }),
@@ -101,12 +122,11 @@ test("plain wrappers may merge, split and remount without changing semantic bloc
     document => { document.querySelector(".markdown")!.innerHTML = `<div><div>${body}</div></div>`; },
     document => { document.querySelector(".markdown")!.innerHTML = body; },
   ]);
-  const buffer = new ChatGptMarkdownBuffer(undefined, 0);
+  const buffer = new ChatGptMarkdownBuffer(undefined);
   let delivered = "";
   for (const [i, stage] of stages.entries()) {
     expect(stage.markdownSegments.map(s => s.tag)).toEqual(["p", "ul:item", "ul:item", "blockquote", "pre", "p"]);
-    delivered += buffer.observe(stage.markdownSegments, i);
-    expect(buffer.currentSnapshotIsConsistent()).toBeTrue();
+    delivered += buffer.observe(stage.markdownSegments);
   }
   const final = buffer.finish();
   delivered += final.delta;
@@ -124,9 +144,9 @@ test("a remounted growing list label preserves delivered prefix and full pending
   ]);
   expect(stages[0]!.markdownSegments[1]!.key).not.toBe(stages[1]!.markdownSegments[1]!.key);
   for (const delivery of ['append', 'buffered'] as const) {
-    const buffer = new ChatGptMarkdownBuffer(undefined, 0, delivery);
-    const first = buffer.observe(stages[0]!.markdownSegments, 0);
-    const next = buffer.observe(stages[1]!.markdownSegments, 1);
+    const buffer = new ChatGptMarkdownBuffer(undefined, delivery);
+    const first = buffer.observe(stages[0]!.markdownSegments);
+    const next = buffer.observe(stages[1]!.markdownSegments);
     const final = buffer.finish();
     expect(first + next + final.delta).toBe('验收记录。\n\n- **校验标识**：`MAPLE`\n- 完成。');
     expect(final.markdown).toBe(first + next + final.delta);
@@ -156,9 +176,9 @@ test("pending paragraphs may hydrate into setext headings without losing their t
       document => { document.querySelector('.markdown')!.innerHTML = `<p>Checkpoint.</p><${heading}><span>The user instructed Codex to:</span></${heading}><p>Keep all identifiers.</p>`; },
     ]);
     for (const delivery of ['append', 'buffered'] as const) {
-      const buffer = new ChatGptMarkdownBuffer(undefined, 0, delivery);
-      const first = buffer.observe(stages[0]!.markdownSegments, 0);
-      const next = buffer.observe(stages[1]!.markdownSegments, 1);
+      const buffer = new ChatGptMarkdownBuffer(undefined, delivery);
+      const first = buffer.observe(stages[0]!.markdownSegments);
+      const next = buffer.observe(stages[1]!.markdownSegments);
       const final = buffer.finish();
       expect(final.markdown).toBe(`Checkpoint.\n\n${heading === 'h1' ? '#' : '##'} The user instructed Codex to:\n\nKeep all identifiers.`);
       expect(first + next + final.delta).toBe(final.markdown);
@@ -172,9 +192,9 @@ test("an unfinished list marker can temporarily promote a pending paragraph to a
     document => { document.querySelector('.markdown')!.innerHTML = '<p>Checkpoint.</p><h2>The user instructed Codex to:</h2>'; },
     document => { document.querySelector('.markdown')!.innerHTML = '<p>Checkpoint.</p><p>The user instructed Codex to:</p><ul><li>Keep all identifiers.</li></ul>'; },
   ]);
-  const b = new ChatGptMarkdownBuffer(undefined, 0);
+  const b = new ChatGptMarkdownBuffer(undefined);
   let delivered = '';
-  stages.forEach((s, i) => { delivered += b.observe(s.markdownSegments, i); });
+  stages.forEach((s, i) => { delivered += b.observe(s.markdownSegments); });
   delivered += b.finish().delta;
   expect(delivered).toBe('Checkpoint.\n\nThe user instructed Codex to:\n\n- Keep all identifiers.');
 });
@@ -213,16 +233,14 @@ test("captured activity summaries use the status stream and keep actual commenta
 
 test("keeps an unfinished hyperlink buffered and detects changed destinations after delivery", async () => {
   const page = (href: string) => `<section id="turn"><div class="markdown"><p data-start="0" data-end="99"><strong><a${href}>Open report</a></strong>.</p><p data-start="100" data-end="115">Next paragraph.</p></div></section>`;
-  const buffer = new ChatGptMarkdownBuffer(markdown => markdown, 0);
+  const buffer = new ChatGptMarkdownBuffer(markdown => markdown);
   const pending = await snapshot(page(""));
-  expect(buffer.observe(pending.markdownSegments, 0)).toBe("");
+  expect(buffer.observe(pending.markdownSegments)).toBe("");
   const linked = await snapshot(page(' href="https://example.com/report#details"'));
-  expect(buffer.observe(linked.markdownSegments, 1000)).toBe("**[Open report](https://example.com/report#details)**.");
+  expect(buffer.observe(linked.markdownSegments)).toBe("**[Open report](https://example.com/report#details)**.");
   expect(buffer.finish().markdown).toBe("**[Open report](https://example.com/report#details)**.\n\nNext paragraph.");
   const changed = await snapshot(page(' href="https://example.com/different"'));
-  buffer.observe(changed.markdownSegments, 2000);
-  expect(buffer.currentSnapshotIsConsistent()).toBeFalse();
-  expect(() => buffer.finish()).toThrow("completed text block");
+  expect(() => buffer.observe(changed.markdownSegments)).toThrow("already emitted");
 });
 
 test("captured DIL smoke response reaches Markdown delivery and stable completion", async () => {
@@ -237,13 +255,13 @@ test("captured DIL smoke response reaches Markdown delivery and stable completio
     expect(response.visibleText).toBe("WEB2HARNESS READY");
     expect(response.completionActionVisible).toBeTrue();
     const buffer = new ChatGptMarkdownBuffer();
-    buffer.observe(response.markdownSegments, 0);
+    buffer.observe(response.markdownSegments);
     expect(buffer.finish().markdown).toBe("WEB2HARNESS READY");
     const tracker = new ChatGptCompletionTracker();
-    const state = { ...response, running: false, currentText: response.visibleText, currentHtml: response.fullHtml };
-    expect(tracker.update({ ...state, running: true }, 0)).toBeFalse();
-    expect(tracker.update(state, 1)).toBeFalse();
-    expect(tracker.update(state, 1 + CHATGPT_COMPLETION_SETTLE_MS)).toBeTrue();
+    const state = { ...response, running: false, normalCompletion: false, completionRevision: 0 };
+    expect(tracker.update({ ...state, running: true })).toBeFalse();
+    expect(tracker.update(state)).toBeFalse();
+    expect(tracker.update({ ...state, normalCompletion: true, completionRevision: 1 })).toBeTrue();
     expect(response.traceBlocks.map(({ kind, text }) => ({ kind, text }))).toEqual([
       { kind: "answer", text: "WEB2HARNESS READY" },
     ]);
@@ -261,7 +279,7 @@ test("captured power UI excludes the user footer during streaming and completes 
   expect(complete.visibleText).toEndWith("STREAM_END_927");
   expect(complete.completionActionVisible).toBeTrue();
   const buffer = new ChatGptMarkdownBuffer();
-  buffer.observe(complete.markdownSegments, 0);
+  buffer.observe(complete.markdownSegments);
   const markdown = buffer.finish().markdown;
   expect(markdown).toContain("## How a Rainbow Begins");
   expect(markdown).toContain("1. Sunlight enters the droplet and refracts.");
@@ -276,13 +294,12 @@ test("captured power UI excludes the user footer during streaming and completes 
   expect(userMarkdown.visibleText).toBe(complete.visibleText);
 });
 
-test("captured power response keeps its Markdown ledger through final rendering", async () => {
+test("captured power response retains emitted content through final rendering", async () => {
   const streaming = await snapshot(powerStreamingHtml);
   const complete = await snapshot(powerCompleteHtml);
-  const buffer = new ChatGptMarkdownBuffer(markdown => markdown, 0);
-  buffer.observe(streaming.markdownSegments, 0);
-  buffer.observe(complete.markdownSegments, 1000);
-  expect(buffer.currentSnapshotIsConsistent()).toBeTrue();
+  const buffer = new ChatGptMarkdownBuffer(markdown => markdown);
+  buffer.observe(streaming.markdownSegments);
+  buffer.observe(complete.markdownSegments);
   expect(buffer.finish().markdown).toEndWith("STREAM\\_END\\_927");
 });
 
@@ -307,16 +324,14 @@ test("reported code-block containers preserve code while their localized toolbar
       expect(during.markdownSegments[1]?.text).toBe(code.trim());
       expect(after.markdownSegments[1]?.text).toBe(code.trim());
       expect(during.markdownSegments[1]).toMatchObject({ sourceStart: 12, sourceEnd: 100 });
-      const buffer = new ChatGptMarkdownBuffer(markdown => markdown, 0);
-      buffer.observe(during.markdownSegments, 0);
-      buffer.observe(after.markdownSegments, 1000);
-      expect(buffer.currentSnapshotIsConsistent()).toBeTrue();
+      const buffer = new ChatGptMarkdownBuffer(markdown => markdown);
+      buffer.observe(during.markdownSegments);
+      buffer.observe(after.markdownSegments);
       expect(buffer.finish().markdown).toBe(`Example\n\n\`\`\`python\n${code}\`\`\`\n\nDone.`);
 
       // Ignore the toolbar, never an actual change to code already sent to Codex.
       const changed = await snapshot(html("", code.replace("print(first)", "print(other)")));
-      buffer.observe(changed.markdownSegments, 2000);
-      expect(() => buffer.finish()).toThrow("ChatGPT changed a completed text block");
+      expect(() => buffer.observe(changed.markdownSegments)).toThrow("already emitted");
     }
   }
 });
@@ -326,14 +341,14 @@ test("a code toolbar before body hydration is not pending answer text", async ()
     + '<div data-markdown-copy="code-block"><div data-markdown-copy="exclude"><div>codex_tool_calls</div><button>Copy</button></div>'
     + body + '</div></div></section>';
   const placeholder = await snapshot(html(''));
-  const buffer = new ChatGptMarkdownBuffer(undefined, 0, "buffered");
-  buffer.observe(placeholder.markdownSegments, 0);
+  const buffer = new ChatGptMarkdownBuffer(undefined, "buffered");
+  buffer.observe(placeholder.markdownSegments);
   expect(buffer.preview()).toBe("");
-  buffer.observe((await snapshot(html('<code>{"calls":[]}</code>'))).markdownSegments, 1000);
+  buffer.observe((await snapshot(html('<code>{"calls":[]}</code>'))).markdownSegments);
   expect(buffer.finish().markdown).toBe('```codex_tool_calls\n{"calls":[]}\n```');
   const raw = await snapshot('<section id="turn"><div class="markdown"><pre>raw code without CODE</pre></div></section>');
-  const rawBuffer = new ChatGptMarkdownBuffer(undefined, 0);
-  rawBuffer.observe(raw.markdownSegments, 0);
+  const rawBuffer = new ChatGptMarkdownBuffer(undefined);
+  rawBuffer.observe(raw.markdownSegments);
   expect(rawBuffer.finish().markdown).toContain('raw code without CODE');
 });
 
@@ -348,10 +363,10 @@ test("empty renderer placeholders never stabilize a growing remounted table", as
   expect(stable!.markdownSegments.find(s => s.tag === "table")!.streamable).toBeFalse();
   expect(complete!.markdownSegments.find(s => s.tag === "table")!.streamable).toBeTrue();
   for (const delivery of ["append", "buffered"] as const) {
-    const buffer = new ChatGptMarkdownBuffer(undefined, 0, delivery);
-    buffer.observe(first!.markdownSegments, 0);buffer.observe(stable!.markdownSegments, 1000);
-    expect(buffer.deliveryState().committedSegments).toBe(1);
-    buffer.observe(complete!.markdownSegments, 2000);
+    const buffer = new ChatGptMarkdownBuffer(undefined, delivery);
+    buffer.observe(first!.markdownSegments);buffer.observe(stable!.markdownSegments);
+    expect(buffer.deliveryState().emittedChars).toBe(delivery === "append" ? "Intro".length : 0);
+    buffer.observe(complete!.markdownSegments);
     expect(buffer.finish().markdown).toContain("**Paragraph**");
     expect(buffer.finish().delta).toBe("");
   }
@@ -374,15 +389,15 @@ test("writing card controls cannot rewrite delivered content, but edited email t
   expect(during.markdownSegments).toEqual(complete.markdownSegments);
   expect(during.markdownSegments.map(segment => segment.text).join("\n")).not.toContain("メール");
   expect(during.markdownSegments.map(segment => segment.text).join("\n")).not.toContain("Email format");
-  const buffer = new ChatGptMarkdownBuffer(markdown => markdown, 0);
-  buffer.observe(during.markdownSegments, 0);
-  buffer.observe(complete.markdownSegments, 1000);
+  const buffer = new ChatGptMarkdownBuffer(markdown => markdown);
+  buffer.observe(during.markdownSegments);
+  buffer.observe(complete.markdownSegments);
   const output = buffer.finish().markdown;
   expect(output).toContain("Hello **Alex**.");
   expect(output).toContain("[details](https://example.com/)");
   expect(output).toContain("line 1\n  line 2");
-  buffer.observe((await snapshot(html("", "Hello Sam."))).markdownSegments, 2000);
-  expect(() => buffer.finish()).toThrow("ChatGPT changed a completed text block");
+  const edited = await snapshot(html("", "Hello Sam."));
+  expect(() => buffer.observe(edited.markdownSegments)).toThrow("already emitted");
 });
 
 test("nested writing cards keep the outer prose and cards without a unique body lose nothing", async () => {
@@ -409,7 +424,7 @@ test("ordinary prose, inline code and legacy fenced code keep their meaning", as
       <p>Done.</p>
     </div></div></section>`);
   const buffer = new ChatGptMarkdownBuffer();
-  buffer.observe(response.markdownSegments, 0);
+  buffer.observe(response.markdownSegments);
   expect(buffer.finish().markdown).toBe("Code: [/tmp/file.ts](</tmp/file.ts>)\n\n````text\n/tmp/file.ts\n\n[[note]]\n```\nend\n````\n\nDone.");
 });
 
@@ -439,7 +454,7 @@ test("power code toolbar preserves explicit native tool language without inferri
       + '<div data-markdown-copy="exclude"><div>' + label + '</div><div><button>Copy</button></div></div>'
       + '<div><code class="whitespace-pre">' + payload + '</code></div></div></div></div></section>');
     const buffer = new ChatGptMarkdownBuffer();
-    buffer.observe(response.markdownSegments, 0);
+    buffer.observe(response.markdownSegments);
     const markdown = buffer.finish().markdown;
     const parsed = splitNativeToolCallBlocks(markdown);
     expect(parsed.blocks.length).toBe(label === "codex_tool_calls" ? 1 : 0);
@@ -447,7 +462,7 @@ test("power code toolbar preserves explicit native tool language without inferri
   }
 });
 
-test("observed resource preview hydration cannot rewrite delivered answer text", async () => {
+test("unlinked resource cards remain evidence but cannot masquerade as a complete transferable answer", async () => {
   // Structural fragment supplied in #769; only the title/filename/type are generic.
   for (const root of ['class="markdown"', 'data-markdown-text-style="assistant-message"']) {
     const page = (label: string, type: string) => `<section id="turn"><div data-content-search-unit-key="answer">
@@ -461,22 +476,15 @@ test("observed resource preview hydration cannot rewrite delivered answer text",
     </div></div><button aria-label="Copy"></button></section>`;
     const before = await snapshot(page("Layout", ""));
     const after = await snapshot(page("candidate-overview.png", "PNG"));
-    const buffer = new ChatGptMarkdownBuffer(undefined, 0);
-    expect(buffer.observe(before.markdownSegments, 0)).toBe("The layout was updated.");
-    expect(buffer.observe(after.markdownSegments, 1)).toBe("");
-    expect(buffer.finish().markdown).toBe("The layout was updated.\n\nValidation completed.");
-    // These snapshots use different documents; node identities must not be reused.
-    expect(before.markdownSegments.map(({ key, ...content }) => content))
-      .toEqual(after.markdownSegments.map(({ key, ...content }) => content));
-    expect(after.markdownSegments.map(segment => segment.html).join("")).not.toContain("candidate-overview.png");
-    expect(after.fullHtml).toContain("candidate-overview.png"); // The browser's original content is untouched.
+    expect(before.contentState).toBe("unsupported");
+    expect(after.contentState).toBe("unsupported");
+    expect(after.markdownSegments.map(segment => segment.html).join("")).toContain("candidate-overview.png");
+    expect(after.fullHtml).toContain("candidate-overview.png");
 
-    buffer.observe((await snapshot(page("Layout", "").replace("The layout was updated.", "Changed answer."))).markdownSegments, 2);
-    expect(() => buffer.finish()).toThrow(ChatGptMarkdownConsistencyError);
   }
 });
 
-test("file preview removal preserves a pending paragraph through movement and remounting", async () => {
+test("removal from a complete final snapshot is permitted only before outward delivery", async () => {
   for (const remount of [false, true]) {
     const html = `<div id="turn"><div class="markdown">
       <p>Report saved:</p><p id="file">report.md</p><p id="tail">Validation completed.</p>
@@ -496,15 +504,18 @@ test("file preview removal preserves a pending paragraph through movement and re
       },
       document => { document.querySelector(".markdown p")!.textContent = "A changed report."; },
     ]);
-    const buffer = new ChatGptMarkdownBuffer(undefined, 0);
-    expect(buffer.observe(before!.markdownSegments, 0)).toBe("Report saved:\n\nreport.md");
-    expect(buffer.observe(moved!.markdownSegments, 1)).toBe("");
-    expect(buffer.observe(repeated!.markdownSegments, 2)).toBe("");
-    if (!remount) expect(moved!.markdownSegments.at(-1)!.key).toBe(before!.markdownSegments.at(-1)!.key);
-    expect(buffer.observe(continued!.markdownSegments, 3)).toBe("\n\nValidation completed.");
-    expect(buffer.finish().markdown).toBe("Report saved:\n\nreport.md\n\nValidation completed.\n\nThe task is finished.");
-    buffer.observe(changed!.markdownSegments, 4);
-    expect(() => buffer.finish()).toThrow(ChatGptMarkdownConsistencyError);
+    const append = new ChatGptMarkdownBuffer();
+    expect(append.observe(before!.markdownSegments)).toBe("Report saved:\n\nreport.md");
+    expect(() => append.observe(moved!.markdownSegments)).toThrow("already emitted");
+    const buffered = new ChatGptMarkdownBuffer(undefined, "buffered");
+    for (const current of [before!, moved!, repeated!, continued!]) {
+      expect(current.contentState).toBe("complete");
+      expect(buffered.observe(current.markdownSegments)).toBe("");
+    }
+    expect(buffered.finish().markdown).toBe("Report saved:\n\nValidation completed.\n\nThe task is finished.");
+    expect(() => buffered.observe(changed!.markdownSegments)).not.toThrow();
+    // Even buffered mode must respect the bytes recorded by finish().
+    expect(() => buffered.prepareFinal()).toThrow(ChatGptMarkdownConsistencyError);
   }
 });
 
@@ -517,8 +528,8 @@ test("resource preview filtering preserves actual links, plain file labels and o
       <span class="group/resource-row"><a href="https://example.com/report">Download report</a></span>
     </div><p>Done.</p>
   </div><button aria-label="Copy"></button></section>`);
-  const buffer = new ChatGptMarkdownBuffer(undefined, 0);
-  buffer.observe(result.markdownSegments, 0);
+  const buffer = new ChatGptMarkdownBuffer(undefined);
+  buffer.observe(result.markdownSegments);
   expect(buffer.finish().markdown).toBe("Ordinary content.\n\nreport.md\n\nOrdinary label.\n\n[Download report](https://example.com/report)\n\nDone.");
 });
 
@@ -532,10 +543,10 @@ test("KaTeX hydration keeps the same formula identity while real formula edits s
   const hydrated = await snapshot(html("x1"));
   expect(initial.markdownSegments[0]?.text).toBe("Value x_1.");
   expect(hydrated.markdownSegments[0]?.text).toBe(initial.markdownSegments[0]?.text);
-  const buffer = new ChatGptMarkdownBuffer(undefined, 0);
-  buffer.observe(initial.markdownSegments, 0);
-  buffer.observe(hydrated.markdownSegments, 1);
+  const buffer = new ChatGptMarkdownBuffer(undefined);
+  buffer.observe(initial.markdownSegments);
+  buffer.observe(hydrated.markdownSegments);
   expect(buffer.finish().markdown).toBe(String.raw`Value \(x_1\).` + "\n\nDone.");
-  buffer.observe((await snapshot(html("x2", "x_2"))).markdownSegments, 2);
-  expect(() => buffer.finish()).toThrow(ChatGptMarkdownConsistencyError);
+  const edited = await snapshot(html("x2", "x_2"));
+  expect(() => buffer.observe(edited.markdownSegments)).toThrow(ChatGptMarkdownConsistencyError);
 });

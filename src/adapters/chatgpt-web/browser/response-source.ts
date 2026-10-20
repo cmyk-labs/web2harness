@@ -1,53 +1,56 @@
 import { ServerSentEventDecoder } from "./sse-decoder";
 import { ChatGptResponseEvidence, type ChatGptResponseEvidenceLimits } from "./response-evidence";
+import { ChatGptDeltaCursor, patchResponseValue } from "./response-protocol";
+import { responseContent } from "./response-content";
 
 type Json = Record<string, any>;
 type Message = { id: string; role: string; channel: unknown; recipient: unknown; status: unknown;
   endTurn: unknown; contentType: unknown; parts?: string[]; discarded: boolean; parent?: string;
-  hidden: boolean; references: unknown[]; citations: unknown[]; complete?: boolean; finishType?: string };
+  hidden: boolean; references: unknown[]; citations: unknown[]; fallback?: Json; complete?: boolean; finishType?: string };
 export interface ChatGptResponseBinding { userMessageId: string; conversationId?: string }
 export type ChatGptResponseSourceResult =
   | { state: "collecting" }
-  | { state: "rejected"; reason: string }
+  | { state: "rejected"; reason: string; kind?: "invalid" | "unsupported" | "unavailable" }
   | { state: "complete"; text: string; messageId: string; conversationId: string };
 
 // Unsupported presentation/observation can use the independent DOM validator. Positive evidence
 // of a different request, unfinished final or server failure must never be hidden by that fallback.
 export function responseSourceBlocksFallback(result: ChatGptResponseSourceResult): boolean {
-  return result.state === "rejected" && ["response_identity_mismatch", "response_parent_unbound",
-    "response_after_termination", "response_upstream_error", "response_message_incomplete",
-    "response_final_message_ambiguous", "response_transport_rejected", "response_request_ambiguous"].includes(result.reason);
+  return result.state === "rejected" && result.kind !== "unsupported" && result.kind !== "unavailable";
 }
 
 const object = (value: unknown): value is Json => !!value && typeof value === "object" && !Array.isArray(value);
 const publicText = (m: Message) => m.role === "assistant" && ["final", "commentary"].includes(m.channel as string)
   && m.recipient === "all" && !m.hidden && m.contentType === "text";
 const ancillaryTypes = new Set(["resume_conversation_token", "message_marker", "server_ste_metadata",
-  "conversation_detail_metadata", "title_generation", "conversation_title", "moderation"]);
+  "conversation_detail_metadata", "title_generation", "conversation_title", "moderation", "url_moderation"]);
 
 /** Reconstruct only explicitly public response content. Facts never contain text or source IDs.
  * The v1 delta encoding inherits p/o between top-level frames; patch children use their own context.
  */
 export class ChatGptResponseSource {
-  private readonly decoder = new ServerSentEventDecoder((data, event) => {
+  private newDecoder() { return new ServerSentEventDecoder((data, event) => {
+    this.completedContent = undefined;
     this.evidence?.capture(data, event);
     // Framing/termination observation survives an unsupported semantic event. These facts do
     // not repair the projection or authorize delivery; they prevent a parser failure from
     // being mislabeled as a network interruption. Later identity/server errors still win.
     try {
-      if (this.observedDone) throw new Error("response_after_termination");
-      if (event === "error") throw new Error("response_upstream_error");
+      if (this.observedDone) { this.reject("response_after_termination", true); return; }
+      if (event === "error") { this.reject("response_upstream_error", true); return; }
       const value: unknown = data === "[DONE]" ? undefined : JSON.parse(data);
-      this.observeBoundary(data, event, value);
+      try { this.observeBoundary(data, event, value); }
+      catch (error) { this.reject(this.errorReason(error), true); return; }
       if (!this.failure) this.event(data, event, value);
     } catch (error) { this.reject(this.errorReason(error)); }
-  });
+  }); }
+  private decoder = this.newDecoder();
   private readonly evidence?: ChatGptResponseEvidence;
   private decoderFailed = false;
   private readonly messages = new Map<string, Message>();
-  private current?: Message;
-  private path = "";
-  private operation = "add";
+  private readonly cursor = new ChatGptDeltaCursor<Message>();
+  private get current() { return this.cursor.current; }
+  private set current(value: Message | undefined) { this.cursor.current = value; }
   private conversation?: string;
   private inputSeen = false;
   private streamComplete = false;
@@ -57,7 +60,11 @@ export class ChatGptResponseSource {
   private observedPath = "";
   private observedOperation = "add";
   private failure?: string;
+  private definitiveFailure = false;
+  private resumeNeedsProof = false;
   private frames = 0;
+  private transportFrames = 0;
+  private completedContent?: ChatGptResponseSourceResult;
   constructor(private readonly binding: ChatGptResponseBinding, captureEvidence?: boolean | ChatGptResponseEvidenceLimits) {
     if (captureEvidence) this.evidence = new ChatGptResponseEvidence(captureEvidence === true ? {} : captureEvidence);
   }
@@ -80,9 +87,23 @@ export class ChatGptResponseSource {
   }
   takeEvidence() { return this.evidence?.take(this.binding); }
   clearEvidence(): void { this.evidence?.clear(); }
-  reject(reason: string): void {
-    if (!this.failure || (!responseSourceBlocksFallback({ state: "rejected", reason: this.failure })
-      && responseSourceBlocksFallback({ state: "rejected", reason }))) this.failure = reason;
+  /** Each resumed HTTP stream starts its own framing and patch context; logical messages stay. */
+  beginTransport(): void {
+    if (this.done) throw Error("response_after_termination");
+    this.decoder = this.newDecoder(); this.decoderFailed = false; this.cursor.reset();
+    this.transportFrames = 0;
+    this.streamComplete = false; this.observedStreamComplete = false;
+    this.resumeNeedsProof = true;
+    this.observedPath = ""; this.observedOperation = "add";
+    this.evidence?.beginTransport();
+  }
+  hasMessage(id: string): boolean { return this.messages.has(id); }
+  reject(reason: string, definitive = false): void {
+    this.completedContent = undefined;
+    if (!this.failure || (definitive && !this.definitiveFailure)) {
+      this.failure = reason;
+      this.definitiveFailure = definitive;
+    }
   }
   facts() { const result = this.result(); return { frames: this.frames, messageCount: this.messages.size, inputBound: this.inputSeen,
     done: this.done, streamComplete: this.streamComplete, observedDone: this.observedDone, observedStreamComplete: this.observedStreamComplete,
@@ -94,11 +115,12 @@ export class ChatGptResponseSource {
       completion: m.complete === undefined ? "missing" : m.complete ? "complete" : "incomplete",
       finish: m.finishType === undefined ? "missing" : m.finishType === "stop" ? "stop" : "other" })) }; }
 
-  result(): ChatGptResponseSourceResult {
+  private completedMessage(): Message | Exclude<ChatGptResponseSourceResult, { state: "complete" }> {
     if (this.failure) return { state: "rejected", reason: this.failure };
     if (!this.done || !this.streamComplete) return { state: "collecting" };
     if (!this.inputSeen || !this.conversation) return { state: "rejected", reason: "response_identity_incomplete" };
-    const finals = [...this.messages.values()].filter(m => publicText(m) && m.channel === "final" && m.endTurn === true);
+    const finals = [...this.messages.values()].filter(m => m.role === "assistant" && m.channel === "final"
+      && m.recipient === "all" && !m.hidden && m.endTurn === true);
     if (finals.length !== 1) return { state: "rejected", reason: "response_final_message_ambiguous" };
     const message = finals[0]!;
     if (message.status !== "finished_successfully" || message.complete === false
@@ -126,17 +148,28 @@ export class ChatGptResponseSource {
         && prior.complete === undefined && prior.finishType === undefined;
       if (!superseded) return { state: "rejected", reason: "response_message_incomplete" };
     }
-    // The bound final's successful status, end_turn and both stream terminators establish
-    // completion. Optional metadata need not repeat it; explicit negative values still reject.
-    if (message.discarded || !message.parts) return { state: "rejected", reason: "response_content_unsupported" };
-    // Rendering rich references requires their source metadata. Never leak unresolved private-use
-    // markers as a successful plain-text answer; the independently checked DOM path may recover it.
-    if (message.references.length || message.citations.length || /[\uE000-\uF8FF]/u.test(message.parts.join(""))) {
-      return { state: "rejected", reason: "response_references_unsupported" };
+    return message;
+  }
+
+  lifecycle(): { state: "unknown" | "generating" | "complete" | "interrupted" | "failed"; messageId?: string; conversationId?: string } {
+    const message = this.completedMessage();
+    if ("state" in message) {
+      if (message.state === "rejected") return { state: message.reason === "response_message_incomplete" ? "interrupted" : "failed" };
+      return { state: this.inputSeen ? "generating" : "unknown" };
     }
-    const text = message.parts.join("");
-    if (!text.trim()) return { state: "rejected", reason: "response_empty" };
-    return { state: "complete", text, messageId: message.id, conversationId: this.conversation };
+    return { state: "complete", messageId: message.id, conversationId: this.conversation };
+  }
+
+  result(): ChatGptResponseSourceResult {
+    if (this.completedContent) return this.completedContent;
+    const message = this.completedMessage();
+    if ("state" in message) return message;
+    try {
+      if (message.discarded && !message.fallback) throw Error("response_content_unsupported");
+      return this.completedContent = { state: "complete", text: responseContent(message), messageId: message.id, conversationId: this.conversation! };
+    } catch (error) {
+      return this.completedContent = { state: "rejected", reason: this.errorReason(error), kind: "unsupported" };
+    }
   }
 
   private bindConversation(id: unknown): void {
@@ -186,8 +219,10 @@ export class ChatGptResponseSource {
     if (event === "error") throw new Error("response_upstream_error");
     if (data === "[DONE]") { this.done = true; return; }
     this.frames++;
-    if (value === "v1" && this.frames === 1) return;
+    this.transportFrames++;
+    if (value === "v1" && this.transportFrames === 1) return;
     if (!object(value)) throw new Error("response_encoding_unsupported");
+    this.cursor.select(value);
     this.bindConversation(value.conversation_id);
     if (value.error || value.error_code || value.type === "error") throw new Error("response_upstream_error");
     if (ancillaryTypes.has(value.type)) return;
@@ -203,15 +238,17 @@ export class ChatGptResponseSource {
     }
     if (value.message) { this.readMessage(value.message); return; }
     if (Object.hasOwn(value, "v")) {
-      if (typeof value.p === "string") this.path = value.p;
-      if (typeof value.o === "string") this.operation = value.o;
-      this.apply(this.path, this.operation, value.v, 0); return;
+      this.apply(this.cursor.path, this.cursor.operation, value.v, 0); return;
     }
     throw new Error("response_event_unsupported");
   }
   private readMessage(value: unknown, selectCurrent = true): void {
     if (!object(value) || typeof value.id !== "string" || !value.id || value.id.length > 256 || !object(value.author) || !object(value.content)) {
       throw new Error("response_message_unsupported");
+    }
+    if (selectCurrent && this.resumeNeedsProof) {
+      if (!this.messages.has(value.id)) throw Error("response_resume_unbound");
+      this.resumeNeedsProof = false;
     }
     if (this.messages.size >= 256 && !this.messages.has(value.id)) throw new Error("response_message_size_limit");
     const metadata = object(value.metadata) ? value.metadata : {};
@@ -220,25 +257,26 @@ export class ChatGptResponseSource {
       hidden: metadata.is_visually_hidden_from_conversation === true, references: [], citations: [] };
     this.metadata(m, metadata, false);
     this.content(m, value.content.parts);
-    if (m.role === "assistant" && m.contentType === "text" && !["final", "commentary", "analysis"].includes(m.channel as string)) {
-      throw new Error("response_channel_unsupported");
-    }
+    // Non-public messages can be ancestors of the eventual final. content() discards their
+    // bodies; retaining the structural node does not make it public or establish completion.
     const previous = this.messages.get(m.id);
     if (previous && (previous.role !== m.role || (previous.parent && m.parent && previous.parent !== m.parent))) throw new Error("response_identity_mismatch");
     // The initial user snapshot omits parent_id; the input_message acknowledgement hydrates it.
     // An omitted field is not contradictory identity evidence. Two different known parents are.
     m.parent ??= previous?.parent;
-    this.messages.set(m.id, m);
-    if (selectCurrent) this.current = m;
+    const updated = previous ? Object.assign(previous, m) : m;
+    this.messages.set(m.id, updated);
+    if (selectCurrent) this.current = updated;
   }
   private content(m: Message, value: unknown): void {
     if (publicText(m)) {
-      if (!Array.isArray(value) || !value.every(p => typeof p === "string")) throw new Error("response_content_unsupported");
+      if (!Array.isArray(value) || !value.every(p => typeof p === "string")) { m.parts = undefined; m.discarded = true; return; }
       m.parts = [...value];
+      m.discarded = false;
     } else { m.parts = undefined; m.discarded = true; }
   }
   private metadata(m: Message, value: Json, append: boolean): void {
-    if (!append) { m.parent = undefined; m.references = []; m.citations = []; m.complete = undefined; m.finishType = undefined; }
+    if (!append) { m.parent = undefined; m.references = []; m.citations = []; m.fallback = undefined; m.complete = undefined; m.finishType = undefined; }
     if (Object.hasOwn(value, "parent_id")) m.parent = typeof value.parent_id === "string" ? value.parent_id : undefined;
     if (Object.hasOwn(value, "is_visually_hidden_from_conversation")) m.hidden = value.is_visually_hidden_from_conversation === true;
     if (Object.hasOwn(value, "is_complete")) m.complete = value.is_complete === true;
@@ -247,13 +285,20 @@ export class ChatGptResponseSource {
     }
     if (Object.hasOwn(value, "content_references")) {
       if (!Array.isArray(value.content_references)) throw new Error("response_references_unsupported");
-      m.references = value.content_references.length ? [true] : [];
+      m.references = publicText(m) ? structuredClone(value.content_references) : [];
     }
     if (Object.hasOwn(value, "citations")) {
       if (!Array.isArray(value.citations)) throw new Error("response_references_unsupported");
-      m.citations = value.citations.length ? [true] : [];
+      m.citations = publicText(m) ? structuredClone(value.citations) : [];
     }
-    if (!publicText(m)) m.parts = undefined;
+    if (Object.hasOwn(value, "model_dil_v2") && publicText(m)) {
+      const dil = value.model_dil_v2;
+      m.fallback = object(dil) ? {
+        ...(Object.hasOwn(dil, "fallbackMarkdown") ? { fallbackMarkdown: dil.fallbackMarkdown } : {}),
+        ...(Object.hasOwn(dil, "fallbackMarkdownVersion") ? { fallbackMarkdownVersion: dil.fallbackMarkdownVersion } : {}),
+      } : undefined;
+    }
+    if (!publicText(m)) { m.parts = undefined; m.fallback = undefined; m.references = []; m.citations = []; }
   }
   private apply(path: string, operation: string, value: unknown, depth: number): void {
     if (depth > 16) throw new Error("response_patch_size_limit");
@@ -278,8 +323,22 @@ export class ChatGptResponseSource {
     if (path === "/message/metadata" && object(value)) { this.metadata(m, value, operation === "append"); return; }
     if (path.startsWith("/message/metadata/")) {
       const key = path.slice("/message/metadata/".length);
+      if (["content_references", "citations", "model_dil_v2"].includes(key)) {
+        if (!publicText(m)) return;
+        const property = key === "content_references" ? "references" : key === "citations" ? "citations" : "fallback";
+        const updated = patchResponseValue(m[property] ?? (property === "fallback" ? {} : []), [], operation, value);
+        this.metadata(m, { [key]: updated ?? (property === "fallback" ? {} : []) }, true);
+        return;
+      }
+      if (/^(content_references|citations|model_dil_v2)\//.test(key)) {
+        if (!publicText(m)) return;
+        const [field, ...tail] = key.split("/");
+        if (field === "model_dil_v2" && !["fallbackMarkdown", "fallbackMarkdownVersion"].includes(tail[0]!)) return;
+        const property = field === "content_references" ? "references" : field === "citations" ? "citations" : "fallback";
+        (m as any)[property] = patchResponseValue(m[property], tail, operation, value);
+        return;
+      }
       if (key.includes("/")) {
-        if (/^(content_references|citations)\//.test(key)) throw new Error("response_references_unsupported");
         if (/^(finish_details|parent_id|is_complete|is_visually_hidden_from_conversation)\//.test(key)) throw new Error("response_patch_unsupported");
       } else if (operation === "remove" && key === "is_complete") m.complete = undefined;
       else if (operation === "remove" && key === "finish_details") m.finishType = undefined;
@@ -290,7 +349,7 @@ export class ChatGptResponseSource {
       "/message/recipient": "recipient", "/message/content/content_type": "contentType" } as const;
     if (Object.hasOwn(scalar, path) && ["add", "replace"].includes(operation)) {
       (m as any)[scalar[path as keyof typeof scalar]] = value;
-      if (!publicText(m)) { m.parts = undefined; m.discarded = true; }
+      if (!publicText(m)) { m.parts = undefined; m.fallback = undefined; m.references = []; m.citations = []; m.discarded = true; }
       return;
     }
     if (path === "/message/content" && object(value) && ["add", "replace"].includes(operation)) {

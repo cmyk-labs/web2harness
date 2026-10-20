@@ -46,6 +46,7 @@ import {
   type ChatGptWebModelRoute,
 } from "./models/chatgpt-web-models";
 import { forwardNativeCodexRequest, type NativeFetch, type NativeImageEndpoint } from "./codex/native-passthrough";
+import { createNativeWebSocketAdapter, createNativeWebSocketConnector, type NativeWebSocketConnect } from "./codex/native-websocket";
 import { fetchNativeCodex } from "./codex/native-network";
 import { NativeSearchModelError } from "./codex/native-search";
 import { validateChatGptWebRequestControls } from "./adapters/chatgpt-web/request-controls";
@@ -1019,7 +1020,7 @@ async function compactRequestFromBody(
 export function startServer(
   config: AppConfig,
   dependencies: { fetchUpstream?: NativeFetch; adapterFactory?: ChatGptWebAdapterFactory; bodyBudget?: HttpBodyBudget;
-    modelCatalogFetches?: ModelCatalogFetches } = {},
+    modelCatalogFetches?: ModelCatalogFetches; nativeWebSocketConnect?: NativeWebSocketConnect } = {},
 ): ReturnType<typeof Bun.serve> {
   if (config.purpose === "dev-harness") {
     assertDevRuntimeIsolation(config);
@@ -1059,6 +1060,12 @@ export function startServer(
     );
   };
   const responsesWs = createResponsesWebSocketAdapter({
+    onDiagnostic: diagnostic => diagnosticEvent(diagnostic.kind === "request_failure" ? "warning" : "info",
+      "http.websocket", { sessionId: diagnostic.connection_id, type: diagnostic.kind,
+        ...(diagnostic.kind === "request_failure" ? { requestId: diagnostic.request_id, stream_index: diagnostic.stream_index,
+          stage: diagnostic.stage, reason: diagnostic.reason, cause: diagnostic.cause, code: diagnostic.transport_code,
+          http_status: diagnostic.http_status, terminal_seen: diagnostic.terminal_seen, cancelled: diagnostic.cancelled }
+          : { phase: diagnostic.close_source, close_code: diagnostic.close_code }) }),
     dispatch: (req, operation) => dispatchResponses(req, { ...operation, memoryOnlyState: true }),
     async validateSteer(req: Request, target: SteerTarget): Promise<SteerValidation> {
       if (draining) return { ok: false, code: "response_not_active", message: "Responses server is draining." };
@@ -1082,10 +1089,74 @@ export function startServer(
       } catch { return { ok: false, code: "invalid_input", message: "Steering validation failed." }; }
     },
   });
+  const nativeWs = createNativeWebSocketAdapter({
+    connect: dependencies.nativeWebSocketConnect ?? createNativeWebSocketConnector(config.browserHostDescriptorPath),
+    isNativeModel: model => !isChatGptWebModelSlug(model),
+    identify(body) {
+      const identity = extractCodexTurnIdentityFromBody(body);
+      return identity.threadId && identity.turnId ? { threadId: identity.threadId, turnId: identity.turnId } : undefined;
+    },
+  });
+  type ResponseSocket = Parameters<NonNullable<typeof responsesWs.websocket.message>>[0];
+  const socketRoutes = new WeakMap<ResponseSocket, "native" | "web">();
+  const connectedSockets = new Set<ResponseSocket>();
+  // Route once, before the generic HTTP/SSE adapter can remove generate or rewrite IDs.
+  // Native sockets have their own upstream lifetime; no credential-keyed/global pool.
+  const websocket: typeof responsesWs.websocket = {
+    ...responsesWs.websocket,
+    open(ws) {
+      if (draining || connectedSockets.size >= 128) { ws.close(1013, "Responses server unavailable"); return; }
+      connectedSockets.add(ws);
+    },
+    message(ws, message) {
+      if (!connectedSockets.has(ws)) return;
+      let route = socketRoutes.get(ws);
+      let event: Record<string, unknown> | undefined;
+      if (typeof message === "string") {
+        if (Buffer.byteLength(message) > 64 * 1024 * 1024) { ws.close(1009, "Responses request too large"); return; }
+        try {
+          const value: unknown = JSON.parse(message);
+          if (value && typeof value === "object" && !Array.isArray(value)) event = value as Record<string, unknown>;
+        } catch { /* Existing Web adapter owns malformed-frame diagnostics. */ }
+      }
+      const selected = event?.type === "response.create" && typeof event.model === "string"
+        ? isChatGptWebModelSlug(event.model) ? "web" : "native" : undefined;
+      if (route && selected && route !== selected) {
+        const sent = ws.send(JSON.stringify({ type: "error", status: 400,
+          error: { type: "invalid_request_error", code: "websocket_route_mismatch", retryable: false,
+            message: "Open a new WebSocket connection to select a different backend; response IDs are backend-owned." } }));
+        if (sent <= 0) ws.close(1011, "Responses route rejection backpressure");
+        return;
+      }
+      if (!route) {
+        if (draining) {
+          const sent = ws.send(JSON.stringify({ type: "error", status: 503, error: { code: "server_draining",
+            type: "server_error", message: "Responses server is draining.", retryable: false } }));
+          if (sent <= 0) ws.close(1011, "Responses drain rejection backpressure");
+          return;
+        }
+        route = selected ?? "web";
+        socketRoutes.set(ws, route);
+        if (route === "native") nativeWs.open(ws, new Headers(ws.data.headers.map(([name, value]) => [name, value])));
+        else responsesWs.websocket.open?.(ws);
+      }
+      if (route === "native") nativeWs.message(ws, message);
+      else responsesWs.websocket.message(ws, message);
+    },
+    drain(ws) {
+      if (socketRoutes.get(ws) === "native") nativeWs.drain(ws);
+      else if (socketRoutes.get(ws) === "web") responsesWs.websocket.drain?.(ws);
+    },
+    close(ws, code, reason) {
+      connectedSockets.delete(ws);
+      if (socketRoutes.get(ws) === "native") nativeWs.close(ws);
+      else if (socketRoutes.get(ws) === "web") responsesWs.websocket.close?.(ws, code, reason);
+    },
+  };
   const activity = () => ({
     active_http_turns: httpTurns.count(),
     active_browser_turns: chatGptTurnSessions.activeCount() + (turnBroker?.externalOwnerActiveCount() ?? 0),
-    active_websocket_turns: responsesWs.activeCount(),
+    active_websocket_turns: responsesWs.activeCount() + nativeWs.activeCount(),
   });
   const controlAuthorized = (req: Request): boolean => {
     const header = req.headers.get("authorization") ?? "";
@@ -1097,7 +1168,7 @@ export function startServer(
     hostname: config.host,
     port: config.port,
     idleTimeout: 0,
-    websocket: responsesWs.websocket,
+    websocket,
     async fetch(req, bunServer) {
       const url = new URL(req.url);
       if (req.method === "GET" && url.pathname === "/healthz") {
@@ -1122,6 +1193,7 @@ export function startServer(
         if (!controlAuthorized(req)) return new Response("Unauthorized", { status: 401 });
         draining = url.pathname === "/admin/drain";
         responsesWs.setDraining(draining);
+        nativeWs.setDraining(draining);
         turnBroker?.setExternalOwnersAccepted(!draining);
         return Response.json({ status: "ok", accepting_turns: !draining, ...activity() });
       }
@@ -1202,10 +1274,12 @@ export function startServer(
           reason,
         );
         const httpCancellation = httpTurns.beginCancelTurn(identity, reason);
+        const cancelledNativeWebsocketTurns = nativeWs.cancelTurn(identity);
         const settlement = Promise.allSettled([
           browserCancellation.settlement,
           compactionCancellation.settlement,
           httpCancellation.settlement,
+          nativeWs.settled(),
         ]);
         void settlement.then(results => {
           for (const result of results) {
@@ -1219,6 +1293,7 @@ export function startServer(
         return Response.json({
           status: "ok",
           cancelled_http_turns: httpCancellation.cancelled,
+          cancelled_native_websocket_turns: cancelledNativeWebsocketTurns,
           cancelled_browser_turns: browserCancellation.cancelled,
           cancelled_compaction_runs: compactionCancellation.cancelled,
         });
@@ -1232,14 +1307,17 @@ export function startServer(
         // owner signal is the only cancellation boundary for a fresh fallback not in the session
         // registry.
         const compactionCancellation = cancelAllStructuredCompactions(reason);
+        const cancelledNativeWebsocketTurns = nativeWs.cancelAll();
         const cancelledBrowserTurns = chatGptTurnSessions.clear(reason) + (turnBroker?.revokeExternalOwners() ?? 0);
         const [cancelledHttpTurns, cancelledCompactionRuns] = await Promise.all([
           httpTurns.cancelAll(reason),
           compactionCancellation,
+          nativeWs.settled(),
         ]);
         return Response.json({
           status: "ok",
           cancelled_http_turns: cancelledHttpTurns,
+          cancelled_native_websocket_turns: cancelledNativeWebsocketTurns,
           cancelled_browser_turns: cancelledBrowserTurns,
           cancelled_compaction_runs: cancelledCompactionRuns,
           ...activity(),
@@ -1402,11 +1480,13 @@ export function startServer(
     // but do not let an unresponsive upstream delay the independent cleanup owners.
     void httpTurns.cancelAll(new DOMException("Server shutting down", "AbortError"));
     responsesWs.closeAll();
+    nativeWs.closeAll();
+    for (const ws of connectedSockets) if (!socketRoutes.has(ws)) ws.close(1001, "Responses server is shutting down");
     modelCatalogFetches.close();
     chatGptTurnSessions.clear();
     flushResponseState();
     shutdownPromise = (async () => {
-      const transportResults = await Promise.allSettled([responsesWs.settled()]);
+      const transportResults = await Promise.allSettled([responsesWs.settled(), nativeWs.settled()]);
       const results = [...transportResults, ...await Promise.allSettled([
         closeChatGptBrowserWorkers(),
         operationStage("cleanup", () => closeTurnBrokers()),

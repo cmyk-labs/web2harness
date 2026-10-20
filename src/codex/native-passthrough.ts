@@ -8,7 +8,9 @@ import { BRIDGE_REASONING_PREFIX } from "../responses/reasoning-envelope";
 import { fetchNativeCodex } from "./native-network";
 import { resolveNativeSearchModel } from "./native-search";
 
-const CODEX_BACKEND = "https://chatgpt.com/backend-api/codex";
+/** The native provider selected by this bridge, shared by HTTP and WebSocket transports.
+ * Do not infer a different provider from a model name or the incoming token. */
+export const CODEX_BACKEND = "https://chatgpt.com/backend-api/codex";
 const FIRST_PARTY_CODEX_ORIGINATORS = new Set([
   "codex_cli_rs",
   "codex-tui",

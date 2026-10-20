@@ -73,7 +73,7 @@ test("Luna checkpoint stream hides a marker split across arbitrary DOM deltas", 
 });
 
 test("Luna checkpoint marker survives the real ChatGPT DOM-to-Markdown serializer", () => {
-  const buffer = new ChatGptMarkdownBuffer(markdown => markdown, 0);
+  const buffer = new ChatGptMarkdownBuffer(markdown => markdown);
   const domCheckpoint = "State:\n- Inspect src/foo_bar.ts and preserve *literal* [evidence].";
   const segments = [
     { key: "answer", html: "<p>Visible answer.</p>", text: "Visible answer.", streamable: true },
@@ -91,7 +91,7 @@ test("Luna checkpoint marker survives the real ChatGPT DOM-to-Markdown serialize
     },
   ];
   const stream = new ChatGptLunaCheckpointStream();
-  const delta = buffer.observe(segments, 0);
+  const delta = buffer.observe(segments);
   const final = buffer.finish();
   let visible = stream.push(delta);
   visible += stream.push(final.delta);

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
-import { createResponsesWebSocketAdapter, type ResponsesWebSocketData, type ResponsesWebSocketOptions } from "../../src/responses/websocket";
+import { createResponsesWebSocketAdapter, type ResponsesWebSocketData, type ResponsesWebSocketOptions, type WebSocketDiagnostic } from "../../src/responses/websocket";
 
 type Event = Record<string, any>;
 const encoder = new TextEncoder();
@@ -13,6 +13,135 @@ const BunWebSocket = WebSocket as unknown as { new(url: string, options: Bun.Web
 const cleanups: (() => Promise<void>)[] = [];
 
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); });
+
+describe("Responses WebSocket failure diagnostics on the wire", () => {
+  test("dispatch cause is bounded and redacted; exact selection, correlation and no replay survive", async () => {
+    const observations: WebSocketDiagnostic[] = [], requests: Event[] = [], signals: AbortSignal[] = [];
+    const secret = "fixture-secret-do-not-log";
+    const f = await fixture({ onDiagnostic: value => { observations.push(value); }, dispatch: async request => {
+      requests.push(await request.json()); signals.push(request.signal);
+      throw new Error(`Bearer ${secret} ${"x".repeat(20_000)}`, {
+        cause: Object.assign(new Error(`https://user:${secret}@upstream.invalid/?token=${secret}`), {
+          code: "ECONNRESET", status: 403, closeCode: 1008, payload: secret, reasoning: secret,
+        }),
+      });
+    } });
+    const client = await f.connect({ authorization: `Bearer ${secret}`, "x-request-id": secret });
+    const original = create({ stream_id: secret, model: "gpt-6-astra", reasoning: { effort: "high" }, input: secret });
+    const failures: Event[] = [];
+    for (let i = 0; i < 2; i++) { client.send(original); failures.push(await client.next()); }
+    const other = await f.connect(); other.send(create()); failures.push(await other.next());
+    await f.adapter.settled();
+    expect(requests).toHaveLength(3);
+    expect(requests[0]).toEqual({ model: "gpt-6-astra", reasoning: { effort: "high" }, input: secret, stream: true });
+    expect(signals.every(signal => signal.aborted)).toBe(true);
+    expect(observations).toHaveLength(3);
+    for (const [i, event] of failures.entries()) {
+      expect(event.status).toBe(502); expect(event.error.code).toBe("websocket_upstream_error");
+      expect(event.error.message).toContain("No request was replayed");
+      const diagnostic = event.error.diagnostics;
+      expect(diagnostic).toEqual(observations[i]);
+      expect(diagnostic).toMatchObject({ kind: "request_failure", stage: "dispatch", reason: "transport_error",
+        cause: "connection_reset", transport_code: "ECONNRESET", stream_index: 0, terminal_seen: false, cancelled: false });
+      expect(diagnostic.http_status).toBeUndefined(); expect(diagnostic.close_code).toBeUndefined();
+      expect(JSON.stringify(diagnostic)).not.toContain(secret);
+      expect(JSON.stringify(diagnostic).length).toBeLessThan(700);
+    }
+    expect(failures[0].stream_id).toBe(secret); // Existing wire routing, not diagnostic metadata.
+    const diagnostics = failures.map(event => event.error.diagnostics);
+    expect(diagnostics[0].connection_id).toBe(diagnostics[1].connection_id);
+    expect(diagnostics[0].connection_id).not.toBe(diagnostics[2].connection_id);
+    expect(new Set(diagnostics.map(value => value.request_id)).size).toBe(3);
+  });
+
+  test.each([
+    ["missing terminal", "", "sse_missing_terminal", "sse_validate", false],
+    ["early DONE", "data: [DONE]\n\n", "sse_missing_terminal", "sse_validate", false],
+    ["JSON", "data: {fixture-secret-malformed}\n\n", "sse_invalid_json", "sse_parse", false],
+    ["shape", 'data: {"type":"fixture-secret-unsupported"}\n\n', "sse_invalid_event", "sse_validate", false],
+    ["framing", 'data: {"type":"response.completed"}', "sse_unterminated_event", "sse_frame", false],
+    ["oversize", `data: ${"x".repeat(1500)}\n\n`, "sse_event_too_large", "sse_frame", false],
+    ["after terminal", frame(completed()) + frame({ type: "response.created" }), "sse_event_after_terminal", "sse_validate", true],
+  ] as const)("classifies %s SSE failures with the observed response status", async (_label, text, reason, stage, terminalSeen) => {
+    const observations: WebSocketDiagnostic[] = [];
+    let dispatches = 0;
+    const f = await fixture({ limits: { maxEventBytes: 1024 }, onDiagnostic: value => { observations.push(value); },
+      dispatch: async () => { dispatches++; return sse(text); } });
+    const client = await f.connect(); client.send(create());
+    const event = await client.next(); await f.adapter.settled();
+    expect(event.error.diagnostics).toMatchObject({ reason, stage, http_status: 200, terminal_seen: terminalSeen });
+    expect(event.error.diagnostics).toEqual(observations[0]);
+    expect(JSON.stringify(event)).not.toContain("fixture-secret");
+    expect(observations).toHaveLength(1); expect(dispatches).toBe(1);
+  });
+
+  test.each([new Uint8Array([0xff]), new Uint8Array([0xe2, 0x82])])("classifies invalid or truncated UTF-8 without text leakage", async bytes => {
+    const f = await fixture({ dispatch: async () => new Response(bytes, { headers: { "content-type": "text/event-stream" } }) });
+    const client = await f.connect(); client.send(create());
+    expect((await client.next()).error.diagnostics).toMatchObject({ stage: "sse_decode", reason: "sse_invalid_utf8", http_status: 200 });
+  });
+
+  test("read failure after a terminal suppresses that terminal and retains the stream cause", async () => {
+    let source!: ReadableStreamDefaultController<Uint8Array>;
+    let calls = 0;
+    const observations: WebSocketDiagnostic[] = [];
+    const f = await fixture({ onDiagnostic: value => { observations.push(value); }, dispatch: async () => {
+      calls++;
+      return new Response(new ReadableStream({ start(controller) {
+        source = controller;
+        controller.enqueue(encoder.encode(frame({ type: "response.created" }) + frame(completed())));
+      } }), { headers: { "content-type": "text/event-stream" } });
+    } });
+    const client = await f.connect(); client.send(create()); expect((await client.next()).type).toBe("response.created");
+    await Bun.sleep(5); // Let the adapter retain the terminal while awaiting the next read.
+    source.error(new Error("fixture-secret-read", { cause: Object.assign(new Error("fixture-secret-cause"), { code: "ETIMEDOUT" }) }));
+    const event = await client.next(); await f.adapter.settled();
+    expect(event.type).toBe("error"); expect(event.error.diagnostics).toMatchObject({
+      stage: "sse_read", cause: "timeout", transport_code: "ETIMEDOUT", http_status: 200, terminal_seen: true,
+    });
+    expect(calls).toBe(1); expect(observations).toHaveLength(1);
+    expect(JSON.stringify(event)).not.toContain("fixture-secret");
+  });
+
+  test("wrong content type and bounded HTTP error body retain real HTTP status", async () => {
+    for (const response of [new Response("fixture-secret-html", { status: 201 }),
+      new Response("x".repeat(1500), { status: 503 })]) {
+      const f = await fixture({ limits: { maxEventBytes: 1024 }, dispatch: async () => response });
+      const client = await f.connect(); client.send(create());
+      const event = await client.next();
+      expect(event.error.diagnostics).toMatchObject(response.status === 201
+        ? { stage: "response_headers", reason: "expected_sse_body", http_status: 201 }
+        : { stage: "http_error_body", reason: "http_error_body_too_large", http_status: 503 });
+      expect(event.status).toBe(502); expect(JSON.stringify(event)).not.toContain("fixture-secret");
+    }
+  });
+
+  test("observes HTTP errors without modifying their existing wire contract", async () => {
+    const observations: WebSocketDiagnostic[] = [];
+    const error = { code: "fixture_error", message: "existing contract" };
+    const f = await fixture({ onDiagnostic: value => { observations.push(value); }, dispatch: async () => Response.json({ error }, {
+      status: 429, headers: { "retry-after": "2", "x-request-id": "fixture-secret-header" },
+    }) });
+    const client = await f.connect(); client.send(create());
+    expect(await client.next()).toEqual({ type: "error", status: 429, error,
+      headers: { "retry-after": "2", "x-request-id": "fixture-secret-header" } });
+    expect(observations).toHaveLength(1);
+    expect(observations[0]).toMatchObject({ reason: "http_error", stage: "http_error_body", http_status: 429 });
+    expect(JSON.stringify(observations)).not.toContain("fixture-secret");
+  });
+
+  test.each([false, true])("observer failure (async=%s) cannot prevent error delivery or new work", async asynchronous => {
+    let calls = 0;
+    const f = await fixture({ onDiagnostic: () => {
+      if (asynchronous) return Promise.reject(new Error("fixture-secret-observer"));
+      throw new Error("fixture-secret-observer");
+    }, dispatch: async () => { if (++calls === 1) throw new Error("fixture-secret"); return sse(frame(completed())); } });
+    const client = await f.connect(); client.send(create());
+    expect((await client.next()).error.diagnostics.cause).toBe("unknown");
+    client.send(create()); expect((await client.next()).type).toBe("response.completed");
+    await f.adapter.settled(); expect(calls).toBe(2);
+  });
+});
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

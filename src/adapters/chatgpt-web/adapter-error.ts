@@ -28,8 +28,8 @@ export class ChatGptWebAdapterError extends Error {
 
 export function chatGptMarkdownFailure(language: "en" | "zh-CN" = "en", cause?: unknown): ChatGptWebAdapterError {
   return new ChatGptWebAdapterError(language === "zh-CN"
-    ? "网页回答的最终内容无法与已读取内容可靠对齐，结果未能完整交付。若浏览器中仍有失败页面，可使用“复制回答”保存未经验证的可见文本。"
-    : "The final Web answer could not be reliably aligned with the observed content, so delivery could not be completed. If the failed page is still available, use Copy answer to save its unverified visible text.",
+    ? "网页回答未能完整提取、转换或可靠交付。若浏览器中仍有失败页面，可使用“复制回答”保存未经验证的可见文本。"
+    : "The Web answer could not be fully extracted, converted or reliably delivered. If the failed page is still available, use Copy answer to save its unverified visible text.",
   { status: 502, errorType: "server_error", code: "browser_stream_inconsistent", retryable: false, cause });
 }
 
@@ -41,6 +41,7 @@ const responseFailureMessages = {
   chatgpt_assistant_turn_missing: "ChatGPT accepted the message but did not expose its assistant turn in the DOM.",
   chatgpt_dom_unresponsive: "ChatGPT accepted the message, but its DOM remained unresponsive after the allowed same-page rebinds.",
   chatgpt_response_timeout: "The ChatGPT Web round exceeded its configured response deadline.",
+  chatgpt_response_extraction_timeout: "ChatGPT finished generating, but the complete final content could not be obtained within the extraction deadline.",
 } as const;
 export type ChatGptResponseFailureCode = keyof typeof responseFailureMessages;
 

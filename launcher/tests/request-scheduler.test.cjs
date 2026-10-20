@@ -69,6 +69,25 @@ test("queue timeout applies while paused and is independent of system-clock chan
   assert.equal(f.scheduler.get("waiting").waitMs, 300_000);
 });
 
+test("reconnect byte estimates retain the first reservation and terminal receipt", () => {
+  const f = fixture({ maxConcurrent: 1 }, { maxWaitingBytes: 200 });
+  f.add("running");
+  const queued = f.add("queued", "task", { bytes: 150, effort: "high" });
+  assert.deepEqual(f.add("queued", "task", { bytes: 900, effort: "high" }), queued);
+  assert.equal(f.scheduler.snapshot().waitingBytes, 150);
+  assert.throws(() => f.add("overflow", "other", { bytes: 51 }), { code: "scheduler_overloaded" });
+  for (const changed of [{ model: "another" }, { effort: "low" }, { mode: "browser-only" }]) {
+    assert.throws(() => f.add("queued", "task", { bytes: 900, effort: "high", ...changed }), { code: "queue_identity_conflict" });
+  }
+  f.finish("running");
+  f.scheduler.settle("queued", f.scheduler.lease("queued"), "failed", "chatgpt_attachment_upload_failed");
+  const replay = f.add("queued", "task", { bytes: 180, effort: "high" });
+  assert.equal(replay.state, "failed");
+  assert.equal(replay.reason, "chatgpt_attachment_upload_failed");
+  assert.equal(f.scheduler.snapshot().active, 0);
+  assert.equal(f.events.filter(e => e.name === "queue.dispatched" && e.fields.id === "queued").length, 1);
+});
+
 test("lowering concurrency drains active work and changes timeout for new tickets only", () => {
   const f = fixture();
   for (let i = 0; i < 5; i++) f.add(`j${i}`);

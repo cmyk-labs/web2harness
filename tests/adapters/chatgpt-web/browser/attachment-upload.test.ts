@@ -198,3 +198,33 @@ test.skipIf(!executable)('file-ready without terminal completion fails when the 
   }finally{await observer.dispose();}
  },()=>new Response(JSON.stringify({event:'file.processing.file_ready'})+'\n',{headers:{'content-type':'application/x-ndjson'}}));
 },10000);
+
+for (const status of [429, 503]) test.skipIf(!executable)(`owned file creation HTTP ${status} fails before a processing request exists`, async () => {
+ await fixture(async(browser,base)=>{
+  const page=await browser.newPage();await page.goto(base);
+  const observer=await observeChatGptAttachmentUploads(page,['wanted.png']);
+  try {
+   await page.evaluate(async()=>{await fetch('/backend-api/files',{method:'POST',body:JSON.stringify({file_name:'wanted.png'})});});
+   const error:any=await observer.wait(AbortSignal.timeout(5_000)).catch(error=>error);
+   expect(error).toBeInstanceOf(ChatGptWebAdapterError);
+   expect(error.status).toBe(status);
+   expect(error.code).toBe(status===429?'upload_quota_exceeded':'chatgpt_attachment_upload_failed');
+  } finally {await observer.dispose();}
+ },()=>new Response('{}',{status,headers:{'content-type':'application/json'}}));
+},15_000);
+
+test.skipIf(!executable)('creation success is not completion; unrelated creation failure is ignored',async()=>{
+ await fixture(async(browser,base)=>{
+  const page=await browser.newPage();await page.goto(base);const observer=await observeChatGptAttachmentUploads(page,['wanted.png']);
+  try {
+   await page.evaluate(async()=>{for(const file_name of ['other.png','wanted.png'])await fetch('/backend-api/files',{method:'POST',body:JSON.stringify({file_name})});});
+   await expect(observer.wait(undefined,100)).rejects.toThrow('processing timed out');
+   await page.evaluate(async()=>{await fetch('/backend-api/files/process_upload_stream',{method:'POST',body:JSON.stringify({file_name:'wanted.png'})});});
+   await observer.wait(AbortSignal.timeout(5_000));observer.throwIfFailed();
+  }finally{await observer.dispose();}
+ },async request=>{
+  const body=await request.json() as any;
+  if(new URL(request.url).pathname==='/backend-api/files')return new Response('{}',{status:body.file_name==='other.png'?429:200});
+  return new Response(JSON.stringify({event:'file.processing.completed'})+'\n');
+ });
+},15_000);

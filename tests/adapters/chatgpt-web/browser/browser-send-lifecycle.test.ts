@@ -85,26 +85,36 @@ test.each(["preflight-failed", "ready-changed", "unknown", "confirmed", "duplica
   },
 );
 
-test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate-request", "cancelled", "disconnected"])("worker handles an identity-bound %s source without relying on a rendered answer", async state => {
+test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate-request", "cancelled", "disconnected", "delayed-source", "delayed-cancel", "consumer-failed", "complete-dom", "foreign-dom", "delayed-dom-source", "partial-dom"])("worker handles an identity-bound %s source without relying on a rendered answer", async state => {
   const root = mkdtempSync(join(tmpdir(), "web2harness-source-worker-"));
   let acceptanceTimer: ReturnType<typeof setTimeout> | undefined;
+  let clockRestore: (() => void) | undefined;
   try {
     const worker: any = ChatGptBrowserWorker.forProvider({ adapter: "chatgpt-web", baseUrl: `browser://${root}`,
       chatgptWeb: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: false,
         storageStatePath: join(root, "auth.json"), browserDiagnosticsPath: join(root, "diagnostics") } });
-    const text = "| Name | Value |\n| --- | --- |\n| Alpha | beta_code |\n\n```ps1\n'Literal *text*'\n```\n\nSame\n\nSame";
+    const domFallback = state === "complete-dom" || state === "foreign-dom" || state === "partial-dom";
+    const text = domFallback ? "Complete DOM answer." : "| Name | Value |\n| --- | --- |\n| Alpha | beta_code |\n\n```ps1\n'Literal *text*'\n```\n\nSame\n\nSame";
     const user = { id: "current-user", author: { role: "user" }, content: { content_type: "text", parts: ["input"] } };
     const frames = ["v1", { type: "input_message", conversation_id: "current", input_message: user },
       { p: "", o: "add", v: { conversation_id: "current", message: { id: "answer", author: { role: "assistant" }, channel: "final", recipient: "all",
         content: { content_type: "text", parts: [text] }, status: state !== "incomplete" ? "finished_successfully" : "finished_partial", end_turn: true,
         metadata: { parent_id: user.id, is_complete: true, finish_details: { type: "stop" } } } } },
       { type: "message_stream_complete", conversation_id: "current" }, "[DONE]"];
-    const body = Buffer.from(frames.map(v => `data: ${v === "[DONE]" ? v : JSON.stringify(v)}\n\n`).join("")).toString("base64");
+    if (domFallback) (frames[2] as any).v.message.metadata.model_dil_v2 = {
+      fallbackMarkdownVersion: 2, fallbackMarkdown: text,
+    };
+    const encoded = (values: unknown[]) => Buffer.from(values.map(v => `data: ${v === "[DONE]" ? v : JSON.stringify(v)}\n\n`).join("")).toString("base64");
+    const delayed = state === "delayed-source" || state === "delayed-cancel" || state === "delayed-dom-source";
+    const body = encoded(delayed ? frames.slice(0, 3) : frames);
+    let bindingRetired = false, bindingStarted = false, domReadStarted = false;
+    const beforeTerminal: number[] = [];
+    const consumerFailure = new TypeError("consumer callback failed after one delivery");
     const sessions: EventEmitter[] = [];
     const cancel = new AbortController();
     const receipts: any[] = [];
     let disconnected = false;
-    const absent: any = { filter() { return this; }, last() { return this; }, isVisible: async () => false };
+    const absent: any = { filter() { return this; }, last() { return this; }, getByText() { return this; }, getByTestId() { return this; }, isVisible: async () => false };
     const page: any = Object.assign(new EventEmitter(), { isClosed: () => disconnected, url: () => "https://chatgpt.com/?temporary-chat=true",
       evaluate: async () => ({}), locator: () => absent, context: () => ({ newCDPSession: async () => {
         const session = Object.assign(new EventEmitter(), { detach: async () => {}, send: async (method: string) =>
@@ -119,7 +129,15 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
         session.emit("Network.requestWillBeSent", { frameId: "owned", requestId: "response", request: { method: "POST", url: "https://chatgpt.com/backend-api/f/conversation",
           postData: JSON.stringify({ action: "next", messages: [{ ...user, content: { parts: [prompt] } }] }) } });
         session.emit("Network.responseReceived", { requestId: "response", response: { status: 200, mimeType: "text/event-stream", url: "https://chatgpt.com/backend-api/f/conversation" } });
-        session.emit("Network.loadingFinished", { requestId: "response" });
+        if (!delayed) session.emit("Network.loadingFinished", { requestId: "response" });
+        if (delayed && session === sessions.at(-1)) acceptanceTimer = setTimeout(() => {
+          beforeTerminal.push(deltas.length, completedResponses);
+          if (state === "delayed-cancel") cancel.abort();
+          else {
+            session.emit("Network.dataReceived", { requestId: "response", data: encoded(frames.slice(3)) });
+            // Deliberately leave HTTP open; application completion is the terminal evidence.
+          }
+        }, 600);
         if (state === "duplicate-request") session.emit("Network.requestWillBeSent", { frameId: "owned", requestId: "second-response", request: { method: "POST", url: "https://chatgpt.com/backend-api/f/conversation",
           postData: JSON.stringify({ action: "next", messages: [{ ...user, id: "second-user", content: { parts: [prompt] } }] }) } });
       } };
@@ -154,26 +172,65 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
       return {};
     } });
     worker.submissionDomState = async () => { throw Error("DOM unavailable: source must supply completion"); };
+    if (delayed) worker.waitForNewAssistantTurn = async (_page: unknown, _baseline: unknown, _deadline: unknown, signal: AbortSignal) => {
+      bindingStarted = true;
+      return new Promise((_resolve, reject) => signal.addEventListener("abort", () => {
+        bindingRetired = true; reject(new DOMException("observation retired", "AbortError"));
+      }, { once: true }));
+    };
+    if (domFallback || state === "delayed-dom-source") {
+      worker.waitForNewAssistantTurn = async () => ({ identity: "owned", locator: absent, acceptedTurnIdentities: [] });
+      worker.responseDomSnapshot = async () => {
+        domReadStarted = true;
+        if (state === "delayed-dom-source") return new Promise(() => {});
+        if (state === "partial-dom" && !acceptanceTimer) {
+          acceptanceTimer = setTimeout(() => {
+            const now = Date.now.bind(Date);
+            const clock = spyOn(Date, "now").mockImplementation(() => now() + 120_001);
+            clockRestore = () => clock.mockRestore();
+          }, 600);
+        }
+        return { responsePresent: true, contentState: state === "partial-dom" ? "partial" : "complete",
+          messageId: state === "foreign-dom" ? "foreign" : "answer",
+          visibleText: text, fullHtml: "<p>" + text + "</p>",
+          markdownSegments: [{ key: "final", html: "<p>" + text + "</p>", text, streamable: false }],
+          completionActionVisible: false, traceBlocks: [], stoppedThinkingVisible: false };
+      };
+    }
     const deltas: string[] = [];
     let completedResponses = 0;
     const result = worker.runBrowserTurnObserved({ traceId: `source-${state}`, modelId: "gpt-5.6-sol", reasoning: "xhigh",
       capabilities: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: false },
       queueTicket: { id: "source-task", secret: "source-secret" }, abortSignal: cancel.signal,
-      prepare: async () => ({ text: "input", images: [], release() {} }), onTextDelta: (delta: string) => deltas.push(delta),
+      prepare: async () => ({ text: "input", images: [], release() {} }), onTextDelta: (delta: string) => { deltas.push(delta); if (state === "consumer-failed") throw consumerFailure; },
       onResponseCompleted: () => { completedResponses++; },
     }, undefined, page);
-    if (["complete", "late-accepted", "late-timeout"].includes(state)) { expect(await result).toBe(text); expect(deltas).toEqual([text]); }
+    if (["complete", "late-accepted", "late-timeout", "delayed-source", "complete-dom", "delayed-dom-source"].includes(state)) { expect(await result).toBe(text); expect(deltas).toEqual([text]); }
+    else if (state === "partial-dom") {
+      await expect(result).rejects.toMatchObject({ code: "browser_stream_inconsistent",
+        cause: { code: "chatgpt_response_extraction_timeout" } });
+      expect(deltas).toEqual([]);
+      expect(domReadStarted).toBeTrue();
+    }
+    else if (state === "foreign-dom") { await expect(result).rejects.toMatchObject({ code: "browser_stream_inconsistent" }); expect(deltas).toEqual([]); }
+    else if (state === "consumer-failed") { await expect(result).rejects.toBe(consumerFailure); expect(deltas).toEqual([text]); }
+    else if (state === "delayed-cancel") { await expect(result).rejects.toMatchObject({ name: "AbortError" }); expect(deltas).toEqual([]); }
     else if (state === "incomplete") { await expect(result).rejects.toMatchObject({ code: "chatgpt_response_source_invalid" }); expect(deltas).toEqual([]); }
     else if (state === "cancelled") { await expect(result).rejects.toThrow(); expect(deltas).toEqual([]); }
     else { await expect(result).rejects.toMatchObject({ code: "chatgpt_send_outcome_unknown" }); expect(deltas).toEqual([]); }
     expect(presses).toBe(1);
-    expect(completedResponses).toBe(["complete", "late-accepted", "late-timeout"].includes(state) ? 1 : 0);
+    expect(completedResponses).toBe(["complete", "late-accepted", "late-timeout", "delayed-source", "consumer-failed", "complete-dom", "foreign-dom", "delayed-dom-source", "partial-dom"].includes(state) ? 1 : 0);
+    if (delayed) {
+      expect(beforeTerminal).toEqual([0, 0]);
+      if (state === "delayed-dom-source") expect(domReadStarted).toBeTrue();
+      else { expect(bindingStarted).toBeTrue(); expect(bindingRetired).toBeTrue(); }
+    }
     expect(receipts).toEqual([{ id: "source-task", secret: "source-secret", permit: "source-permit",
-      outcome: ["complete", "incomplete", "late-accepted", "late-timeout"].includes(state) ? "confirmed" : "unknown" }]);
+      outcome: ["complete", "incomplete", "late-accepted", "late-timeout", "delayed-source", "delayed-cancel", "consumer-failed", "complete-dom", "foreign-dom", "delayed-dom-source", "partial-dom"].includes(state) ? "confirmed" : "unknown" }]);
     const archives = readdirSync(join(root, "diagnostics")).filter(name => name.startsWith("response-source-"));
     const artifacts = archives.filter(name => existsSync(join(root, "diagnostics", name, "response-source.private.json")));
     if (state === "cancelled") expect(archives).toEqual([]);
-    if (["incomplete", "duplicate-request", "disconnected"].includes(state)) {
+    if (["incomplete", "duplicate-request", "disconnected", "consumer-failed", "foreign-dom", "partial-dom"].includes(state)) {
       expect(artifacts).toHaveLength(1);
       const artifact = JSON.parse(readFileSync(join(root, "diagnostics", artifacts[0]!, "response-source.private.json"), "utf8"));
       expect(artifact.format).toBe("chatgpt-public-response-events");
@@ -183,6 +240,7 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
     } else expect(artifacts).toEqual([]);
   } finally {
     clearTimeout(acceptanceTimer);
+    clockRestore?.();
     if (dirname(resolve(root)) !== resolve(tmpdir()) || !basename(root).startsWith("web2harness-source-worker-")) throw Error("Unexpected fixture directory");
     rmSync(root, { recursive: true, force: true });
   }

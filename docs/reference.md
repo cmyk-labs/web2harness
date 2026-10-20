@@ -92,7 +92,7 @@ The same **Runtime parameters** form also saves the following Launcher-owned set
 | Tab retention target | 5 tabs | 5, 8, 12, 16 | When a new task needs a tab, reclaim an older eligible idle tab at this target. Running and tool-wait tabs remain protected; this is not an execution concurrency limit or a strict total cap. |
 | Idle tab retention | 30 minutes | 5, 15, 30, 60, 120 | Completed tabs without pending tool results. Time starts from task activity, not viewing or selecting the tab. |
 | Web inactivity timeout | 15 minutes | 2, 5, 10, 15, 30 | Adapter silence watchdog; not the total duration of a task. |
-| Attachment processing timeout | 5 minutes | 2, 3, 5, 10 | Automatic mode only. Per-file upload/processing confirmation. Input readiness, card visibility and send readiness have independent limits. Confirmed upload failures still stop before Send. |
+| Attachment processing timeout | 5 minutes | 2, 3, 5, 10 | Automatic mode only. Per-file, per-attempt upload/processing confirmation. An explicit ordinary failure gets one attachment retry after 3 seconds; explicit HTTP 429 quota errors return immediately. Input readiness, card visibility and send readiness have independent limits. |
 | Failure retry limit | 3 retries | 0, 1, 2, 3 | Collapsed Advanced settings. Additional attempts after the first, only for explicitly retryable failures. Zero disables those retries; transport reconnects are not new attempts. |
 | Manual request submission timeout | 60 seconds | 60, 120, 300 | Manual mode only; time to paste, send and confirm submission. |
 | Manual compaction submission timeout | 120 seconds | 120, 300, 600 | Manual mode only; independent of the subsequent compaction generation period. |
@@ -118,9 +118,12 @@ Automatic browser workflows do not have a shared preparation or whole-task deadl
 | Composer locate / Escape, focus, select-all, delete / empty-state verification | 60 / 30 each / 60 seconds |
 | Prompt write / readback / exact-text confirmation | 60 / 60 / 30 seconds |
 | File input readiness / upload and processing / attachment card / send readiness | 60 seconds / 5 minutes per file / 120 seconds per card / 120 seconds |
+| Explicit attachment failure recovery | Remove only the failed attachment, wait 3 seconds, retry once with a fresh processing timeout; explicit HTTP 429 is not retried |
+| Native upstream WebSocket connection / physical cleanup / backpressure | 120 / 120 / 30 seconds independently; request and input queue 64 MiB each, individual output event 16 MiB, output buffer 32 MiB |
 | Send visible / enabled / click / acknowledgement / late reconciliation | 60 / 120 / 60 / 120 / 30 seconds; never automatically click again after an uncertain send |
 | Internal Send activation acknowledgement | 60 seconds; expiry prevents a later click |
-| Missing response DOM / response-stream tail / Markdown recovery | 120 / 30 / 30 seconds |
+| Missing response DOM / final-content extraction | 120 seconds each; extraction starts only after normal generation completion |
+| Public-source CDP operation / individual response DOM or control read / observer detach | 120 / 120 / 30 seconds each; no shared allowance across reads |
 | Compaction generation / settlement / previous owner release | 15 minutes / 120 seconds / 120 seconds; generation starts at confirmed submission |
 | Remote attachment DNS / connection and headers / body | 30 / 60 / 120 seconds; every file and redirect receives fresh applicable limits |
 | Helper startup / helper process cleanup | 30 / 120 seconds; browser operations retain their own limits |

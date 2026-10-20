@@ -6,9 +6,8 @@ export const CHATGPT_RESPONSE_DOM_GRACE_MS = 120_000;
 
 export const CHATGPT_EMPTY_RESPONSE_GRACE_MS = 10_000;
 
-export const CHATGPT_COMPLETION_ACTION_GRACE_MS = 60_000;
-
-export const CHATGPT_COMPLETION_SETTLE_MS = 2_000;
+/** Starts only after normal generation completion; independent of the generation deadline. */
+export const CHATGPT_RESPONSE_EXTRACTION_TIMEOUT_MS = 120_000;
 
 /**
  * Detects that this process was suspended (system sleep) by watching for gaps in a steady tick.
@@ -91,18 +90,23 @@ export async function withChatGptBrowserObservationTimeout<T>(
   }
 }
 
-export function chatGptTurnIsComplete(state: {
+export interface ChatGptCompletionEvidence {
   responsePresent: boolean;
   running: boolean;
-  currentText: string;
-  currentHtml?: string;
-  completionActionVisible: boolean;
-  handoffCompletionVisible?: boolean;
-}): boolean {
+  normalCompletion: boolean;
+  completionRevision: number;
+  externalToolCallsInFlight?: boolean;
+}
+
+/** The caller binds this evidence to the current answer. Toolbar visibility and draft
+ * stability are deliberately absent: both also occur on interrupted answers. */
+export function chatGptTurnIsComplete(state: ChatGptCompletionEvidence): boolean {
   return state.responsePresent
     && !state.running
-    && ((state.currentText.length > 0 && state.completionActionVisible)
-      || state.handoffCompletionVisible === true);
+    && !state.externalToolCallsInFlight
+    && state.normalCompletion
+    && Number.isSafeInteger(state.completionRevision)
+    && state.completionRevision > 0;
 }
 
 export type ChatGptSubmissionEvidence = "user_turn" | "assistant_turn" | "generation_running" | "mcp_tool_call" | "response_stream";
@@ -141,15 +145,10 @@ export function chatGptReboundTurnIdentity(
 }
 
 export class ChatGptCompletionTracker {
-  private candidate?: { signature: string; since: number };
   private lastToolBatchRevision = 0;
-  private postToolAnswerBaselineText?: string;
-  private missingPostToolAnswerSince?: number;
+  private completionAtLastToolBatch = 0;
 
-  constructor(
-    private readonly stableMs = CHATGPT_COMPLETION_SETTLE_MS,
-    private readonly missingPostToolAnswerMs = CHATGPT_COMPLETION_ACTION_GRACE_MS,
-  ) {}
+  constructor(readonly announcementKey?: string) {}
 
   needsToolBatchObservation(revision: number): boolean {
     if (!Number.isSafeInteger(revision) || revision < this.lastToolBatchRevision) {
@@ -158,68 +157,28 @@ export class ChatGptCompletionTracker {
     return revision > this.lastToolBatchRevision;
   }
 
-  observeToolBatch(revision: number, currentText: string): boolean {
+  observeToolBatch(revision: number, completionRevision: number): boolean {
     if (!this.needsToolBatchObservation(revision)) return false;
-    // The caller acknowledges the batch only after this projection is captured. The outer Codex
-    // harness therefore cannot execute the tool until this exact pre-tool answer boundary exists.
-    this.postToolAnswerBaselineText = currentText;
+    if (!Number.isSafeInteger(completionRevision) || completionRevision < 0) {
+      throw new Error("ChatGPT completion received an invalid completion revision");
+    }
+    // A completion observed before the tool is acknowledged cannot finish its later reply.
+    // Text may be identical in the two replies; the completion event establishes the boundary.
+    this.completionAtLastToolBatch = Math.max(this.completionAtLastToolBatch, completionRevision);
     this.lastToolBatchRevision = revision;
-    this.missingPostToolAnswerSince = undefined;
-    this.candidate = undefined;
     return true;
   }
 
-  update(
-    state: Parameters<typeof chatGptTurnIsComplete>[0] & {
-      externalToolCallsInFlight?: boolean;
-    },
-    now = Date.now(),
-  ): boolean {
-    const signature = `${state.currentText}\0${state.currentHtml ?? state.currentText}`;
-    // An outstanding tool call proves the model has more to say, whatever the rendered message
-    // currently looks like. Completing here would return a truncated answer and retire the turn
-    // while its own tool calls were still in flight.
-    if (state.externalToolCallsInFlight) {
-      this.candidate = undefined;
-      this.missingPostToolAnswerSince = undefined;
-      return false;
-    }
-    if (this.postToolAnswerBaselineText === state.currentText && !state.handoffCompletionVisible) {
-      this.candidate = undefined;
-      if (!chatGptTurnIsComplete(state)) {
-        this.missingPostToolAnswerSince = undefined;
-        return false;
-      }
-      this.missingPostToolAnswerSince ??= now;
-      if (now - this.missingPostToolAnswerSince >= this.missingPostToolAnswerMs) {
-        throw new Error("ChatGPT completed without producing a final answer after its last Codex tool call");
-      }
-      return false;
-    }
-    this.missingPostToolAnswerSince = undefined;
-    if (!chatGptTurnIsComplete(state)) {
-      this.candidate = undefined;
-      return false;
-    }
-    if (this.candidate?.signature !== signature) {
-      this.candidate = { signature, since: now };
-      return false;
-    }
-    return now - this.candidate.since >= this.stableMs;
+  update(state: ChatGptCompletionEvidence): boolean {
+    return chatGptTurnIsComplete(state) && state.completionRevision > this.completionAtLastToolBatch;
   }
 }
 
 export class ChatGptTurnDomHealthTracker {
   private sawResponse = false;
   private missingResponseSince?: number;
-  private emptyCompletionSince?: number;
-  private missingCompletionAction?: { text: string; since: number };
 
-  constructor(
-    private readonly missingResponseMs = CHATGPT_RESPONSE_DOM_GRACE_MS,
-    private readonly emptyCompletionMs = CHATGPT_EMPTY_RESPONSE_GRACE_MS,
-    private readonly missingCompletionActionMs = CHATGPT_COMPLETION_ACTION_GRACE_MS,
-  ) {}
+  constructor(private readonly missingResponseMs = CHATGPT_RESPONSE_DOM_GRACE_MS) {}
 
   /**
    * Clears only the missing-response window, leaving `sawResponse` history intact.
@@ -232,21 +191,16 @@ export class ChatGptTurnDomHealthTracker {
     this.missingResponseSince = undefined;
   }
 
-  update(state: {
+  update<T extends {
     responsePresent: boolean;
     running: boolean;
-    currentText: string;
-    completionActionVisible: boolean;
     externalProgressLive?: boolean;
-  }, now = Date.now()): string | undefined {
+    sourceAvailable?: boolean;
+  }>(state: T, now = Date.now()): string | undefined {
     if (state.responsePresent) this.sawResponse = true;
-    if (state.externalProgressLive || state.running) {
-      // Every conclusion below asserts that ChatGPT stopped producing this turn. A tool call that
-      // is still completing or a visible Stop control disproves that, whatever response content
-      // the renderer currently exposes. Start a fresh grace period once generation stops.
+    if (state.externalProgressLive || state.running || state.sourceAvailable) {
+      // DOM availability is not a prerequisite of an independently observed source reply.
       this.missingResponseSince = undefined;
-      this.emptyCompletionSince = undefined;
-      this.missingCompletionAction = undefined;
       return undefined;
     }
     if (state.responsePresent) {
@@ -258,31 +212,6 @@ export class ChatGptTurnDomHealthTracker {
           ? "ChatGPT response DOM disappeared while the browser turn was active"
           : "ChatGPT did not create a response DOM after the message was sent";
       }
-    }
-
-    const emptyCompletion = state.responsePresent
-      && !state.running
-      && state.currentText.length === 0
-      && state.completionActionVisible;
-    if (!emptyCompletion) {
-      this.emptyCompletionSince = undefined;
-    } else {
-      this.emptyCompletionSince ??= now;
-      if (now - this.emptyCompletionSince >= this.emptyCompletionMs) {
-        return "ChatGPT browser turn completed without a final answer";
-      }
-    }
-
-    const missingCompletionAction = state.responsePresent
-      && !state.running
-      && state.currentText.length > 0
-      && !state.completionActionVisible;
-    if (!missingCompletionAction) {
-      this.missingCompletionAction = undefined;
-    } else if (this.missingCompletionAction?.text !== state.currentText) {
-      this.missingCompletionAction = { text: state.currentText, since: now };
-    } else if (now - this.missingCompletionAction.since >= this.missingCompletionActionMs) {
-      return "ChatGPT stopped generating but did not expose its completed-turn action; the ChatGPT DOM may have changed";
     }
     return undefined;
   }

@@ -119,7 +119,10 @@ class RequestScheduler {
       || !Number.isInteger(input.retryAttempt) || input.retryAttempt < 0 || input.retryAttempt > 2)) throw new Error("Invalid MCP queue scope");
     const existing = this.jobs.get(input.id);
     if (existing) {
-      if (["groupId", "model", "mode", "bytes", "effort", "mcpScope", "connectorName", "retryAttempt"].some(key => existing[key] !== input[key])) {
+      // bytes accounts for the first admission, not semantic identity. The caller's stable
+      // request ID already covers input/authority; transport/runtime metadata can change the
+      // serialized size on an exact reconnect. Keep the original reservation and receipt.
+      if (["groupId", "model", "mode", "effort", "mcpScope", "connectorName", "retryAttempt"].some(key => existing[key] !== input[key])) {
         throw schedulingError("queue_identity_conflict", "Queued request identity conflicts with its original request");
       }
       return this.view(existing);

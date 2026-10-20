@@ -68,6 +68,18 @@ test("cancelling an active owner retains its slot until physical resources are r
   assert.equal((await f.queue.request("poll", child.ticket)).record.state, "preparing");
 });
 
+test("an exact owner reconnect keeps its original failure despite a changed byte estimate", async t => {
+  const f = await fixture(t), first = await f.add("failed_upload");
+  await f.queue.request("settle", { ...first.ticket, outcome: "failed", reason: "chatgpt_attachment_upload_failed" });
+  const retry = { ...first.input, job: { ...first.input.job, bytes: first.input.job.bytes + 17 } };
+  const replay = await f.queue.request("enqueue", retry);
+  assert.equal(replay.secret, first.ticket.secret);
+  assert.equal(replay.record.state, "failed");
+  assert.equal(replay.record.reason, "chatgpt_attachment_upload_failed");
+  assert.equal(f.queue.snapshot().active, 0);
+  await assert.rejects(f.queue.request("enqueue", { ...retry, traceId: "trace_foreign_owner" }), { code: "queue_request_replayed" });
+});
+
 test("resource cleanup can call back into queue without locking itself out", async t => {
   let f, ticket, cleaned;
   const cleanup = new Promise(resolve => { cleaned = resolve; });

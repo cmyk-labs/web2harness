@@ -1771,14 +1771,14 @@ export function createChatGptWebAdapter(
               chatGptWebTurnRetryPolicy.recordTerminalFailure(retryKey, turnError);
             } else chatGptWebTurnRetryPolicy.clear(retryKey);
           }
-          if (handledError instanceof ChatGptWebAdapterError && !handledError.retryable) {
-            // A deterministic request failure remains replayable so a native reconnect cannot burn
-            // another browser attempt. Every other failure retires the browser session: client
-            // disconnects, stage failures, and retryable ChatGPT errors must start a fresh surface
-            // instead of replaying one rejected browser outcome for the registry's full TTL.
-            session.cancel();
-          } else {
+          if (handledError instanceof ChatGptWebAdapterError && handledError.retryable) {
             chatGptTurnSessions.retire(executionKey, session);
+          } else {
+            // A reconnect observes the same failed operation, including an unclassified
+            // preparation error. Retiring it would reopen the same durable queue receipt and
+            // replace the original cause with a replay/identity error. Only an explicitly
+            // retryable failure gets a new attempt; a new user instruction has its own identity.
+            session.cancel();
           }
           if (session.runtime.mode === "tools") {
             void session.runtime.token.then(turnToken => broker.revoke(turnToken)).catch(() => {});

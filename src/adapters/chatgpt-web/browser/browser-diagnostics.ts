@@ -65,13 +65,14 @@ export class ChatGptResponseEvidenceStorageError extends Error {
  * deleting a failure while a task is still being investigated. Existing evidence is never replaced.
  */
 export function persistChatGptResponseEvidence(root: string, artifact: unknown,
-  file: "response-source.private.json" | "response-dom.private.json" | "browser-failure.private.json" = "response-source.private.json"): string {
+  file: "response-source.private.json" | "response-dom.private.json" | "browser-failure.private.json" | "response-delivery.private.json" = "response-source.private.json"): string {
   const serialized = JSON.stringify(artifact);
   if (Buffer.byteLength(serialized) > RESPONSE_EVIDENCE_MAX_BYTES) throw new ChatGptResponseEvidenceStorageError("response_evidence_too_large");
   privateDirectory(root);
   const canonicalRoot = realpathSync(root);
   for (let slot = 0; slot < RESPONSE_EVIDENCE_SLOTS; slot++) {
-    const name = `response-source-${String(slot).padStart(2, "0")}`;
+    // Opt-in successful deliveries never consume or replace the failure archive.
+    const name = `${file === "response-delivery.private.json" ? "response-delivery" : "response-source"}-${String(slot).padStart(2, "0")}`;
     const directory = join(canonicalRoot, name);
     try { mkdirSync(directory, { mode: 0o700 }); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === "EEXIST") continue; throw error; }
@@ -100,6 +101,7 @@ export function pruneBrowserDiagnostics(root: string): void {
   const traces = readdirSync(root, { withFileTypes: true })
     .filter(entry => entry.isDirectory() && !entry.isSymbolicLink()
       && !entry.name.startsWith("response-source-")
+      && !entry.name.startsWith("response-delivery-")
       && /^[A-Za-z0-9_-]{6,128}-[a-f0-9]{8}$/.test(entry.name))
     .map(entry => {
       const path = join(root, entry.name);

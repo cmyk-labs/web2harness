@@ -119,12 +119,15 @@ async function registerIsolatedCases(): Promise<void> {
   // lib.dom omits Bun's headers overload, but this is the real Bun WebSocket client.
   const BunWebSocket = WebSocket as unknown as { new(url: string, options: Bun.WebSocketOptions): WebSocket };
 
-  function fixture(runTurn: ProviderAdapter["runTurn"]) {
+  function fixture(runTurn: ProviderAdapter["runTurn"], nativeWebSocketConnect?: import("../../src/codex/native-websocket").NativeWebSocketConnect) {
     const config = { ...defaultConfig("native-tools"), host: "127.0.0.1" as const, port: 0,
       subagentProtocol: "native" as const, extraHighAvailable: true, autoApproveToolCalls: false };
     const before = new Map(["SIGINT", "SIGTERM"].map(signal => [signal, new Set(process.listeners(signal))]));
     let adapterConstructions = 0;
-    const server = startServer(config, { adapterFactory: provider => {
+    const server = startServer(config, {
+      // No fixture may accidentally contact an account service, even when native routing regresses.
+      nativeWebSocketConnect: nativeWebSocketConnect ?? (async () => { throw new Error("No native upstream configured in this fixture"); }),
+      adapterFactory: provider => {
       adapterConstructions++;
       expect(provider.chatgptWeb?.nativeToolsEnabled).toBe(true);
       expect(provider.chatgptWeb?.autoApproveToolCalls).toBe(false);
@@ -417,36 +420,82 @@ async function registerIsolatedCases(): Promise<void> {
     await f.counts(0, 0);
   });
 
-  test("native generate:false is explicitly rejected without an upstream generation or cache entry", async () => {
-    let runs = 0, upstreamAttempts = 0;
-    const f = fixture(async (_parsed, _incoming, emit) => { runs++; complete(emit); });
-    const client = await f.connect({ authorization: "Bearer synthetic-native-prewarm-token" });
+  async function nativeUpstream() {
+    const { createNativeWebSocketConnector } = await import("../../src/codex/native-websocket");
+    const requests: Array<{ connection: number; body: WireEvent; raw: string }> = [];
+    const headers: Headers[] = [];
+    let closed = 0;
+    const upstream = Bun.serve<{ connection: number }>({ hostname: "127.0.0.1", port: 0,
+      fetch(req, server) {
+        headers.push(new Headers(req.headers));
+        if (server.upgrade(req, { data: { connection: headers.length } })) return;
+        return new Response("Upgrade required", { status: 426 });
+      },
+      websocket: {
+        message(ws, raw) {
+          const body = JSON.parse(String(raw)); requests.push({ connection: ws.data.connection, body, raw: String(raw) });
+          const id = `actual-upstream-${ws.data.connection}-${requests.length}`;
+          const stream = body.stream_id === undefined ? {} : { stream_id: body.stream_id };
+          ws.send(JSON.stringify({ type: "response.created", ...stream, response: { id, status: "in_progress" } }));
+          if (body.metadata?.hold === true) return;
+          ws.send(JSON.stringify({ type: "response.completed", ...stream, response: { id, status: "completed",
+            output: body.generate === false ? [] : [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "native fixture result" }] }] } }));
+        }, close() { closed++; },
+      },
+    });
+    cleanups.push(async () => { await upstream.stop(true); });
+    const connect: import("../../src/codex/native-websocket").NativeWebSocketConnect = (target, events, signal) => {
+      expect(target.url).toBe("wss://chatgpt.com/backend-api/codex/responses");
+      return createNativeWebSocketConnector("", {})({ ...target, url: `ws://127.0.0.1:${upstream.port}/responses` }, events, signal);
+    };
+    return { requests, headers, connect, closed: () => closed };
+  }
+
+  test("native prefill reaches a real upstream WS and reuses its ID without HTTP/browser/cache substitution", async () => {
+    const up = await nativeUpstream();
+    const f = fixture(async () => { throw new Error("Native request reached Web adapter"); }, up.connect);
     const baseline = stateSnapshot();
-    const originalFetch = globalThis.fetch;
-    // Safety net for a regression in the native guard: never send synthetic credentials or
-    // a generation to an external service. This interception exists only in the owned child.
-    globalThis.fetch = Object.assign((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      if (url.origin !== f.base) {
-        upstreamAttempts++;
-        throw new Error("Native prewarm attempted an external request in the isolated fixture");
-      }
-      return originalFetch(input, init);
-    }, { preconnect: originalFetch.preconnect }) as typeof fetch;
-    try {
-      client.send(create({ generate: false, model: "gpt-6.1-sol", stream_id: "native-prewarm" }));
-      const reply = await client.terminal();
-      expect(reply.events).toHaveLength(1);
-      expect(reply.event).toMatchObject({ type: "error", status: 400, stream_id: "native-prewarm", error: {
-        code: "unsupported_native_prewarm", param: "generate", retryable: false,
-      } });
-      expect(reply.event).not.toHaveProperty("response");
-      expect(upstreamAttempts).toBe(0);
-      expect(runs).toBe(0);
-      expect(f.adapterConstructions()).toBe(0);
-      expect(stateSnapshot()).toBe(baseline);
-      await f.counts(0, 0);
-    } finally { globalThis.fetch = originalFetch; }
+    const client = await f.connect({ authorization: "Bearer synthetic-native-prewarm-token", "chatgpt-account-id": "fixture-native-account" });
+    const first = create({ generate: false, model: "gpt-6-astra", reasoning: { effort: "high" }, stream_id: "native-prewarm",
+      input: [{ type: "reasoning", encrypted_content: "fixture-opaque-native-state" }] });
+    client.send(first);
+    const warm = await client.terminal();
+    expect(warm.event).toMatchObject({ type: "response.completed", stream_id: "native-prewarm", response: { id: "actual-upstream-1-1", output: [] } });
+    expect(up.requests[0]!.body).toEqual(first);
+    const next = create({ model: "gpt-6-astra", reasoning: { effort: "high" }, previous_response_id: warm.event.response.id,
+      stream_id: "native-prewarm", input: [{ role: "user", content: "continue exact upstream state" }] });
+    client.send(next); const reply = await client.terminal();
+    expect(reply.event.response.id).toBe("actual-upstream-1-2");
+    expect(up.requests[1]!.body).toEqual(next); expect(up.headers).toHaveLength(1);
+    expect(up.headers[0]!.get("authorization")).toBe("Bearer synthetic-native-prewarm-token");
+    expect(up.headers[0]!.get("chatgpt-account-id")).toBe("fixture-native-account");
+    expect(up.headers[0]!.get("openai-beta")).toContain("responses_websockets=2026-02-06");
+    expect(f.adapterConstructions()).toBe(0); expect(stateSnapshot()).toBe(baseline); await f.counts(0, 0);
+  });
+
+  test("native connections isolate authentication and reject switching an established socket to Web", async () => {
+    const up = await nativeUpstream(), f = fixture(async () => { throw new Error("Unexpected Web request"); }, up.connect);
+    const one = await f.connect({ authorization: "Bearer fixture-one", "chatgpt-account-id": "one" });
+    const two = await f.connect({ authorization: "Bearer fixture-two", "chatgpt-account-id": "two" });
+    for (const client of [one, two]) { client.send(create({ model: "gpt-6-astra", generate: false })); await client.terminal(); }
+    expect(up.headers.map(header => header.get("authorization"))).toEqual(["Bearer fixture-one", "Bearer fixture-two"]);
+    expect(up.requests.map(request => request.connection)).toEqual([1, 2]);
+    one.send(create()); expect((await one.terminal()).event.error.code).toBe("websocket_route_mismatch");
+    expect(up.requests).toHaveLength(2); expect(f.adapterConstructions()).toBe(0);
+  });
+
+  test("native drain and owned turn interruption close upstream without replay or fabricated completion", async () => {
+    const up = await nativeUpstream(), f = fixture(async () => { throw new Error("Unexpected Web request"); }, up.connect);
+    const client = await f.connect({ authorization: "Bearer fixture-cancel" });
+    client.send(create({ model: "gpt-6-astra", metadata: { hold: true },
+      client_metadata: { "x-codex-turn-metadata": JSON.stringify({ thread_id: "native-fixture-thread", turn_id: "native-fixture-turn" }) } }));
+    expect((await client.next()).type).toBe("response.created"); await f.counts(0, 1);
+    await f.admin("drain");
+    client.send(create({ model: "gpt-6-astra", generate: false })); expect((await client.terminal()).event.error.code).toBe("server_draining");
+    const cancellation = await (await f.admin("interrupt-turn", { threadId: "native-fixture-thread", turnId: "native-fixture-turn" })).json();
+    expect(cancellation.cancelled_native_websocket_turns).toBe(1);
+    await f.counts(0, 0); expect(up.requests).toHaveLength(1);
+    await bounded(client.closed, "native downstream closed after interrupt");
   });
 
   test("drain blocks prewarm without changing its anchor and resume prepares context without generation", async () => {

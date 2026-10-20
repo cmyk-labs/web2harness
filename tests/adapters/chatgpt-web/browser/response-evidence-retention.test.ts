@@ -61,6 +61,16 @@ test("failure archive stops at its bounded capacity without overwriting the earl
   expect(readdirSync(root)).toHaveLength(64);
 }));
 
+test("opt-in delivery evidence has independent bounded slots and survives ordinary trace cleanup", () => fixture(root => {
+  const success = persistChatGptResponseEvidence(root, { delivered: "exact public answer" }, "response-delivery.private.json");
+  expect(success).toBe("response-delivery-00/response-delivery.private.json");
+  for (let i = 1; i < 64; i++) persistChatGptResponseEvidence(root, { index: i }, "response-delivery.private.json");
+  expect(() => persistChatGptResponseEvidence(root, {}, "response-delivery.private.json")).toThrow("archive is full");
+  expect(persistChatGptResponseEvidence(root, { failure: true })).toBe("response-source-00/response-source.private.json");
+  pruneBrowserDiagnostics(root);
+  expect(JSON.parse(readFileSync(join(root, success), "utf8"))).toEqual({ delivered: "exact public answer" });
+}));
+
 test("rotation and archive reservation do not follow existing directory links", () => fixture(root => {
   const diagnostics = join(root, "diagnostics"), protectedDirectory = join(root, "protected");
   mkdirSync(diagnostics); mkdirSync(protectedDirectory);

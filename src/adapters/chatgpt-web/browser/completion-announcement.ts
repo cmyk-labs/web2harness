@@ -3,13 +3,13 @@ import type { Page } from "playwright-core";
 import { CHATGPT_STOP_BUTTON_SELECTOR } from "../../../browser/session";
 
 type AnnouncementWindow = Window & { __web2harnessCompletion?: {
-  key: string; complete: boolean; observer: MutationObserver; refresh: () => void;
+  key: string; complete: boolean; revision: number; observer: MutationObserver; refresh: () => void;
 } };
 
-/** Tool-only replies have no answer toolbar. Observe a NEW accessibility announcement from
+/** Observe a NEW accessibility announcement from
  * ChatGPT's document-level UI, armed before sending. Old announcements and quoted answer text
  * are never completion evidence. The caller still requires the bound turn, stopped generation,
- * stable DOM and the broker's sealed, inactive completion fence before releasing resources. */
+ * complete content and any broker completion fence before releasing resources. */
 export async function armCompletionAnnouncement(page: Page): Promise<string> {
   const key = randomUUID();
   await page.evaluate(({ key, stopSelector }) => {
@@ -24,10 +24,15 @@ export async function armCompletionAnnouncement(page: Page): Promise<string> {
     const scan = (changed: boolean) => {
       const state = target.__web2harnessCompletion!;
       const generating = [...document.querySelectorAll(stopSelector)].some(node => {
-        const bounds = node.getBoundingClientRect();
-        const style = getComputedStyle(node);
-        return node.isConnected && style.visibility !== "hidden" && style.visibility !== "collapse"
-          && bounds.width > 0 && bounds.height > 0;
+        if (!node.isConnected) return false;
+        // An owned Electron view may have zero geometry while its renderer is active.
+        // Generation follows rendered controls, not whether the host view is on screen.
+        for (let current: Element | null = node; current; current = current.parentElement) {
+          const style = getComputedStyle(current);
+          if (current.hasAttribute("hidden") || style.display === "none" || style.visibility === "hidden"
+            || style.visibility === "collapse" || style.opacity === "0") return false;
+        }
+        return true;
       });
       if (changed && generating && !wasGenerating) {
         epoch += 1;
@@ -61,12 +66,14 @@ export async function armCompletionAnnouncement(page: Page): Promise<string> {
       wasGenerating = generating;
       // A completion may arrive just before Stop disappears. Preserve that candidate,
       // but never expose it while generating or carry it into the next generation.
-      state.complete = !generating && pendingCompletion;
+      const complete = !generating && pendingCompletion;
+      if (complete && !state.complete) state.revision += 1;
+      state.complete = complete;
     };
     // A Stop/clear phase entirely lost between scans cannot establish an epoch.
     // Mutation records alone cannot prove an intermediate control was visible.
     const observer = new MutationObserver(() => scan(true));
-    target.__web2harnessCompletion = { key, complete: false, observer, refresh: () => scan(true) };
+    target.__web2harnessCompletion = { key, complete: false, revision: 0, observer, refresh: () => scan(true) };
     scan(false);
     observer.observe(document.body, {
       childList: true, subtree: true, characterData: true, attributes: true,
@@ -76,14 +83,19 @@ export async function armCompletionAnnouncement(page: Page): Promise<string> {
   return key;
 }
 
-export function hasFreshCompletionAnnouncement(page: Page, key: string): Promise<boolean> {
+export function readCompletionAnnouncement(page: Page, key?: string): Promise<{ complete: boolean; revision: number }> {
+  if (!key) return Promise.resolve({ complete: false, revision: 0 });
   return page.evaluate(key => {
     const state = (window as AnnouncementWindow).__web2harnessCompletion;
-    if (state?.key !== key) return false;
+    if (state?.key !== key) return { complete: false, revision: 0 };
     // Also sample CSS/layout visibility changes that do not mutate the observed body.
     state.refresh();
-    return state.complete;
+    return { complete: state.complete, revision: state.revision };
   }, key);
+}
+
+export async function hasFreshCompletionAnnouncement(page: Page, key: string): Promise<boolean> {
+  return (await readCompletionAnnouncement(page, key)).complete;
 }
 
 export async function disposeCompletionAnnouncement(page: Page, key: string): Promise<void> {

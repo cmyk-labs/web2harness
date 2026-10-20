@@ -84,10 +84,10 @@ test("browser replies cannot bypass a required tool choice", () => fixture(async
 
 test("previewing completed Markdown does not commit a tail when the fence must be retried", () => {
   const buffer = new ChatGptMarkdownBuffer();
-  const block = (text: string) => [{ key: "last", tag: "p", html: `<p>${text}</p>`, text, streamable: true }];
-  buffer.observe(block("Draft"), 0);
-  expect(buffer.preview()).toBe("Draft");
-  buffer.observe(block("Final answer"), 1);
-  expect(buffer.preview()).toBe("Final answer");
+  const block = (text: string) => [{ key: "last", tag: "p", html: `<p>${text}</p>`, text, streamable: false }];
+  buffer.observe(block("Draft"));
+  expect(buffer.prepareFinal()).toEqual({ markdown: "Draft", delta: "Draft" });
+  buffer.observe(block("Final answer"));
+  expect(buffer.prepareFinal()).toEqual({ markdown: "Final answer", delta: "Final answer" });
   expect(buffer.finish()).toEqual({ markdown: "Final answer", delta: "Final answer" });
 });

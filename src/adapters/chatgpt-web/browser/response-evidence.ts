@@ -1,4 +1,5 @@
 import type { ChatGptResponseBinding } from "./response-source";
+import { ChatGptDeltaCursor } from "./response-protocol";
 
 export interface ChatGptResponseEvidenceLimits { maxBytes?: number; maxEvents?: number }
 type ResponseEvidenceEvent = "message" | "delta_encoding" | "delta";
@@ -25,12 +26,12 @@ export interface ChatGptResponseEvidenceArtifact {
 }
 
 type Json = Record<string, any>;
-type Visibility = { id: string; role?: unknown; channel?: unknown; recipient?: unknown; contentType?: unknown; hidden?: boolean };
+type Visibility = { id: string; role?: unknown; channel?: unknown; recipient?: unknown; contentType?: unknown; hidden?: boolean; codeReferences?: Set<number>; referenceCount?: number };
 const object = (v: unknown): v is Json => !!v && typeof v === "object" && !Array.isArray(v);
 const publicText = (m?: Visibility) => m?.role === "assistant" && (m.channel === "final" || m.channel === "commentary")
   && m.recipient === "all" && m.contentType === "text" && !m.hidden;
 const controlTypes = new Set(["message_stream_complete", "resume_conversation_token", "message_marker", "server_ste_metadata",
-  "conversation_detail_metadata", "title_generation", "conversation_title", "moderation"]);
+  "conversation_detail_metadata", "title_generation", "conversation_title", "moderation", "url_moderation"]);
 const operations = new Set(["add", "replace", "append", "remove", "patch"]);
 const finite = (value: number | undefined, fallback: number, ceiling: number) =>
   value === undefined ? fallback : Number.isSafeInteger(value) && value > 0 ? Math.min(value, ceiling) : fallback;
@@ -44,9 +45,10 @@ const enumValue = (v: unknown, allowed: readonly unknown[]): unknown => { if (!a
  */
 export class ChatGptResponseEvidence {
   #records: Array<ChatGptResponseEvidenceRecord & { owners: string[] }> = [];
-  #current?: Visibility;
-  #path = "";
-  #operation = "add";
+  #cursor = new ChatGptDeltaCursor<Visibility>();
+  #messages = new Map<string, Visibility>();
+  get #current() { return this.#cursor.current; }
+  set #current(value: Visibility | undefined) { this.#cursor.current = value; }
   #bytes = 0;
   #seen = 0;
   #dropped = 0;
@@ -92,7 +94,10 @@ export class ChatGptResponseEvidence {
     } catch {
       // An unknown mutation may change visibility. Forget that context and revoke its captured
       // text until a complete new message snapshot establishes public identity again.
-      if (this.#current) this.revoke(this.#current.id);
+      if (this.#current) {
+        this.#current.hidden = true;
+        this.revoke(this.#current.id);
+      }
       this.#current = undefined;
     }
     if ([...owners].some(owner => this.#revokedInEvent.has(owner))) { safe = undefined; kind = "withheld"; }
@@ -110,6 +115,7 @@ export class ChatGptResponseEvidence {
     this.#records.push({ ...record, owners: [...owners] });
   }
   finish(discardedData = false): void { this.#ended = true; this.#framing ||= discardedData; }
+  beginTransport(): void { this.#cursor.reset(); this.#ended = false; this.#framing = true; }
   framingFailure(): void { this.#framing = true; }
   summary() { return { events: this.#seen, retained: this.#records.length, retainedBytes: this.#bytes,
     projected: this.#projected, withheld: this.#withheld, dropped: this.#dropped,
@@ -121,7 +127,7 @@ export class ChatGptResponseEvidence {
       binding: { ...binding }, summary: this.summary(), records: this.#records.map(({ owners: _, ...record }) => record) };
     this.clear(); return result;
   }
-  clear(): void { this.#records = []; this.#current = undefined; this.#taken = true; }
+  clear(): void { this.#records = []; this.#cursor.reset(); this.#messages.clear(); this.#taken = true; }
   private revoke(messageId: string): void {
     this.#revokedInEvent.add(messageId);
     for (const record of this.#records) if (record.data !== undefined && record.owners.includes(messageId)) {
@@ -130,7 +136,7 @@ export class ChatGptResponseEvidence {
     }
     // Do not refund the allocation budget: revoked events cannot cause unbounded retention churn.
   }
-  private metadata(v: unknown): Json {
+  private metadata(v: unknown, m?: Visibility, owners?: Set<string>, referenceOffset = 0): Json {
     if (!object(v)) throw Error();
     const out: Json = {};
     for (const [key, value] of Object.entries(v)) {
@@ -143,17 +149,40 @@ export class ChatGptResponseEvidence {
           if (!Array.isArray(value.stop_tokens) || value.stop_tokens.length > 32 || !value.stop_tokens.every(Number.isSafeInteger)) throw Error();
           out[key].stop_tokens = value.stop_tokens;
         }
+      } else if (key === "model_dil_v2" && object(value)) {
+        out[key] = {};
+        if (Object.hasOwn(value, "fallbackMarkdownVersion")) out[key].fallbackMarkdownVersion = enumValue(value.fallbackMarkdownVersion, [1]);
+        if (publicText(m) && Object.hasOwn(value, "fallbackMarkdown")) {
+          if (typeof value.fallbackMarkdown !== "string") throw Error();
+          out[key].fallbackMarkdown = value.fallbackMarkdown;
+          owners?.add(m!.id);
+        }
       } else if (key === "citations" || key === "content_references") {
         if (!Array.isArray(value)) throw Error();
-        out[key] = value.length ? [{}] : [];
+        if (key === "content_references" && publicText(m)) {
+          if (referenceOffset === 0) m!.codeReferences = new Set();
+          m!.referenceCount = referenceOffset + value.length;
+          out[key] = value.map((ref, index) => {
+            if (ref?.type !== "client_defined_widget" || ref.category !== "code_block" || ref.data?.widget_type !== "code_block") return {};
+            if (typeof ref.data.content !== "string" || typeof ref.data.language !== "string" || typeof ref.matched_text !== "string"
+              || !Number.isSafeInteger(ref.start_idx) || !Number.isSafeInteger(ref.end_idx)) throw Error();
+            m!.codeReferences!.add(index + referenceOffset); owners?.add(m!.id);
+            return { type: ref.type, category: ref.category,
+              data: { widget_type: ref.data.widget_type, language: ref.data.language, content: ref.data.content },
+              start_idx: ref.start_idx, end_idx: ref.end_idx, matched_text: ref.matched_text };
+          });
+        } else out[key] = value.length ? [{}] : [];
       }
     }
     return out;
   }
   private message(v: unknown, owners: Set<string>, select = true): Json {
     if (!object(v) || !object(v.author) || !object(v.content)) throw Error();
-    const m: Visibility = { id: id(v.id), role: v.author.role, channel: v.channel, recipient: v.recipient,
+    const snapshot: Visibility = { id: id(v.id), role: v.author.role, channel: v.channel, recipient: v.recipient,
       contentType: v.content.content_type, hidden: v.metadata?.is_visually_hidden_from_conversation === true };
+    const previous = this.#messages.get(snapshot.id);
+    const m = previous ? Object.assign(previous, snapshot, { codeReferences: undefined, referenceCount: undefined }) : snapshot;
+    this.#messages.set(m.id, m);
     if (!publicText(m)) this.revoke(m.id);
     if (select) this.#current = m;
     const out: Json = {};
@@ -165,7 +194,7 @@ export class ChatGptResponseEvidence {
       else if (key === "recipient") { if (value === "all") out[key] = value; } // Tool names need not be retained.
       else if (key === "status") out[key] = enumValue(value, ["in_progress", "finished_successfully", "finished_partial"]);
       else if (key === "end_turn") out[key] = enumValue(value, [null, true, false]);
-      else if (key === "metadata") out[key] = this.metadata(value);
+      else if (key === "metadata") out[key] = this.metadata(value, m, owners);
       else if (key === "content") {
         out[key] = { content_type: enumValue(v.content.content_type,
           ["text", "code", "thoughts", "reasoning_recap", "model_editable_context", "execution_output", "multimodal_text", "tether_browsing_display"]) };
@@ -179,6 +208,7 @@ export class ChatGptResponseEvidence {
   }
   private frame(v: Json, owners: Set<string>): Json {
     if (v.error || v.error_code || v.type === "error") throw Error();
+    this.#cursor.select(v);
     const out: Json = {};
     if (v.type === "input_message") {
       for (const key of Object.keys(v)) {
@@ -197,11 +227,9 @@ export class ChatGptResponseEvidence {
     }
     if (v.message) return this.envelope(v, owners);
     if (!Object.hasOwn(v, "v")) throw Error();
-    if (v.p !== undefined) { if (typeof v.p !== "string") throw Error(); this.#path = v.p; }
-    if (v.o !== undefined) { if (!operations.has(v.o)) throw Error(); this.#operation = v.o; }
-    const value = this.patch(this.#path, this.#operation, v.v, owners, 0);
+    const value = this.patch(this.#cursor.path, this.#cursor.operation, v.v, owners, 0);
     for (const key of Object.keys(v)) {
-      if (key === "p" || key === "o") out[key] = v[key];
+      if (key === "p" || key === "o" || key === "c") out[key] = v[key];
       if (key === "v") out.v = value;
       if (key === "conversation_id") out[key] = id(v[key]);
     }
@@ -238,18 +266,34 @@ export class ChatGptResponseEvidence {
     if (path === "/message/status") return enumValue(value, ["in_progress", "finished_successfully", "finished_partial"]);
     if (path === "/message/end_turn") return enumValue(value, [true, false, null]);
     if (path === "/message/metadata") {
-      const out = this.metadata(value);
+      const out = this.metadata(value, m, owners);
       if (out.is_visually_hidden_from_conversation === true) { m.hidden = true; this.revoke(m.id); }
       return out;
     }
     if (path.startsWith("/message/metadata/")) {
       const key = path.slice("/message/metadata/".length);
+      if (key === "model_dil_v2/fallbackMarkdownVersion") return enumValue(value, [1]);
+      if (key === "model_dil_v2/fallbackMarkdown") {
+        if (!publicText(m)) return "";
+        if (typeof value !== "string") throw Error();
+        owners.add(m.id); return value;
+      }
+      const reference = /^content_references\/(0|[1-9]\d*)\/(data\/content|data\/language|matched_text|start_idx|end_idx)$/.exec(key);
+      if (reference) {
+        if (!publicText(m) || !m.codeReferences?.has(Number(reference[1]))) throw Error();
+        if (["start_idx", "end_idx"].includes(reference[2]!) ? !Number.isSafeInteger(value) : typeof value !== "string") throw Error();
+        owners.add(m.id); return value;
+      }
       if (["conversation_followup_suggestions_eligible", "can_save"].includes(key)) return enumValue(value, [true, false]);
       if (["reasoning_title", "reasoning_titles", "aggregate_result/status", "aggregate_result/update_time",
         "aggregate_result/end_time", "aggregate_result/jupyter_messages"].includes(key)) return operation === "remove" ? undefined : null;
-      if (!["parent_id", "is_complete", "finish_details", "is_visually_hidden_from_conversation", "citations", "content_references"].includes(key)) throw Error();
-      if (operation === "remove") return undefined;
-      const out = this.metadata({ [key]: value });
+      if (!["parent_id", "is_complete", "finish_details", "is_visually_hidden_from_conversation", "citations", "content_references", "model_dil_v2"].includes(key)) throw Error();
+      if (operation === "remove") {
+        if (key === "content_references") { m.codeReferences = new Set(); m.referenceCount = 0; }
+        return undefined;
+      }
+      const offset = key === "content_references" && operation === "append" ? m.referenceCount ?? 0 : 0;
+      const out = this.metadata({ [key]: value }, m, owners, offset);
       if (key === "is_visually_hidden_from_conversation") { m.hidden = value === true; if (m.hidden) this.revoke(m.id); }
       return out[key];
     }

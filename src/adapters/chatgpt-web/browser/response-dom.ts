@@ -1,6 +1,8 @@
 /** Projects the current ChatGPT response DOM into answer content and visible progress. */
 
-import type { Locator } from "playwright-core";
+import type { Locator, Page } from "playwright-core";
+import { randomUUID } from "node:crypto";
+import { withChatGptBrowserObservationTimeout } from "./turn-observation";
 import { CHATGPT_COMPLETION_ACTION_SELECTOR } from "../../../browser/session";
 import { chatGptHtmlToMarkdown, type ChatGptMarkdownSegment } from "../markdown";
 import { chatGptBrowserTabClosedError } from "../adapter-error";
@@ -19,6 +21,7 @@ export const CHATGPT_DOM_REVISION_ATTRIBUTES = [
   "data-end",
   "data-is-last-node",
   "data-message-author-role",
+  "data-message-id",
   "data-state",
   "data-streaming-response-status",
   "data-testid",
@@ -35,6 +38,8 @@ export const CHATGPT_DOM_REVISION_ATTRIBUTES = [
   "disabled",
   "hidden",
   "href",
+  "src",
+  "alt",
   "inert",
   "open",
   "role",
@@ -58,6 +63,9 @@ export interface ChatGptVisibleTraceEvent {
 
 export interface ChatGptResponseDomSnapshot {
   responsePresent: boolean;
+  contentState: "complete" | "partial" | "unsupported" | "absent";
+  contentReason?: string;
+  messageId?: string;
   visibleText: string;
   fullHtml: string;
   markdownSegments: ChatGptMarkdownSegment[];
@@ -67,6 +75,7 @@ export interface ChatGptResponseDomSnapshot {
 }
 
 export interface ChatGptResponseDomCache {
+  ownerKey?: string;
   key?: string;
   snapshot?: ChatGptResponseDomSnapshot;
   fullScans?: number;
@@ -75,6 +84,7 @@ export interface ChatGptResponseDomCache {
 
 const absentResponseDomSnapshot = (): ChatGptResponseDomSnapshot => ({
   responsePresent: false,
+  contentState: "absent",
   visibleText: "",
   fullHtml: "",
   markdownSegments: [],
@@ -152,16 +162,21 @@ export async function readChatGptResponseDom(
   responseTurn: Locator,
   cache?: ChatGptResponseDomCache,
 ): Promise<ChatGptResponseDomSnapshot> {
-  const observed = await responseTurn.evaluate((element, options) => {
-    const root = element as HTMLElement;
+  if (responseTurn.page().isClosed()) throw chatGptBrowserTabClosedError();
+  if (cache) cache.ownerKey ??= randomUUID();
+  const observed = await withChatGptBrowserObservationTimeout(responseTurn.evaluateAll((elements, options) => {
+    if (elements.length === 0) return undefined;
+    if (elements.length !== 1) throw new Error("ChatGPT exposed multiple bound response roots");
+    const root = elements[0] as HTMLElement;
     type ObserverState = {
       id: number;
       revision: number;
       observer: MutationObserver;
+      owners: Set<string>;
       rendered: Map<HTMLElement, boolean>;
     };
     type ObserverRegistry = {
-      documentId: string; nextId: number; states: WeakMap<Element, ObserverState>;
+      documentId: string; nextId: number; states: Map<Element, ObserverState>;
       nextNodeId: number; nodeIds: WeakMap<Node, number>;
     };
     const scope = globalThis as typeof globalThis & {
@@ -172,7 +187,7 @@ export async function readChatGptResponseDom(
       nextId: 0,
       nextNodeId: 0,
       nodeIds: new WeakMap<Node, number>(),
-      states: new WeakMap<Element, ObserverState>(),
+      states: new Map<Element, ObserverState>(),
     };
     let observerState = registry.states.get(root);
     if (!observerState) {
@@ -180,21 +195,23 @@ export async function readChatGptResponseDom(
         id: ++registry.nextId,
         revision: 0,
         observer: undefined as unknown as MutationObserver,
+        owners: new Set<string>(),
         rendered: new Map<HTMLElement, boolean>(),
       };
       const state = observerState;
       state.observer = new MutationObserver(() => {
         state.revision += 1;
       });
-      state.observer.observe(root, {
+      if (options.cacheEnabled) state.observer.observe(root, {
         subtree: true,
         childList: true,
         characterData: true,
         attributes: true,
         attributeFilter: options.attributeFilter,
       });
-      registry.states.set(root, state);
+      if (options.cacheEnabled) registry.states.set(root, state);
     }
+    if (options.ownerKey) observerState.owners.add(options.ownerKey);
     // Browser turn WebContents are intentionally allowed to run while their Electron view is
     // hidden or has no measured width. Layout geometry is therefore not response visibility:
     // completed Markdown can have width=0 while remaining connected, rendered and readable.
@@ -297,6 +314,22 @@ export async function readChatGptResponseDom(
     );
     const commentaryRoots = classified.commentaryRoots;
     const renderedRoots = classified.answerRoots;
+    // These components can expose only a viewport or a preview. Their visible text and
+    // the last paragraph are not evidence that the underlying answer is complete.
+    const virtualized = renderedRoots.some(candidate => candidate.querySelector(".cm-editor, .cm-content, .cm-gap"));
+    const semanticElements = renderedRoots.flatMap(candidate => [...candidate.querySelectorAll(
+      'svg, canvas, iframe, audio, video, .chart-widget-container, [data-code-block-preview-pane], [role="link"]:not([href])',
+    )]).filter(element => !element.closest('[aria-hidden="true"], [hidden], [data-markdown-copy="exclude"], button'));
+    const unlinkedResource = renderedRoots.some(candidate => [...candidate.querySelectorAll(
+      '[data-chatgpt-copy-reference][data-markdown-copy="contents"]',
+    )].some(card => card.querySelector('[class~="group/resource-row"]') && !card.querySelector("a[href]")));
+    const unsupported = semanticElements.length > 0 || unlinkedResource;
+    const pendingLinks = renderedRoots.some(candidate => [...candidate.querySelectorAll("a")]
+      .some(link => !!link.textContent?.trim() && !link.getAttribute("href")?.trim()));
+    const contentState = virtualized || pendingLinks ? "partial" as const
+      : unsupported ? "unsupported" as const : renderedRoots.length ? "complete" as const : "absent" as const;
+    const contentReason = virtualized ? "virtualized_content" : pendingLinks ? "link_destination_pending"
+      : unsupported ? "semantic_component_unsupported" : undefined;
     // CHATGPT_MARKDOWN_CONTENT_BEGIN
     const chatGptMarkdownContent = (
       markdownRoot: HTMLElement,
@@ -330,31 +363,19 @@ export async function readChatGptResponseDom(
         card.textContent = "";
         for (const child of children) card.appendChild(child);
       }
-      // #769 captured a resource preview changing its title to filename/type after
-      // surrounding prose was already delivered. This is a presentation control,
-      // not answer text. Preserve cards that expose an actual link destination.
-      for (const card of Array.from(content.querySelectorAll(
-        '[data-chatgpt-copy-reference][data-markdown-copy="contents"]',
-      ))) {
-        if (card.querySelector('[class~="group/resource-row"]') && !card.querySelector("a[href]")) {
-          card.remove();
-        }
-      }
-      // These are embedded renderers, not Markdown answer text. Their loading labels, controls
-      // and plot axes change independently of generation (including after a later paragraph).
-      // Keep their UI out of both the emitted HTML and the text consistency fingerprint.
-      // Also remove the media already excluded by chatGptHtmlToMarkdown, so their
-      // accessibility labels cannot become consistency fingerprints for untransmitted text.
-      // Ordinary code blocks, surrounding prose and the original observed DOM remain intact.
+      // Resource labels remain visible evidence. A reference without a transferable
+      // destination is marked unsupported above, never removed to manufacture completeness.
+      // Remove only presentation controls. Semantic media either retain their source
+      // reference or make the complete DOM projection explicitly unsupported above.
       for (const widget of Array.from(content.querySelectorAll(
-        ".chart-widget-container, [data-code-block-preview-pane], script, style, svg, img, picture, source",
+        'script, style, [aria-hidden="true"]',
       ))) widget.remove();
       for (const button of Array.from(content.querySelectorAll("button"))) {
         // Observed file-reference controls have a label but no authoritative download URL.
         // Keep only their text; never carry button attributes or infer a link from the name.
         if (button.matches(".behavior-btn.entity-underline")
           && !button.closest('[hidden], [aria-hidden="true"]')) {
-          for (const hidden of Array.from(button.querySelectorAll('[hidden], [aria-hidden="true"], .sr-only, [role="tooltip"]'))) {
+          for (const hidden of Array.from(button.querySelectorAll('svg, [hidden], [aria-hidden="true"], .sr-only, [role="tooltip"]'))) {
             hidden.remove();
           }
           button.replaceWith(content.ownerDocument.createTextNode(button.textContent ?? ""));
@@ -558,7 +579,7 @@ export async function readChatGptResponseDom(
         const shell = document.createElement("span");
         nodes.forEach(node => shell.append(node.cloneNode(true)));
         const text = markdownText(shell);
-        if (text) {
+        if (text || shell.querySelector("img")) {
           const rangedElements = nodes.flatMap(node => node instanceof Element
             ? [node, ...node.querySelectorAll<HTMLElement>("[data-start][data-end]")]
             : []);
@@ -745,6 +766,9 @@ export async function readChatGptResponseDom(
       key: observerKey,
       snapshot: {
         responsePresent: true,
+        contentState,
+        contentReason,
+        messageId: renderedRoots.at(-1)?.closest("[data-message-id]")?.getAttribute("data-message-id") ?? undefined,
         visibleText: renderedRoots.map(candidate => candidate.innerText.trim()).filter(Boolean).join("\n\n"),
         fullHtml: renderedRoots.map(candidate => candidate.innerHTML).join(""),
         markdownSegments,
@@ -758,8 +782,13 @@ export async function readChatGptResponseDom(
     answerRootSelector: CHATGPT_ANSWER_ROOT_SELECTOR,
     stoppedThinkingLabels: [...CHATGPT_STOPPED_THINKING_LABELS],
     knownKey: cache?.key,
+    cacheEnabled: cache !== undefined,
+    ownerKey: cache?.ownerKey,
     attributeFilter: [...CHATGPT_DOM_REVISION_ATTRIBUTES],
-  }, { timeout: 2_000 }).catch(() => undefined);
+  }), 120_000).catch(error => {
+    if (responseTurn.page().isClosed()) throw chatGptBrowserTabClosedError();
+    throw error;
+  });
   if (!observed) {
     if (responseTurn.page().isClosed()) {
       throw chatGptBrowserTabClosedError();
@@ -790,4 +819,21 @@ export async function readChatGptResponseDom(
     .map(stripChatGptTraceControlSuffix)
     .filter(block => block.text.length > 0 && !isChatGptTraceControl(block));
   return snapshot;
+}
+
+/** Dispose only observers recorded by this task, including roots replaced by the renderer. */
+export async function disposeChatGptResponseDom(page: Page, cache: ChatGptResponseDomCache): Promise<void> {
+  const ownerKey = cache.ownerKey;
+  if (!ownerKey) return;
+  await page.evaluate(ownerKey => {
+    const registry = (globalThis as any).__WEB2HARNESS_RESPONSE_OBSERVERS__;
+    if (!registry) return;
+    for (const [root, state] of registry.states) {
+      if (!state.owners.delete(ownerKey) || state.owners.size > 0) continue;
+      state.observer.disconnect();
+      registry.states.delete(root);
+    }
+  }, ownerKey);
+  cache.key = undefined;
+  cache.snapshot = undefined;
 }

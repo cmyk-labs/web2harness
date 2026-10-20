@@ -1,7 +1,10 @@
 import type { ServerWebSocket, WebSocketHandler } from "bun";
 import { WebSocketSteering, type SteeringJob, type SteerTarget, type SteerValidation } from "./websocket-steering";
 import { operationStage } from "../runtime/operation-stage";
+import { classifyWebSocketFailure, emitWebSocketDiagnostic, WebSocketTransportFailure,
+  type WebSocketDiagnostic, type WebSocketFailureStage, type WebSocketRequestFailureDiagnostic } from "./websocket-diagnostics";
 export type { SteerTarget, SteerValidation } from "./websocket-steering";
+export type { WebSocketDiagnostic } from "./websocket-diagnostics";
 
 type JsonObject = Record<string, unknown>;
 type Socket = ServerWebSocket<ResponsesWebSocketData>;
@@ -55,6 +58,10 @@ export interface ResponsesWebSocketOptions {
   dispatch(request: Request, options?: { prepareOnly?: boolean }): Promise<Response>;
   /** Validate only; never generate/cache. Required to opt this shared route into steering. */
   validateSteer?(request: Request, target: SteerTarget): Promise<SteerValidation>;
+  /** Bounded metadata only: at most one failure per dispatched request and two close
+   * observations per socket (local request / peer callback). Keep observers fast;
+   * they are not awaited, retained, or allowed to affect transport behavior. */
+  onDiagnostic?(diagnostic: WebSocketDiagnostic): void | Promise<void>;
   limits?: Partial<ResponsesWebSocketLimits>;
 }
 
@@ -85,39 +92,49 @@ function errorEvent(status: number, code: string, message: string, param?: strin
 }
 
 /** Incremental SSE framing: chunk boundaries, CR/LF and UTF-8 boundaries are not events. */
-async function* sseData(reader: ReadableStreamDefaultReader<Uint8Array>, maxBytes: number): AsyncGenerator<string> {
+async function* sseData(reader: ReadableStreamDefaultReader<Uint8Array>, maxBytes: number,
+  stage: (value: WebSocketFailureStage) => void): AsyncGenerator<string> {
   const decoder = new TextDecoder("utf-8", { fatal: true });
+  function decode(bytes?: Uint8Array, stream = false): string {
+    stage("sse_decode");
+    try { return decoder.decode(bytes, { stream }); }
+    catch (error) { throw new WebSocketTransportFailure("sse_invalid_utf8", error); }
+  }
   let line = "", parts: string[] = [], eventBytes = 0, skipLf = false;
   function* lines(text: string): Generator<string> {
+    stage("sse_frame");
     for (const char of text) {
       if (skipLf) { skipLf = false; if (char === "\n") continue; }
       if (char !== "\r" && char !== "\n") {
         line += char;
-        if (line.length + eventBytes > maxBytes) throw new Error("SSE event too large");
+        if (line.length + eventBytes > maxBytes) throw new WebSocketTransportFailure("sse_event_too_large");
         continue;
       }
       skipLf = char === "\r";
       eventBytes += Buffer.byteLength(line) + 1;
-      if (eventBytes > maxBytes) throw new Error("SSE event too large");
+      if (eventBytes > maxBytes) throw new WebSocketTransportFailure("sse_event_too_large");
       if (!line) {
         const data = parts.length ? parts.join("\n") : undefined;
         parts = []; eventBytes = 0;
         if (data !== undefined) yield data;
+        stage("sse_frame");
       } else if (line === "data") parts.push("");
       else if (line.startsWith("data:")) parts.push(line.slice(line[5] === " " ? 6 : 5));
       line = "";
     }
   }
   for (;;) {
+    stage("sse_read");
     const { done, value } = await reader.read();
     if (done) break;
     // Do not decode an arbitrarily large upstream chunk into a second unbounded string.
     for (let offset = 0; offset < value.length; offset += 64 * 1024) {
-      yield* lines(decoder.decode(value.subarray(offset, offset + 64 * 1024), { stream: true }));
+      yield* lines(decode(value.subarray(offset, offset + 64 * 1024), true));
     }
   }
-  yield* lines(decoder.decode());
-  if (parts.length || line === "data" || line.startsWith("data:")) throw new Error("Unterminated SSE event");
+  yield* lines(decode());
+  stage("sse_frame");
+  if (parts.length || line === "data" || line.startsWith("data:")) throw new WebSocketTransportFailure("sse_unterminated_event");
 }
 
 async function readHttpError(response: Response, active: ActiveResponse, maxBytes: number): Promise<JsonObject> {
@@ -128,7 +145,7 @@ async function readHttpError(response: Response, active: ActiveResponse, maxByte
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      if ((size += value.length) > maxBytes) throw new Error("HTTP error body too large");
+      if ((size += value.length) > maxBytes) throw new WebSocketTransportFailure("http_error_body_too_large");
       chunks.push(value);
     }
     try { body = JSON.parse(Buffer.concat(chunks, size).toString("utf8")); } catch { /* Never forward arbitrary HTML. */ }
@@ -159,7 +176,23 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
   const activeTasks = new Set<Promise<void>>();
   // Keep disconnected ownership until cleanup actually finishes, including after a timeout.
   const connections = new Map<Socket, ConnectionTasks>();
+  // Weak ownership also covers close callbacks after connection cleanup has finished.
+  const diagnostics = new WeakMap<Socket, { id: string; localClose: boolean; peerClose: boolean }>();
   let draining = false;
+
+  function correlation(ws: Socket) {
+    let value = diagnostics.get(ws);
+    if (!value) { value = { id: crypto.randomUUID(), localClose: false, peerClose: false }; diagnostics.set(ws, value); }
+    return value;
+  }
+
+  function observeClose(ws: Socket, code: number, source: "local_request" | "peer_observed"): void {
+    const context = correlation(ws), key = source === "local_request" ? "localClose" : "peerClose";
+    if (context[key]) return;
+    context[key] = true;
+    emitWebSocketDiagnostic(options.onDiagnostic, { kind: "socket_close", connection_id: context.id, close_source: source,
+      ...(Number.isInteger(code) && code >= 1000 && code <= 4999 ? { close_code: code } : {}) });
+  }
 
   function owner(ws: Socket): ConnectionTasks {
     let connection = connections.get(ws);
@@ -204,7 +237,7 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
     data.closed = true;
     sockets.delete(ws);
     clearTimeout(data.backpressureTimer);
-    const error = new Error("Responses WebSocket disconnected");
+    const error = new WebSocketTransportFailure("websocket_disconnected");
     data.steering?.close();
     for (const lane of data.lanes.values()) {
       lane.active?.controller.abort(error);
@@ -220,6 +253,7 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
   }
 
   function closeSocket(ws: Socket, code: number, reason: string): void {
+    observeClose(ws, code, "local_request");
     releaseSocket(ws);
     ws.close(code, reason);
   }
@@ -230,9 +264,10 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
       const frame = data.pending.shift()!;
       data.pendingBytes -= frame.bytes;
       let sent: number;
-      try { sent = ws.send(frame.text); } catch { sent = 0; }
+      let sendError: unknown;
+      try { sent = ws.send(frame.text); } catch (error) { sendError = error; sent = 0; }
       if (sent === 0) {
-        frame.reject(new Error("WebSocket frame was dropped"));
+        frame.reject(new WebSocketTransportFailure("websocket_send_failed", sendError));
         closeSocket(ws, 1011, "Responses transport send failed");
       } else if (sent === -1) {
         // Bun has ALREADY queued this frame. Resolve on drain; never send it a second time.
@@ -243,7 +278,7 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
   }
 
   function send(ws: Socket, event: JsonObject, streamId?: string): Promise<void> {
-    if (ws.data.closed) return Promise.reject(new Error("WebSocket is closed"));
+    if (ws.data.closed) return Promise.reject(new WebSocketTransportFailure("websocket_disconnected"));
     const payload = { ...event };
     delete payload.stream_id;
     if (streamId !== undefined) payload.stream_id = streamId;
@@ -252,7 +287,7 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
     if (bytes > limits.maxEventBytes || data.pending.length >= limits.maxPendingFrames
       || ws.getBufferedAmount() + data.pendingBytes + bytes > limits.maxBufferedBytes) {
       closeSocket(ws, 1013, "Responses output buffer limit");
-      return Promise.reject(new Error("WebSocket output limit"));
+      return Promise.reject(new WebSocketTransportFailure("websocket_output_limit"));
     }
     return new Promise<void>((resolve, reject) => {
       data.pending.push({ text, bytes, resolve, reject }); data.pendingBytes += bytes;
@@ -332,55 +367,102 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
 
   async function run(ws: Socket, job: QueuedResponse, active: ActiveResponse, streamId?: string): Promise<void> {
     const data = ws.data;
-    const preflight = data.steering?.prepare(job, streamId);
-    if (preflight) { await send(ws, preflight, streamId); return; }
     let terminal: JsonObject | undefined;
+    let stage: WebSocketFailureStage = "request", httpStatus: number | undefined;
+    let reported = false;
+    const requestId = crypto.randomUUID();
+    const diagnostic = (error: unknown): WebSocketRequestFailureDiagnostic => ({
+      kind: "request_failure", connection_id: correlation(ws).id, request_id: requestId,
+      stream_index: [...data.lanes.keys()].indexOf(streamId), stage, ...classifyWebSocketFailure(error),
+      ...(httpStatus === undefined ? {} : { http_status: httpStatus }),
+      terminal_seen: terminal !== undefined, cancelled: data.closed || active.controller.signal.aborted,
+    });
+    const report = (error: unknown) => {
+      const failure = diagnostic(error);
+      if (!reported) { reported = true; emitWebSocketDiagnostic(options.onDiagnostic, failure); }
+      return failure;
+    };
     try {
-      if (Buffer.byteLength(JSON.stringify(job.body)) > limits.maxMessageBytes) throw new Error("Steering continuation too large");
-      const response = await options.dispatch(request(data, job.body, active.controller.signal), job.prepareOnly ? { prepareOnly: true } : undefined);
-      if (active.controller.signal.aborted) {
-        await response.body?.cancel().catch(error => { owner(ws).failures.push(error); });
-        return;
-      }
-      if (!response.ok) terminal = await readHttpError(response, active, limits.maxEventBytes);
-      else {
-        if (!response.body || !/^text\/event-stream(?:\s*;|$)/i.test(response.headers.get("content-type") ?? "")) {
-          await response.body?.cancel();
-          throw new Error("Expected Responses SSE body");
+      stage = "steering";
+      const preflight = data.steering?.prepare(job, streamId);
+      if (preflight) { stage = "send"; await send(ws, preflight, streamId); return; }
+      stage = "request";
+      try {
+        if (Buffer.byteLength(JSON.stringify(job.body)) > limits.maxMessageBytes) throw new WebSocketTransportFailure("request_too_large");
+        const dispatchedRequest = request(data, job.body, active.controller.signal);
+        stage = "dispatch";
+        const response = await options.dispatch(dispatchedRequest, job.prepareOnly ? { prepareOnly: true } : undefined);
+        if (response.status >= 100 && response.status <= 599) httpStatus = response.status;
+        if (active.controller.signal.aborted) {
+          await response.body?.cancel().catch(error => { owner(ws).failures.push(error); });
+          return;
         }
-        const reader = active.reader = response.body.getReader();
-        let doneMarker = false;
-        for await (const value of sseData(reader, limits.maxEventBytes)) {
-          if (value === "[DONE]") { if (!terminal) throw new Error("Missing terminal event"); doneMarker = true; continue; }
-          const event: unknown = JSON.parse(value);
-          if (!object(event) || typeof event.type !== "string"
-            || !(event.type.startsWith("response.") || event.type === "error")) throw new Error("Invalid Responses event");
-          if (event.type === "response.heartbeat" && terminal) continue;
-          if (terminal || doneMarker) throw new Error("Event after terminal");
-          if (TERMINAL_EVENTS.has(event.type)) { terminal = event; data.steering?.stopAccepting(job); }
-          else {
-            if (event.type === "response.created") data.steering?.created(job, event, streamId);
-            await send(ws, event, streamId);
+        stage = "response_headers";
+        if (!response.ok) {
+          stage = "http_error_body";
+          terminal = await readHttpError(response, active, limits.maxEventBytes);
+          report(new WebSocketTransportFailure("http_error"));
+        }
+        else {
+          if (!response.body || !/^text\/event-stream(?:\s*;|$)/i.test(response.headers.get("content-type") ?? "")) {
+            await response.body?.cancel();
+            throw new WebSocketTransportFailure("expected_sse_body");
           }
+          const reader = active.reader = response.body.getReader();
+          let doneMarker = false;
+          for await (const value of sseData(reader, limits.maxEventBytes, value => { stage = value; })) {
+            stage = "sse_validate";
+            if (value === "[DONE]") { if (!terminal) throw new WebSocketTransportFailure("sse_missing_terminal"); doneMarker = true; continue; }
+            stage = "sse_parse";
+            let event: unknown;
+            try { event = JSON.parse(value); } catch (error) { throw new WebSocketTransportFailure("sse_invalid_json", error); }
+            stage = "sse_validate";
+            if (!object(event) || typeof event.type !== "string"
+              || !(event.type.startsWith("response.") || event.type === "error")) throw new WebSocketTransportFailure("sse_invalid_event");
+            if (event.type === "response.heartbeat" && terminal) continue;
+            if (terminal || doneMarker) throw new WebSocketTransportFailure("sse_event_after_terminal");
+            if (TERMINAL_EVENTS.has(event.type)) { terminal = event; data.steering?.stopAccepting(job); }
+            else {
+              if (event.type === "response.created") data.steering?.created(job, event, streamId);
+              stage = "send";
+              await send(ws, event, streamId);
+            }
+          }
+          stage = "sse_validate";
+          if (!terminal) throw new WebSocketTransportFailure("sse_missing_terminal");
         }
-        if (!terminal) throw new Error("SSE ended before terminal event");
+      } catch (error) {
+        const failure = report(error);
+        if (!data.closed && !active.controller.signal.aborted) {
+          terminal = errorEvent(502, "websocket_upstream_error", "Responses transport failed before a complete result. No request was replayed.");
+          const detailed = { ...terminal, error: { ...(terminal.error as JsonObject), diagnostics: failure },
+            ...(streamId === undefined ? {} : { stream_id: streamId }) };
+          // Diagnostic overhead must not close a socket whose original error fits.
+          // The callback still receives full metadata under a small wire budget.
+          if (Buffer.byteLength(JSON.stringify(detailed)) <= Math.min(limits.maxEventBytes, limits.maxBufferedBytes)) {
+            (terminal.error as JsonObject).diagnostics = failure;
+          }
+          active.controller.abort(new Error("Responses transport failed"));
+        }
+      } finally {
+        stage = "cleanup";
+        data.steering?.stopAccepting(job);
+        if (active.reader) {
+          await cancelReader(ws, active);
+          active.reader.releaseLock();
+        }
       }
-    } catch {
-      if (!data.closed && !active.controller.signal.aborted) {
-        terminal = errorEvent(502, "websocket_upstream_error", "Responses transport failed before a complete result. No request was replayed.");
-        active.controller.abort(new Error("Responses transport failed"));
-      }
-    } finally {
-      data.steering?.stopAccepting(job);
-      if (active.reader) {
-        await cancelReader(ws, active);
-        active.reader.releaseLock();
-      }
+      // Keep this lane occupied until HTTP cleanup AND terminal backpressure settle.
+      stage = "steering";
+      await data.steering?.beforeTerminal(job);
+      stage = "terminal_send";
+      if (terminal && !data.closed) await send(ws, terminal, streamId);
+      stage = "steering";
+      await data.steering?.afterTerminal(job, terminal, streamId);
+    } catch (error) {
+      report(error);
+      throw error;
     }
-    // Keep this lane occupied until HTTP cleanup AND terminal backpressure settle.
-    await data.steering?.beforeTerminal(job);
-    if (terminal && !data.closed) await send(ws, terminal, streamId);
-    await data.steering?.afterTerminal(job, terminal, streamId);
   }
 
   const websocket: WebSocketHandler<ResponsesWebSocketData> = {
@@ -445,7 +527,7 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
       flush(ws);
       schedule(ws);
     },
-    close(ws) { releaseSocket(ws); },
+    close(ws, code) { observeClose(ws, code, "peer_observed"); releaseSocket(ws); },
   };
 
   return {

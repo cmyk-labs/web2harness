@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { StandaloneRequestQueue } from "../../../../src/browser/standalone-request-queue";
 import { createContext, runInContext } from "node:vm";
 import type { Page } from "playwright-core";
-import { CHATGPT_BROWSER_OBSERVATION_PROBE_TIMEOUT_MS, CHATGPT_COMPLETION_SETTLE_MS, CHATGPT_EXTERNAL_PROGRESS_CLOCK_SKEW_MS, CHATGPT_EXTERNAL_PROGRESS_STALL_CEILING_MS, ChatGptCompletionTracker, chatGptExternalProgressSuppressesDomHealth, CHATGPT_RESPONSE_DOM_GRACE_MS, MAX_CHATGPT_INTERNAL_OBSERVATION_FAULTS, CHATGPT_COMPOSER_DOCUMENT_END_KEY, CHATGPT_COMPOSER_SELECT_ALL_KEY, ChatGptBrowserObservationTimeoutError, ChatGptBrowserWorker, ChatGptSubmissionRejectionObserver, ChatGptPromptAttachmentIntegrityError, ChatGptTurnDomHealthTracker, ChatGptVisibleTraceTracker, MAX_CHATGPT_BROWSER_PAGE_REBINDS, MAX_CHATGPT_BROWSER_TABS, MAX_CHATGPT_CONNECTOR_TRIGGER_ATTEMPTS, assertChatGptWebInputWithinLimits, browserDiagnosticCheckpoint, chatGptConnectorAttachmentMode, chatGptNewTurnIdentity, chatGptReboundTurnIdentity, chatGptSubmissionEvidence, connectAfterClosingBrowserConnection, dismissChatGptTemporaryChatOnboarding, isChatGptTraceControl, redactChatGptUiDiagnostic, resolveBrowserConfig, resolveChatGptToolConfirmation, sanitizeChatGptBrowserDiagnosticState, setChatGptThinkMode, stripChatGptTraceControlSuffix, throwIfChatGptRateLimitDialog, throwIfChatGptSessionFailureAlert, throwIfChatGptTerminalErrorAlert, withChatGptBrowserObservationTimeout, browserStageTimeouts, ChatGptSuspensionClock, remainingStageBudgetMs } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
+import { CHATGPT_BROWSER_OBSERVATION_PROBE_TIMEOUT_MS, CHATGPT_EXTERNAL_PROGRESS_CLOCK_SKEW_MS, CHATGPT_EXTERNAL_PROGRESS_STALL_CEILING_MS, ChatGptCompletionTracker, chatGptExternalProgressSuppressesDomHealth, CHATGPT_RESPONSE_DOM_GRACE_MS, MAX_CHATGPT_INTERNAL_OBSERVATION_FAULTS, CHATGPT_COMPOSER_DOCUMENT_END_KEY, CHATGPT_COMPOSER_SELECT_ALL_KEY, ChatGptBrowserObservationTimeoutError, ChatGptBrowserWorker, ChatGptSubmissionRejectionObserver, ChatGptPromptAttachmentIntegrityError, ChatGptTurnDomHealthTracker, ChatGptVisibleTraceTracker, MAX_CHATGPT_BROWSER_PAGE_REBINDS, MAX_CHATGPT_BROWSER_TABS, MAX_CHATGPT_CONNECTOR_TRIGGER_ATTEMPTS, assertChatGptWebInputWithinLimits, browserDiagnosticCheckpoint, chatGptConnectorAttachmentMode, chatGptNewTurnIdentity, chatGptReboundTurnIdentity, chatGptSubmissionEvidence, connectAfterClosingBrowserConnection, dismissChatGptTemporaryChatOnboarding, isChatGptTraceControl, redactChatGptUiDiagnostic, resolveBrowserConfig, resolveChatGptToolConfirmation, sanitizeChatGptBrowserDiagnosticState, setChatGptThinkMode, stripChatGptTraceControlSuffix, throwIfChatGptRateLimitDialog, throwIfChatGptSessionFailureAlert, throwIfChatGptTerminalErrorAlert, withChatGptBrowserObservationTimeout, browserStageTimeouts, ChatGptSuspensionClock, remainingStageBudgetMs } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { ensureChatGptPersonalizedConnectorAccess, chatGptUnavailableProDetail } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { chatGptStoppedThinkingError } from "../../../../src/adapters/chatgpt-web/adapter-error";
 import { CHATGPT_STOPPED_THINKING_LABELS } from "../../../../src/adapters/chatgpt-web/browser/ui-labels";
@@ -252,8 +252,8 @@ test("response caching rechecks CSS visibility without requiring a DOM mutation"
       });
       const evaluationErrors: string[] = [];
       const locator = {
-        evaluate: async (callback: Function, options: unknown) => {
-          try { return runInContext(`(${callback.toString()})`, context)(window.document.getElementById("turn"), options); }
+        evaluateAll: async (callback: Function, options: unknown) => {
+          try { return runInContext(`(${callback.toString()})`, context)([window.document.getElementById("turn")], options); }
           catch (error) { evaluationErrors.push((error as Error).stack ?? String(error)); throw error; }
         },
         page: () => ({ isClosed: () => false }),
@@ -3138,7 +3138,8 @@ test("effort menu waiting stops when ChatGPT reports an expired session", async 
 
 test("terminal model errors are scoped to the new assistant turn instead of global page alerts", () => {
   const workerSource = readFileSync(new URL("../../../../src/adapters/chatgpt-web/browser/browser-worker.ts", import.meta.url), "utf8");
-  expect(workerSource).toContain("throwIfChatGptTerminalErrorAlert(responseTurn.locator)");
+  expect(workerSource.includes("throwIfChatGptTerminalErrorAlert(locator)")).toBeTrue();
+  expect(workerSource.includes("const observedLocator = responseTurn.locator")).toBeTrue();
   expect(workerSource).not.toContain("throwIfChatGptTerminalErrorAlert(page)");
 });
 
@@ -3758,40 +3759,20 @@ test("trace parsing removes an Answer now control appended to live reasoning", (
   });
 });
 
-test("browser DOM health fails closed on a vanished or empty ChatGPT response", () => {
-  const missing = new ChatGptTurnDomHealthTracker(1_000, 500);
-  const absent = {
-    responsePresent: false,
-    running: false,
-    currentText: "",
-    completionActionVisible: false,
-  };
-  expect(missing.update(absent, 1_000)).toBeUndefined();
-  expect(missing.update(absent, 2_000)).toContain("did not create a response DOM");
-
-  const empty = new ChatGptTurnDomHealthTracker(1_000, 500);
-  const terminal = {
-    ...absent,
-    responsePresent: true,
-    running: false,
-    completionActionVisible: true,
-  };
-  expect(empty.update(terminal, 1_000)).toBeUndefined();
-  expect(empty.update(terminal, 1_500)).toContain("completed without a final answer");
-
-  const missingCompletionAction = new ChatGptTurnDomHealthTracker(1_000, 500, 750);
-  const completedWithoutMarker = {
-    ...terminal,
-    currentText: "complete answer",
-    completionActionVisible: false,
-  };
-  expect(missingCompletionAction.update(completedWithoutMarker, 1_000)).toBeUndefined();
-  expect(missingCompletionAction.update(completedWithoutMarker, 1_749)).toBeUndefined();
-  expect(missingCompletionAction.update(completedWithoutMarker, 1_750)).toContain("DOM may have changed");
+test("DOM health owns availability, not text, Copy controls or completion", () => {
+  const tracker = new ChatGptTurnDomHealthTracker(1_000);
+  const absent = { responsePresent: false, running: false };
+  expect(tracker.update(absent, 0)).toBeUndefined();
+  expect(tracker.update(absent, 1_000)).toContain("did not create a response DOM");
+  for (const completionActionVisible of [true, false]) {
+    const readable = { responsePresent: true, running: false, currentText: "", completionActionVisible };
+    expect(tracker.update(readable, 2_000)).toBeUndefined();
+    expect(tracker.update(readable, 50_000)).toBeUndefined();
+  }
 });
 
 test("visible generation suspends DOM health and restarts its grace when Stop disappears", () => {
-  const tracker = new ChatGptTurnDomHealthTracker(1_000, 500);
+  const tracker = new ChatGptTurnDomHealthTracker(1_000);
   const absent = { responsePresent: false, running: false, currentText: "", completionActionVisible: false };
   expect(tracker.update(absent, 0)).toBeUndefined();
   expect(tracker.update({ ...absent, running: true }, 500)).toBeUndefined();
@@ -3828,7 +3809,7 @@ test("browser send accepts only new logical turns or generation, not remounted h
 });
 
 test("visible reasoning keeps the browser turn healthy before final assistant markdown exists", () => {
-  const health = new ChatGptTurnDomHealthTracker(1_000, 500);
+  const health = new ChatGptTurnDomHealthTracker(1_000);
   const reasoning = {
     responsePresent: true,
     running: false,
@@ -3840,7 +3821,7 @@ test("visible reasoning keeps the browser turn healthy before final assistant ma
 });
 
 test("suspending DOM health for proven MCP progress restarts the missing-response window", () => {
-  const tracker = new ChatGptTurnDomHealthTracker(1_000, 500);
+  const tracker = new ChatGptTurnDomHealthTracker(1_000);
   const absent = {
     responsePresent: false,
     running: false,
@@ -3861,7 +3842,7 @@ test("suspending DOM health for proven MCP progress restarts the missing-respons
 });
 
 test("clearing the missing-response window preserves whether a response was ever observed", () => {
-  const tracker = new ChatGptTurnDomHealthTracker(1_000, 500);
+  const tracker = new ChatGptTurnDomHealthTracker(1_000);
   const present = {
     responsePresent: true,
     running: true,
@@ -3903,40 +3884,19 @@ test("the response loop checks explicit Stopped thinking before acknowledging fu
   expect((worker.match(/domHealthTracker\.clearMissingResponse\(\)/g) ?? []).length).toBe(1);
 });
 
-test("proven MCP progress vetoes every terminal DOM conclusion, not just a missing response", () => {
-  // Tool activity remains authoritative when the response DOM is present but its completion action
-  // has not appeared yet.
-  const stalled = new ChatGptTurnDomHealthTracker(1_000, 500, 750);
-  const answeredWithoutCompletionAction = {
-    responsePresent: true,
-    running: false,
-    currentText: "partial answer",
-    completionActionVisible: false,
-  };
-
-  expect(stalled.update({ ...answeredWithoutCompletionAction, externalProgressLive: true }, 1_000)).toBeUndefined();
-  expect(stalled.update({ ...answeredWithoutCompletionAction, externalProgressLive: true }, 10_000)).toBeUndefined();
-
-  // Once the model genuinely stops, the window starts fresh rather than charging the live stretch.
-  expect(stalled.update(answeredWithoutCompletionAction, 10_100)).toBeUndefined();
-  expect(stalled.update(answeredWithoutCompletionAction, 10_849)).toBeUndefined();
-  expect(stalled.update(answeredWithoutCompletionAction, 10_850)).toContain("did not expose its completed-turn action");
-
-  const empty = new ChatGptTurnDomHealthTracker(1_000, 500, 750);
-  const completedEmpty = {
-    responsePresent: true,
-    running: false,
-    currentText: "",
-    completionActionVisible: true,
-  };
-  expect(empty.update({ ...completedEmpty, externalProgressLive: true }, 1_000)).toBeUndefined();
-  expect(empty.update({ ...completedEmpty, externalProgressLive: true }, 9_000)).toBeUndefined();
-  expect(empty.update(completedEmpty, 9_100)).toBeUndefined();
-  expect(empty.update(completedEmpty, 9_600)).toContain("completed without a final answer");
+test("proven source or MCP progress suspends missing DOM health without fabricating completion", () => {
+  for (const progress of [{ sourceAvailable: true }, { externalProgressLive: true }]) {
+    const tracker = new ChatGptTurnDomHealthTracker(1_000);
+    const absent = { responsePresent: false, running: false };
+    expect(tracker.update({ ...absent, ...progress }, 0)).toBeUndefined();
+    expect(tracker.update({ ...absent, ...progress }, 90_000)).toBeUndefined();
+    expect(tracker.update(absent, 90_001)).toBeUndefined();
+    expect(tracker.update(absent, 91_001)).toContain("did not create a response DOM");
+  }
 });
 
 test("live external progress still records that a response DOM was observed", () => {
-  const tracker = new ChatGptTurnDomHealthTracker(1_000, 500);
+  const tracker = new ChatGptTurnDomHealthTracker(1_000);
   const absent = {
     responsePresent: false,
     running: false,
@@ -4102,7 +4062,7 @@ test("the shipped commentary classifier separates answer Markdown from reasoning
   expect(answerFor('<div class="markdown">ONLY ANSWER</div>')).toBe("ONLY ANSWER");
 });
 
-test("embedded chart hydration cannot replace Markdown answer content with renderer UI", () => {
+test("unsupported chart semantics cannot be silently dropped from a final answer", () => {
   const { createDocument, createWindow } = require("@mixmark-io/domino") as {
     createDocument(html: string): { body: HTMLElement };
     createWindow(): { HTMLElement: unknown; Node: unknown };
@@ -4138,10 +4098,9 @@ test("embedded chart hydration cannot replace Markdown answer content with rende
       + '<div data-start="82" data-end="150"><div data-code-block-preview-pane="vega-lite"><iframe title="Preview"></iframe></div></div>'
       + tail).body;
     const hydrated = contentFor(after);
-    expect(projected.innerHTML).toBe(hydrated.innerHTML);
-    expect(projected.textContent).toBe(hydrated.textContent);
-    expect(textFor(projected)).toBe(textFor(hydrated));
-    expect(chatGptHtmlToMarkdown(projected.innerHTML)).toBe(expected);
+    expect(() => chatGptHtmlToMarkdown(projected.innerHTML)).toThrow("semantic component");
+    expect(() => chatGptHtmlToMarkdown(hydrated.innerHTML)).toThrow("semantic component");
+    expect(chatGptHtmlToMarkdown(prose + code + tail)).toBe(expected);
     expect(before.innerHTML).toBe(original);
     expect(projected.querySelector("pre")?.getAttribute("data-start")).toBe("22");
   }
@@ -4167,111 +4126,31 @@ test("embedded chart hydration cannot replace Markdown answer content with rende
   expect(files.innerHTML).toBe(originalFiles);
 });
 
-test("proven MCP progress vetoes completion, not only the health verdicts", () => {
-  const tracker = new ChatGptCompletionTracker(500);
-  const finishedLooking = {
-    responsePresent: true,
-    running: false,
-    currentText: "partial answer so far",
-    currentHtml: "<p>partial answer so far</p>",
-    completionActionVisible: true,
-  };
-
-  // Between two tool calls the rendered message can look finished. Completing there returns a
-  // truncated answer and retires the turn while its own tool calls are still in flight.
-  expect(tracker.update({ ...finishedLooking, externalToolCallsInFlight: true }, 1_000)).toBeFalse();
-  expect(tracker.update({ ...finishedLooking, externalToolCallsInFlight: true }, 5_000)).toBeFalse();
-
-  // Once the model is genuinely idle the settle window starts fresh rather than completing at once.
-  expect(tracker.update(finishedLooking, 5_100)).toBeFalse();
-  expect(tracker.update(finishedLooking, 5_599)).toBeFalse();
-  expect(tracker.update(finishedLooking, 5_600)).toBeTrue();
-});
-
-test("MCP Bridge mode has no fixed post-tool final-answer deadline", () => {
-  const progress = new ChatGptExternalTurnProgress();
+test("in-flight tools veto genuine normal completion", () => {
   const tracker = new ChatGptCompletionTracker();
-  const partialLookingFinal = {
-    responsePresent: true,
-    running: false,
-    currentText: "partial answer",
-    currentHtml: "<p>partial answer</p>",
-    completionActionVisible: true,
-  };
-
-  progress.recordToolBatch(1, 1_000);
-  const activeToolProgress = progress.snapshot();
-  expect(chatGptExternalToolCallsAreInFlight(activeToolProgress)).toBeTrue();
-  expect(tracker.observeToolBatch(
-    activeToolProgress.lastToolBatchRevision,
-    partialLookingFinal.currentText,
-  )).toBeTrue();
-  expect(tracker.update({
-    ...partialLookingFinal,
-    externalToolCallsInFlight: chatGptExternalToolCallsAreInFlight(activeToolProgress),
-  }, 1_500)).toBeFalse();
-
-  progress.recordToolResult(2_000);
-  const betweenTools = progress.snapshot();
-  // Recent progress remains a DOM-health grace, but it no longer imposes #272's 60-second
-  // completion delay. The unchanged partial answer still cannot complete in the #274 gap.
-  expect(chatGptExternalProgressSuppressesDomHealth(betweenTools, 2_001)).toBeTrue();
-  expect(tracker.update({
-    ...partialLookingFinal,
-    externalToolCallsInFlight: false,
-  }, 2_001)).toBeFalse();
-
-  progress.recordToolBatch(1, 2_500);
-  const secondToolInFlight = progress.snapshot();
-  expect(tracker.observeToolBatch(
-    secondToolInFlight.lastToolBatchRevision,
-    partialLookingFinal.currentText,
-  )).toBeTrue();
-  expect(tracker.update({
-    ...partialLookingFinal,
-    externalToolCallsInFlight: true,
-  }, 2_501)).toBeFalse();
-
-  progress.recordToolResult(3_000);
-  const completed = progress.snapshot();
-  // Hiding the tool row cannot release a stale partial answer after a newer batch.
-  expect(tracker.update({
-    ...partialLookingFinal,
-    externalToolCallsInFlight: false,
-  }, 3_001)).toBeFalse();
-
-  const finalAnswer = {
-    ...partialLookingFinal,
-    currentText: "complete final answer",
-    currentHtml: "<p>complete final answer</p>",
-  };
-  expect(tracker.update({
-    ...finalAnswer,
-  }, 3_100)).toBeFalse();
-  expect(tracker.update({
-    ...finalAnswer,
-  }, 3_100 + CHATGPT_COMPLETION_SETTLE_MS - 1)).toBeFalse();
-  expect(tracker.update({
-    ...finalAnswer,
-  }, 3_100 + CHATGPT_COMPLETION_SETTLE_MS)).toBeTrue();
+  const final = { responsePresent: true, running: false, normalCompletion: true, completionRevision: 1 };
+  expect(tracker.update({ ...final, externalToolCallsInFlight: true })).toBeFalse();
+  expect(tracker.update(final)).toBeTrue();
 });
 
-test("MCP Bridge mode fails closed when ChatGPT exposes completion without a post-tool final answer", () => {
-  const tracker = new ChatGptCompletionTracker(500, 1_000);
-  const partialLookingFinal = {
-    responsePresent: true,
-    running: false,
-    currentText: "partial answer",
-    currentHtml: "<p>partial answer</p>",
-    completionActionVisible: true,
-  };
+test("MCP completion uses the generation revision after the acknowledged tool batch", () => {
+  const tracker = new ChatGptCompletionTracker();
+  const final = { responsePresent: true, running: false, normalCompletion: true, completionRevision: 1 };
+  expect(tracker.observeToolBatch(1, 1)).toBeTrue();
+  expect(tracker.observeToolBatch(1, 1)).toBeFalse();
+  expect(tracker.update(final)).toBeFalse();
+  expect(tracker.update({ ...final, completionRevision: 2 })).toBeTrue();
+  expect(tracker.observeToolBatch(2, 2)).toBeTrue();
+  expect(tracker.update({ ...final, completionRevision: 2 })).toBeFalse();
+  expect(tracker.update({ ...final, completionRevision: 3 })).toBeTrue();
+});
 
-  expect(tracker.observeToolBatch(1, partialLookingFinal.currentText)).toBeTrue();
-  expect(tracker.update(partialLookingFinal, 1_000)).toBeFalse();
-  // Citation/markup hydration is not a new final answer and cannot release the boundary.
-  expect(tracker.update({ ...partialLookingFinal, currentHtml: '<p data-hydrated="true">partial answer</p>' }, 1_999)).toBeFalse();
-  expect(() => tracker.update(partialLookingFinal, 2_000))
-    .toThrow("completed without producing a final answer after its last Codex tool call");
+test("a stale completion revision cannot become valid by waiting or changing markup", () => {
+  const tracker = new ChatGptCompletionTracker();
+  tracker.observeToolBatch(1, 4);
+  const stale = { responsePresent: true, running: false, normalCompletion: true, completionRevision: 4,
+    currentText: "same or changed text", completionActionVisible: true };
+  for (let i = 0; i < 10; i++) expect(tracker.update(stale)).toBeFalse();
 });
 
 test("a future progress timestamp is not treated as liveness", () => {

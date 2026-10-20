@@ -50,6 +50,25 @@ test("replace modifies the candidate before commit; repeated strings are never d
   expect(result).toMatchObject({ state: "complete", text: "newnew" });
 });
 
+test("observed URL moderation metadata neither completes nor rewrites the bound answer", () => {
+  // This control envelope was observed in authenticated DEV on 2026-10-19.
+  // Its opaque link-check payload is not answer text or a completion receipt.
+  const control = { type: "url_moderation", conversation_id: binding.conversationId,
+    message_id: "answer-current", url_moderation_result: { synthetic: "not answer content" } };
+  const prefix = [...begin(), { p: "/message/content/parts/0", o: "append", v: "[draft](https://example.test/old)" }, control];
+  for (const chunk of [1, 17, 4096]) {
+    const pending = project(prefix, chunk);
+    expect(pending.result()).toEqual({ state: "collecting" });
+    expect(pending.lifecycle().state).toBe("generating");
+    const complete = project([...prefix, { o: "replace", v: "[final](https://example.test/new)" }, ...end()], chunk);
+    expect(complete.result()).toMatchObject({ state: "complete", text: "[final](https://example.test/new)" });
+  }
+  expect(project([...begin(), { ...control, conversation_id: "foreign" }, ...end()]).result())
+    .toMatchObject({ state: "rejected", reason: "response_identity_mismatch" });
+  expect(project([...begin(), { ...control, error: { message: "failed" } }, ...end()]).result())
+    .toMatchObject({ state: "rejected", reason: "response_upstream_error" });
+});
+
 test("input acknowledgement hydrates the initial user snapshot without permitting known identity changes", () => {
   const prefix = ["v1", { p: "", o: "add", v: { message: user, conversation_id: binding.conversationId } },
     { type: "input_message", input_message: { ...user, metadata: { parent_id: "system" } }, conversation_id: binding.conversationId }];
@@ -79,11 +98,36 @@ test("private reasoning and tool bytes never reach an answer or telemetry", () =
   expect(JSON.stringify(source)).not.toContain("PRIVATE");
 });
 
+test.each([[null], [undefined], ["opaque"]] as const)("non-public channel %s preserves ancestry without ending generation", channel => {
+  // Shape observed in authenticated DEV: a completed, nonterminal assistant message after
+  // a hidden system node, before any public final. Bodies/identities here are synthetic.
+  const system = message({ id: "system", author: { role: "system" }, channel: null,
+    status: "finished_successfully", metadata: { parent_id: user.id, is_visually_hidden_from_conversation: true } });
+  const intermediate = message({ id: "intermediate", channel, recipient: undefined,
+    status: "finished_successfully", end_turn: false, content: { content_type: "text", parts: ["PRIVATE_INTERMEDIATE"] },
+    metadata: { parent_id: system.id, is_complete: true, finish_details: { type: "stop" } } });
+  const prefix = ["v1", { type: "input_message", input_message: user, conversation_id: binding.conversationId },
+    { p: "", o: "add", c: 0, v: { message: system, conversation_id: binding.conversationId } },
+    { c: 1, v: { message: intermediate, conversation_id: binding.conversationId } }];
+  for (const chunk of [1, 17, 4096]) {
+    const pending = project(prefix, chunk);
+    expect(pending.result()).toEqual({ state: "collecting" });
+    expect(pending.lifecycle().state).toBe("generating");
+    expect(JSON.stringify(pending)).not.toContain("PRIVATE_INTERMEDIATE");
+    const final = { p: "", o: "add", c: 2, v: { conversation_id: binding.conversationId,
+      message: message({ metadata: { parent_id: intermediate.id }, content: { content_type: "text", parts: ["Exact final"] } }) } };
+    expect(project([...prefix, final, ...end()], chunk).result()).toMatchObject({ state: "complete", text: "Exact final" });
+    expect(project([...prefix, ...end()], chunk).result()).toMatchObject({ state: "rejected", reason: "response_final_message_ambiguous" });
+    const foreign = { ...final, v: { ...final.v, message: message({ metadata: { parent_id: "unbound" } }) } };
+    expect(project([...prefix, foreign, ...end()], chunk).result()).toMatchObject({ state: "rejected", reason: "response_parent_unbound" });
+  }
+});
+
 test.each([
   ["DONE alone", ["[DONE]"], "response_identity_incomplete"],
   ["wrong input", [{ type: "input_message", input_message: { ...user, id: "old" }, conversation_id: binding.conversationId }], "response_identity_mismatch"],
   ["foreign conversation", [{ p: "", o: "add", v: { message: message(), conversation_id: "foreign" } }], "response_identity_mismatch"],
-  ["unknown channel", [{ p: "", o: "add", v: { message: message({ channel: null }), conversation_id: binding.conversationId } }], "response_channel_unsupported"],
+  ["unknown channel without public final", [{ p: "", o: "add", v: { message: message({ channel: null }), conversation_id: binding.conversationId } }], "response_final_message_ambiguous"],
   ["unknown operation", [{ p: "/message/content/parts/0", o: "mystery", v: "text" }], "response_patch_unsupported"],
   ["server error", [{ error: { message: "private error" } }], "response_upstream_error"],
 ] as const)("%s cannot become a successful response", (_name, frames, reason) => {
@@ -164,7 +208,8 @@ test("the message marker does not freeze the response before DONE", () => {
   }
   const unknown = project([...frames, { p: "/unsupported-projection", o: "replace", v: {} }, "[DONE]"]).result();
   expect(unknown).toEqual({ state: "rejected", reason: "response_patch_unsupported" });
-  expect(responseSourceBlocksFallback(unknown)).toBeFalse();
+  // An unknown structural patch cannot prove that a complete current answer survived.
+  expect(responseSourceBlocksFallback(unknown)).toBeTrue();
   expect(project([...frames, "[DONE]", { p: "/message/content/parts/0", o: "append", v: "late" }]).result())
     .toEqual({ state: "rejected", reason: "response_after_termination" });
 });
