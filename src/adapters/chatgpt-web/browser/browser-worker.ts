@@ -4106,6 +4106,7 @@ export class ChatGptBrowserWorker {
             selectedSource = "response";
             if (finalText.trim() === "api_tool unavailable") throw new Error("ChatGPT selected mode rejected the Codex Native MCP tool (api_tool unavailable)");
             responsePhase = "delivery";
+            for (const trace of visibleTrace.finish()) turn.onCommentary?.(trace.text, trace.continuation === true);
             turn.onTextDelta(finalText);
             diagnosticEvent("info", "browser.response_source_committed", { chars: finalText.length, source: responseSource.snapshot() });
             break;
@@ -4326,6 +4327,7 @@ export class ChatGptBrowserWorker {
               }
             }
             responsePhase = "delivery";
+            for (const trace of visibleTrace.finish()) turn.onCommentary?.(trace.text, trace.continuation === true);
             if (final.delta) emitMarkdownDelta(final.delta);
             if (checkpointStream) {
               const completed = checkpointStream.finishOptional(snapshot.visibleText);

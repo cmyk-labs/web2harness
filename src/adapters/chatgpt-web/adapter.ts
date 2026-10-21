@@ -1,4 +1,5 @@
-import { diagnosticEvent } from "../../diagnostics";
+import { diagnosticContext, diagnosticError, diagnosticEvent, diagnosticReference } from "../../diagnostics";
+import { abortWithDiagnostic } from "../../interruption-diagnostics";
 import { ChatGptPublicTextEvidence } from "./public-text-evidence";
 import { chatGptWebQueueModel } from "../../models/chatgpt-web-queue-model";
 import { CompletionFenceWait } from "./tools/completion-fence";
@@ -113,6 +114,7 @@ function cancellableBrowserTurn(
   controller: AbortController,
   compactionStages?: CompactionStageTimers,
 ): { browser: Promise<string>; physicalSettlement: Promise<void>; cancel: (reason?: Error) => void } {
+  const interruptionContext = { ...diagnosticContext.getStore() };
   let rejectCancellation!: (error: Error) => void;
   const cancellation = new Promise<never>((_resolve, reject) => {
     rejectCancellation = reject;
@@ -125,7 +127,7 @@ function cancellableBrowserTurn(
     // handshake, but the Codex Responses turn no longer waits on that process cleanup.
     browser: compactionStages
       ? withAbort(browser, compactionStages.signal).catch(error => {
-        if (!controller.signal.aborted) controller.abort(error);
+        if (!controller.signal.aborted) abortWithDiagnostic(controller, "compaction_stage_abort", error, { ...interruptionContext, error: diagnosticError(error) });
         throw error;
       }).finally(() => compactionStages.dispose())
       : browser,
@@ -133,7 +135,8 @@ function cancellableBrowserTurn(
     // worker promise, whose finally block completes the launcher /turn/end handshake.
     physicalSettlement: run.then(() => undefined, () => undefined),
     cancel(reason?: Error) {
-      if (!controller.signal.aborted) controller.abort(reason);
+      if (!controller.signal.aborted) abortWithDiagnostic(controller, "adapter_cancel", reason, { ...interruptionContext, explicitReason: !!reason,
+        ...(reason ? { error: diagnosticError(reason) } : {}) });
       // Explicit targeted cancellation ends the Codex Responses turn immediately. Generic
       // retirement (client disconnect or compaction replacement) still waits for the helper's
       // cleanup handshake before a replacement browser may start.
@@ -584,6 +587,7 @@ export function createChatGptWebAdapter(
       return answer;
     });
     const browserAbort = new AbortController();
+    const interruptionContext = { ...diagnosticContext.getStore(), traceId };
     const compactionStages = parsed._compactionRequest ? new CompactionStageTimers(browserAbort.signal) : undefined;
     let browserOwnerSettled = false;
     const trackBrowserOwner = (browser: Promise<string>): Promise<string> => browser.finally(() => {
@@ -603,14 +607,14 @@ export function createChatGptWebAdapter(
         () => {
           const retirement = new Error("Codex Native retired the turn binding before its tool work completed");
           externalProgress.retire(retirement);
-          if (!browserOwnerSettled && !browserAbort.signal.aborted) browserAbort.abort(retirement);
+          if (!browserOwnerSettled && !browserAbort.signal.aborted) abortWithDiagnostic(browserAbort, "native_binding_retired", retirement, interruptionContext);
         },
         error => {
           const failure = new Error("ChatGPT could not observe Codex Native turn retirement", {
             cause: error,
           });
           externalProgress.retire(failure);
-          if (!browserAbort.signal.aborted) browserAbort.abort(failure);
+          if (!browserAbort.signal.aborted) abortWithDiagnostic(browserAbort, "native_retirement_failed", failure, { ...interruptionContext, error: diagnosticError(failure) });
         },
       );
     };
@@ -776,7 +780,7 @@ export function createChatGptWebAdapter(
       const queuedManual = scheduling ? withQueuedRequest({ descriptorPath: retainedLauncherDescriptor, job: scheduling,
         traceId, signal: browserAbort.signal,
         execute: async (ticket, signal) => {
-          const stop = () => browserAbort.abort(signal.reason);
+          const stop = () => abortWithDiagnostic(browserAbort, "adapter_signal_forwarded", signal.reason, interruptionContext);
           signal.addEventListener("abort", stop, { once: true });
           try { signal.throwIfAborted(); return await runManual(ticket); }
           finally { signal.removeEventListener("abort", stop); }
@@ -1457,58 +1461,76 @@ export function createChatGptWebAdapter(
          * retryably with corrective feedback recorded for the next browser attempt.
          */
         const emitNativeReply = (answer: string, reasoning: string[]): void => {
-          const commitReply = (events: AdapterEvent[]): void => {
-            // Commit prose, tool identities/arguments and terminal as one validated reply before
-            // invoking the observer. A disconnect on the first prose event must not leave a
-            // partial journal that reparses the answer and appends duplicate prose on reconnect.
-            session.appendRoundEvents(roundKey, events);
-            session.completeRound(roundKey);
-            session.setFinalEvents(session.roundEvents(roundKey));
-            publicTextEvidence.record("projected", {
-              source: "native_reply", sourceText: answer, expectedText: parsedReply.visibleText,
-              actualText: events.filter(event => event.type === "text_delta").map(event => event.text).join(""),
-              transformation: "native_tool_blocks_v1", complete: true,
+          let deliveryState = "validating";
+          const deliveryDiagnostic = (outcome: "started" | "committed" | "returned" | "failed"): void =>
+            diagnosticEvent(outcome === "failed" ? "warning" : "info", "browser.native_reply_delivery", {
+              traceId: session.traceId, roundRef: diagnosticReference(roundKey), deliveryState, outcome,
+              chars: answer.length, observerAborted: incoming.abortSignal?.aborted === true,
+              clientAcknowledged: false,
             });
-            chatGptWebTurnRetryPolicy.clear(retryKey);
-            clearNativeToolCallCorrection(retryKey);
-            deliverRoundEvents(events);
-          };
-          const parsedReply = parseNativeToolCallReply(answer, parsed.context.tools ?? []);
-          if (parsedReply.issues.length === 0) {
-            try { validateToolCallBatch(parsed, parsedReply.calls.map(nativeBrokerRequest)); }
-            catch (error) { parsedReply.issues.push({ callIndex: null, problem: error instanceof Error ? error.message : String(error) }); }
-          }
-          if (parsedReply.calls.length > 0 && parsedReply.issues.length === 0) {
-            const requests = parsedReply.calls.map(nativeBrokerRequest);
-            const events: AdapterEvent[] = [];
-            if (parsedReply.visibleText.length > 0) {
-              events.push({ type: "text_delta", text: parsedReply.visibleText, phase: "commentary" });
+          deliveryDiagnostic("started");
+          try {
+            const commitReply = (events: AdapterEvent[]): void => {
+              // Commit prose, tool identities/arguments and terminal as one validated reply before
+              // invoking the observer. A disconnect on the first prose event must not leave a
+              // partial journal that reparses the answer and appends duplicate prose on reconnect.
+              session.appendRoundEvents(roundKey, events);
+              session.completeRound(roundKey);
+              session.setFinalEvents(session.roundEvents(roundKey));
+              deliveryState = "journaled";
+              deliveryDiagnostic("committed");
+              publicTextEvidence.record("projected", {
+                source: "native_reply", sourceText: answer, expectedText: parsedReply.visibleText,
+                actualText: events.filter(event => event.type === "text_delta").map(event => event.text).join(""),
+                transformation: "native_tool_blocks_v1", complete: true,
+              });
+              chatGptWebTurnRetryPolicy.clear(retryKey);
+              clearNativeToolCallCorrection(retryKey);
+              deliveryState = "emitting";
+              deliverRoundEvents(events);
+              deliveryState = "emitter_returned";
+              deliveryDiagnostic("returned");
+            };
+            const parsedReply = parseNativeToolCallReply(answer, parsed.context.tools ?? []);
+            if (parsedReply.issues.length === 0) {
+              try { validateToolCallBatch(parsed, parsedReply.calls.map(nativeBrokerRequest)); }
+              catch (error) { parsedReply.issues.push({ callIndex: null, problem: error instanceof Error ? error.message : String(error) }); }
             }
-            emitToolBatch(
-              requests,
-              estimateChatGptWebUsage(parsed, { reasoning, toolRequests: requests }, turnCapabilities, experimentalContextFiles, experimentalSkillAttachments),
+            if (parsedReply.calls.length > 0 && parsedReply.issues.length === 0) {
+              const requests = parsedReply.calls.map(nativeBrokerRequest);
+              const events: AdapterEvent[] = [];
+              if (parsedReply.visibleText.length > 0) {
+                events.push({ type: "text_delta", text: parsedReply.visibleText, phase: "commentary" });
+              }
+              emitToolBatch(
+                requests,
+                estimateChatGptWebUsage(parsed, { reasoning, toolRequests: requests }, turnCapabilities, experimentalContextFiles, experimentalSkillAttachments),
+                event => events.push(event),
+              );
+              commitReply(events);
+              return;
+            }
+            if (parsedReply.issues.length > 0) {
+              if (session.runtime.contextResyncAttempted) throw contextResyncError("context_resync_failed", provider.chatgptWeb?.uiLanguage);
+              recordNativeToolCallCorrection(retryKey, answer, parsedReply.issues);
+              throw new ChatGptWebAdapterError(
+                "ChatGPT returned a tool-call block that could not be relayed to Codex",
+                { status: 502, errorType: "server_error", code: "native_tool_call_invalid", retryable: true },
+              );
+            }
+            structuredOutputValidator?.(parsedReply.visibleText);
+            const events: AdapterEvent[] = [];
+            emitTextDeltas([parsedReply.visibleText], event => events.push(event));
+            emitBrowserCompletion(
+              { type: "final", answer },
+              estimateChatGptWebUsage(parsed, { answer, reasoning }, turnCapabilities, experimentalContextFiles, experimentalSkillAttachments),
               event => events.push(event),
             );
             commitReply(events);
-            return;
+          } catch (error) {
+            deliveryDiagnostic("failed");
+            throw error;
           }
-          if (parsedReply.issues.length > 0) {
-            if (session.runtime.contextResyncAttempted) throw contextResyncError("context_resync_failed", provider.chatgptWeb?.uiLanguage);
-            recordNativeToolCallCorrection(retryKey, answer, parsedReply.issues);
-            throw new ChatGptWebAdapterError(
-              "ChatGPT returned a tool-call block that could not be relayed to Codex",
-              { status: 502, errorType: "server_error", code: "native_tool_call_invalid", retryable: true },
-            );
-          }
-          structuredOutputValidator?.(parsedReply.visibleText);
-          const events: AdapterEvent[] = [];
-          emitTextDeltas([parsedReply.visibleText], event => events.push(event));
-          emitBrowserCompletion(
-            { type: "final", answer },
-            estimateChatGptWebUsage(parsed, { answer, reasoning }, turnCapabilities, experimentalContextFiles, experimentalSkillAttachments),
-            event => events.push(event),
-          );
-          commitReply(events);
         };
         try {
           await session.runExclusive(async () => {

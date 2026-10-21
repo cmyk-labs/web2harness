@@ -97,7 +97,7 @@ test.each(["preflight-failed", "ready-changed", "unknown", "confirmed", "duplica
   },
 );
 
-test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate-request", "cancelled", "disconnected", "delayed-source", "delayed-cancel", "consumer-failed", "complete-dom", "foreign-dom", "delayed-dom-source", "partial-dom", "no-final", "saved-no-final", "saved-recovered"])("worker handles an identity-bound %s source without relying on a rendered answer", async state => {
+test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate-request", "cancelled", "disconnected", "delayed-source", "delayed-cancel", "consumer-failed", "complete-dom", "foreign-dom", "delayed-dom-source", "partial-dom", "no-final", "saved-no-final", "saved-recovered", "progress-source", "progress-dom", "progress-cancel", "progress-consumer"])("worker handles an identity-bound %s source without relying on a rendered answer", async state => {
   const root = mkdtempSync(join(tmpdir(), "web2harness-source-worker-"));
   let acceptanceTimer: ReturnType<typeof setTimeout> | undefined;
   let clockRestore: (() => void) | undefined;
@@ -106,7 +106,8 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
     const worker: any = ChatGptBrowserWorker.forProvider({ adapter: "chatgpt-web", baseUrl: `browser://${root}`,
       chatgptWeb: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: false,
         useSavedChats: saved, storageStatePath: join(root, "auth.json"), browserDiagnosticsPath: join(root, "diagnostics") } });
-    const domFallback = state === "complete-dom" || state === "foreign-dom" || state === "partial-dom";
+    const progress = state.startsWith("progress-");
+    const domFallback = state === "complete-dom" || state === "foreign-dom" || state === "partial-dom" || state === "progress-dom";
     const text = domFallback ? "Complete DOM answer." : "| Name | Value |\n| --- | --- |\n| Alpha | beta_code |\n\n```ps1\n'Literal *text*'\n```\n\nSame\n\nSame";
     const user = { id: "current-user", author: { role: "user" }, content: { content_type: "text", parts: ["input"] } };
     const frames = ["v1", { type: "input_message", conversation_id: "current", input_message: user },
@@ -118,7 +119,7 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
       fallbackMarkdownVersion: 2, fallbackMarkdown: text,
     };
     const encoded = (values: unknown[]) => Buffer.from(values.map(v => `data: ${v === "[DONE]" ? v : JSON.stringify(v)}\n\n`).join("")).toString("base64");
-    const delayed = state === "delayed-source" || state === "delayed-cancel" || state === "delayed-dom-source";
+    const delayed = state === "delayed-source" || state === "delayed-cancel" || state === "delayed-dom-source" || progress && !domFallback;
     const body = encoded(noFinal ? [...frames.slice(0, 2), ...frames.slice(3)] : delayed ? frames.slice(0, 3) : frames);
     const turnIds = { turn_exchange_id: "exchange", working_turn_id: "working" };
     const final = (frames[2] as any).v.message;
@@ -127,6 +128,8 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
     let bindingRetired = false, bindingStarted = false, domReadStarted = false;
     const beforeTerminal: number[] = [];
     const consumerFailure = new TypeError("consumer callback failed after one delivery");
+    const commentary: string[] = [], deliveryOrder: string[] = [];
+    let lastProgress = "", progressReads = 0;
     const sessions: EventEmitter[] = [];
     const cancel = new AbortController();
     const receipts: any[] = [];
@@ -167,7 +170,7 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
         }, 1_500);
         if (delayed && session === sessions.at(-1)) acceptanceTimer = setTimeout(() => {
           beforeTerminal.push(deltas.length, completedResponses);
-          if (state === "delayed-cancel") cancel.abort();
+          if (state === "delayed-cancel" || state === "progress-cancel") cancel.abort();
           else {
             session.emit("Network.dataReceived", { requestId: "response", data: encoded(frames.slice(3)) });
             // Deliberately leave HTTP open; application completion is the terminal evidence.
@@ -213,7 +216,7 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
         bindingRetired = true; reject(new DOMException("observation retired", "AbortError"));
       }, { once: true }));
     };
-    if (domFallback || state === "delayed-dom-source") {
+    if (domFallback || state === "delayed-dom-source" || progress) {
       worker.waitForNewAssistantTurn = async () => ({ identity: "owned", locator: absent, acceptedTurnIdentities: [] });
       worker.responseDomSnapshot = async () => {
         domReadStarted = true;
@@ -225,11 +228,13 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
             clockRestore = () => clock.mockRestore();
           }, 600);
         }
+        if (progress) lastProgress = `Pending public commentary ${++progressReads}`;
         return { responsePresent: true, contentState: state === "partial-dom" ? "partial" : "complete",
           messageId: state === "foreign-dom" ? "foreign" : "answer",
           visibleText: text, fullHtml: "<p>" + text + "</p>",
           markdownSegments: [{ key: "final", html: "<p>" + text + "</p>", text, streamable: false }],
-          completionActionVisible: false, traceBlocks: [], stoppedThinkingVisible: false };
+          completionActionVisible: false, traceBlocks: progress
+            ? [{ kind: "commentary", key: "progress", text: lastProgress, complete: true }] : [], stoppedThinkingVisible: false };
       };
     }
     const deltas: string[] = [];
@@ -237,10 +242,20 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
     const result = worker.runBrowserTurnObserved({ traceId: `source-${state}`, modelId: "gpt-5.6-sol", reasoning: "xhigh",
       capabilities: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: false },
       queueTicket: { id: "source-task", secret: "source-secret" }, abortSignal: cancel.signal,
-      prepare: async () => ({ text: "input", images: [], release() {} }), onTextDelta: (delta: string) => { deltas.push(delta); if (state === "consumer-failed") throw consumerFailure; },
+      prepare: async () => ({ text: "input", images: [], release() {} }), onTextDelta: (delta: string) => { deliveryOrder.push("answer"); deltas.push(delta); if (state === "consumer-failed") throw consumerFailure; },
+      onCommentary: (delta: string) => { deliveryOrder.push("commentary"); commentary.push(delta); if (state === "progress-consumer") throw consumerFailure; },
       onResponseCompleted: () => { completedResponses++; },
     }, undefined, page);
-    if (["complete", "late-accepted", "late-timeout", "delayed-source", "complete-dom", "delayed-dom-source", "saved-recovered"].includes(state)) { expect(await result).toBe(text); expect(deltas).toEqual([text]); }
+    if (progress) {
+      if (state === "progress-cancel") { await expect(result).rejects.toMatchObject({ name: "AbortError" }); expect(commentary).toEqual([]); expect(deltas).toEqual([]); }
+      else {
+        if (state === "progress-consumer") { await expect(result).rejects.toBe(consumerFailure); expect(deltas).toEqual([]); }
+        else { expect(await result).toBe(text); expect(deltas).toEqual([text]); expect(deliveryOrder).toEqual(["commentary", "answer"]); }
+        expect(commentary).toEqual([lastProgress]);
+      }
+      expect(progressReads).toBeGreaterThan(0);
+    }
+    else if (["complete", "late-accepted", "late-timeout", "delayed-source", "complete-dom", "delayed-dom-source", "saved-recovered"].includes(state)) { expect(await result).toBe(text); expect(deltas).toEqual([text]); }
     else if (state === "partial-dom") {
       await expect(result).rejects.toMatchObject({ code: "browser_stream_inconsistent",
         cause: { code: "chatgpt_response_extraction_timeout" } });
@@ -259,18 +274,18 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
     else { await expect(result).rejects.toMatchObject({ code: "chatgpt_send_outcome_unknown" }); expect(deltas).toEqual([]); }
     expect(presses).toBe(1);
     expect(reloads).toBe(saved ? 1 : 0);
-    expect(completedResponses).toBe(["complete", "late-accepted", "late-timeout", "delayed-source", "consumer-failed", "complete-dom", "foreign-dom", "delayed-dom-source", "partial-dom", "saved-recovered"].includes(state) ? 1 : 0);
+    expect(completedResponses).toBe(["complete", "late-accepted", "late-timeout", "delayed-source", "consumer-failed", "complete-dom", "foreign-dom", "delayed-dom-source", "partial-dom", "saved-recovered", "progress-source", "progress-dom", "progress-consumer"].includes(state) ? 1 : 0);
     if (delayed) {
       expect(beforeTerminal).toEqual([0, 0]);
-      if (state === "delayed-dom-source") expect(domReadStarted).toBeTrue();
+      if (state === "delayed-dom-source" || progress) expect(domReadStarted).toBeTrue();
       else { expect(bindingStarted).toBeTrue(); expect(bindingRetired).toBeTrue(); }
     }
     expect(receipts).toEqual([{ id: "source-task", secret: "source-secret", permit: "source-permit",
-      outcome: ["complete", "incomplete", "late-accepted", "late-timeout", "delayed-source", "delayed-cancel", "consumer-failed", "complete-dom", "foreign-dom", "delayed-dom-source", "partial-dom", "no-final", "saved-no-final", "saved-recovered"].includes(state) ? "confirmed" : "unknown" }]);
+      outcome: progress || ["complete", "incomplete", "late-accepted", "late-timeout", "delayed-source", "delayed-cancel", "consumer-failed", "complete-dom", "foreign-dom", "delayed-dom-source", "partial-dom", "no-final", "saved-no-final", "saved-recovered"].includes(state) ? "confirmed" : "unknown" }]);
     const archives = readdirSync(join(root, "diagnostics")).filter(name => name.startsWith("response-source-"));
     const artifacts = archives.filter(name => existsSync(join(root, "diagnostics", name, "response-source.private.json")));
     if (state === "cancelled") expect(archives).toEqual([]);
-    if (["incomplete", "duplicate-request", "disconnected", "consumer-failed", "foreign-dom", "partial-dom", "no-final", "saved-no-final"].includes(state)) {
+    if (["incomplete", "duplicate-request", "disconnected", "consumer-failed", "foreign-dom", "partial-dom", "no-final", "saved-no-final", "progress-consumer"].includes(state)) {
       expect(artifacts).toHaveLength(1);
       const artifact = JSON.parse(readFileSync(join(root, "diagnostics", artifacts[0]!, "response-source.private.json"), "utf8"));
       expect(artifact.format).toBe("chatgpt-public-response-events");

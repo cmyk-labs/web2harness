@@ -51,6 +51,8 @@ function safeDetail(value, depth = 0) {
     key, SECRET.test(key) || CONTENT.test(key) ? "[removed]"
       : typeof item === "string" ? (Object.hasOwn(QUEUE_ENUMS, key) ? (QUEUE_ENUMS[key].has(item) ? item : "[text removed]")
         : ["groupId", "roundRef", "errorRef", "diagnosticRef"].includes(key) ? (/^diag-[a-f0-9]{24}$/.test(item) ? item : "[text removed]")
+        : ["attemptId", "queueId", "websocketRequestId", "websocketConnectionId", "firstEventId", "parentEventId", "triggerEventId", "controlId"].includes(key) ? (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(item) || key === "queueId" && /^[a-f0-9]{64}$/.test(item) ? item : "[text removed]")
+        : key === "helperRequestId" ? (/^[A-Za-z0-9_-]{6,128}$/.test(item) ? item : "[text removed]")
         : key === "sourceId" ? (/^[a-f0-9]{64}$/.test(item) ? item : "[text removed]")
         : TEXT.has(key) ? cleanText(item) : "[text removed]")
       : safeDetail(item, depth + 1),

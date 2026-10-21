@@ -1,4 +1,5 @@
 import { diagnosticError, diagnosticEvent } from "../../../diagnostics";
+import { readInterruption, type InterruptionEvidence } from "../../../interruption-diagnostics";
 import { adapterErrorEvent } from "../../../lib/errors";
 import { validMcpRemoteFailure, type McpRemoteFailure } from "../../../../launcher/shared/mcp-remote-error.cjs";
 
@@ -12,16 +13,17 @@ export interface BrowserHelperError {
   code?: string;
   retryable?: boolean;
   diagnosticRef?: string;
+  interruption?: InterruptionEvidence;
   mcpRemote?: McpRemoteFailure;
 }
 
 /** Root causes stay in helper diagnostics; only an opaque reference crosses IPC. */
-export function browserHelperError(id: string, error: unknown, traceId?: string): BrowserHelperError {
+export function browserHelperError(id: string, error: unknown, traceId?: string, interruption = readInterruption(error)): BrowserHelperError {
   const event = adapterErrorEvent(error);
   const remote = error && typeof error === "object" && "mcpRemote" in error ? error.mcpRemote : undefined;
   const evidence = diagnosticError(error);
   diagnosticEvent(event.status === 499 ? "info" : "error", "browser.helper_failed", {
-    requestId: id, traceId, ...evidence,
+    helperRequestId: id, traceId, interruption, ...evidence,
   });
   const structured = event.status !== undefined && event.errorType !== undefined
     && event.code !== undefined && event.retryable !== undefined;
@@ -30,6 +32,7 @@ export function browserHelperError(id: string, error: unknown, traceId?: string)
     name: error instanceof Error && /^[A-Za-z0-9_.-]{1,128}$/.test(error.name) ? error.name : "Error",
     ...(structured ? { status: event.status, errorType: event.errorType, code: event.code, retryable: event.retryable } : {}),
     diagnosticRef: evidence.errorRef,
+    ...(interruption ? { interruption } : {}),
     ...(validMcpRemoteFailure(remote) ? { mcpRemote: remote } : {}),
   };
 }

@@ -148,6 +148,8 @@ function readRecent(filePath) {
 }
 
 function createLogger({ filePath, publish }) {
+  const failureContext = require("../shared/failure-context.cjs").createFailureContextRecorder();
+  let failureContextWriteFailure = null;
   const records = readRecent(filePath);
   const sessionId = randomUUID();
   let lastPruned = 0;
@@ -169,6 +171,11 @@ function createLogger({ filePath, publish }) {
       if (Date.now() - lastPruned > 3600000) { pruneLogs(filePath); lastPruned = Date.now(); }
       writeFailure = null;
     } catch (error) { writeFailure = { at: record.at, code: error.code ?? "LOG_WRITE_FAILED", message: redactText(error.message) }; }
+    try {
+      for (const context of failureContext.remember(record)) {
+        appendBoundedLog(path.join(path.dirname(filePath), "failure-context.jsonl"), JSON.stringify(context) + "\n");
+      }
+    } catch (error) { failureContextWriteFailure = { at: record.at, code: error.code ?? "LOG_WRITE_FAILED" }; }
     publish?.(record);
     return record;
   };
@@ -186,7 +193,7 @@ function createLogger({ filePath, publish }) {
     error: (event, detail) => append("error", event, detail),
     recent: (limit = 150) => records.slice(-Math.max(1, Math.min(300, limit))),
     filePath,
-    health: () => ({ writeFailure }),
+    health: () => ({ writeFailure, failureContextWriteFailure }),
   };
 }
 

@@ -9,6 +9,7 @@ import { createInterface } from "node:readline";
 import { notifyLauncherTurn, readLauncherBrowserHostDescriptor } from "../../../browser/launcher-client";
 import { ChatGptCompactionHandoffAccepted, ChatGptWebAdapterError } from "../adapter-error";
 import { diagnosticError, diagnosticEvent } from "../../../diagnostics";
+import { attachInterruption, correlationContext, observeInterruption, parseInterruption, readInterruption } from "../../../interruption-diagnostics";
 import type { BrowserHelperError } from "./browser-helper-error";
 import { validMcpRemoteFailure } from "../../../../launcher/shared/mcp-remote-error.cjs";
 import type { CompiledChatGptWebPrompt } from "../prompt/compile";
@@ -19,6 +20,7 @@ import {
 } from "../conversation/rolling-checkpoint";
 
 interface PendingTurn {
+  context: Record<string, string>;
   turn: BrowserTurn;
   resolve: (value: string) => void;
   reject: (error: Error) => void;
@@ -166,6 +168,7 @@ function parseHelperMessage(line: string): HelperMessage {
       message: errorMessage,
       ...(validMcpRemoteFailure(message.mcpRemote) ? { mcpRemote: message.mcpRemote } : {}),
       ...(typeof message.diagnosticRef === "string" ? { diagnosticRef: message.diagnosticRef } : {}),
+      ...(parseInterruption(message.interruption) ? { interruption: parseInterruption(message.interruption) } : {}),
       ...(errorName !== undefined ? { name: errorName as string } : {}),
       ...(structured ? {
         status: status as number,
@@ -230,10 +233,15 @@ export class LauncherBrowserHelperClient {
           rejectResult(new Error(`Duplicate launcher browser turn: ${turn.traceId}`));
           return;
         }
-        const pending: PendingTurn = { turn, resolve: resolveResult, reject: rejectResult };
+        const pending: PendingTurn = { turn, resolve: resolveResult, reject: rejectResult, context: { ...correlationContext(), traceId: turn.traceId } };
         this.pending.set(turn.traceId, pending);
         if (turn.abortSignal) {
           const abortListener = () => {
+            const interruption = observeInterruption(pending, "helper_local_abort", pending.context,
+              readInterruption(turn.abortSignal) ?? readInterruption(turn.abortSignal?.reason));
+            diagnosticEvent("info", "browser.helper_abort_requested", { ...pending.context, interruption,
+              cancelSource: "local_signal", dispatched: pending.sent === true,
+              error: diagnosticError(turn.abortSignal?.reason) });
             if (!pending.sent) {
               this.finishWithError(
                 turn.traceId,
@@ -244,6 +252,7 @@ export class LauncherBrowserHelperClient {
             void this.send({
               type: "abort",
               id: turn.traceId,
+              interruption,
               ...(turn.abortSignal?.reason instanceof ChatGptCompactionHandoffAccepted
                 ? { reason: "compaction_handoff_accepted" }
                 : {}),
@@ -269,6 +278,7 @@ export class LauncherBrowserHelperClient {
         void this.send({
           type: "run",
           id: turn.traceId,
+          diagnostics: pending.context,
           config: {
             appName: this.config.appName,
             browserHostDescriptorPath: this.config.browserHostDescriptorPath!,
@@ -316,7 +326,10 @@ export class LauncherBrowserHelperClient {
     this.readyResolve = undefined;
     this.readyReject = undefined;
     for (const id of [...this.pending.keys()]) {
-      this.finishWithError(id, new DOMException("Launcher browser helper is closing", "AbortError"));
+      const pending = this.pending.get(id)!;
+      const error = new DOMException("Launcher browser helper is closing", "AbortError");
+      attachInterruption(error, observeInterruption(pending, "helper_shutdown_requested", { ...pending.context, helperPid: child?.pid }));
+      this.finishWithError(id, error);
     }
     if (!child) return;
     await this.sendTo(child, { type: "shutdown" }).catch(() => {});
@@ -354,6 +367,12 @@ export class LauncherBrowserHelperClient {
     output.on("line", line => this.handleLine(child, line));
     const errors = createInterface({ input: child.stderr });
     errors.on("line", line => console.info(line.startsWith(DIAGNOSTIC_PREFIX) ? line : `[chatgpt-web-helper] ${line}`));
+    for (const [channel, stream] of [["protocol", child.stdout], ["diagnostic", child.stderr]] as const) {
+      stream.once("end", () => diagnosticEvent("info", "browser.helper_pipe_closed", {
+        channel, helperPid: child.pid, exitCode: child.exitCode, signal: child.signalCode,
+        pendingCount: this.child === child ? this.pending.size : 0, owned: this.child === child,
+      }));
+    }
     const failChild = (error: Error) => {
       const owned = this.child === child;
       this.handleExit(child, error);
@@ -366,12 +385,15 @@ export class LauncherBrowserHelperClient {
       }
     };
     child.once("error", failChild);
-    child.stdin.once("error", error => failChild(new Error(
-      `Launcher browser helper input failed: ${error instanceof Error ? error.message : String(error)}`,
-    )));
-    child.once("exit", (code, signal) => this.handleExit(child, new Error(
-      `Launcher browser helper exited ${signal ? `from signal ${signal}` : `with status ${code ?? 1}`}`,
-    )));
+    child.stdin.once("error", error => {
+      const failure = new Error(`Launcher browser helper input failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+      observeInterruption(failure, "helper_input_failure", { helperPid: child.pid, error: diagnosticError(error) });
+      failChild(failure);
+    });
+    child.once("exit", (code, signal) => {
+      diagnosticEvent("info", "browser.helper_process_exit", { helperPid: child.pid, exitCode: code, signal, owned: this.child === child });
+      this.handleExit(child, new Error(`Launcher browser helper exited ${signal ? `from signal ${signal}` : `with status ${code ?? 1}`}`));
+    });
     const timer = setTimeout(() => {
       if (this.child === child) this.readyReject?.(new Error("Launcher browser helper did not become ready"));
     }, 30_000);
@@ -577,10 +599,14 @@ export class LauncherBrowserHelperClient {
       if (error instanceof ChatGptWebAdapterError && message.name === "AbortError") error.name = "AbortError";
       if (message.diagnosticRef) {
         Object.defineProperty(error, "diagnosticRef", { value: message.diagnosticRef });
-        diagnosticEvent(message.status === 499 || message.name === "AbortError" ? "info" : "error", "browser.helper_error_received", {
-          requestId: message.id, traceId: pending.turn.traceId, ...diagnosticError(error),
-        });
       }
+      attachInterruption(error, message.interruption ?? (message.name === "AbortError" ? readInterruption(pending) : undefined));
+      diagnosticEvent(message.status === 499 || message.name === "AbortError" ? "info" : "error", "browser.helper_error_received", {
+        ...pending.context, helperRequestId: message.id, traceId: pending.turn.traceId,
+        interruption: readInterruption(error), localInterruption: readInterruption(pending), ...diagnosticError(error),
+        signalAborted: pending.turn.abortSignal?.aborted === true, localFailure: !!pending.localFailure,
+        cancelSource: pending.localFailure ? "local_protocol" : pending.turn.abortSignal?.aborted ? "local_signal" : "none",
+      });
       this.finish(message.id);
       pending.reject(pending.localFailure ?? error);
     }
@@ -589,7 +615,11 @@ export class LauncherBrowserHelperClient {
   private abortWithLocalFailure(id: string, error: Error, pending: PendingTurn): void {
     if (this.pending.get(id) !== pending || pending.localFailure) return;
     pending.localFailure = error;
-    void this.send({ type: "abort", id }).catch(sendError => {
+    const interruption = observeInterruption(pending, "helper_protocol", pending.context);
+    attachInterruption(error, interruption);
+    diagnosticEvent("warning", "browser.helper_abort_requested", { ...pending.context, interruption,
+      cancelSource: "local_protocol", dispatched: pending.sent === true, error: diagnosticError(error) });
+    void this.send({ type: "abort", id, interruption }).catch(sendError => {
       if (this.pending.get(id) !== pending) return;
       this.finishWithError(
         id,
@@ -659,6 +689,8 @@ export class LauncherBrowserHelperClient {
 
   private handleExit(child: ChildProcessWithoutNullStreams, error: Error): void {
     if (this.child !== child) return;
+    const interruption = readInterruption(error) ?? observeInterruption(error, "helper_exit", {
+      helperPid: child.pid, exitCode: child.exitCode, signal: child.signalCode, error: diagnosticError(error), pendingCount: this.pending.size });
     this.readyReject?.(error);
     this.readyReject = undefined;
     this.readyResolve = undefined;
@@ -667,6 +699,8 @@ export class LauncherBrowserHelperClient {
     for (const id of [...this.pending.keys()]) {
       const pending = this.pending.get(id);
       if (!pending) continue;
+      diagnosticEvent("error", "browser.helper_turn_lost", { ...pending.context, helperPid: child.pid, interruption,
+        signalAborted: pending.turn.abortSignal?.aborted === true, error: diagnosticError(error) });
       void notifyLauncherTurn(this.config.browserHostDescriptorPath!, {
         phase: "end",
         traceId: id,

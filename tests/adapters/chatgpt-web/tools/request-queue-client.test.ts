@@ -1,4 +1,5 @@
-import { test, expect } from "bun:test";
+import { test, expect, spyOn } from "bun:test";
+import { parseDiagnosticLine, type DiagnosticRecord } from "../../../../launcher/shared/diagnostic-event.cjs";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname, basename, resolve } from "node:path";
@@ -12,6 +13,34 @@ import { LAUNCHER_BROWSER_HOST_KIND, LAUNCHER_BROWSER_IDLE_URL } from "../../../
 const require = createRequire(import.meta.url);
 const { RequestQueue } = require("../../../../launcher/electron/runtime/request-queue.cjs");
 const { BrowserControlServer } = require("../../../../launcher/electron/control-server.cjs");
+
+test.each([false, true])("an execution AbortError records caller signal=%s without inventing cancellation", async signalled => {
+  const records: DiagnosticRecord[] = [], settlements: any[] = [];
+  const log = spyOn(console, "error").mockImplementation((line: unknown) => {
+    const record = parseDiagnosticLine(String(line)); if (record) records.push(record);
+  });
+  const abort = new AbortController(), original = new DOMException("Browser operation aborted", "AbortError");
+  const transport = { async request<T>(action: string, body: unknown): Promise<T> {
+    if (action === "enqueue") return { record: { state: "preparing" }, secret: "PRIVATE_TICKET" } as T;
+    if (action === "settle") settlements.push(body);
+    return {} as T;
+  } };
+  try {
+    await expect(withQueuedRequest({ descriptorPath: transport, traceId: "abort-origin", signal: abort.signal,
+      job: { id: "abort-origin", groupId: "fixture", model: "gpt-6", mode: "native-tools", bytes: 1 },
+      execute: async () => { if (signalled) abort.abort(original); throw original; },
+    })).rejects.toBe(original);
+    expect(settlements[0]?.outcome).toBe(signalled ? "cancelled" : "failed");
+    expect(records).toHaveLength(2);
+    expect(records[0]?.event).toBe("browser.queue_attempt_admitted");
+    expect(records[1]).toMatchObject({ event: "browser.queue_execution_interrupted", detail: {
+      signalAborted: signalled, callerAborted: signalled, queueAborted: false,
+      cancelSource: signalled ? "caller" : "none", outcome: signalled ? "cancelled" : "failed",
+      error: { errorName: "AbortError", code: "20" }, restoredQueueError: false,
+    } });
+    expect(JSON.stringify(records)).not.toContain("PRIVATE_TICKET");
+  } finally { log.mockRestore(); }
+});
 
 async function withQueueFixture(run: (queue: InstanceType<typeof RequestQueue>) => Promise<void>) {
   const root = resolve(await mkdtemp(join(tmpdir(), "w2h-client-queue-")));

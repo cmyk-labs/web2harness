@@ -76,20 +76,28 @@ export function chatGptModelFamilyMatches(
   family: ChatGptWebModelFamily,
   effort: ChatGptWebAdapterEffort,
 ): boolean {
+  const states = modelDescriptionChecks(descriptions, family, effort).filter(state => state.recognized);
+  return states.length > 0 && states.every(state => state.familyMatches && state.nameMatches && state.effortMatches);
+}
+
+/** Record predicates, never arbitrary picker text (which can contain account/page content). */
+function modelDescriptionChecks(descriptions: readonly string[], family: ChatGptWebModelFamily, effort: ChatGptWebAdapterEffort) {
   // An older Latest picker can still use 5.6 below Pro. That does not prove a GPT-6 request.
   const expectedName = family === "6" && effort === "max" ? "astra" : "sol";
   // Adapted from miuuyy/codex-chatgpt-web 6f43747 (MIT): require the exact effort,
   // and normalize only an identical version repeated across separate header labels.
   const expectedMode = { low: "instant", medium: "medium", high: "high", xhigh: "extra high", max: "pro" }[effort];
-  const states = descriptions.flatMap(text => {
+  return descriptions.map(text => {
     const normalized = text.normalize("NFKC").replace(/\p{Cf}/gu, "").replace(/\s+/g, " ").trim()
       .replace(/^((?:GPT[-\s]?)?(\d+(?:\.\d+)?)\s+(?:Sol|Astra))\s+(?:GPT[-\s]?)?\2\s+/i, "$1 ");
     const match = /^(?:GPT[-\s]?)?(\d+(?:\.\d+)?)(?:\s+(Sol|Astra))?\s+([^\p{P}]+)(?:\p{P}|$)/iu.exec(normalized);
-    return match ? [{ version: match[1], name: match[2]?.toLowerCase(), mode: match[3]!.trim() }] : [];
+    return { recognized: !!match, familyMatches: match?.[1] === family,
+      modelFamily: match?.[1] === "6" || match?.[1] === "5.6" ? match[1] : "unknown",
+      model: ["sol", "astra"].includes(match?.[2]?.toLowerCase() ?? "") ? match![2]!.toLowerCase() : "unknown",
+      effort: ["instant", "medium", "high", "extra high", "pro"].includes(match?.[3]?.trim().toLowerCase() ?? "") ? match![3]!.trim().toLowerCase() : "unknown",
+      nameMatches: !!match && (!match[2] || match[2].toLowerCase() === expectedName),
+      effortMatches: match?.[3]?.trim().toLowerCase() === expectedMode };
   });
-  return states.length > 0 && states.every(state => state.version === family
-    && (!state.name || state.name === expectedName)
-    && state.mode.toLowerCase() === expectedMode);
 }
 
 export async function assertChatGptModelFamily(
@@ -100,15 +108,55 @@ export async function assertChatGptModelFamily(
   settleMs = 0,
 ): Promise<void> {
   const deadline = Date.now() + settleMs;
-  do {
-    const option = familyOption(menu, family);
-    const checked = await option.evaluateAll(rows => rows.length === 1 && rows[0]!.getAttribute("aria-checked") === "true");
-    const snapshot = await readChatGptModelSnapshot(menu.slider);
-    const state = snapshot && parseChatGptEffortSliderState(snapshot.min, snapshot.max, snapshot.value);
-    if (checked && state && state.value === state.min + effortIndex
-      && chatGptModelFamilyMatches(snapshot.descriptions, family, effort)) return;
-    if (Date.now() >= deadline) break;
-    await new Promise(resolve => setTimeout(resolve, 50));
-  } while (true);
+  let checks: Record<string, unknown> = {};
+  let stage = "family_radio";
+  let attempts = 0;
+  const started = performance.now();
+  const history: Record<string, unknown>[] = [];
+  let lastState = "", droppedStates = 0;
+  const observe = () => {
+    const state = JSON.stringify({ stage, checks });
+    if (state === lastState) return;
+    lastState = state;
+    const entry = { stage, checks, elapsedMs: Math.round(performance.now() - started), attempts };
+    // Retain the first observation and latest 31 changes. Report loss explicitly.
+    if (history.length >= 32) { history.splice(1, 1); droppedStates++; }
+    history.push(entry);
+    diagnosticEvent("info", "browser.model_verification_state", { modelFamily: family, requestedEffort: effort, ...entry });
+  };
+  try {
+    do {
+      attempts++;
+      stage = "family_radio";
+      const option = familyOption(menu, family);
+      const radio = await option.evaluateAll(rows => ({ count: rows.length,
+        checked: rows.length === 1 && rows[0]!.getAttribute("aria-checked") === "true" }));
+      checks = { radio };
+      stage = "model_snapshot";
+      const snapshot = await readChatGptModelSnapshot(menu.slider);
+      const state = snapshot && parseChatGptEffortSliderState(snapshot.min, snapshot.max, snapshot.value);
+      const sliderMatches = !!state && state.value === state.min + effortIndex;
+      const descriptions = modelDescriptionChecks(snapshot?.descriptions ?? [], family, effort)
+        .map((description, index) => ({ ...description, source: snapshot?.descriptionSources?.[index] ?? "unknown" }));
+      const recognized = descriptions.filter(description => description.recognized);
+      const descriptionsMatch = recognized.length > 0 && recognized.every(description =>
+        description.familyMatches && description.nameMatches && description.effortMatches);
+      checks = { radio, snapshotPresent: !!snapshot, sliderValid: !!state,
+        ...(snapshot ? { controlId: snapshot.controlId, headerCount: snapshot.headerCount, connected: snapshot.connected, visible: snapshot.visible, busy: snapshot.busy } : {}),
+        ...(state ? { slider: { ...state, target: state.min + effortIndex } } : {}),
+        sliderMatches, descriptions, descriptionsMatch };
+      observe();
+      if (radio.checked && sliderMatches && descriptionsMatch) return;
+      if (Date.now() >= deadline) break;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    } while (true);
+  } catch (error) {
+    observe();
+    diagnosticEvent("warning", "browser.model_verification_failed", { modelFamily: family, requestedEffort: effort,
+      stage, reason: "observation_failed", attempts, checks, history, droppedStates, submission: "not-sent" });
+    throw error;
+  }
+  diagnosticEvent("warning", "browser.model_verification_failed", { modelFamily: family, requestedEffort: effort,
+    stage: "selection_confirmation", reason: "selection_mismatch", attempts, checks, history, droppedStates, submission: "not-sent" });
   throw familyError(family);
 }

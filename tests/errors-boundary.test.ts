@@ -205,18 +205,19 @@ test("helper preserves structured cancellation and ordinary AbortError, and acce
 
 test("helper diagnostics distinguish request identity from a supplied turn trace and omit unknown traces", () => {
   captureDiagnostics();
-  const frame = browserHelperError("fixture-request", new Error("turn failed"), "fixture-turn-trace");
+  const requestId = crypto.randomUUID();
+  const frame = diagnosticContext.run({ requestId }, () => browserHelperError("fixture-request", new Error("turn failed"), "fixture-turn-trace"));
   receiveHelperError(frame, "fixture-turn-trace");
   expect(records.find(record => record.event === "browser.helper_failed")!.detail).toMatchObject({
-    requestId: "fixture-request", traceId: "fixture-turn-trace", errorRef: frame.diagnosticRef,
+    requestId, helperRequestId: "fixture-request", traceId: "fixture-turn-trace", errorRef: frame.diagnosticRef,
   });
   expect(records.find(record => record.event === "browser.helper_error_received")!.detail).toMatchObject({
-    requestId: "fixture-request", traceId: "fixture-turn-trace", diagnosticRef: frame.diagnosticRef,
+    helperRequestId: "fixture-request", traceId: "fixture-turn-trace", diagnosticRef: frame.diagnosticRef,
   });
   const unknown = diagnosticContext.run({ traceId: "unrelated-context-trace" }, () =>
     browserHelperError("fixture-maintenance-request", new Error("maintenance failed")));
-  const evidence = records.find(record => record.detail.requestId === unknown.id)!.detail;
-  expect(evidence).toMatchObject({ requestId: unknown.id, errorRef: unknown.diagnosticRef });
+  const evidence = records.find(record => record.detail.helperRequestId === unknown.id)!.detail;
+  expect(evidence).toMatchObject({ helperRequestId: unknown.id, errorRef: unknown.diagnosticRef });
   expect(evidence).not.toHaveProperty("traceId");
 });
 

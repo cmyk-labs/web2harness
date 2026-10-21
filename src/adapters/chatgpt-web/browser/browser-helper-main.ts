@@ -1,5 +1,6 @@
 import { PREFIX, createDiagnosticRecord, type DiagnosticRecord } from "../../../../launcher/shared/diagnostic-event.cjs";
-import { diagnosticContext } from "../../../diagnostics";
+import { diagnosticContext, diagnosticError, diagnosticEvent } from "../../../diagnostics";
+import { abortWithDiagnostic, correlationContext, parseInterruption, readInterruption, type InterruptionEvidence } from "../../../interruption-diagnostics";
 import { isCompletionFenceState, isCompletionFenceCommit, type CompletionFenceState, type CompletionFenceCommit } from "../tools/completion-fence";
 import { validateContextFile } from "../prompt/context-attachments";
 import { validateInputFiles } from "../prompt/file-attachments";
@@ -19,6 +20,7 @@ import { validSavedChatTask, type SavedChatTask } from "../../../../launcher/sha
 import type { ChatGptExternalTurnProgressSnapshot } from "../tools/turn-progress";
 
 interface RunMessage {
+  diagnostics?: Record<string, unknown>;
   type: "run";
   id: string;
   config: {
@@ -90,17 +92,19 @@ type InputMessage = RunMessage
   | { type: "completion_fence_begin_ack"; id: string; requestId: number; result: CompletionFenceState }
   | { type: "completion_fence_commit_ack"; id: string; requestId: number; result: CompletionFenceCommit }
   | { type: "progress"; id: string; snapshot: ChatGptExternalTurnProgressSnapshot }
-  | { type: "abort"; id: string; reason?: "compaction_handoff_accepted" }
+  | { type: "abort"; id: string; reason?: "compaction_handoff_accepted"; interruption?: InterruptionEvidence }
   | { type: "shutdown" };
 
 let outputFailure: Error | undefined;
-const handleOutputFailure = (error: Error): void => {
+let outputFailureChannel: "protocol" | "diagnostic" | undefined;
+const handleOutputFailure = (error: Error, channel: "protocol" | "diagnostic"): void => {
   if (outputFailure) return;
   outputFailure = error;
-  void requestShutdown();
+  outputFailureChannel = channel;
+  void requestShutdown("helper_output_failure");
 };
-const protocolOutput = createProcessLineWriter(stdout, handleOutputFailure);
-const diagnosticOutput = createProcessLineWriter(stderr, handleOutputFailure);
+const protocolOutput = createProcessLineWriter(stdout, error => handleOutputFailure(error, "protocol"));
+const diagnosticOutput = createProcessLineWriter(stderr, error => handleOutputFailure(error, "diagnostic"));
 
 const writeProtocol = (message: unknown): boolean => protocolOutput.write(JSON.stringify(message));
 
@@ -114,6 +118,11 @@ console.warn = (...values) => diagnosticAt("warning", ...values);
 console.error = (...values) => diagnosticAt("error", ...values);
 
 const abortControllers = new Map<string, AbortController>();
+const turnContexts = new Map<string, Record<string, unknown>>();
+function abortTurn(id: string, origin: string, reason?: unknown, parent?: InterruptionEvidence): void {
+  const controller = abortControllers.get(id);
+  if (controller) abortWithDiagnostic(controller, origin, reason, turnContexts.get(id) ?? { traceId: id }, parent);
+}
 const turnProgress = new Map<string, ChatGptMirroredTurnProgress>();
 const preparedSelections = new Map<string, ReturnType<typeof createBrowserHelperPromptSelection>>();
 const sendActivationWaiters = new Map<string, {
@@ -134,16 +143,18 @@ let completionFenceRequestId = 0;
 let shuttingDown = false;
 let shutdownPromise: Promise<void> | undefined;
 
-function requestShutdown(): Promise<void> {
+function requestShutdown(origin: string): Promise<void> {
   if (shutdownPromise) return shutdownPromise;
   let completeShutdown!: () => void;
   shutdownPromise = new Promise<void>(resolveShutdown => {
     completeShutdown = resolveShutdown;
   });
   shuttingDown = true;
+  diagnosticEvent("info", "browser.helper_shutdown", { origin, pendingCount: abortControllers.size, outputFailed: !!outputFailure,
+    channel: outputFailureChannel, ...(outputFailure ? { error: diagnosticError(outputFailure) } : {}) });
+  for (const id of abortControllers.keys()) abortTurn(id, origin);
   protocolOutput.close();
   diagnosticOutput.close();
-  for (const controller of abortControllers.values()) controller.abort();
   for (const selection of preparedSelections.values()) selection.cancel();
   preparedSelections.clear();
   for (const waiter of sendActivationWaiters.values()) {
@@ -231,6 +242,9 @@ async function run(message: RunMessage): Promise<void> {
   };
   const abortController = new AbortController();
   abortControllers.set(message.id, abortController);
+  const context = { ...correlationContext(message.diagnostics), traceId: message.turn.traceId };
+  turnContexts.set(message.id, context);
+  diagnosticEvent("info", "browser.helper_turn_bound", context);
   // The Codex MCP broker runs in the daemon process, so this mirror is the only way the worker can
   // observe that a turn is still executing while its ChatGPT DOM is unavailable. Trace ids are
   // derived deterministically and can repeat, so each run starts a fresh mirror rather than
@@ -346,10 +360,12 @@ async function run(message: RunMessage): Promise<void> {
     } : {}),
   };
   try {
-    const text = await diagnosticContext.run({ requestId: message.id, traceId: turn.traceId }, () => ChatGptBrowserWorker.forProvider(provider).run(turn));
+    const text = await diagnosticContext.run(context, () => ChatGptBrowserWorker.forProvider(provider).run(turn));
     writeProtocol({ type: "result", id: message.id, text });
   } catch (error) {
-    writeProtocol(browserHelperError(message.id, error, turn.traceId));
+    const causedByAbort = abortController.signal.aborted && (error === abortController.signal.reason || error instanceof Error && error.name === "AbortError");
+    diagnosticContext.run(context, () => writeProtocol(browserHelperError(message.id, error, turn.traceId,
+      causedByAbort ? readInterruption(abortController.signal) : readInterruption(error))));
   } finally {
     preparedSelections.get(message.id)?.cancel();
     preparedSelections.delete(message.id);
@@ -364,6 +380,7 @@ async function run(message: RunMessage): Promise<void> {
     commitWaiter?.reject(new DOMException("Browser helper turn ended before completion-fence commit", "AbortError"));
     abortControllers.delete(message.id);
     turnProgress.delete(message.id);
+    turnContexts.delete(message.id);
   }
 }
 
@@ -436,18 +453,18 @@ input.on("line", line => {
     if (!prepared || typeof prepared.text !== "string" || !Array.isArray(prepared.images)
       || (prepared.handoffBinding !== undefined && (typeof prepared.handoffBinding !== "string" || !/^[a-f0-9]{64}$/.test(prepared.handoffBinding)))) {
       writeProtocol({ type: "error", id: message.id, message: "Browser helper prompt selection is invalid" });
-      abortControllers.get(message.id)?.abort();
+      abortTurn(message.id, "helper_protocol");
       return;
     }
     try { validateSkillFiles(prepared.skillFiles); validateContextFile(prepared.contextFile); validateInputFiles(prepared.files); }
     catch (error) {
       writeProtocol(browserHelperError(message.id, error));
-      abortControllers.get(message.id)?.abort();
+      abortTurn(message.id, "helper_protocol");
       return;
     }
     if ("multipart" in prepared) {
       writeProtocol({ type: "error", id: message.id, message: "Multipart context transport was removed; restart the updated runtime" });
-      abortControllers.get(message.id)?.abort();
+      abortTurn(message.id, "helper_protocol");
       return;
     }
     const selection = preparedSelections.get(message.id);
@@ -468,7 +485,7 @@ input.on("line", line => {
     if (!Number.isSafeInteger(message.requestId) || message.requestId <= 0
       || !isCompletionFenceState(message.result)) {
       writeProtocol({ type: "error", id: message.id, message: "Browser helper completion fence revision is invalid" });
-      abortControllers.get(message.id)?.abort();
+      abortTurn(message.id, "helper_protocol");
       return;
     }
     const waiter = completionFenceBeginWaiters.get(message.id);
@@ -479,7 +496,7 @@ input.on("line", line => {
     if (!Number.isSafeInteger(message.requestId) || message.requestId <= 0
       || !isCompletionFenceCommit(message.result)) {
       writeProtocol({ type: "error", id: message.id, message: "Browser helper completion fence result is invalid" });
-      abortControllers.get(message.id)?.abort();
+      abortTurn(message.id, "helper_protocol");
       return;
     }
     const waiter = completionFenceCommitWaiters.get(message.id);
@@ -503,9 +520,9 @@ input.on("line", line => {
       );
     }
   } else if (message.type === "abort") {
-    abortControllers.get(message.id)?.abort(message.reason === "compaction_handoff_accepted"
+    abortTurn(message.id, "helper_local_abort", message.reason === "compaction_handoff_accepted"
       ? new ChatGptCompactionHandoffAccepted()
-      : undefined);
+      : undefined, parseInterruption(message.interruption));
     preparedSelections.get(message.id)?.cancel();
     const waiter = sendActivationWaiters.get(message.id);
     sendActivationWaiters.delete(message.id);
@@ -518,7 +535,7 @@ input.on("line", line => {
     commitWaiter?.reject(new DOMException("Browser helper turn aborted before completion-fence commit", "AbortError"));
   }
   else if (message.type === "shutdown") {
-    void requestShutdown();
+    void requestShutdown("helper_shutdown_requested");
   } else if (message.type === "verify") {
     void verify(message).catch(error => writeProtocol(browserHelperError(message.id, error)));
   } else if (message.type === "inspect" || message.type === "smoke" || message.type === "limits") {
@@ -535,13 +552,13 @@ input.on("line", line => {
   }
 });
 input.on("close", () => {
-  void requestShutdown();
+  void requestShutdown("helper_input_closed");
 });
 process.once("SIGINT", () => {
-  void requestShutdown();
+  void requestShutdown("helper_sigint");
 });
 process.once("SIGTERM", () => {
-  void requestShutdown();
+  void requestShutdown("helper_sigterm");
 });
 
 // Advertise the optional frames this helper understands so the daemon can negotiate them explicitly.

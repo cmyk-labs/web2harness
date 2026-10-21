@@ -1,43 +1,43 @@
 ## 简体中文
 
-Web2Harness 2.5.3（`v2.5.3`）修复浏览器检查误报、过时成功状态和队列恢复流程。
+Web2Harness 2.5.4（`v2.5.4`）修复公开进度尾段丢失，并补全后续故障定位所需的日志。
 
-- **区分连接与发送验证**：已有队列暂停时，实际检查登录与页面，但不发送测试消息。明确显示发送验证被阻断及恢复入口，不再把队列阻断误报为浏览器连接或整体运行故障。
-- **保留错误与正确状态**：跨帮助进程和界面保留结构化错误及诊断编号，分别记录主失败和清理失败。普通操作失败或取消不再污染浏览器健康；真实页面加载故障仍正常报错。
-- **使过时检查失效**：区分通过、阻断、失败、取消和未执行。失败、认证变化或浏览器进程重启使当前证明失效，迟到结果不能恢复旧成功状态；历史成功单独保存。
-- **可核对的队列恢复**：未解决暂停保留有界原因、时间和发送阶段摘要，普通回执过期后仍可核对。恢复拒绝过时确认，并要求没有活动任务或浏览器资源；保留独立的手动暂停，不重发旧请求。
-- **保持Codex能力**：模型、推理强度、上下文、原生工具、权限、审批、等待和点击/Enter策略保持原有行为。
-
-升级或重启不会自动解除未知发送暂停。在“运行控制”核对阻断原因并明确恢复后，再运行“检查浏览器连接”。恢复本身不代表真实发送验证通过。
+- **完整交付进度尾段**：成功完成且正文证据完整时，交付尚未输出的公开进度尾段；保持续接去重，不把失败或取消当作完成。
+- **中断来源与传播**：记录本地首次观察到的中断及父事件引用，串联WebSocket、HTTP、任务/轮次、队列尝试和辅助进程；分别保留取消、关停、输入关闭、管道失败及进程退出证据。
+- **模型校验历史**：区分aria描述与可见标题，记录模型/强度匹配条件、滑块状态、控件重建及状态变化；失败最多保留32个变化状态，不保存未知页面文本。
+- **有界故障现场与导出**：桌面独立保存结构化故障上下文，保留首次绑定及近期观察，纳入现有诊断包；报告丢弃、淘汰和写入失败，不包含对话正文、工具载荷或凭据。
+- **保持Codex能力**：模型、强度、上下文、原生工具、权限、审批、等待、重试及点击/Enter策略保持原有行为；严格模型校验不放宽。
 
 ### 验证范围与已知限制
 
-隔离测试覆盖结构化错误、检查结果失效、账号身份范围、迟到结果、回执过期和恢复确认。双语界面专项11项及完整工作区326项通过。独立认证DEV验证了暂停时实际连接通过且没有新增发送、恢复后真实测试消息成功，以及GPT-6/high Native Tools的两条真实命令、一次文件补丁和完整最终答案交付。
+确定性测试覆盖首因传播、独立错误、队列结算、helper真实子进程EOF/关停/取消/输出断管、模型状态历史、日志轮转与导出。真实Chrome模型夹具通过。认证隔离DEV确认主动取消及因果链，并在同一服务不重启的情况下完成GPT-6/xhigh的4次请求、2条原生命令、1次补丁和完整最终回答；实际诊断包包含首次中断及传播引用，覆盖完整。
 
-完整源码验证、五个原生构建目标及新包完整性由对应CI检查；跳过和未执行项不计为通过。有效的既有证据继续沿用。本轮未重新完成人工安装/升级/卸载、跨平台认证、真实账号切换、远端MCP绑定、真实最小化/失焦、物理输入或跨DPI验收。用户手动DEV验收尚无结果；CI包冒烟不替代人工验收。
+完整源码验证、五个原生构建目标和新包完整性由对应CI检查。有效的既有验收证据继续沿用，跳过和未执行项不计通过。本轮未重新完成人工安装/升级/卸载、跨平台认证、远端MCP绑定、物理输入或跨DPI验收；CI包冒烟不替代这些检查。
 
-原始点击超时、历史七次附件超时及不完整进度句的底层原因仍未完全证实。本版本修复已证实的检查、状态和恢复缺口，不宣称这些历史故障全部根治。既有Web模型协议兼容限制及偶发发送、缺正文、音频识别风险继续保留。
+历史连接重置、模型校验失败及更早点击/附件超时的底层原因仍未证实，不能宣称全部根治。日志证明本地观察和传播，不保证确定远端服务或网络设备的内部原因；强杀或已断开的日志管道仍可能丢失末尾记录。既有Web模型协议兼容及偶发发送、缺正文、音频识别限制继续保留。
+
+遇到问题时记录版本与发生时间，在“用量与诊断 → 日志 → 导出诊断包”保留现场后检查具体错误。升级不会自动恢复未知发送暂停；在运行控制核对发送状态并明确恢复，不要盲目重发结果未知的请求。此前未保存的历史证据无法由本版本补回。
 
 发布目标为Windows x64、macOS arm64/x64、Linux x64/arm64的七个包及`checksums.txt`。Windows无证书签名；macOS为ad-hoc签名，未作Developer ID签名或公证。
 
 ## English
 
-Web2Harness 2.5.3 (`v2.5.3`) fixes misleading browser checks, stale success state and queue recovery.
+Web2Harness 2.5.4 (`v2.5.4`) fixes missing public progress tails and adds evidence for diagnosing future failures.
 
-- **Separate connectivity from send verification**: When dispatch is paused, check the actual sign-in and page without sending a test message. Show blocked send verification and a recovery link instead of misreporting a browser or overall runtime failure.
-- **Preserve errors and health state**: Carry structured errors and diagnostic references across helper and renderer boundaries, retaining primary and cleanup failures separately. Ordinary operation failures or cancellations no longer poison browser health; real page-load failures still report an error.
-- **Invalidate stale checks**: Distinguish passed, blocked, failed, cancelled and not-run results. Failure, authentication changes or browser-process restart invalidate current proof; late results cannot revive old success. Historical success is retained separately.
-- **Reviewable queue recovery**: Keep bounded reason, time and send-stage summaries for unresolved pauses after ordinary receipts expire. Reject stale confirmations and require no active tasks or browser resources. Preserve a separate manual pause and never replay old requests.
-- **Preserve Codex capabilities**: Retain model, effort, context, native tools, permissions, approvals, wait semantics and click/Enter behavior.
-
-Upgrade or restart does not automatically clear an unknown-send pause. Review the blocker in Runtime controls, explicitly recover, then run Check browser connection again. Recovery alone does not pass actual send verification.
+- **Complete progress delivery**: Flush the remaining public progress tail after successful completion with complete text evidence. Preserve continuation deduplication and never treat failure or cancellation as completion.
+- **Interruption origin and propagation**: Record the first locally observed interruption and parent-event references across WebSocket, HTTP, task/turn, queue attempts and helpers. Distinguish cancellation, shutdown, closed input, pipe failure and process exit.
+- **Model verification history**: Separate aria descriptions from visible headers and record model/effort predicates, slider state, control remounts and state changes. Retain up to 32 changed states on failure without unknown page text.
+- **Bounded failure context and export**: Retain structural failure context separately on desktop, preserving initial binding and recent observations in existing diagnostic bundles. Report dropped/evicted records and write failures; exclude conversation bodies, tool payloads and credentials.
+- **Preserve Codex capabilities**: Keep model, effort, context, native tools, permissions, approvals, waits, retries and click/Enter behavior unchanged. Strict model verification remains enforced.
 
 ### Validation scope and known limitations
 
-Isolated tests cover structured errors, stale checks, account identity scope, late results, receipt expiry and recovery confirmation. The bilingual browser-check suite passed 11 checks and the full workspace suite passed 326. Independently authenticated DEV confirmed real connectivity without a new send while paused, a successful real test message after recovery, and GPT-6/high Native Tools execution with two real commands, one file patch and complete final-answer delivery.
+Deterministic tests cover first-event propagation, independent errors, queue settlement, real helper subprocess EOF/shutdown/cancellation/broken output, model history, log rotation and export. Real Chrome model fixtures passed. Authenticated isolated DEV confirmed cancellation and its causal chain, followed without a service restart by GPT-6/xhigh execution with four requests, two native commands, one patch and a complete final answer. The real diagnostic bundle retained the initial interruption and propagation references with complete coverage.
 
-The corresponding CI checks full source verification, five native build targets and new-package integrity; skipped and unexecuted checks are not passes. Valid existing evidence is reused. Manual installation/upgrade/uninstall, authenticated cross-platform operation, real account switching, remote MCP binding, real minimization/focus loss, physical input and cross-DPI acceptance were not repeated in this round. The user's manual DEV acceptance has no reported result; CI package smoke does not replace manual acceptance.
+The corresponding CI checks full source verification, five native build targets and new-package integrity. Valid existing acceptance evidence is reused; skipped and unexecuted checks are not passes. Manual installation/upgrade/uninstall, authenticated cross-platform operation, remote MCP binding, physical input and cross-DPI acceptance were not repeated in this round. CI package smoke does not replace these checks.
 
-The underlying causes of the original click timeout, seven earlier attachment timeouts and an incomplete progress sentence remain unproven. This release fixes confirmed check, state and recovery gaps without claiming to eliminate all historical failures. Existing Web-model protocol limitations and intermittent send, missing-answer and audio-recognition risks remain.
+The underlying causes of historical connection resets, model-check failures and earlier click/attachment timeouts remain unproven; this release does not claim to eliminate them all. Logs establish local observations and propagation, not necessarily the internal cause in a remote service or network device. Forced termination or a broken diagnostic pipe can still lose final records. Existing Web-model protocol limitations and intermittent send, missing-answer and audio-recognition risks remain.
+
+If a problem occurs, record the version and time, export a diagnostic bundle from Usage & diagnostics → Logs, and inspect the specific error. Upgrade does not automatically clear an unknown-send pause: review send state in Runtime controls and explicitly recover without blindly resending an uncertain request. This release cannot reconstruct historical evidence that was never saved.
 
 Release targets are seven packages for Windows x64, macOS arm64/x64 and Linux x64/arm64, plus `checksums.txt`. Windows packages are not certificate-signed; macOS uses ad-hoc signing without Developer ID signing or notarization.

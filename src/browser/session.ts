@@ -44,8 +44,17 @@ export async function readChatGptModelSnapshot(slider: Locator) {
     if (elements.length !== 1) return undefined;
     const element = elements[0]!;
     const doc = element.ownerDocument;
+    // Ephemeral node identity detects remounts without writing DOM attributes or page text.
+    let controlId: string | undefined;
+    try {
+      const observedDoc = doc as Document & { __web2harnessModelControls?: WeakMap<Element, string> };
+      const controls = observedDoc.__web2harnessModelControls ??= new WeakMap<Element, string>();
+      controlId = controls.get(element);
+      if (!controlId) { controlId = crypto.randomUUID(); controls.set(element, controlId); }
+    } catch { /* Diagnostic identity is optional and cannot change model verification. */ }
     const descriptions = (element.closest('[role="menuitem"]')?.getAttribute("aria-describedby") ?? "")
       .split(/\s+/).filter(Boolean).map(id => doc.getElementById(id)?.textContent ?? "");
+    const descriptionSources = descriptions.map(() => "aria" as "aria" | "header");
     const menu = element.closest('[role="menu"]');
     const rendered = (node: Element): boolean => {
       for (let parent: Element | null = node; parent; parent = parent.parentElement) {
@@ -69,8 +78,11 @@ export async function readChatGptModelSnapshot(slider: Locator) {
         }
       }
       descriptions.push(words.join(" "));
+      descriptionSources.push("header");
     }
-    return { descriptions, min: element.getAttribute("aria-valuemin"),
+    return { descriptions, descriptionSources, controlId, headerCount: headers.length,
+      connected: element.isConnected, visible: rendered(element), busy: menu?.getAttribute("aria-busy") === "true",
+      min: element.getAttribute("aria-valuemin"),
       max: element.getAttribute("aria-valuemax"), value: element.getAttribute("aria-valuenow") };
   });
 }

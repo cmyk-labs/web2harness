@@ -1,5 +1,70 @@
-import { expect, test } from "bun:test";
-import { chatGptModelFamilyMatches, selectChatGptModelFamily } from "../../../../src/adapters/chatgpt-web/browser/model-selection";
+import { expect, spyOn, test } from "bun:test";
+import { assertChatGptModelFamily, chatGptModelFamilyMatches, selectChatGptModelFamily } from "../../../../src/adapters/chatgpt-web/browser/model-selection";
+import { parseDiagnosticLine, type DiagnosticRecord } from "../../../../launcher/shared/diagnostic-event.cjs";
+
+test("model history distinguishes stale aria/header observations, remounts, deduplication and bounded loss", async () => {
+  const records: DiagnosticRecord[] = [];
+  const log = spyOn(console, "error").mockImplementation(line => { const row = parseDiagnosticLine(String(line)); if (row) records.push(row); });
+  let observations = 0;
+  const firstControl = crypto.randomUUID(), nextControl = crypto.randomUUID();
+  const menu = {
+    menu: { getByRole: () => ({ evaluateAll: async () => ({ count: 1, checked: true }) }) },
+    slider: { evaluateAll: async () => {
+      observations++;
+      return { min: "0", max: "4", value: "3", controlId: observations < 4 ? firstControl : nextControl,
+        descriptions: [`6 Sol ${observations < 4 || observations % 2 ? "High" : "Medium"}, PRIVATE_ARIA`, "6 Sol Extra High, PRIVATE_HEADER"],
+        descriptionSources: ["aria", "header"] };
+    } },
+  } as unknown as Parameters<typeof assertChatGptModelFamily>[0];
+  try {
+    await expect(assertChatGptModelFamily(menu, "6", "xhigh", 3, 2050)).rejects.toMatchObject({ code: "model_version_unavailable" });
+    const failed = records.find(row => row.event === "browser.model_verification_failed")!;
+    const history = failed.detail.history as any[];
+    expect(history.length).toBe(32);
+    expect(failed.detail.droppedStates).toBeGreaterThan(0);
+    expect(history[0].checks.controlId).toBe(firstControl);
+    expect(history.at(-1).checks.controlId).toBe(nextControl);
+    expect(history[0].checks.descriptions).toMatchObject([
+      { source: "aria", effort: "high", effortMatches: false }, { source: "header", effort: "extra high", effortMatches: true },
+    ]);
+    expect(records.filter(row => row.event === "browser.model_verification_state").length).toBe(observations - 2);
+    expect(JSON.stringify(records)).not.toContain("PRIVATE");
+  } finally { log.mockRestore(); }
+}, 10_000);
+
+test.each(["valid", "radio", "slider", "stale", "unknown", "read-error"])("model verification diagnoses %s without relaxing selection or exposing picker text", async scenario => {
+  const records: DiagnosticRecord[] = [];
+  const log = spyOn(console, "error").mockImplementation((line: unknown) => {
+    const record = parseDiagnosticLine(String(line)); if (record) records.push(record);
+  });
+  const readError = new Error("PRIVATE page data");
+  const menu = {
+    menu: { getByRole: () => ({ evaluateAll: async () => ({ count: 1, checked: scenario !== "radio" }) }) },
+    slider: { evaluateAll: async () => {
+      if (scenario === "read-error") throw readError;
+      return { min: "0", max: "4", value: scenario === "slider" ? "2" : "3",
+        descriptions: [scenario === "unknown" ? "PRIVATE account label" : `6 ${scenario === "stale" ? "High" : "Extra High"}, PRIVATE account label`] };
+    } },
+  } as unknown as Parameters<typeof assertChatGptModelFamily>[0];
+  try {
+    const result = assertChatGptModelFamily(menu, "6", "xhigh", 3);
+    if (scenario === "valid") { await result; expect(records).toHaveLength(1); expect(records[0]?.event).toBe("browser.model_verification_state"); return; }
+    if (scenario === "read-error") await expect(result).rejects.toBe(readError);
+    else await expect(result).rejects.toMatchObject({ code: "model_version_unavailable", retryable: false });
+    expect(records).toHaveLength(2);
+    expect(JSON.stringify(records)).not.toContain("PRIVATE");
+    expect(records[1]).toMatchObject({ event: "browser.model_verification_failed", detail: {
+      modelFamily: "6", requestedEffort: "xhigh", attempts: 1, submission: "not-sent",
+      reason: scenario === "read-error" ? "observation_failed" : "selection_mismatch",
+    } });
+    if (scenario === "read-error") expect(records[1]?.detail.stage).toBe("model_snapshot");
+    else expect(records[1]?.detail.checks).toMatchObject({
+      radio: { count: 1, checked: scenario !== "radio" },
+      slider: { min: 0, max: 4, value: scenario === "slider" ? 2 : 3, target: 3 },
+      sliderMatches: scenario !== "slider", descriptionsMatch: !["stale", "unknown"].includes(scenario),
+    });
+  } finally { log.mockRestore(); }
+});
 
 test("model selection recognizes Latest in the launcher languages without accepting other model names", async () => {
   for (const [label, accepted] of [

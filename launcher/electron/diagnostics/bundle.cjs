@@ -94,6 +94,11 @@ function collectDiagnostics({ logsDirectory, coreHome }, input = {}, now = Date.
     } finally { hooks.complete?.(file, entry); }
   }
   try {
+    const contexts = managedLogFiles(path.join(logsDirectory, "failure-context.jsonl"));
+    contexts.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+    for (const file of contexts) read(logsDirectory, file, path.basename(file), "jsonl");
+  } catch (error) { if (error.code?.startsWith("HISTORY_")) throw error; sources.push({ file: "failure-context", status: "failed", error: cleanText(error.message) }); }
+  try {
     const files = logFiles(path.join(logsDirectory, "launcher.jsonl"));
     if (!files.length) sources.push({ file: "launcher.jsonl", status: "absent" });
     // Current and newest files first when the safety bound is reached.
@@ -156,7 +161,7 @@ function validateDestination(destination, roots) {
 function exportBundle(options, input, destination, snapshot = {}, now = Date.now()) {
   const target = validateDestination(destination, [options.logsDirectory, options.coreHome, options.userData ?? options.logsDirectory]);
   const collection = collectDiagnostics(options, input, now);
-  if (snapshot.collectorErrors?.length || snapshot.logging?.writeFailure) collection.partial = true;
+  if (snapshot.collectorErrors?.length || snapshot.logging?.writeFailure || snapshot.logging?.failureContextWriteFailure) collection.partial = true;
   const generatedAt = new Date(now).toISOString();
   const manifest = { schemaVersion: 1, generatedAt, requestedRange: collection.range, availableRange: collection.available,
     recordCount: collection.records.length, partial: collection.partial, retention: { days: RETENTION_DAYS, maxLauncherBytes: MAX_RETAINED_BYTES },

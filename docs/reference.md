@@ -281,6 +281,10 @@ GPT-5.6 Sol and GPT-6 provide Fast, Medium, High and Extra High subject to the a
 
 Catalog gating records general Sol/Extra High/Pro capability, not a separate availability flag for every model family. Before submitting a named automatic route, the adapter selects and verifies both the browser family and effort. A generic Pro label alone is insufficient. Failure to verify the requested family produces `model_version_unavailable` and leaves the pending message unsent; the adapter does not silently substitute another family.
 
+`browser.model_verification_failed` distinguishes observation failure from selection mismatch. It records the requested family/effort, radio count and checked state, numeric slider position/target, and description-match predicates without retaining picker text. A matching slider alone cannot establish the selected model; the same strict checks still apply.
+
+Failure correlation uses independent WebSocket, HTTP and physical-attempt IDs plus hashed task/turn references. Helper IPC carries only validated correlation and interruption references; `helperRequestId` is separate from HTTP `requestId`. `firstEventId` identifies the first locally observed interruption, not a proven external root cause. Model verification retains up to 32 distinct structural observations. The desktop failure recorder retains up to 32 histories of 48 records / 32 KiB, with 30-minute idle expiry and explicit loss counts; its snapshots use normal managed log retention and diagnostics export. See [fault diagnosis and coverage](troubleshooting.md#support-report).
+
 <a id="instant-grouping"></a>
 
 #### Fast grouping

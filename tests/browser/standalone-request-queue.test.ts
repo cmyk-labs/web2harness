@@ -1,4 +1,5 @@
 import { test, expect } from "bun:test";
+import { parseDiagnosticLine } from "../../launcher/shared/diagnostic-event.cjs";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, writeFile, rename, rmdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -57,7 +58,13 @@ test("separate CLI processes join one profile owner and share capacity and actua
   await queue.updateSettings(settings);
   try {
     const results = await Promise.all(Array.from({ length: 3 }, () => child(profile, "join")));
-    expect(results).toEqual(Array.from({ length: 3 }, () => ({ exit: 0, stdout: "joined\n", stderr: "" })));
+    expect(results.map(({ exit, stdout }) => ({ exit, stdout }))).toEqual(Array.from({ length: 3 }, () => ({ exit: 0, stdout: "joined\n" })));
+    for (const result of results) {
+      const rows = result.stderr.trim().split(/\r?\n/).map(parseDiagnosticLine);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ event: "browser.queue_attempt_admitted", level: "info" });
+      expect(rows[0]!.detail.attemptId).toMatch(/^[a-f0-9-]{36}$/);
+    }
     const events = (await readFile(join(directory, "events.jsonl"), "utf8")).trim().split("\n")
       .map(line => JSON.parse(line) as { event: string; at: number; pid: number });
     expect(events.map(event => event.event)).toEqual(["send", "release", "send", "release", "send", "release"]);
@@ -76,7 +83,11 @@ test("lost remote owner retains its physical lease and fences new dispatch", asy
   const { profile } = await fixture();
   const queue = await StandaloneRequestQueue.open(profile);
   try {
-    expect(await child(profile, "join-crash")).toEqual({ exit: 0, stdout: "", stderr: "" });
+    const result = await child(profile, "join-crash");
+    expect({ exit: result.exit, stdout: result.stdout }).toEqual({ exit: 0, stdout: "" });
+    const rows = result.stderr.trim().split(/\r?\n/).map(parseDiagnosticLine);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ event: "browser.queue_attempt_admitted", level: "info" });
     const deadline = Date.now() + 2500;
     while (!queue.snapshot().pausedReason && Date.now() < deadline) await delay(25);
     expect(queue.snapshot()).toMatchObject({ active: 1, pausedReason: "browser_unavailable" });

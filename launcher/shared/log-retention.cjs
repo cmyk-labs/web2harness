@@ -5,9 +5,9 @@ const { randomUUID } = require("node:crypto");
 const MAX_LOG_BYTES = 4 * 1024 * 1024;
 const MAX_RETAINED_BYTES = 100 * 1024 * 1024;
 const RETENTION_DAYS = 7;
-const ACTIVE = ["launcher.jsonl", "launcher-fatal.log", "process-stream-errors.log", "update-worker.log",
+const ACTIVE = ["launcher.jsonl", "failure-context.jsonl", "launcher-fatal.log", "process-stream-errors.log", "update-worker.log",
   "daemon.stdout.log", "daemon.stderr.log", "tunnel.stdout.log", "tunnel.stderr.log"];
-const ARCHIVE = /^(?:launcher|launcher-fatal|process-stream-errors|update-worker|(?:daemon|tunnel)\.(?:stdout|stderr))\.\d{13}-[a-f0-9-]+\.(?:jsonl|log)$/;
+const ARCHIVE = /^(?:launcher|failure-context|launcher-fatal|process-stream-errors|update-worker|(?:daemon|tunnel)\.(?:stdout|stderr))\.\d{13}-[a-f0-9-]+\.(?:jsonl|log)$/;
 
 function plain(file) {
   let current = path.resolve(file);

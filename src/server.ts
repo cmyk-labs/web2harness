@@ -1,4 +1,5 @@
-import { diagnosticContext, diagnosticEvent, diagnosticError } from "./diagnostics";
+import { diagnosticContext, diagnosticEvent, diagnosticError, diagnosticReference } from "./diagnostics";
+import { abortWithDiagnostic, readInterruption } from "./interruption-diagnostics";
 import { chatGptWebTraceId, createChatGptWebAdapter } from "./adapters/chatgpt-web/adapter";
 import { closeChatGptBrowserWorkers } from "./adapters/chatgpt-web/browser/browser-worker";
 import { closeTurnBrokers, TurnBroker } from "./adapters/chatgpt-web/tools/turn-broker";
@@ -137,6 +138,7 @@ function emitHttpStreamFailure(
 
 export class HttpTurnCounter {
   private readonly active = new Map<number, {
+    context: Record<string, unknown>;
     abort: AbortController;
     done: Promise<void>;
     finish: () => void;
@@ -169,7 +171,7 @@ export class HttpTurnCounter {
   async cancelAll(reason: unknown = new Error("Active HTTP turns cancelled")): Promise<number> {
     const turns = [...this.active.values()];
     for (const turn of turns) {
-      if (!turn.abort.signal.aborted) turn.abort.abort(reason);
+      if (!turn.abort.signal.aborted) abortWithDiagnostic(turn.abort, "http_shutdown", reason, turn.context);
     }
     await Promise.all(turns.map(turn => turn.done));
     return turns.length;
@@ -193,7 +195,7 @@ export class HttpTurnCounter {
       turn.identity?.threadId === identity.threadId && turn.identity.turnId === identity.turnId
     ));
     for (const turn of turns) {
-      if (!turn.abort.signal.aborted) turn.abort.abort(reason);
+      if (!turn.abort.signal.aborted) abortWithDiagnostic(turn.abort, "http_turn_cancel", reason, turn.context);
     }
     return {
       cancelled: turns.length,
@@ -219,11 +221,12 @@ export class HttpTurnCounter {
     let finish!: () => void;
     const done = new Promise<void>(resolve => { finish = resolve; });
     const tracked: {
+      context: Record<string, unknown>;
       abort: AbortController;
       done: Promise<void>;
       finish: () => void;
       identity?: NativeCodexTurnIdentity;
-    } = { abort, done, finish };
+    } = { abort, done, finish, context: requestContext };
     this.active.set(id, tracked);
     let released = false;
     let clientAbortListener: (() => void) | undefined;
@@ -234,6 +237,7 @@ export class HttpTurnCounter {
       diagnosticEvent(failure && !abort.signal.aborted ? "error" : "info", "http.request_closed", {
         ...requestContext, outcome: abort.signal.aborted ? "cancelled" : failure ? "failed" : "transport-closed",
         httpStatus: responseStatus, chunks: totalChunks, bytes: totalBytes, durationMs: Math.round(performance.now() - started),
+        interruption: readInterruption(abort.signal),
         ...(failure ? { error: diagnosticError(failure) } : {}),
       });
       this.active.delete(id);
@@ -244,8 +248,9 @@ export class HttpTurnCounter {
       if (streamAbortListener) abort.signal.removeEventListener("abort", streamAbortListener);
       finish();
     };
-    clientAbortListener = () => abort.abort(clientSignal?.reason);
-    if (clientSignal?.aborted) abort.abort(clientSignal.reason);
+    clientAbortListener = () => abortWithDiagnostic(abort, "http_client_abort", clientSignal?.reason, requestContext,
+      readInterruption(clientSignal) ?? readInterruption(clientSignal?.reason));
+    if (clientSignal?.aborted) clientAbortListener();
     else clientSignal?.addEventListener("abort", clientAbortListener, { once: true });
 
     try {
@@ -258,8 +263,10 @@ export class HttpTurnCounter {
           throw new Error("An HTTP request cannot change its native Codex turn identity");
         }
         tracked.identity = identity;
+        requestContext.groupId = diagnosticReference(identity.threadId);
+        requestContext.roundRef = diagnosticReference(identity.turnId);
         const interruptedReason = this.interrupted.get(this.identityKey(identity));
-        if (interruptedReason !== undefined && !abort.signal.aborted) abort.abort(interruptedReason);
+        if (interruptedReason !== undefined && !abort.signal.aborted) abortWithDiagnostic(abort, "http_turn_cancel", interruptedReason, requestContext);
       }));
       responseStatus = response.status;
       diagnosticEvent("info", "http.response_headers", { ...requestContext, httpStatus: response.status, durationMs: Math.round(performance.now() - started) });

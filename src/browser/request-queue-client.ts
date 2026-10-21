@@ -3,6 +3,8 @@ import type { QueueInput, QueueRecord } from "../../launcher/shared/request-sche
 import { readLauncherBrowserHostDescriptor } from "./launcher-client";
 import { ChatGptWebAdapterError } from "../adapters/chatgpt-web/adapter-error";
 import { validMcpRemoteFailure } from "../../launcher/shared/mcp-remote-error.cjs";
+import { diagnosticContext, diagnosticError, diagnosticEvent } from "../diagnostics";
+import { abortWithDiagnostic, readInterruption } from "../interruption-diagnostics";
 
 export interface QueueTicket { id: string; secret: string }
 /** Launcher transport or the in-process owner of a standalone browser profile. */
@@ -49,6 +51,9 @@ export async function withQueuedRequest<T>(options: {
     job: options.job, traceId: options.traceId, pid: process.pid,
   });
   const ticket = { id: options.job.id, secret: admitted.secret };
+  const context = { ...diagnosticContext.getStore(), traceId: options.traceId, queueId: ticket.id, attemptId: crypto.randomUUID() };
+  return diagnosticContext.run(context, async () => {
+  diagnosticEvent("info", "browser.queue_attempt_admitted", { state: admitted.record.state });
   const abort = new AbortController();
   const signal = options.signal ? AbortSignal.any([abort.signal, options.signal]) : abort.signal;
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -59,7 +64,7 @@ export async function withQueuedRequest<T>(options: {
   const interruptFromQueue = (error: unknown, outcome: "failed" | "cancelled") => {
     if (abort.signal.aborted) return;
     queueInterruption = { error, outcome };
-    abort.abort(error);
+    abortWithDiagnostic(abort, "queue_interrupt", error, { ...context, outcome });
   };
   try {
     let record = admitted.record;
@@ -92,6 +97,14 @@ export async function withQueuedRequest<T>(options: {
     executionError = queueAbort ? queueInterruption!.error : error;
     if (queueAbort) outcome = queueInterruption!.outcome;
     else if (signal.aborted) outcome = "cancelled";
+    diagnosticEvent(outcome === "cancelled" ? "info" : "warning", "browser.queue_execution_interrupted", {
+      ...context, outcome, interruption: readInterruption(signal.reason),
+      cancelSource: signal.aborted ? signal.reason === abort.signal.reason && abort.signal.aborted ? "queue" : "caller" : "none",
+      callerAborted: options.signal?.aborted === true, queueAborted: abort.signal.aborted,
+      signalAborted: signal.aborted, restoredQueueError: !!queueAbort,
+      error: diagnosticError(executionError),
+      ...(signal.aborted ? { cause: diagnosticError(signal.reason) } : {}),
+    });
     throw executionError;
   } finally {
     clearInterval(timer);
@@ -107,6 +120,7 @@ export async function withQueuedRequest<T>(options: {
       throw cleanupError;
     }
   }
+  });
 }
 
 export async function waitForSendPermit(descriptorPath: RequestQueueTarget, ticket: QueueTicket, signal?: AbortSignal): Promise<string> {

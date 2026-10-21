@@ -1,4 +1,7 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
+import { diagnosticContext } from "../../src/diagnostics";
+import { HttpTurnCounter } from "../../src/server";
+import { parseDiagnosticLine, type DiagnosticRecord } from "../../launcher/shared/diagnostic-event.cjs";
 import type { ServerWebSocket } from "bun";
 import { classifyWebSocketFailure } from "../../src/responses/websocket-diagnostics";
 import { createResponsesWebSocketAdapter, type ResponsesWebSocketData, type ResponsesWebSocketOptions,
@@ -8,6 +11,30 @@ const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); });
 const frame = (type: string) => `data: ${JSON.stringify({ type })}\n\n`;
 const sse = (text: string) => new Response(text, { headers: { "content-type": "text/event-stream" } });
+
+test("concurrent WebSocket dispatches retain separate HTTP correlations without accepting client IDs", async () => {
+  const rows: DiagnosticRecord[] = [];
+  const log = spyOn(console, "error").mockImplementation(line => { const row = parseDiagnosticLine(String(line)); if (row) rows.push(row); });
+  try {
+    const counter = new HttpTurnCounter();
+    const contexts: Record<string, unknown>[] = [];
+    const f = fixture(request => counter.track(async () => {
+      contexts.push({ ...diagnosticContext.getStore() });
+      await Bun.sleep(5);
+      return sse(frame("response.completed"));
+    }, request.signal, "linux", "responses"));
+    f.create("PRIVATE_A"); f.create("PRIVATE_B");
+    await f.adapter.settled();
+    expect(contexts).toHaveLength(2);
+    expect(contexts[0]!.websocketConnectionId).toBe(contexts[1]!.websocketConnectionId);
+    expect(contexts[0]!.websocketRequestId).not.toBe(contexts[1]!.websocketRequestId);
+    expect(contexts[0]!.requestId).not.toBe(contexts[1]!.requestId);
+    expect(contexts[0]!.requestId).not.toBe(contexts[0]!.websocketRequestId);
+    expect(rows.filter(row => row.event === "http.request_closed")).toHaveLength(2);
+    expect(JSON.stringify(rows)).not.toContain("PRIVATE");
+    expect(counter.count()).toBe(0);
+  } finally { log.mockRestore(); }
+});
 
 function fixture(dispatch: ResponsesWebSocketOptions["dispatch"], sendResult: number | Error = 1,
   limits?: ResponsesWebSocketOptions["limits"]) {

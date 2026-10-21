@@ -50,6 +50,42 @@ test("an observed short source is preserved and a real projection mismatch is di
   expect(projections[1]?.level).toBe("warning");
 });
 
+test("successful completion preserves a growing commentary tail after its DOM root disappears", () => {
+  const records = capture(() => {
+    const tracker = new ChatGptVisibleTraceTracker(250);
+    const block = { kind: "commentary" as const, key: "owned", text: "三个子 Agent 已启动，", complete: true };
+    expect(tracker.observe([block], false, 1_000)).toEqual([]);
+    expect(tracker.observe([block], false, 1_300)).toEqual([{ kind: "commentary", text: block.text }]);
+    const tail = "现在继续核对执行证据。";
+    for (let i = 1; i <= tail.length; i++) {
+      expect(tracker.observe([{ ...block, text: block.text + tail.slice(0, i) }], false, 1_300 + i * 100)).toEqual([]);
+    }
+    expect(tracker.observe([], true, 5_000)).toEqual([]);
+    expect(tracker.finish()).toEqual([{ kind: "commentary", text: tail, continuation: true }]);
+    expect(tracker.finish()).toEqual([]);
+    expect(tracker.observe([{ ...block, text: block.text + tail }], true, 6_000)).toEqual([]);
+  });
+  const projections = records.filter(record => record.detail.stage === "projected");
+  expect(projections).toHaveLength(2);
+  expect(projections[1]?.detail).toMatchObject({ complete: true, matches: true, continuation: true });
+});
+
+test("completion flush excludes answers, statuses and unproven drafts and retains latest completion evidence", () => {
+  const tracker = new ChatGptVisibleTraceTracker(250);
+  tracker.observe([
+    { kind: "answer", text: "final" }, { kind: "status", text: "Thinking" },
+    { kind: "commentary", key: "draft", text: "unfinished", complete: false },
+    { kind: "commentary", key: "unknown", text: "unknown" },
+    { kind: "commentary", key: "revised", text: "revised", complete: true },
+    { kind: "commentary", key: "same", text: "completed without text change", complete: false },
+  ], false, 1_000);
+  tracker.observe([
+    { kind: "commentary", key: "revised", text: "revised", complete: false },
+    { kind: "commentary", key: "same", text: "completed without text change", complete: true },
+  ], false, 1_100);
+  expect(tracker.finish()).toEqual([{ kind: "commentary", text: "completed without text change" }]);
+});
+
 test("diagnostic budgets are separate from delivery and cannot consume the final projection allowance", () => {
   const records = capture(() => {
     const evidence = new ChatGptPublicTextEvidence();

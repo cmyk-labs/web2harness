@@ -281,6 +281,10 @@ GPT-5.6 Sol 与 GPT-6 按下述账户和预算规则提供 Fast、Medium、High�
 
 模型目录判断记录的是通用 Sol／Extra High／Pro 能力，不是每个模型家族各自的可用性标记。在提交具有明确家族名称的自动路由前，适配器会选择并验证浏览器家族和推理强度。只有一个通用 Pro 标签不足以通过验证。无法验证目标家族时返回 `model_version_unavailable`，待发送消息不会提交，也不会静默换用其他家族。
 
+`browser.model_verification_failed` 区分观察失败与选择不匹配，记录目标家族／强度、选项数量和选中状态、滑块当前／目标数值，以及说明文字的匹配条件，不保存选择器原文。仅滑块数值正确不能证明模型选择正确，严格校验标准保持不变。
+
+故障关联使用独立的WebSocket、HTTP、物理执行尝试ID及散列任务／轮次引用。辅助进程IPC只携带已校验的关联与中断引用，`helperRequestId` 与HTTP `requestId` 分开。`firstEventId` 表示本地最先观察到的中断，不代表已证明的外部根因。模型校验保留最多32个不同的结构状态。桌面故障记录器最多保留32个历史，每个48条／32 KiB，空闲30分钟后移除并明确计数丢失；快照沿用受管日志保留及诊断导出。见[故障诊断与覆盖范围](troubleshooting.zh-CN.md#support-report)。
+
 <a id="instant-grouping"></a>
 
 #### Fast 的分组规则

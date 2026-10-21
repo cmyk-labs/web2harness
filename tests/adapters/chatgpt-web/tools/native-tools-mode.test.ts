@@ -330,9 +330,11 @@ describe("native-tools adapter emission", () => {
 
   test("native prose evidence covers projection, journal and emitter without exposing source or tool arguments", async () => {
     const records: DiagnosticRecord[] = [];
+    const delivery: DiagnosticRecord[] = [];
     const log = spyOn(console, "error").mockImplementation((line: unknown) => {
       const record = parseDiagnosticLine(String(line));
       if (record?.event === "browser.public_text_evidence") records.push(record);
+      if (record?.event === "browser.native_reply_delivery") delivery.push(record);
     });
     try {
       const answer = "PRIVATE_PROGRESS 已读取输入。\n```" + CODEX_TOOL_CALLS_FENCE
@@ -345,6 +347,12 @@ describe("native-tools adapter emission", () => {
       expect(records.filter(record => record.detail.stage !== "emitter_returned").every(record => record.detail.matches === true)).toBeTrue();
       expect(records.every(record => record.detail.clientAcknowledged === false)).toBeTrue();
       expect(JSON.stringify(records)).not.toContain("PRIVATE");
+      expect(delivery.map(record => [record.detail.deliveryState, record.detail.outcome])).toEqual([
+        ["validating", "started"], ["journaled", "committed"], ["emitter_returned", "returned"],
+      ]);
+      expect(new Set(delivery.map(record => record.detail.roundRef)).size).toBe(1);
+      expect(delivery.every(record => record.detail.clientAcknowledged === false)).toBeTrue();
+      expect(JSON.stringify(delivery)).not.toContain("PRIVATE");
     } finally { log.mockRestore(); }
   });
 
@@ -398,6 +406,10 @@ describe("native-tools adapter emission", () => {
   });
 
   test.each(["plain-text", "tool-prose", "tool-call"])("disconnect during validated native emission replays one committed reply: %s", async point => {
+    const delivery: DiagnosticRecord[] = [];
+    const log = spyOn(console, "error").mockImplementation((line: unknown) => {
+      const record = parseDiagnosticLine(String(line)); if (record?.event === "browser.native_reply_delivery") delivery.push(record);
+    });
     const provider = nativeProvider(), turnId = `atomic_native_${point}_${Date.now()}`;
     const worker = ChatGptBrowserWorker.forProvider(provider), originalRun = worker.run.bind(worker);
     const withTools = point !== "plain-text", visible = "One visible reply.";
@@ -427,7 +439,27 @@ describe("native-tools adapter emission", () => {
       const again: AdapterEvent[] = [];
       await createChatGptWebAdapter(provider).runTurn!(wireRequest(turnId), { headers: new Headers() }, event => again.push(event));
       expect(again).toEqual(replay); expect(starts).toBe(1);
-    } finally { (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = originalRun; }
+      expect(delivery.map(record => [record.detail.deliveryState, record.detail.outcome])).toEqual([
+        ["validating", "started"], ["journaled", "committed"], ["emitting", "failed"],
+      ]);
+      expect(delivery.at(-1)?.detail.observerAborted).toBe(true);
+    } finally { log.mockRestore(); (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = originalRun; }
+  });
+
+  test("invalid native reply is diagnosed before any journal commit without retaining arguments", async () => {
+    const records: DiagnosticRecord[] = [];
+    const log = spyOn(console, "error").mockImplementation((line: unknown) => {
+      const record = parseDiagnosticLine(String(line)); if (record?.event === "browser.native_reply_delivery") records.push(record);
+    });
+    try {
+      const answer = '```codex_tool_calls\n{"calls":[{"name":"UNKNOWN_PRIVATE","arguments":{"secret":"PRIVATE_ARGUMENT"}}]}\n```';
+      const attempt = await withFakeWorker(nativeProvider(), [answer]);
+      expect(attempt.events.find(event => event.type === "error")).toMatchObject({ code: "native_tool_call_invalid" });
+      expect(records.map(record => [record.detail.deliveryState, record.detail.outcome])).toEqual([
+        ["validating", "started"], ["validating", "failed"],
+      ]);
+      expect(JSON.stringify(records)).not.toContain("PRIVATE");
+    } finally { log.mockRestore(); }
   });
 
   test("an unusable block fails retryably and the retry prompt carries corrective feedback", async () => {

@@ -1,4 +1,6 @@
 import type { ServerWebSocket, WebSocketHandler } from "bun";
+import { diagnosticContext, diagnosticEvent } from "../diagnostics";
+import { abortWithDiagnostic, observeInterruption } from "../interruption-diagnostics";
 import { WebSocketSteering, type SteeringJob, type SteerTarget, type SteerValidation } from "./websocket-steering";
 import { operationStage } from "../runtime/operation-stage";
 import { classifyWebSocketFailure, emitWebSocketDiagnostic, WebSocketTransportFailure,
@@ -9,7 +11,7 @@ export type { WebSocketDiagnostic } from "./websocket-diagnostics";
 type JsonObject = Record<string, unknown>;
 type Socket = ServerWebSocket<ResponsesWebSocketData>;
 type PendingFrame = { text: string; bytes: number; resolve(): void; reject(error: Error): void };
-type ActiveResponse = { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; cancellation?: Promise<void> };
+type ActiveResponse = { controller: AbortController; context?: Record<string, unknown>; reader?: ReadableStreamDefaultReader<Uint8Array>; cancellation?: Promise<void> };
 type ConnectionTasks = { tasks: Set<Promise<void>>; failures: unknown[]; cleanup?: Promise<void> };
 type QueuedResponse = SteeringJob & { bytes: number };
 type Lane = { streamId?: string; queue: QueuedResponse[]; active?: ActiveResponse; ready: boolean };
@@ -240,7 +242,7 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
     const error = new WebSocketTransportFailure("websocket_disconnected");
     data.steering?.close();
     for (const lane of data.lanes.values()) {
-      lane.active?.controller.abort(error);
+      if (lane.active) abortWithDiagnostic(lane.active.controller, "websocket_close", error, lane.active.context);
       if (lane.active) void cancelReader(ws, lane.active, error);
       lane.queue.length = 0; lane.ready = false;
     }
@@ -371,6 +373,8 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
     let stage: WebSocketFailureStage = "request", httpStatus: number | undefined;
     let reported = false;
     const requestId = crypto.randomUUID();
+    const context = active.context = { ...diagnosticContext.getStore(), websocketConnectionId: correlation(ws).id, websocketRequestId: requestId };
+    diagnosticEvent("info", "http.websocket_dispatched", context);
     const diagnostic = (error: unknown): WebSocketRequestFailureDiagnostic => ({
       kind: "request_failure", connection_id: correlation(ws).id, request_id: requestId,
       stream_index: [...data.lanes.keys()].indexOf(streamId), stage, ...classifyWebSocketFailure(error),
@@ -391,7 +395,7 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
         if (Buffer.byteLength(JSON.stringify(job.body)) > limits.maxMessageBytes) throw new WebSocketTransportFailure("request_too_large");
         const dispatchedRequest = request(data, job.body, active.controller.signal);
         stage = "dispatch";
-        const response = await options.dispatch(dispatchedRequest, job.prepareOnly ? { prepareOnly: true } : undefined);
+        const response = await diagnosticContext.run(context, () => options.dispatch(dispatchedRequest, job.prepareOnly ? { prepareOnly: true } : undefined));
         if (response.status >= 100 && response.status <= 599) httpStatus = response.status;
         if (active.controller.signal.aborted) {
           await response.body?.cancel().catch(error => { owner(ws).failures.push(error); });
@@ -442,7 +446,8 @@ export function createResponsesWebSocketAdapter(options: ResponsesWebSocketOptio
           if (Buffer.byteLength(JSON.stringify(detailed)) <= Math.min(limits.maxEventBytes, limits.maxBufferedBytes)) {
             (terminal.error as JsonObject).diagnostics = failure;
           }
-          active.controller.abort(new Error("Responses transport failed"));
+          const interruption = observeInterruption(error && typeof error === "object" ? error : {}, "websocket_transport", { ...context, stage, ...classifyWebSocketFailure(error) });
+          abortWithDiagnostic(active.controller, "websocket_transport", new Error("Responses transport failed"), context, interruption);
         }
       } finally {
         stage = "cleanup";

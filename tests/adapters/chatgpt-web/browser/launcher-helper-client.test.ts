@@ -11,6 +11,29 @@ import { LauncherBrowserHelperClient } from "../../../../src/adapters/chatgpt-we
 import { ChatGptExternalTurnProgress } from "../../../../src/adapters/chatgpt-web/tools/turn-progress";
 import type { BrowserTurn, ResolvedBrowserConfig } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { LAUNCHER_BROWSER_HOST_KIND, LAUNCHER_BROWSER_IDLE_URL } from "../../../../src/browser/launcher-client";
+import { parseDiagnosticLine, type DiagnosticRecord } from "../../../../launcher/shared/diagnostic-event.cjs";
+
+test.each([false, true])("helper AbortError receipt retains local signal=%s even without a diagnostic reference", signalled => {
+  const records: DiagnosticRecord[] = [];
+  const log = spyOn(console, "error").mockImplementation((line: unknown) => {
+    const record = parseDiagnosticLine(String(line)); if (record) records.push(record);
+  });
+  const abort = new AbortController(); if (signalled) abort.abort();
+  let received: unknown;
+  const child = {}, client: any = Object.assign(Object.create(LauncherBrowserHelperClient.prototype), {
+    child, pending: new Map([["owned", { turn: { traceId: "owned", abortSignal: abort.signal },
+      reject: (error: unknown) => { received = error; } }]]),
+  });
+  try {
+    client.handleLine(child, JSON.stringify({ type: "error", id: "owned", name: "AbortError", message: "Browser aborted" }));
+    expect(received).toBeInstanceOf(DOMException);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ event: "browser.helper_error_received", detail: {
+      signalAborted: signalled, localFailure: false, cancelSource: signalled ? "local_signal" : "none", errorName: "AbortError",
+    } });
+    expect(client.pending.size).toBe(0);
+  } finally { log.mockRestore(); }
+});
 
 const roots: string[] = [];
 afterEach(() => {

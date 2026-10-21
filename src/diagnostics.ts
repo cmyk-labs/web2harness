@@ -5,7 +5,9 @@ export { diagnosticError, diagnosticReference } from "../launcher/shared/diagnos
 
 export const diagnosticContext = new AsyncLocalStorage<Record<string, unknown>>();
 /** Diagnostic failures must never change request execution or write to MCP protocol stdout. */
-export function diagnosticEvent(level: DiagnosticRecord["level"], event: string, detail: Record<string, unknown> = {}): void {
-  try { console.error(PREFIX + JSON.stringify(createDiagnosticRecord(level, event, { sourceId: LOADED_SOURCE_ID, ...diagnosticContext.getStore(), ...detail }))); }
+export function diagnosticEvent(level: DiagnosticRecord["level"], event: string, detail: Record<string, unknown> = {}, eventId?: string): void {
+  try { const record = createDiagnosticRecord(level, event, { sourceId: LOADED_SOURCE_ID, ...diagnosticContext.getStore(), ...detail });
+    if (eventId) record.eventId = eventId;
+    console.error(PREFIX + JSON.stringify(record)); }
   catch { /* The supervising process records stream/persistence failures independently. */ }
 }

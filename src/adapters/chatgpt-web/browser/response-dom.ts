@@ -94,11 +94,14 @@ const absentResponseDomSnapshot = (): ChatGptResponseDomSnapshot => ({
   traceBlocks: [],
 });
 
-/** Convert the public ChatGPT turn DOM into append-only Codex reasoning summaries. */
+type TraceCandidate = { text: string; sourceText: string; changedAt: number;
+  kind: "commentary" | "status"; complete: boolean };
+
+/** Convert the public ChatGPT turn DOM into append-only Codex progress. */
 export class ChatGptVisibleTraceTracker {
   private readonly evidence = new ChatGptPublicTextEvidence();
   private readonly emittedTrace = new Map<string, string>();
-  private readonly traceCandidates = new Map<string, { text: string; changedAt: number }>();
+  private readonly traceCandidates = new Map<string, TraceCandidate>();
 
   constructor(private readonly traceStabilityMs = 250) {}
 
@@ -123,7 +126,8 @@ export class ChatGptVisibleTraceTracker {
       if (!text) continue;
       let candidate = this.traceCandidates.get(slot);
       if (!candidate || candidate.text !== text) {
-        candidate = { text, changedAt: now };
+        candidate = { text, sourceText: block.text, changedAt: now, kind: block.kind,
+          complete: block.complete === true || completionActionVisible };
         this.traceCandidates.set(slot, candidate);
         if (block.kind === "commentary") this.evidence.record("observed", {
           source: "dom_commentary", sourceText: block.text, expectedText: text, slot,
@@ -131,33 +135,51 @@ export class ChatGptVisibleTraceTracker {
         });
         if (!completionActionVisible && this.traceStabilityMs > 0) continue;
       }
+      // Completion can change without a text mutation. Retain the latest structural evidence,
+      // including a regression to incomplete; disappearance alone is not completion.
+      candidate.complete = block.complete === true || completionActionVisible;
+      candidate.sourceText = block.text;
       // A commentary Markdown root remains mutable until ChatGPT appends the next reasoning item.
       // Emitting it earlier lets a tool-status boundary split one semantic paragraph into multiple
       // Codex messages. The next anchored item (or final completion evidence) is the stable boundary.
       if (block.kind === "commentary" && block.complete === false && !completionActionVisible) continue;
       if (!completionActionVisible && now - candidate.changedAt < this.traceStabilityMs) continue;
 
-      const previous = this.emittedTrace.get(slot);
-      if (previous === text) continue;
-      this.emittedTrace.set(slot, text);
-      const kind = block.kind === "commentary" ? "commentary" : "reasoning";
-
-      if (previous && text.startsWith(previous)) {
-        output.push({ kind, text: text.slice(previous.length), continuation: true });
-      } else {
-        output.push({ kind, text });
-      }
-      if (kind === "commentary") {
-        const emitted = output.at(-1)!;
-        this.evidence.record("projected", {
-          source: "dom_commentary", sourceText: block.text, expectedText: text,
-          actualText: emitted.continuation ? previous! + emitted.text : emitted.text,
-          fragmentText: emitted.text, continuation: emitted.continuation === true, slot,
-          complete: block.complete === true || completionActionVisible, transformation: "dom_whitespace_v1",
-        });
-      }
+      const event = this.project(slot, candidate);
+      if (event) output.push(event);
     }
     return output;
+  }
+
+  /** Call only at successful response delivery, never from cancellation/error cleanup.
+   * A completed commentary can disappear or keep changing until the source wins the race
+   * against DOM stabilization. Preserve its last observed tail without promoting drafts.
+   */
+  finish(): ChatGptVisibleTraceEvent[] {
+    const output: ChatGptVisibleTraceEvent[] = [];
+    for (const [slot, candidate] of this.traceCandidates) {
+      if (candidate.kind !== "commentary" || !candidate.complete) continue;
+      const event = this.project(slot, candidate);
+      if (event) output.push(event);
+    }
+    return output;
+  }
+
+  private project(slot: string, candidate: TraceCandidate): ChatGptVisibleTraceEvent | undefined {
+    const { text, sourceText, complete } = candidate;
+    const previous = this.emittedTrace.get(slot);
+    if (previous === text) return;
+    this.emittedTrace.set(slot, text);
+    const kind = candidate.kind === "commentary" ? "commentary" : "reasoning";
+    const event: ChatGptVisibleTraceEvent = previous && text.startsWith(previous)
+      ? { kind, text: text.slice(previous.length), continuation: true } : { kind, text };
+    if (kind === "commentary") this.evidence.record("projected", {
+      source: "dom_commentary", sourceText, expectedText: text,
+      actualText: event.continuation ? previous! + event.text : event.text,
+      fragmentText: event.text, continuation: event.continuation === true, slot,
+      complete, transformation: "dom_whitespace_v1",
+    });
+    return event;
   }
 }
 
