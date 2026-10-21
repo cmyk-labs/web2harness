@@ -1427,8 +1427,8 @@ export class ChatGptBrowserWorker {
     return this.enqueueMaintenance("session inspection", () => this.inspectSessionExclusive(detectCapabilities, abortSignal));
   }
 
-  smokeTest(abortSignal?: AbortSignal, traceId?: string): Promise<{ effort: string; response: string }> {
-    return this.enqueueMaintenance("smoke test", () => this.smokeTestExclusive(abortSignal, traceId));
+  smokeTest(abortSignal?: AbortSignal, traceId?: string, options: { skipSend?: boolean; onCheck?: (phase: "connection" | "dispatch") => void } = {}): Promise<{ effort: string; response: string; sendSkipped?: boolean }> {
+    return this.enqueueMaintenance("smoke test", () => this.smokeTestExclusive(abortSignal, traceId, options));
   }
 
   inspectLimitsPlan(abortSignal?: AbortSignal) {
@@ -3242,7 +3242,7 @@ export class ChatGptBrowserWorker {
     return { authenticated: true, temporary: true, url, ...capabilities };
   }
 
-  private async smokeTestExclusive(abortSignal?: AbortSignal, traceId = `smoke_${randomUUID().replaceAll("-", "")}`): Promise<{ effort: string; response: string }> {
+  private async smokeTestExclusive(abortSignal?: AbortSignal, traceId = `smoke_${randomUUID().replaceAll("-", "")}`, options: { skipSend?: boolean; onCheck?: (phase: "connection" | "dispatch") => void } = {}): Promise<{ effort: string; response: string; sendSkipped?: boolean }> {
     abortSignal?.throwIfAborted();
     const page = await this.ensurePage();
     await this.prepareChatSurface(page, undefined, false, { signal: abortSignal });
@@ -3254,6 +3254,8 @@ export class ChatGptBrowserWorker {
     const modelId = account.solAvailable ? CHATGPT_WEB_MODEL_ID : CHATGPT_WEB_LUNA_MODEL_ID;
     const reasoning = account.solAvailable ? "high" : "low";
     const mode = resolveChatGptWebModelMode(modelId, reasoning, capabilities);
+    options.onCheck?.("connection");
+    if (options.skipSend) return { effort: mode.displayLabel, response: "", sendSkipped: true };
     const smokeTurn: BrowserTurn = {
       traceId,
       modelId,
@@ -3268,7 +3270,10 @@ export class ChatGptBrowserWorker {
         descriptorPath: this.config.browserHostDescriptorPath!, traceId, signal: abortSignal,
         job: { id: createHash("sha256").update(traceId).digest("hex"), groupId: "launcher-smoke",
           model: modelId, effort: reasoning, mode: "browser-only", bytes: Buffer.byteLength(CHATGPT_SMOKE_TEXT) },
-        execute: (queueTicket, signal) => this.runExclusive({ ...smokeTurn, queueTicket, abortSignal: signal }),
+        execute: (queueTicket, signal) => {
+          options.onCheck?.("dispatch");
+          return this.runExclusive({ ...smokeTurn, queueTicket, abortSignal: signal });
+        },
       })
       : await this.run(smokeTurn);
     if (response.trim() !== CHATGPT_SMOKE_EXPECTED) {

@@ -51,6 +51,8 @@ class RequestScheduler {
     this.serviceOrder = 0;
     this.pauseReasons = new Set();
     this.pauseSources = new Map();
+    this.pauseEvidence = new Map();
+    this.recoveryToken = randomUUID();
     this.lastSendAt = undefined;
     this.sendOwner = null;
     this.closed = false;
@@ -65,7 +67,11 @@ class RequestScheduler {
       const now = this.monotonicNow();
       for (const [id, job] of this.jobs) {
         if (TERMINAL.has(job.state) && now - job.endedMonotonic >= this.receiptTtlMs) {
+          for (const [reason, requestId] of this.pauseSources) {
+            if (requestId === id) this.capturePauseEvidence(reason, job);
+          }
           this.jobs.delete(id);
+          this.event("queue.receipt_expired");
         } else if (job.state === "queued" && this.pausedReason && this.pausedReason !== "user") {
           const reason = this.pausedReason;
           job.blockedBy = { reason, ...(this.pauseSources.has(reason) ? { requestId: this.pauseSources.get(reason) } : {}) };
@@ -332,7 +338,12 @@ class RequestScheduler {
       throw new Error("Invalid scheduler pause reason");
     }
     this.pauseReasons.add(reason);
-    if (requestId && this.jobs.has(requestId)) this.pauseSources.set(reason, requestId);
+    this.recoveryToken = randomUUID();
+    if (requestId && this.jobs.has(requestId)) {
+      this.pauseSources.set(reason, requestId);
+      this.pauseEvidence.set(reason, { at: this.now() });
+      this.capturePauseEvidence(reason, this.jobs.get(requestId));
+    }
     this.event("queue.paused");
   }
 
@@ -340,6 +351,8 @@ class RequestScheduler {
     if (!this.pauseReasons.has(expectedReason)) throw schedulingError("queue_pause_changed", "Pause reason changed; reconcile it before resuming");
     this.pauseReasons.delete(expectedReason);
     this.pauseSources.delete(expectedReason);
+    this.pauseEvidence.delete(expectedReason);
+    this.recoveryToken = randomUUID();
     this.event("queue.resumed");
     this.tick();
   }
@@ -373,7 +386,8 @@ class RequestScheduler {
     return {
       settings: { ...this.settings }, configRevision: this.configRevision, pausedReason: this.pausedReason,
       pauseReasons: [...this.pauseReasons],
-      pauseSources: [...this.pauseSources].map(([reason, requestId]) => ({ reason, requestId })),
+      recoveryToken: this.recoveryToken,
+      pauseSources: this.pauseSourceSnapshot(),
       mcpStatus: this.mcpStatus(),
       active: this.active().length, waiting: this.waiting().length,
       waitingBytes: this.waiting().reduce((sum, job) => sum + job.bytes, 0), closed: this.closed,
@@ -406,12 +420,35 @@ class RequestScheduler {
     catch { /* A diagnostic sink must not corrupt the resource ledger. */ }
   }
 
-  restorePauseSources(sources = []) {
+  capturePauseEvidence(reason, record) {
+    const summary = { ...this.pauseEvidence.get(reason) };
+    if (!Number.isFinite(summary.at) && Number.isFinite(record.endedAt ?? record.sendAttemptedAt ?? record.queuedAt)) {
+      summary.at = record.endedAt ?? record.sendAttemptedAt ?? record.queuedAt;
+    }
+    if ([...SEND_PROGRESS, "confirmed", "not-sent", "unknown"].includes(record.sendProgress)) summary.sendProgress = record.sendProgress;
+    this.pauseEvidence.set(reason, summary);
+  }
+
+  pauseSourceSnapshot() {
+    return [...this.pauseSources].map(([reason, requestId]) => {
+      const record = this.jobs.get(requestId);
+      if (record) this.capturePauseEvidence(reason, record);
+      return { reason, requestId, ...this.pauseEvidence.get(reason) };
+    });
+  }
+
+  restorePauseSources(sources = [], records = []) {
     if (!Array.isArray(sources) || sources.length > 4) throw new Error("Invalid queue pause sources");
     for (const source of sources) {
       if (!source || !this.pauseReasons.has(source.reason) || typeof source.requestId !== "string"
         || !source.requestId || source.requestId.length > 256) throw new Error("Invalid queue pause source");
       this.pauseSources.set(source.reason, source.requestId);
+      const summary = {};
+      if (Number.isFinite(source.at) && source.at >= 0) summary.at = source.at;
+      if ([...SEND_PROGRESS, "confirmed", "not-sent", "unknown"].includes(source.sendProgress)) summary.sendProgress = source.sendProgress;
+      this.pauseEvidence.set(source.reason, summary);
+      const record = records.find(record => record.id === source.requestId);
+      if (record) this.capturePauseEvidence(source.reason, record);
     }
   }
 }

@@ -1,39 +1,43 @@
 ## 简体中文
 
-Web2Harness 2.5.2（`v2.5.2`）改进网页发送可靠性、故障证据和队列状态展示。
+Web2Harness 2.5.3（`v2.5.3`）修复浏览器检查误报、过时成功状态和队列恢复流程。
 
-- **点击优先，条件Enter兜底**：先检查发送按钮是否可操作。仅在实际输入前确认按钮被遮挡、仍可见且可用、没有阻断模态层时，才改用聚焦发送按钮后按一次Enter；发送前再次核验状态。实际点击或Enter一旦执行，结果未知时不重复发送。
-- **可靠的发送判定**：保留点击后的命中检查，避免晚到遮挡导致无输入却返回成功。输入返回、获得许可和服务端接受分别记录；没有接受证据时继续保留未知结果保护。
-- **完整失败证据**：输入动作结束后立即读取有界探针，保留原始错误及按钮可见性、命中和事件摘要。探针停止监听后结果仍可读取，安装或读取失败明确记为不可用；新增诊断不保存提示词或输入正文。
-- **清晰的队列进度**：区分预检查、等待发送许可、正在发送、等待确认和结果复核，提供阻塞任务日志入口；展示状态不改变发送许可或接受判定。
-- **上游兼容改进**：迁移并适配暂停计时和模型标题精确匹配，保留显式模型与推理强度检查。沿用Codex原生指令、完整上下文、工具参数、子任务与等待语义、权限及审批规则。
+- **区分连接与发送验证**：已有队列暂停时，实际检查登录与页面，但不发送测试消息。明确显示发送验证被阻断及恢复入口，不再把队列阻断误报为浏览器连接或整体运行故障。
+- **保留错误与正确状态**：跨帮助进程和界面保留结构化错误及诊断编号，分别记录主失败和清理失败。普通操作失败或取消不再污染浏览器健康；真实页面加载故障仍正常报错。
+- **使过时检查失效**：区分通过、阻断、失败、取消和未执行。失败、认证变化或浏览器进程重启使当前证明失效，迟到结果不能恢复旧成功状态；历史成功单独保存。
+- **可核对的队列恢复**：未解决暂停保留有界原因、时间和发送阶段摘要，普通回执过期后仍可核对。恢复拒绝过时确认，并要求没有活动任务或浏览器资源；保留独立的手动暂停，不重发旧请求。
+- **保持Codex能力**：模型、推理强度、上下文、原生工具、权限、审批、等待和点击/Enter策略保持原有行为。
+
+升级或重启不会自动解除未知发送暂停。在“运行控制”核对阻断原因并明确恢复后，再运行“检查浏览器连接”。恢复本身不代表真实发送验证通过。
 
 ### 验证范围与已知限制
 
-真实Chrome DOM夹具覆盖正常点击、遮挡Enter兜底、延迟可用、模态阻挡、失焦和取消等边界。隔离的认证DEV使用GPT-6/high及Native Tools，验证了受控遮挡下单次Enter产生一个生成请求，后续真实命令、文件补丁与原生最终答案交付；另验证了Enter被阻止后取消时没有生成请求、工具执行或最终答案。概览页后台轮次通过，但不等同于操作系统最小化或真实失焦验收。
+隔离测试覆盖结构化错误、检查结果失效、账号身份范围、迟到结果、回执过期和恢复确认。双语界面专项11项及完整工作区326项通过。独立认证DEV验证了暂停时实际连接通过且没有新增发送、恢复后真实测试消息成功，以及GPT-6/high Native Tools的两条真实命令、一次文件补丁和完整最终答案交付。
 
-原2.5.1会话点击超时的底层原因、此前七次附件超时及一条不完整进度句的来源仍未完全证实，本版本不宣称全部根治。已经执行输入但结果未知时不会用Enter重发。既有Web模型协议兼容限制及偶发发送、缺正文、音频识别风险继续保留。
+完整源码验证、五个原生构建目标及新包完整性由对应CI检查；跳过和未执行项不计为通过。有效的既有证据继续沿用。本轮未重新完成人工安装/升级/卸载、跨平台认证、真实账号切换、远端MCP绑定、真实最小化/失焦、物理输入或跨DPI验收。用户手动DEV验收尚无结果；CI包冒烟不替代人工验收。
 
-本版本源码完整验证、五个原生构建目标及新包完整性由对应CI检查；跳过和未执行项不计为通过。既有不受影响的证据继续沿用。本轮未重新完成macOS/Linux认证DEV、真实最小化/失焦、远程MCP Bridge、人工安装/升级/卸载、物理输入和跨DPI验收；CI包冒烟不能替代这些结果。
+原始点击超时、历史七次附件超时及不完整进度句的底层原因仍未完全证实。本版本修复已证实的检查、状态和恢复缺口，不宣称这些历史故障全部根治。既有Web模型协议兼容限制及偶发发送、缺正文、音频识别风险继续保留。
 
-发布目标为Windows x64、macOS arm64/x64、Linux x64/arm64的七个包及`checksums.txt`。Windows无证书签名；macOS为ad-hoc签名，未作Developer ID签名或公证。遇到异常请保留诊断日志并按故障排查说明处理。
+发布目标为Windows x64、macOS arm64/x64、Linux x64/arm64的七个包及`checksums.txt`。Windows无证书签名；macOS为ad-hoc签名，未作Developer ID签名或公证。
 
 ## English
 
-Web2Harness 2.5.2 (`v2.5.2`) improves browser sending reliability, failure evidence and queue progress visibility.
+Web2Harness 2.5.3 (`v2.5.3`) fixes misleading browser checks, stale success state and queue recovery.
 
-- **Click first, guarded Enter fallback**: Check Send actionability before actual input. Only a covered button that remains visible and enabled, without a blocking modal, can select one Enter on the focused Send button; recheck state before input. Once an actual click or Enter has been attempted, an unknown outcome never triggers another send.
-- **Reliable send classification**: Retain the post-click hit check so a late overlay cannot produce a successful return without input. Record input return, permit grant and server acceptance separately; missing acceptance evidence retains the unknown-outcome guard.
-- **Preserved failure evidence**: Read the bounded probe immediately after input settles, retaining original errors and button visibility, hit and event summaries. Results survive listener expiry; installation or read failures are explicitly unavailable. New diagnostics do not store prompts or input text.
-- **Clear queue progress**: Distinguish preflight, waiting for a permit, sending, waiting for acknowledgement and reconciliation, with links to blocking-task logs. Display progress cannot grant a permit or establish acceptance.
-- **Adapted upstream improvements**: Port suspension timing and exact model-header matching while retaining explicit model and effort checks. Preserve native Codex instructions, full context, tool arguments, child-task and wait semantics, permissions and approvals.
+- **Separate connectivity from send verification**: When dispatch is paused, check the actual sign-in and page without sending a test message. Show blocked send verification and a recovery link instead of misreporting a browser or overall runtime failure.
+- **Preserve errors and health state**: Carry structured errors and diagnostic references across helper and renderer boundaries, retaining primary and cleanup failures separately. Ordinary operation failures or cancellations no longer poison browser health; real page-load failures still report an error.
+- **Invalidate stale checks**: Distinguish passed, blocked, failed, cancelled and not-run results. Failure, authentication changes or browser-process restart invalidate current proof; late results cannot revive old success. Historical success is retained separately.
+- **Reviewable queue recovery**: Keep bounded reason, time and send-stage summaries for unresolved pauses after ordinary receipts expire. Reject stale confirmations and require no active tasks or browser resources. Preserve a separate manual pause and never replay old requests.
+- **Preserve Codex capabilities**: Retain model, effort, context, native tools, permissions, approvals, wait semantics and click/Enter behavior.
+
+Upgrade or restart does not automatically clear an unknown-send pause. Review the blocker in Runtime controls, explicitly recover, then run Check browser connection again. Recovery alone does not pass actual send verification.
 
 ### Validation scope and known limitations
 
-Real Chrome DOM fixtures cover normal clicks, covered-button Enter fallback, delayed readiness, modal blocking, focus loss and cancellation. Isolated authenticated DEV with GPT-6/high and Native Tools confirmed one generation request from one Enter under a controlled overlay, followed by real commands, file patches and native final-answer delivery. Cancellation after prevented Enter produced no generation request, tool execution or final answer. An Overview-panel background round passed, but does not establish operating-system minimization or actual focus-loss acceptance.
+Isolated tests cover structured errors, stale checks, account identity scope, late results, receipt expiry and recovery confirmation. The bilingual browser-check suite passed 11 checks and the full workspace suite passed 326. Independently authenticated DEV confirmed real connectivity without a new send while paused, a successful real test message after recovery, and GPT-6/high Native Tools execution with two real commands, one file patch and complete final-answer delivery.
 
-The underlying cause of the original 2.5.1 click timeout, seven earlier attachment timeouts and one incomplete progress sentence remains unproven; this release does not claim to eliminate all of them. Input already attempted with an unknown outcome is never resent through Enter. Existing Web-model protocol limitations and intermittent send, missing-answer and audio-recognition risks remain.
+The corresponding CI checks full source verification, five native build targets and new-package integrity; skipped and unexecuted checks are not passes. Valid existing evidence is reused. Manual installation/upgrade/uninstall, authenticated cross-platform operation, real account switching, remote MCP binding, real minimization/focus loss, physical input and cross-DPI acceptance were not repeated in this round. The user's manual DEV acceptance has no reported result; CI package smoke does not replace manual acceptance.
 
-The corresponding CI checks full source verification, five native build targets and new-package integrity; skipped and unexecuted checks are not passes. Valid unaffected evidence is reused. Authenticated macOS/Linux DEV, real minimization/focus loss, remote MCP Bridge, manual installation/upgrade/uninstall, physical input and cross-DPI acceptance were not completed again in this round; CI package smoke does not replace those results.
+The underlying causes of the original click timeout, seven earlier attachment timeouts and an incomplete progress sentence remain unproven. This release fixes confirmed check, state and recovery gaps without claiming to eliminate all historical failures. Existing Web-model protocol limitations and intermittent send, missing-answer and audio-recognition risks remain.
 
-Release targets are seven packages for Windows x64, macOS arm64/x64 and Linux x64/arm64, plus `checksums.txt`. Windows packages are not certificate-signed; macOS uses ad-hoc signing without Developer ID signing or notarization. Preserve diagnostic logs after errors and follow the troubleshooting instructions.
+Release targets are seven packages for Windows x64, macOS arm64/x64 and Linux x64/arm64, plus `checksums.txt`. Windows packages are not certificate-signed; macOS uses ad-hoc signing without Developer ID signing or notarization.

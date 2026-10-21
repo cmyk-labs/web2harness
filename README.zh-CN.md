@@ -5,9 +5,9 @@
 **Web2Harness** — 在 Codex 中使用 ChatGPT 网页版模型，包括账号有权使用的 Pro，支持原生工具调用、任务上下文、流式响应和图片输入。可选实验性三倍上下文预算。使用网页模型时，将遵循 ChatGPT 的网页端限制，且不会消耗 Codex 的配额。默认采用原生工具模式，无需 MCP 连接器或隧道。
 
 <p align="center">
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.2/web2harness-2.5.2-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 最新正式版"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.2/web2harness-2.5.2-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 最新正式版"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.2/web2harness-2.5.2-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 最新正式版"></a>
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.3/web2harness-2.5.3-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · 最新正式版"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.3/web2harness-2.5.3-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · 最新正式版"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.3/web2harness-2.5.3-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · 最新正式版"></a>
 </p>
 
 <p align="center">
@@ -150,6 +150,7 @@ bun run dev:launcher
 
 | 版本 | 日期 | 更新内容 |
 | --- | --- | --- |
+| 2.5.3 | 2026-10-21 | 区分浏览器连接与发送阻断，保留结构化错误，使过时检查结果失效；保留阻断摘要并提供受保护的队列恢复，保持Codex原生工具与未知发送保护。 |
 | 2.5.2 | 2026-10-21 | 点击优先，在实际输入前增加受保护的Enter兜底；保留输入失败证据、展示队列发送阶段，改进暂停计时与模型标题精确核验。历史事故底层原因仍未证实。 |
 | 2.5.1 | 2026-10-21 | 区分附件观察未确认与上传失败；有界补读原处理响应，保护取消和超时终态，避免对永久失败重传，增加附件阶段与公开正文交付摘要；更新Vite安全补丁。历史超时底层原因仍未全部证实。 |
 | 2.5.0 | 2026-10-20 | 等待网页生成完成后提取完整正文；拆分操作超时，普通上传失败重传一次；扩展原生搜索、附件、原始音频与WebSocket续接，验证结构化输出、图片编辑及任务追加指令；大窗口保持正常控件比例，统一浏览器窗口栏。既有兼容边界继续明确保留。 |

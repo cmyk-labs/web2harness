@@ -166,10 +166,59 @@ test("rate-limit pauses persist across restart and require explicit recovery", a
   assert.equal(waiting.record.reason, "queue_blocked_account_rate_limited");
   assert.deepEqual(waiting.record.blockedBy, { reason: "account_rate_limited", requestId: first.ticket.id });
   await assert.rejects(f.queue.control("resume"), /reconcile/);
-  await f.queue.control("recover");
+  await f.queue.control("recover", undefined, f.queue.snapshot().recoveryToken);
   assert.equal((await f.queue.request("poll", waiting.ticket)).record.state, "failed");
   assert.equal((await f.add("after_recovery")).record.state, "preparing");
   assert.equal(f.queue.query({ state: "ended" }).items[0].reason, "rate_limit_exceeded");
+});
+
+test("expired blocking receipts retain bounded evidence across restart, without replay", async t => {
+  const f = await fixture(t), original = await f.add("expired_blocker");
+  const permit = await f.queue.request("send-begin", original.ticket);
+  await f.queue.request("send-end", { ...original.ticket, permit: permit.permit, outcome: "unknown" });
+  await f.queue.request("settle", { ...original.ticket, outcome: "failed", reason: "chatgpt_send_outcome_unknown" });
+  f.queue.core.jobs.get(original.ticket.id).endedMonotonic -= f.queue.core.receiptTtlMs + 1;
+  assert.equal(f.queue.core.get(original.ticket.id), null);
+  const evidence = f.queue.snapshot().pauseSources[0];
+  assert.equal(evidence.requestId, original.ticket.id);
+  assert.equal(evidence.sendProgress, "unknown");
+  assert.ok(Number.isFinite(evidence.at));
+  assert.deepEqual(Object.keys(evidence).sort(), ["at", "reason", "requestId", "sendProgress"]);
+  await f.restart();
+  assert.deepEqual(f.queue.snapshot().pauseSources[0], evidence);
+  assert.equal((await f.add("check_still_blocked")).record.reason, "queue_blocked_send_outcome_unknown");
+  await f.queue.control("recover", undefined, f.queue.snapshot().recoveryToken);
+  assert.equal(f.queue.snapshot().pauseSources.length, 0);
+  assert.equal((await f.add("new_after_recovery")).record.state, "preparing");
+});
+
+test("old receipt files migrate blocking evidence before their records expire", async t => {
+  const f = await fixture(t), original = await f.add("old_format");
+  await f.queue.request("settle", { ...original.ticket, outcome: "failed", reason: "rate_limit_exceeded" });
+  await f.queue.close();
+  const file = path.join(f.root, "request-queue.json");
+  const saved = JSON.parse(await fs.readFile(file, "utf8"));
+  saved.pauseSources = saved.pauseSources.map(({ reason, requestId }) => ({ reason, requestId }));
+  saved.records[0].endedAt = Date.now() - 25 * 3600_000;
+  await fs.writeFile(file, JSON.stringify(saved));
+  await f.restart();
+  assert.equal(f.queue.query({ state: "ended" }).items.length, 0);
+  assert.equal(f.queue.snapshot().pauseSources[0].at, saved.records[0].endedAt);
+});
+
+test("recovery rejects missing/stale confirmations and preserves the user's separate pause", async t => {
+  const f = await fixture(t);
+  f.queue.core.pause("send_outcome_unknown");
+  const old = f.queue.snapshot().recoveryToken;
+  await assert.rejects(f.queue.control("recover"), { code: "queue_pause_changed" });
+  f.queue.core.pause("browser_unavailable");
+  await assert.rejects(f.queue.control("recover", undefined, old), { code: "queue_pause_changed" });
+  await f.queue.control("pause");
+  await f.queue.control("recover", undefined, f.queue.snapshot().recoveryToken);
+  assert.deepEqual(f.queue.snapshot().pauseReasons, ["user"]);
+  assert.equal((await f.add("manual_pause_preserved")).record.state, "queued");
+  await f.queue.control("resume");
+  assert.equal(f.queue.snapshot().active, 1);
 });
 
 test("recovery cannot release a still-active physical owner", async t => {
@@ -177,12 +226,12 @@ test("recovery cannot release a still-active physical owner", async t => {
   const send = await f.queue.request("send-begin", first.ticket);
   await f.queue.request("send-end", { ...first.ticket, permit: send.permit, outcome: "unknown" });
   f.resources.add("trace_main");
-  await assert.rejects(f.queue.control("recover"), /Stop active tasks/);
+  await assert.rejects(f.queue.control("recover", undefined, f.queue.snapshot().recoveryToken), /Stop active tasks/);
   await f.queue.control("cancel", first.ticket.id);
-  await assert.rejects(f.queue.control("recover"), /Stop active tasks/);
+  await assert.rejects(f.queue.control("recover", undefined, f.queue.snapshot().recoveryToken), /Stop active tasks/);
   f.resources.delete("trace_main");
   await f.queue.request("settle", { ...first.ticket, outcome: "cancelled" });
-  await f.queue.control("recover");
+  await f.queue.control("recover", undefined, f.queue.snapshot().recoveryToken);
   assert.equal(f.queue.snapshot().pausedReason, null);
 });
 
@@ -193,7 +242,7 @@ test("restart during an unacknowledged send pauses dispatch without replaying th
   assert.ok(f.queue.snapshot().pauseReasons.includes("send_outcome_unknown"));
   assert.equal((await f.add("after_restart")).record.reason, "queue_blocked_send_outcome_unknown");
   await assert.rejects(f.queue.request("enqueue", first.input), /receipt/);
-  await f.queue.control("recover");
+  await f.queue.control("recover", undefined, f.queue.snapshot().recoveryToken);
   assert.equal(f.queue.snapshot().active, 0);
   assert.equal((await f.add("after_recovery")).record.state, "preparing");
 });

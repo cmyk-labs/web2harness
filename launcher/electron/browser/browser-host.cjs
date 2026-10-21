@@ -14,6 +14,7 @@ const {
   verifyConnectorWithBrowserHelper,
 } = require("./browser-helper-verifier.cjs");
 const { validateConnectorName } = require("../connector-identity.cjs");
+const { browserOperationError, browserFailureKind } = require("../../shared/browser-operation-error.cjs");
 const { processRunning } = require("../common/process-tree.cjs");
 const { validatePasskeyLoginState } = require("./passkey-login-state.cjs");
 const {
@@ -455,6 +456,7 @@ class BrowserHost {
     getLanguage = () => "en",
     getUseSavedChats = () => false,
     getRuntimeParameters = () => DEFAULT_RUNTIME_PARAMETERS,
+    getQueueStatus = () => null,
   }) {
     if (typeof getConnectorName !== "function") {
       throw new Error("Browser host connector-name resolver is unavailable");
@@ -487,6 +489,7 @@ class BrowserHost {
     this.getLanguage = getLanguage;
     this.getUseSavedChats = getUseSavedChats;
     this.getRuntimeParameters = getRuntimeParameters;
+    this.getQueueStatus = getQueueStatus;
     this.runBrowserHelperOperation = runBrowserHelperOperation;
     this.verifyConnectorWithBrowserHelper = verifyConnectorWithBrowserHelper;
     this.surfaceId = randomBytes(24).toString("base64url");
@@ -532,6 +535,7 @@ class BrowserHost {
       url: "about:blank",
       title: "ChatGPT",
       authenticated: false,
+      sessionEpoch: randomBytes(16).toString("hex"),
       authenticationStatus: "unknown",
       authenticationMessage: "",
       visible: false,
@@ -1390,12 +1394,13 @@ class BrowserHost {
   async refreshChatGptHomeDocument(options = {}) {
     // A navigation from the idle host already creates a fresh ChatGPT document. Reload only an
     // existing Temporary Chat document so the helper observes one authoritative SPA bootstrap.
-    if (isTemporaryChatUrl(this.view.webContents.getURL())) {
-      options.onStage?.("page-load");
-      await this.hardRefreshHome(120_000);
-    } else {
-      options.onStage?.("page-load");
-      await this.hardRefreshHome(120_000, TEMPORARY_CHAT_URL);
+    options.onStage?.("page-load");
+    try {
+      await this.hardRefreshHome(120_000, isTemporaryChatUrl(this.view.webContents.getURL()) ? undefined : TEMPORARY_CHAT_URL);
+    } catch (error) {
+      // A failed navigation is connection evidence, unlike a later connector/plan failure.
+      if (browserFailureKind(error) === "failed") this.setState({ status: "error", loading: false, message: error.message });
+      throw error;
     }
     if (options.abortSignal?.aborted) throw new DOMException("Session inspection aborted", "AbortError");
     options.onStage?.("controls");
@@ -3251,6 +3256,7 @@ class BrowserHost {
         };
         const initialSurface = readSurface();
         let sessionAuthenticated = false;
+        let sessionAccountKey = null;
         let sessionCheckError = null;
         if (new URL(initialSurface.url).origin === expectedUrl.origin) {
           const controller = new AbortController();
@@ -3293,6 +3299,10 @@ class BrowserHost {
             sessionAuthenticated = sessionHasUser
               && sessionHasNoError
               && sessionExpiryIsValid;
+            if (sessionAuthenticated && typeof user.id === "string" && user.id) {
+              const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(user.id));
+              sessionAccountKey = Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, "0")).join("");
+            }
           } catch {
             sessionCheckError = controller.signal.aborted
               ? "ChatGPT session verification timed out. Check your network or proxy and retry."
@@ -3302,7 +3312,7 @@ class BrowserHost {
           }
           finally { clearTimeout(timeout); }
         }
-        return { ...readSurface(), sessionAuthenticated, sessionCheckError };
+        return { ...readSurface(), sessionAuthenticated, sessionCheckError, sessionAccountKey };
       })()`, true).catch(() => ({
         url: "",
         composer: false,
@@ -3345,6 +3355,10 @@ class BrowserHost {
           lifetime.closeAuthView();
         }
         const wasAuthenticated = this.state.authenticated;
+        if (result.sessionAccountKey && result.sessionAccountKey !== this.authenticatedAccountKey) {
+          if (this.authenticatedAccountKey) this.setState({ sessionEpoch: randomBytes(16).toString("hex") });
+          this.authenticatedAccountKey = result.sessionAccountKey;
+        }
         const availability = this.activeTraceId
           ? { status: "running", message: "ChatGPT is working" }
           : this.manualOperation
@@ -3411,9 +3425,9 @@ class BrowserHost {
     throw timeoutError();
   }
 
-  async smokeTest() {
+  async smokeTest(onCheck) {
     requireAutomaticBrowserInspection(this, "ChatGPT browser smoke test");
-    return await this.withManualOperation("browser smoke test", () => this.runSmokeTest());
+    return await this.withManualOperation("browser smoke test", () => this.runSmokeTest(onCheck));
   }
 
   connectorName() {
@@ -3423,7 +3437,7 @@ class BrowserHost {
     return validateConnectorName(this.getConnectorName());
   }
 
-  async runSmokeTest() {
+  async runSmokeTest(onCheck) {
     requireAutomaticBrowserInspection(this, "ChatGPT browser smoke test");
     const connectorName = this.connectorName();
     this.show();
@@ -3431,12 +3445,22 @@ class BrowserHost {
     this.setState({ status: "testing", message: "Running browser smoke test" });
     this.logger.info("smoke.started");
     let result;
+    const paused = this.getQueueStatus?.()?.pausedReason;
+    let connected = false;
     try {
       result = await this.runBrowserHelperOperation({
         helper: this.helper,
         descriptorPath: this.descriptorPath,
         appName: connectorName,
         operation: "smoke",
+        payload: { skipSend: Boolean(paused) },
+        onCheck: phase => {
+          if (phase === "connection") {
+            connected = true;
+            this.setState({ status: "testing", authenticated: true, message: "Browser connection verified" });
+          }
+          onCheck?.(phase);
+        },
         logger: this.logger,
         onStarted: ({ id, pid }) => {
           if (!Number.isSafeInteger(pid) || pid < 1 || !/^smoke-[a-f0-9]{24}$/.test(id)) {
@@ -3445,11 +3469,22 @@ class BrowserHost {
           this.smokeTurnOwner = { traceId: id, helperPid: pid };
         },
       });
+    } catch (error) {
+      if (!connected && browserFailureKind(error) === "failed") {
+        this.setState({ status: "error", message: error.message });
+      }
+      throw error;
     } finally {
       this.smokeTurnOwner = null;
     }
     const evidence = result?.value;
-    if (!evidence
+    if (paused && connected && evidence?.sendSkipped === true) {
+      this.setState({ status: "ready", authenticated: true, message: "Browser connected; send verification blocked by queue" });
+      throw Object.assign(new Error("Send verification was not run. Review the task queue and resume dispatch."), {
+        code: `queue_blocked_${paused}`, status: 503, errorType: "server_error", retryable: false,
+      });
+    }
+    if (!connected || !evidence
       || typeof evidence.effort !== "string"
       || !evidence.effort
       || evidence.response !== "WEB2HARNESS READY") {
@@ -3572,6 +3607,7 @@ class BrowserHost {
       throw new Error(`ChatGPT browser is already busy with ${this.manualOperation}`);
     }
     this.manualOperation = name;
+    const prior = { status: this.state.status, message: this.state.message };
     this.resetInputOverride();
     this.activateHomeSurface();
     const contents = this.view?.webContents;
@@ -3579,8 +3615,10 @@ class BrowserHost {
     try {
       return await action();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.setState({ status: "error", message });
+      // Operation failure is not browser-health evidence. Navigation/authentication
+      // observers and explicit connection checks own genuine health transitions.
+      this.setState({ ...(this.state.status === "testing" ? prior : {}),
+        lastOperation: { name, status: browserFailureKind(error), error: browserOperationError(error) } });
       throw error;
     } finally {
       if (contents && !contents.isDestroyed()) contents.setBackgroundThrottling(true);

@@ -4,6 +4,7 @@ import { chromium } from '../../node_modules/playwright-core/index.mjs';
 import { createServer } from '../node_modules/vite/dist/node/index.js';
 import assert from 'node:assert/strict';
 import { runQueueSmoke } from './smoke-queue.mjs';
+import { runBrowserCheckSmoke } from './smoke-browser-check.mjs';
 import { runRuntimeParametersSmoke } from './smoke-runtime-parameters.mjs';
 import { runStorageSmoke } from './smoke-storage.mjs';
 import { runWindowLayoutSmoke } from './smoke-window-layout.mjs';
@@ -29,6 +30,11 @@ await context.addInitScript(installWorkspaceFixture);if(process.env.WORKSPACE_SM
  check('Window layout renderer has no JavaScript errors',errors.length===0);
  await writeFile(out+'/results.json',JSON.stringify({scope:'layout',passed:checks.length,checks,errors},null,2));
  console.log(JSON.stringify({scope:'layout',passed:checks.length,errors}));
+}else if(process.env.WORKSPACE_SMOKE_SCOPE==='browser-check'){
+ await runBrowserCheckSmoke({context,origin,out,check,errors});
+ check('Browser check renderer has no JavaScript errors',errors.length===0);
+ await writeFile(out+'/results.json',JSON.stringify({scope:'browser-check',passed:checks.length,checks,errors},null,2));
+ console.log(JSON.stringify({scope:'browser-check',passed:checks.length,errors}));
 }else if(process.env.WORKSPACE_SMOKE_SCOPE==='queue'){
  await runQueueSmoke({context,origin,out,check,errors});
  check('Queue renderer has no JavaScript errors',errors.length===0);
@@ -103,7 +109,7 @@ await page.evaluate(()=>window.__fixture.patch({codexCatalogVerified:true}));
 check('Successful catalog read hides the stale restart reminder',await page.locator('.model-catalog-notice').count()===0&&await page.locator('.model-catalog-status').count()===0);
 await page.evaluate(()=>window.__fixture.patch({codexRestartRequired:false}));
 
-check('Shared runtime rules expose four Pro-account Web models',await page.locator('.model').count()===4);
+check('Shared runtime rules expose six Pro-account routes including Instant fallbacks',await page.locator('.model').count()===6);
 await page.locator('.model-list summary').click();
 await page.screenshot({path:out+'/connection-native-zh.png',fullPage:true});
 const mutations=()=>page.evaluate(()=>window.__fixture.calls.filter(c=>['setupCore','setupMcp','setToolMode','smokeTest','verifyMcp'].includes(c[0])).length);
@@ -187,7 +193,7 @@ check('Queue defaults are shown in a separate settings page',await page.getByLab
 await page.getByLabel('Web 同时执行数',{exact:true}).selectOption('3');
 check('Editing queue settings does not save implicitly',await page.evaluate(()=>window.__fixture.state.requestScheduling.maxConcurrent===4));
 await page.getByRole('button',{name:'恢复默认值',exact:true}).click();
-check('Restore defaults changes only the draft',await page.getByRole('button',{name:'保存设置',exact:true}).isDisabled());
+check('Restore defaults changes only the draft',await page.getByLabel('排队超时',{exact:true}).inputValue()==='30'&&await page.evaluate(()=>window.__fixture.state.requestScheduling.queueTimeoutMinutes===15)&&await page.getByRole('button',{name:'保存设置',exact:true}).isEnabled());
 await page.getByLabel('最小发送间隔',{exact:true}).fill('0');
 check('Invalid send intervals cannot be saved',await page.getByRole('button',{name:'保存设置',exact:true}).isDisabled());
 await page.getByLabel('最小发送间隔',{exact:true}).fill('3');
@@ -248,7 +254,7 @@ await page.waitForTimeout(1200);
 check('Repeated identical success restarts timer without stacking',await page.locator('.feedback').count()===1&&!await page.locator('.feedback').evaluate(el=>el.classList.contains('is-leaving')));
 await page.locator('.feedback').waitFor({state:'detached',timeout:4000});
 check('Success feedback automatically disappears',await page.locator('.feedback').count()===0);
-await page.getByText('实验功能 · 按需启用',{exact:true}).click();
+await page.getByText('实验功能 · 按需调整',{exact:true}).click();
 check('Explicit user opt-out keeps file transport off and budget hidden',await page.getByRole('switch',{name:'上下文文件传输（实验性）',exact:true}).getAttribute('aria-checked')==='false'&&await page.getByRole('radiogroup',{name:'上下文预算'}).count()===0);
 await page.getByRole('switch',{name:'上下文文件传输（实验性）',exact:true}).click();
 check('Enabling file transport uses standard budget',await page.evaluate(()=>!window.__fixture.state.experimentalContextTripleBudget));
@@ -269,7 +275,7 @@ const captureConnection = async name => {
   await page.screenshot({path:out+'/'+name+'.png',fullPage:true});
   await setWindowFixtureSize(page, {width:390,height:1050});
   await waitLayout();await page.waitForTimeout(250);
-  check(name+' narrow mode choices use a readable single column',await page.locator('.mode-list .mode').evaluateAll(nodes=>new Set(nodes.map(el=>Math.round(el.getBoundingClientRect().left))).size===1));
+  check(name+' compact window keeps scaled mode choices readable and unclipped',await page.locator('.mode-list .mode').evaluateAll(nodes=>nodes.length===2&&nodes.every(el=>{const rect=el.getBoundingClientRect();return rect.width>=200&&rect.left>=0&&rect.right<=innerWidth&&el.scrollWidth<=el.clientWidth})));
   check(name+' narrow view has no horizontal overflow',await page.locator('.ui-page').evaluate(el=>el.scrollWidth<=el.clientWidth));
   await page.screenshot({path:out+'/'+name+'-mobile.png',fullPage:true});
   await setWindowFixtureSize(page, {width:1440,height:1050});await waitLayout();await page.waitForTimeout(250);
@@ -522,7 +528,7 @@ await page.getByRole('tab',{name:'运行日志',exact:true}).waitFor();
 check('Switching to Chinese preserves exact original JSON and UTC timestamps',await page.locator('.log-json-record pre').first().textContent().then(value=>value===rawLog));
 await page.screenshot({path:out+'/logs-zh.png'});
 await setWindowFixtureSize(page, {width:390,height:1050});await page.waitForTimeout(300);
-check('Narrow log actions form two aligned equal-width rows',await page.locator('.log-selection-actions button').evaluateAll(nodes=>{const r=nodes.map(el=>el.getBoundingClientRect());return r.length===4&&Math.abs(r[0].width-r[1].width)<1&&Math.abs(r[0].top-r[1].top)<1&&Math.abs(r[2].top-r[3].top)<1&&r[2].top>r[0].top}));
+check('Compact window keeps scaled log actions aligned and unclipped',await page.locator('.log-selection-actions button').evaluateAll(nodes=>{const r=nodes.map(el=>el.getBoundingClientRect());return r.length===4&&r.every(rect=>Math.abs(rect.top-r[0].top)<1&&rect.left>=0&&rect.right<=innerWidth)&&nodes.every(el=>el.scrollWidth<=el.clientWidth)}));
 check('Narrow wrapped JSON stays within its own viewer',await page.locator('.log-json-scroll').evaluate(el=>el.scrollWidth<=el.clientWidth));
 check('Page-size label and selector stay together inside a narrow page',await page.locator('.log-page-size').evaluate(el=>{const r=el.getBoundingClientRect(),s=el.querySelector('select').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&s.top>=r.top&&s.bottom<=r.bottom}));
 await page.getByRole('button',{name:'导出诊断包',exact:true}).click();
@@ -711,7 +717,7 @@ for(const name of ['Overview','Runtime controls','Connection & Models','Preferen
 }
 await nav('Usage & Diagnostics');await page.getByRole('tab',{name:'Usage',exact:true}).focus();await page.keyboard.press('ArrowRight');
 check('Diagnostics supports keyboard tab selection',await page.getByRole('tab',{name:'Health checks',exact:true}).getAttribute('aria-selected')==='true');
-await page.keyboard.press('End');check('Diagnostics End key opens logs',await page.getByRole('tab',{name:'Logs',exact:true}).getAttribute('aria-selected')==='true');
+await page.keyboard.press('End');check('Diagnostics End key opens the final Storage & cache tab',await page.getByRole('tab',{name:'Storage & cache',exact:true}).getAttribute('aria-selected')==='true');
 await page.emulateMedia({reducedMotion:'reduce'});
 await page.locator('.app-titlebar .icon-button').first().click();
 check('Collapsed navigation is excluded from keyboard interaction',await page.locator('#workspace-sidebar').getAttribute('inert')!==null);

@@ -23,6 +23,7 @@ const { createWindowVisibility } = require("./window-visibility.cjs");
 const { createStorageManager } = require("./storage-management.cjs");
 const { appendBoundedLog, startLogMaintenance } = require("../shared/log-retention.cjs");
 const { BrowserHost, navigationErrorForLog } = require("./browser/browser-host.cjs");
+const { createBrowserCheckController } = require("./browser/browser-check-controller.cjs");
 const { requestBrowserInputOverride } = require("./browser/browser-input-override.cjs");
 const { BrowserControlServer } = require("./control-server.cjs");
 const { RequestQueue } = require("./runtime/request-queue.cjs");
@@ -132,7 +133,7 @@ let tray = null;
 let quitting = false;
 let shutdownInProgress = false;
 let exitCommitted = false;
-let smokePassedThisSession = false;
+let browserChecks = null;
 let cdpPort = 0;
 let lastOperation = null;
 let catalogVerificationTimer = null;
@@ -563,7 +564,7 @@ function registerIpc({ logger, stateStore }) {
     platform: process.platform,
     packaged: app.isPackaged,
     version: app.getVersion(),
-    smokePassed: smokePassedThisSession || smokePassedForCurrentVersion(stateStore.read()),
+    smokePassed: smokePassedForCurrentVersion(stateStore.read()),
     operation: lastOperation,
     update: updateController?.getState() ?? { status: "disabled" },
     });
@@ -589,11 +590,11 @@ function registerIpc({ logger, stateStore }) {
     applyRuntimeParameters: () => browserHost?.writeDescriptor(),
     publish: state => send("launcher:state-changed", state), assertActive: () => licenseController.assertActive() });
   handle("launcher:queue-settings", (_event, value, expectedRevision, parameters, parameterEdits) => saveQueueSettings(value, expectedRevision, parameters, parameterEdits));
-  handle("launcher:queue-control", async (_event, action, id) => {
+  handle("launcher:queue-control", async (_event, action, id, recoveryToken) => {
     // Stopping remains available after license expiry. Resume requires a fresh check.
     if (action === "resume" || action === "recover") await licenseController.assertActive();
     if (!requestQueue) throw new Error("Request scheduler is not running");
-    return requestQueue.control(action, id);
+    return requestQueue.control(action, id, recoveryToken);
   });
 
   handle("launcher:set-language", (_event, language) => {
@@ -669,6 +670,7 @@ function registerIpc({ logger, stateStore }) {
   handle("launcher:browser-passkey-login-continue", () => runtimeHost.continuePasskeyLogin());
   handle("launcher:browser-logout", async () => {
     const browser = await browserHost.logout();
+    browserChecks.invalidate();
     const state = stateStore.update({ sessionRefreshReminderAt: nextSessionRefreshReminderAt() });
     send("launcher:state-changed", state);
     return { browser, state };
@@ -682,10 +684,7 @@ function registerIpc({ logger, stateStore }) {
     if (stateStore.read().browserInteractionMode === "manual") {
       throw new Error("Browser smoke testing is disabled in Zero Risk mode");
     }
-    const result = await browserHost.smokeTest();
-    stateStore.update({ browserSmokePassed: true, browserSmokeVersion: app.getVersion() });
-    smokePassedThisSession = true;
-    return result;
+    return browserChecks.run(onCheck => browserHost.smokeTest(onCheck));
   });
   handle("launcher:mcp-verify", async (event) => {
     const operationName = "mcp-verification";
@@ -841,7 +840,7 @@ function registerIpc({ logger, stateStore }) {
     }
     if (setupState.browserInteractionMode === "automatic"
       && !setupState.coreSetupComplete
-      && !(smokePassedThisSession || smokePassedForCurrentVersion(setupState))) {
+      && !smokePassedForCurrentVersion(setupState)) {
       throw new Error(
         IS_DEV_PROFILE
           ? "Run the browser smoke test before configuring the DEV harness"
@@ -1357,6 +1356,8 @@ async function start() {
     && stateStore.read().browserInteractionMode !== configuredInteractionMode) {
     stateStore.update({ browserInteractionMode: configuredInteractionMode });
   }
+  browserChecks = createBrowserCheckController({ stateStore, version: app.getVersion(), logger,
+    publish: state => send("launcher:state-changed", state) });
   browserHost = new BrowserHost({
     window: mainWindow,
     descriptorPath: BROWSER_DESCRIPTOR_PATH,
@@ -1372,7 +1373,8 @@ async function start() {
     loginWithPasskey: () => runtimeHost.capturePasskeyLogin(),
     partition: LAUNCHER_PROFILE.browserPartition,
     profile: LAUNCHER_PROFILE.kind,
-    publishState: (state) => send("launcher:browser-state", state),
+    publishState: (state) => { browserChecks.observe(state); send("launcher:browser-state", state); },
+    getQueueStatus: () => requestQueue?.snapshot(),
     showWindow: showMainWindow,
     getBrowserInteractionMode: () => stateStore.read().browserInteractionMode,
     getLanguage: () => stateStore.read().language,

@@ -73,6 +73,7 @@ interface SmokeMessage {
   type: "smoke";
   id: string;
   config: VerifyMessage["config"];
+  skipSend?: boolean;
 }
 
 interface LimitsMessage {
@@ -409,7 +410,10 @@ async function maintain(message: InspectMessage | SmokeMessage | LimitsMessage):
     const value = message.type === "inspect"
       ? await worker.inspectSession(message.detectCapabilities, abortController.signal)
       : message.type === "limits" ? await worker.inspectLimitsPlan(abortController.signal)
-      : await worker.smokeTest(abortController.signal, message.id);
+      : await worker.smokeTest(abortController.signal, message.id, {
+        skipSend: message.skipSend === true,
+        onCheck: phase => writeProtocol({ type: "check", id: message.id, phase }),
+      });
     writeProtocol({ type: "result", id: message.id, value });
   } catch (error) {
     writeProtocol(browserHelperError(message.id, error));

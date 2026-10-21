@@ -17,6 +17,17 @@ export type Language = keyof typeof languages;
 export type LauncherProfile = "production" | "development";
 export type BrowserInteractionMode = "automatic" | "manual";
 export type Surface = "browser" | "setup" | "mcp" | "activity" | "limits" | "settings";
+export type BrowserCheckStatus = "not_run" | "running" | "passed" | "blocked" | "failed" | "cancelled";
+export interface BrowserCheck {
+  id?: string;
+  status: BrowserCheckStatus;
+  version: string;
+  startedAt?: number;
+  finishedAt?: number;
+  connection: BrowserCheckStatus;
+  dispatch: BrowserCheckStatus;
+  error?: { message: string; code?: string; diagnosticRef?: string; cleanupMessage?: string };
+}
 
 export interface LauncherState {
   version: 1;
@@ -45,6 +56,8 @@ export interface LauncherState {
   logPageSize: number;
   browserSmokePassed?: boolean;
   browserSmokeVersion?: string | null;
+  browserCheck?: BrowserCheck;
+  lastBrowserCheckSuccess?: { at: number; version: string };
   coreSetupComplete?: boolean;
   codexCatalogVerified?: boolean;
   mcpSetupComplete?: boolean;
@@ -60,6 +73,7 @@ export interface BrowserState {
   url: string;
   title: string;
   authenticated: boolean;
+  sessionEpoch?: string;
   authenticationStatus?: "unknown" | "checking" | "authenticated" | "signed-out" | "error";
   authenticationMessage?: string;
   visible: boolean;
@@ -227,7 +241,7 @@ export interface LauncherApi {
     state: LauncherState; persistedRevision: number; appliedRevision: number | null;
     applyState: "applied" | "pending-start" | "apply-failed";
   }>;
-  controlQueue(action: "pause" | "resume" | "recover" | "cancel" | "cancel-waiting" | "cancel-all", id?: string): Promise<QueueSnapshot>;
+  controlQueue(action: "pause" | "resume" | "recover" | "cancel" | "cancel-waiting" | "cancel-all", id?: string, recoveryToken?: string): Promise<QueueSnapshot>;
   licenseStatus(): Promise<import("../../src/licensing/schema").LicenseStatus>;
   importLicense(code: string): Promise<import("../../src/licensing/schema").LicenseStatus>;
   retryStartup(): Promise<void>;
@@ -259,7 +273,7 @@ export interface LauncherApi {
   continuePasskeyLogin(): Promise<boolean>;
   logoutChatGpt(): Promise<{ browser: BrowserState; state: LauncherState }>;
   dismissSessionReminder(): Promise<LauncherState>;
-  smokeTest(): Promise<{ ok: boolean; effort: string; response: string }>;
+  smokeTest(): Promise<{ ok: boolean; effort?: string; response?: string; check?: BrowserCheck }>;
   verifyMcp(): Promise<DoctorReport>;
   doctor(): Promise<DoctorReport>;
   cancelTurns(): Promise<{ stdout: string }>;

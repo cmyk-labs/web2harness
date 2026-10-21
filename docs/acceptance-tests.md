@@ -286,6 +286,8 @@ Record desktop UI, standalone/HTTP/protocol fixtures, authenticated Native Tools
 
 For timeout changes, exercise sequential operations whose combined duration exceeds the former enclosing cap while each stays within its own [operation limit](reference.md#independent-operation-timeouts). Verify attachment settings of 2/3/5/10 minutes never shorten input/card waits, compaction clocks start at their actual phase boundaries, and cancellation retains ownership until cleanup. Test helper exit/disconnection separately from a healthy long-running operation; test independent tunnel probes and concurrent per-connection WebSocket cleanup. Preserve exact model/effort, permission and single-send checks. Controlled clocks and browser fixtures prove timing behavior; the authenticated DEV task must separately demonstrate real command results and complete final-body delivery. Keep fixture, native Codex/environment failures and confirmed Web2Harness defects separate in the record.
 
+Browser-check recovery: restore an old unknown-send pause, run the shared connection check without sending, and show blocked verification with recovery navigation rather than a connection/runtime fault. Confirm recovery only for the reviewed pause state, with no active resources; preserve manual pauses and never replay old requests. Verify successful checks followed by failure/cancellation, sign-out/account change, late results, process restart, and blocker summaries after receipt expiry. Cover bilingual narrow UI and an authenticated DEV send after recovery.
+
 <a id="cap-010"></a>
 
 ## CAP-010: Aggregate HTTP body budget

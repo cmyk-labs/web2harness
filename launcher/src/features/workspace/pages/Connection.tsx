@@ -8,6 +8,7 @@ import { interactionName, modeName } from "../labels";
 import { Report } from "../Report";
 import type { WorkspaceProps } from "../types";
 import { useConnectionSetup } from "../useConnectionSetup";
+import { BrowserCheckResult } from "../BrowserCheckResult";
 
 export function Connection(p: WorkspaceProps) {
   const { active: licensed } = useLicense();
@@ -162,8 +163,8 @@ export function Connection(p: WorkspaceProps) {
               : snapshot.state.browserSmokePassed && snapshot.state.browserSmokeVersion !== snapshot.version
                 ? t("应用版本已更新，请重新检查浏览器连接。", "The app version changed. Check the browser connection again.")
               : t(
-                  "运行浏览器检查，验证当前会话是否可用。",
-                  "Run a browser check to verify that this session is available.",
+                  "检查登录与页面，并发送一条测试消息验证会话。队列暂停时只检查连接。",
+                  "Check sign-in and the page, then send a test message. A paused queue allows only the connection check.",
                 ),
         !manual && snapshot.smokePassed,
         manual ? (
@@ -181,8 +182,10 @@ export function Connection(p: WorkspaceProps) {
               onClick={() =>
                 void run("browser", async () => {
                   await activateBrowser();
-                  await api.smokeTest();
-                  updateState((await api.snapshot()).state);
+                  try {
+                    await api.smokeTest();
+                    updateState((await api.snapshot()).state);
+                  } finally { p.navigate("connection"); }
                 })
               }
             >
@@ -190,6 +193,7 @@ export function Connection(p: WorkspaceProps) {
                 ? t("重新检查", "Check again")
                 : t("检查连接", "Check connection")}
             </Button>
+            <BrowserCheckResult check={snapshot.state.browserCheck} t={t} onQueue={() => p.navigate("runtime-controls")} />
             {errorFor("browser")}
           </>
         ),

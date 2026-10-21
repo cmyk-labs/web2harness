@@ -1604,6 +1604,8 @@ test("launcher delegates every ChatGPT model and turn operation to the shared br
     setState: patch => calls.push(["state", patch]),
     runBrowserHelperOperation: async options => {
       calls.push(["helper", options]);
+      options.onCheck("connection");
+      options.onCheck("dispatch");
       return { type: "result", value: { effort: "High", response: "WEB2HARNESS READY" } };
     },
   });
@@ -1621,6 +1623,7 @@ test("launcher delegates every ChatGPT model and turn operation to the shared br
 for (const failure of [false, true]) test(`smoke admits only its registered helper and clears ownership after settlement (failure=${failure})`, async () => {
   let created = 0;
   const fixture = Object.assign(Object.create(BrowserHost.prototype), {
+    state: { status: "ready", authenticated: true, message: "ready" },
     manualOperation: null, turnTabs: new Map(), userCancelledTurnOwners: new Map(),
     ready: async () => {}, activateHomeSurface() {}, show() {}, waitForSurfaceReady: async () => {},
     setState() {}, writeDescriptor() {}, syncViewVisibility() {}, snapshot: () => ({ tabs: [] }),
@@ -1634,6 +1637,8 @@ for (const failure of [false, true]) test(`smoke admits only its registered help
       const id = "smoke-" + "a".repeat(24), pid = process.pid;
       await assert.rejects(fixture.beginTurn(id, false, pid), /busy with browser smoke test/);
       options.onStarted({ id, pid });
+      options.onCheck("connection");
+      options.onCheck("dispatch");
       await assert.rejects(fixture.beginTurn(id + "x", false, pid), /busy with browser smoke test/);
       await assert.rejects(fixture.beginTurn(id, false, pid + 1), /busy with browser smoke test/);
       fixture.manualOperation = "session inspection";
@@ -1650,6 +1655,44 @@ for (const failure of [false, true]) test(`smoke admits only its registered help
   assert.equal(created, 1);
   assert.equal(fixture.smokeTurnOwner, null);
   assert.equal(fixture.manualOperation, null);
+});
+
+test("paused smoke verifies the connection without sending and returns a recoverable category", async () => {
+  const phases = [];
+  const host = Object.assign(Object.create(BrowserHost.prototype), {
+    state: { status: "ready", authenticated: true }, turnTabs: new Map(), manualOperation: null,
+    ready: async () => {}, activateHomeSurface() {}, show() {}, waitForSurfaceReady: async () => {},
+    getConnectorName: () => "Fixture DEV", getQueueStatus: () => ({ pausedReason: "send_outcome_unknown" }),
+    logger: { info() {} }, snapshot() { return this.state; }, syncInputProtection() {}, resetInputOverride() {},
+    setState(patch) { Object.assign(this.state, patch); },
+    runBrowserHelperOperation: async options => {
+      assert.equal(options.payload.skipSend, true);
+      options.onCheck("connection");
+      return { value: { effort: "High", response: "", sendSkipped: true } };
+    },
+  });
+  await assert.rejects(host.smokeTest(phase => phases.push(phase)), { code: "queue_blocked_send_outcome_unknown" });
+  assert.deepEqual(phases, ["connection"]);
+  assert.equal(host.state.status, "ready");
+  assert.equal(host.state.authenticated, true);
+  assert.equal(host.state.lastOperation.status, "blocked");
+  assert.equal(host.smokeTurnOwner, null);
+});
+
+test("operation failures and cancellation do not overwrite independently observed browser health", async () => {
+  for (const error of [new DOMException("cancelled", "AbortError"), Object.assign(new Error("connector missing"), { code: "connector_unavailable" }), new Error("plan unavailable")]) {
+    const host = Object.assign(Object.create(BrowserHost.prototype), {
+      state: { status: "ready", authenticated: true, message: "verified" }, turnTabs: new Map(),
+      ready: async () => {}, activateHomeSurface() {}, snapshot() { return this.state; }, resetInputOverride() {}, syncInputProtection() {},
+      setState(patch) { Object.assign(this.state, patch); },
+    });
+    await assert.rejects(host.withManualOperation("inspection", async () => { host.setState({ status: "testing" }); throw error; }));
+    assert.equal(host.state.status, "ready");
+    assert.equal(host.state.lastOperation.error.message, error.message);
+    await assert.rejects(host.withManualOperation("inspection", async () => { host.setState({ status: "error", message: "network lost" }); throw error; }));
+    assert.equal(host.state.status, "error");
+    assert.equal(host.state.message, "network lost");
+  }
 });
 
 test("browser helper operations fail closed when the configured connector name is invalid", async () => {
@@ -2167,6 +2210,7 @@ test("manual browser operations disable background throttling until completion",
   const throttling = [];
   const surfaces = [];
   const fixture = {
+    state: { status: "ready", message: "ready" },
     turnTabs: new Map(),
     syncInputProtection() {},
     resetInputOverride: BrowserHost.prototype.resetInputOverride,

@@ -17,7 +17,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-test("smoke helper keeps the launcher's exact operation identity through real IPC and maintenance scheduling", async () => {
+test.each([false, true])("smoke helper keeps identity, connection proof and skipSend=%s through real IPC", async skipSend => {
   const { runBrowserHelperOperation } = require("../../../../launcher/electron/browser/browser-helper-verifier.cjs");
   const root = mkdtempSync(join(tmpdir(), "codex-smoke-owner-"));
   roots.push(root);
@@ -25,23 +25,30 @@ test("smoke helper keeps the launcher's exact operation identity through real IP
   writeFileSync(helper, `
     import { ChatGptBrowserWorker } from ${JSON.stringify(new URL("../../../../src/adapters/chatgpt-web/browser/browser-worker.ts", import.meta.url).href)};
     // Only the browser action is substituted; real maintenance scheduling and IPC remain.
-    ChatGptBrowserWorker.prototype.smokeTestExclusive = async function(signal, traceId) {
+    ChatGptBrowserWorker.prototype.smokeTestExclusive = async function(signal, traceId, options) {
       if (!signal || !/^smoke-[a-f0-9]{24}$/.test(traceId)) throw new Error("Smoke ownership lost");
+      if (options.skipSend !== ${skipSend}) throw new Error("Skipped send choice lost");
+      options.onCheck("connection");
+      if (options.skipSend) return { effort: traceId, response: "", sendSkipped: true };
+      options.onCheck("dispatch");
       return { effort: traceId, response: "WEB2HARNESS READY" };
     };
     await import(${JSON.stringify(new URL("../../../../src/adapters/chatgpt-web/browser/browser-helper-main.ts", import.meta.url).href)});
   `);
   let owner: { id: string; pid: number } | undefined;
+  const phases: string[] = [];
   const result = await runBrowserHelperOperation({
     helper: { executable: process.execPath, script: helper },
     descriptorPath: join(root, "unused-launcher.json"), appName: "Codex Native2 DEV", operation: "smoke",
+    payload: { skipSend }, onCheck: (phase: string) => phases.push(phase),
     logger: { info() {} }, onStarted: (value: { id: string; pid: number }) => { owner = value; },
   });
   expect(owner?.id).toMatch(/^smoke-[a-f0-9]{24}$/);
   expect(owner?.pid).toBeGreaterThan(0);
   expect(owner?.pid).not.toBe(process.pid);
   expect(result.id).toBe(owner?.id);
-  expect(result.value).toEqual({ effort: owner?.id, response: "WEB2HARNESS READY" });
+  expect(phases).toEqual(skipSend ? ["connection"] : ["connection", "dispatch"]);
+  expect(result.value).toEqual(skipSend ? { effort: owner?.id, response: "", sendSkipped: true } : { effort: owner?.id, response: "WEB2HARNESS READY" });
 }, 30_000);
 
 test("daemon streams browser lifecycle through the real helper process", async () => {

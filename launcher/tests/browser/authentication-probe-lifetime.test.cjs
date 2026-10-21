@@ -71,6 +71,22 @@ function cleaned(fixture, timers, ...surfaces) {
   for (const surface of surfaces) assert.deepEqual(surface.eventNames(), [], "all probe listeners are removed");
 }
 
+test("account identity changes rotate opaque proof scope without publishing the account key", async () => {
+  const page = contents(), fixture = host(page);
+  fixture.state.sessionEpoch = "initial";
+  let account = "a".repeat(64);
+  page.executeJavaScript = async () => ({ ...result(), sessionAccountKey: account });
+  await fixture.probeAuthentication();
+  assert.equal(fixture.state.sessionEpoch, "initial");
+  await fixture.probeAuthentication();
+  assert.equal(fixture.state.sessionEpoch, "initial");
+  account = "b".repeat(64);
+  await fixture.probeAuthentication();
+  assert.notEqual(fixture.state.sessionEpoch, "initial");
+  assert.equal(fixture.state.authenticated, true);
+  assert.equal(JSON.stringify(fixture.state).includes(account), false);
+});
+
 test("bounded recheck restores authentication after a same-document interruption without navigating", async t => {
   const timers = clock(t), page = contents("https://chatgpt.com/"), fixture = host(page), old = deferred();
   page.executeJavaScript = () => old.promise;

@@ -34,6 +34,10 @@ For `tool_identity_mismatch`, diagnostics compare the submitted identity with th
 
 The browser smoke test also uses the global Web request queue and send interval. Its launcher-owned helper is identified by both operation ID and process ID, so the test can run while its maintenance lock continues to exclude unrelated browser work. If it immediately reports “busy with browser smoke test”, retain the diagnostic log; that is a local ownership failure, not evidence of an account or network limit.
 
+**Check browser connection** reports connection/page readiness separately from send verification. If dispatch is paused, the connection stage can still run, but send verification remains blocked and the overall check has not passed. Use **Review queue and resume**, inspect the blocking task and confirm that browser work has stopped before **Confirm recovery → Resume dispatch**. This does not resend old requests or clear a separate manual pause. A changed pause requires a new confirmation. Unknown-send protection survives upgrades and restarts; neither proves the remote outcome. Minimal blocker metadata remains available after ordinary task receipts expire, although older detailed logs may have expired.
+
+Queue blockage, cancelled inspection and a failed connector/plan operation do not by themselves establish a browser connection failure. Review the specific operation result and independent browser/runtime health. A newer failed, blocked or cancelled check replaces the current success flag. Signing out, detecting an account change or restarting the browser process requires a fresh check; reopening the renderer alone does not. Historical success is not current verification.
+
 Run **Usage & Diagnostics → Health checks → Run doctor** and retain every failed check. If startup prevents access to the workspace, use **View details** and **Export diagnostic log** on the startup page. For automatic interaction, inspect browser sign-in, applied configuration, and catalog readiness in that order. For manual interaction, personally verify the browser and remote connector binding.
 
 | Symptom | Start here |

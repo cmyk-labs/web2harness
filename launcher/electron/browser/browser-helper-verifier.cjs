@@ -3,6 +3,7 @@ const { randomBytes } = require("node:crypto");
 const { createInterface } = require("node:readline");
 
 const { OPERATION_STAGE_TIMEOUTS } = require("../../shared/operation-stages.cjs");
+const { browserOperationError } = require("../../shared/browser-operation-error.cjs");
 const HELPER_STAGES = new Set(["running", "connection", "controls", "inspection", "cleanup"]);
 
 function waitForExit(child, timeoutMs) {
@@ -48,7 +49,7 @@ async function stopChild(child) {
   }
 }
 
-async function runBrowserHelperOperation({ helper, descriptorPath, appName, operation, payload = {}, logger, onStarted, onStage, abortSignal }) {
+async function runBrowserHelperOperation({ helper, descriptorPath, appName, operation, payload = {}, logger, onStarted, onStage, onCheck, abortSignal }) {
   if (!helper || typeof helper.executable !== "string" || typeof helper.script !== "string") {
     throw new Error("Browser helper verification command is invalid");
   }
@@ -73,6 +74,7 @@ async function runBrowserHelperOperation({ helper, descriptorPath, appName, oper
   let sent = false;
   let timer;
   let lastSequence = 0;
+  let checkPhase = 0;
   let onAbort;
   const output = createInterface({ input: child.stdout });
   const errors = createInterface({ input: child.stderr });
@@ -156,11 +158,17 @@ async function runBrowserHelperOperation({ helper, descriptorPath, appName, oper
         finish(null, message);
         return;
       }
-      if (message.type === "error" && typeof message.message === "string") {
-        const helperError = new Error(message.message);
-        if (typeof message.name === "string" && /^[A-Za-z][A-Za-z0-9]{0,79}$/.test(message.name)) {
-          helperError.name = message.name;
+      if (message.type === "check" && operation === "smoke") {
+        if (!sent || message.phase !== ["connection", "dispatch"][checkPhase]) {
+          finish(new Error("Browser helper check evidence is out of order"));
+          return;
         }
+        checkPhase++;
+        try { onCheck?.(message.phase); } catch (error) { finish(error); }
+        return;
+      }
+      if (message.type === "error" && typeof message.message === "string") {
+        const helperError = Object.assign(new Error(message.message), browserOperationError(message));
         finish(helperError);
         return;
       }
@@ -180,11 +188,14 @@ async function runBrowserHelperOperation({ helper, descriptorPath, appName, oper
     primaryError = error instanceof Error ? error : new Error(String(error));
   }
   try {
-    onStage?.("cleanup");
-    await stopChild(child);
+    try { onStage?.("cleanup"); } finally { await stopChild(child); }
   } catch (cleanupError) {
     const cleanup = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
-    if (primaryError) throw new Error(`${primaryError.message}; browser helper cleanup failed: ${cleanup}`);
+    if (primaryError) {
+      primaryError.cleanupMessage = cleanup;
+      primaryError.operationId = id;
+      throw primaryError;
+    }
     throw cleanupError;
   } finally {
     abortSignal?.removeEventListener("abort", onAbort);

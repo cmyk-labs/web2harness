@@ -365,6 +365,8 @@ Local uninstall does not delete ChatGPT history or revoke remote connectors, tun
 
 ## Manage the request queue
 
+Browser checks show connection/page readiness and actual send verification separately. Paused dispatch does not pass send verification: follow the queue recovery link, review the blocker, then check again. Recovery preserves old outcomes and a separate manual pause; stale confirmations are rejected. Failed checks and authentication changes invalidate current proof. See [browser-check recovery](troubleshooting.md) for details.
+
 In **Runtime parameters → Context budget**, choose only **Standard budget** or **Triple budget**. Fast (Instant/low) and non-Fast (medium/high/xhigh/Pro) windows are fixed at 80k/272k for standard and 240k/816k for triple (1k = 1,000 tokens). Values are read-only; usable capacity (95%) and auto-compaction (90%) are derived automatically. Triple still requires Context as File and supported mode/account capabilities. Legacy custom windows normalize to the fixed values while preserving a valid standard/triple choice; reapply configuration and restart the corresponding Codex for a stale catalog. Restore defaults changes only the draft. Busy or queued tasks reject saves; idle saves synchronize runtime and catalog transactionally. The 32 KiB file-transport threshold is independent. Budgets do not guarantee actual web capacity or complete recall.
 
 **Runtime parameters** is an independent page. Edit concurrent Web turns, queue timeout and minimum send interval, then save explicitly; defaults are four, 30 minutes and three seconds. The UI reports saved/applied status. Unlicensed users can inspect values but cannot save or resume dispatch. See the [parameter rules](reference.md#request-scheduling).

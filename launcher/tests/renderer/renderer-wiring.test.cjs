@@ -113,7 +113,7 @@ test("setup preserves session-check failures and never installs without verified
       stateStore: { read: () => state, update() {} },
       browserHost: { probeAuthentication: async () => browser, returnToIdle: async () => {} },
       runtimeHost: { setupCore: run, setupDevCore: run, runtimeConfigSnapshot: () => ({ config: {} }) },
-      smokePassedThisSession: true, send() {}, startCatalogVerificationMonitor() {}, logger: {},
+      smokePassedForCurrentVersion: () => true, send() {}, startCatalogVerificationMonitor() {}, logger: {},
     });
     await assert.rejects(setup, error => error.message === browser.message);
     assert.equal(installs, 0);
@@ -360,7 +360,7 @@ test("completed model setup remains a repeatable capability probe", () => {
   assert.match(workspaceSource, /api\.smokeTest\(\)/);
   assert.match(
     electronMain,
-    /!setupState\.coreSetupComplete[\s\S]*?smokePassedThisSession[\s\S]*?smokePassedForCurrentVersion\(setupState\)/,
+    /!setupState\.coreSetupComplete[\s\S]*?smokePassedForCurrentVersion\(setupState\)/,
   );
 });
 

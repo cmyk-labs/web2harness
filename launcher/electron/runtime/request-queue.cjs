@@ -35,7 +35,7 @@ class RequestQueue {
       this.core.restoreMcpStatus(saved.mcpStatus);
       for (const reason of saved.pauseReasons ?? []) this.core.pause(reason);
       if (saved.pendingSend === true) this.core.pause("send_outcome_unknown");
-      this.core.restorePauseSources(saved.pauseSources);
+      this.core.restorePauseSources(saved.pauseSources, saved.records);
       if (Number.isFinite(saved.lastSendAt)) this.core.lastSendAt = performance.now() - Math.max(0, Date.now() - saved.lastSendAt);
       for (const record of saved.records) {
         if (typeof record.id !== "string" || typeof record.groupId !== "string" || !Number.isFinite(record.queuedAt)
@@ -95,7 +95,7 @@ class RequestQueue {
   async persist() {
     if (!this.dirty) return;
     const text = JSON.stringify({ version: 1, pauseReasons: [...this.core.pauseReasons],
-      pauseSources: [...this.core.pauseSources].map(([reason, requestId]) => ({ reason, requestId })), pendingSend: Boolean(this.core.sendOwner),
+      pauseSources: this.core.pauseSourceSnapshot(), pendingSend: Boolean(this.core.sendOwner),
       mcpStatus: this.core.mcpStatus(),
       lastSendAt: this.core.lastSendAt === undefined ? undefined : Date.now() - (performance.now() - this.core.lastSendAt),
       records: [...this.core.jobs.values()].map(job => this.core.view(job)) });
@@ -173,15 +173,18 @@ class RequestQueue {
   updateSettings(settings, revision) { return this.serial(async () => {
     this.core.updateSettings(settings); this.core.configRevision = revision; await this.persist(); return this.snapshot();
   }); }
-  control(action, id) { return this.serial(async () => {
+  control(action, id, recoveryToken) { return this.serial(async () => {
     if (action === "pause") this.core.pause();
     else if (action === "resume") this.core.resume();
     else if (action === "recover") {
+      if (typeof recoveryToken !== "string" || recoveryToken !== this.core.recoveryToken) {
+        throw Object.assign(new Error("Queue pause changed. Review the current reasons and confirm recovery again / 队列暂停已变化，请核对当前原因并重新确认恢复"), { code: "queue_pause_changed" });
+      }
       if (this.core.active().length || [...this.owners.values()].some(owner => this.hasResource(owner.traceId))) {
         throw new Error("Stop active tasks and release their browser resources before confirming recovery");
       }
       // Explicit operator confirmation never replays old receipts or changes their outcomes.
-      for (const reason of [...this.core.pauseReasons]) this.core.resume(reason);
+      for (const reason of [...this.core.pauseReasons]) if (reason !== "user") this.core.resume(reason);
     }
     else if (action === "cancel" || action === "cancel-waiting" || action === "cancel-all") {
       const ids = action === "cancel" ? [id] : [...this.core.jobs.values()]

@@ -97,7 +97,7 @@ export function RequestQueue({ api, snapshot, navigate }: WorkspaceProps) {
   const [confirmWaiting, setConfirmWaiting] = useState(false);
   const snapshotId = useRef<string | undefined>(undefined);
   const available = status?.status === "ready";
-  const [confirmRecovery, setConfirmRecovery] = useState(false);
+  const [confirmRecovery, setConfirmRecovery] = useState<string | null>(null);
   const needsRecovery = status?.scheduler?.pauseReasons.some(reason => reason !== "user");
   useEffect(() => {
     let disposed = false, pending = false;
@@ -127,8 +127,9 @@ export function RequestQueue({ api, snapshot, navigate }: WorkspaceProps) {
   }
   async function control(action: "pause" | "resume" | "recover" | "cancel" | "cancel-waiting", id?: string) {
     if (working || !available || (["resume", "recover"].includes(action) && !licensed)) return;
-    setWorking(true); setNotice(""); setConfirmWaiting(false); setConfirmRecovery(false);
-    try { await api.controlQueue(action, id); setNotice(t("操作已受理", "Action accepted")); setRefresh(value => value + 1); }
+    const recoveryToken = confirmRecovery ?? undefined;
+    setWorking(true); setNotice(""); setConfirmWaiting(false); setConfirmRecovery(null);
+    try { await api.controlQueue(action, id, recoveryToken); setNotice(t("操作已受理", "Action accepted")); setRefresh(value => value + 1); }
     catch (error) { setNotice(String(error)); }
     finally { setWorking(false); }
   }
@@ -144,9 +145,14 @@ export function RequestQueue({ api, snapshot, navigate }: WorkspaceProps) {
       {needsRecovery && <div className="queue-feedback" role="alert">{status?.scheduler?.pausedReason === "send_outcome_unknown"
         ? t("发送结果未知，队列已暂停。请先核对阻断任务。", "Send outcome unknown. Dispatch is paused; inspect the blocking task first.")
         : `${t("异常暂停", "Dispatch suspended")}: ${status?.scheduler?.pausedReason}`}
-        {status?.scheduler?.pauseSources?.map(source => <Button key={source.reason} onClick={() => { openRequestLogs(source.requestId); navigate("diagnostics"); }}>{t("阻断任务日志", "Blocking task logs")} · {source.requestId.slice(0, 12)}</Button>)}
-        <Button disabled={!licensed || working || !!status?.scheduler?.active} onClick={() => setConfirmRecovery(true)}>{t("确认恢复", "Confirm recovery")}</Button></div>}
-      {confirmRecovery && <div className="queue-feedback queue-actions"><span>{t("请确认账号限流已解除、网页已停止。恢复只派发等待任务，不重发旧请求。", "Confirm the account is available and browser work has stopped. Recovery dispatches waiting tasks; old requests are never resent.")}</span><Button onClick={() => void control("recover")}>{t("恢复派发", "Resume dispatch")}</Button><Button onClick={() => setConfirmRecovery(false)}>{t("返回", "Back")}</Button></div>}
+        {status?.scheduler?.pauseSources?.map(source => <div key={source.reason}>
+          <span>{source.reason}{source.at !== undefined ? ` · ${new Date(source.at).toLocaleString()}` : ""}
+            {source.sendProgress && sendLabels[source.sendProgress] ? ` · ${t(...sendLabels[source.sendProgress])}` : ""}</span>
+          <Button onClick={() => { openRequestLogs(source.requestId); navigate("diagnostics"); }}>{t("阻断任务日志", "Blocking task logs")} · {source.requestId.slice(0, 12)}</Button>
+        </div>)}
+        <Button disabled={!licensed || working || !!status?.scheduler?.active || !status?.scheduler?.recoveryToken} onClick={() => setConfirmRecovery(status?.scheduler?.recoveryToken ?? null)}>{t("确认恢复", "Confirm recovery")}</Button></div>}
+      {confirmRecovery && <div className="queue-feedback queue-actions"><span>{t("请确认账号限流已解除、网页已停止。恢复不重发旧请求；手动暂停需另行恢复。", "Confirm the account is available and browser work has stopped. Old requests are never resent; a manual pause must be resumed separately.")}</span><Button disabled={working || confirmRecovery !== status?.scheduler?.recoveryToken} onClick={() => void control("recover")}>{t("恢复派发", "Resume dispatch")}</Button><Button onClick={() => setConfirmRecovery(null)}>{t("返回", "Back")}</Button>
+        {confirmRecovery !== status?.scheduler?.recoveryToken && <span role="alert">{t("暂停状态已变化，请返回重新核对。", "Pause state changed. Go back and review it again.")}</span>}</div>}
       <form className="queue-filters" onSubmit={event => { event.preventDefault(); changeQuery({ search }); }}>
         <label>{t("状态", "State")}<select aria-label={t("状态", "State")} value={query.state} onChange={event => changeQuery({ state: event.target.value as QueueQuery["state"] })}>{[["active", t("活动任务", "Active")], ["queued", t("排队中", "Queued")], ["running", t("执行中", "Running")], ["ended", t("已结束", "Finished")], ["failed", t("失败", "Failed")], ["cancelled", t("已取消", "Cancelled")], ["timed-out", t("超时", "Timed out")]].map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
         <label>{t("会话", "Session")}<select aria-label={t("会话", "Session")} disabled={!available || !page?.groups.length} value={page?.groups.includes(query.groupId ?? "") ? query.groupId : ""} onChange={event => changeQuery({ groupId: event.target.value || undefined })}><option value="">{t("全部", "All")}</option>{page?.groups.map(group => <option key={group} value={group} title={group}>{sessionLabel(group)}</option>)}</select></label>

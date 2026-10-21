@@ -92,7 +92,6 @@ function LauncherApp() {
               ...current,
               state,
               smokePassed:
-                current.smokePassed ||
                 (state.browserSmokePassed === true &&
                   state.browserSmokeVersion === current.version),
             }
@@ -129,7 +128,6 @@ function LauncherApp() {
             ...current,
             state,
             smokePassed:
-              current.smokePassed ||
               (state.browserSmokePassed === true &&
                 state.browserSmokeVersion === current.version),
           }

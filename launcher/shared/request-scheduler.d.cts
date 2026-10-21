@@ -53,7 +53,8 @@ export interface QueueSnapshot {
   configRevision: number;
   pausedReason: QueuePauseReason | null;
   pauseReasons: QueuePauseReason[];
-  pauseSources: Array<{ reason: QueuePauseReason; requestId: string }>;
+  recoveryToken?: string;
+  pauseSources: Array<{ reason: QueuePauseReason; requestId: string; at?: number; sendProgress?: QueueRecord["sendProgress"] }>;
   active: number;
   waiting: number;
   waitingBytes: number;
@@ -94,7 +95,7 @@ export class RequestScheduler {
   restoreMcpStatus(values?: McpQueueStatus[]): void;
   updateSettings(settings: RequestSchedulingSettings): { settings: RequestSchedulingSettings; configRevision: number };
   pause(reason?: QueuePauseReason, requestId?: string): void;
-  restorePauseSources(sources?: Array<{ reason: QueuePauseReason; requestId: string }>): void;
+  restorePauseSources(sources?: QueueSnapshot["pauseSources"], records?: QueueRecord[]): void;
   resume(expectedReason?: QueuePauseReason): void;
   close(): QueueRecord[];
   get(id: string): QueueRecord | null;

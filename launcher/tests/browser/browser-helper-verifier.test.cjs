@@ -8,7 +8,7 @@ const { EventEmitter } = require("node:events");
 const { PassThrough, Writable } = require("node:stream");
 const vm = require("node:vm");
 
-function stagedHelper(t) {
+function stagedHelper(t, options = {}) {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let request;
   const child = Object.assign(new EventEmitter(), { pid: 4321, exitCode: null, signalCode: null,
@@ -27,6 +27,7 @@ function stagedHelper(t) {
   vm.runInNewContext(fs.readFileSync(filename, "utf8"), sandbox, { filename });
   const pending = sandbox.module.exports.runBrowserHelperOperation({
     helper: { executable: "fixture", script: "fixture" }, descriptorPath: "/fixture", appName: "Fixture", operation: "inspect",
+    ...options,
   });
   void pending.catch(() => {});
   const send = value => child.stdout.write(`${JSON.stringify(value)}\n`);
@@ -44,6 +45,51 @@ test("helper connection, controls and each inspection get fresh timers beyond ni
   f.send({ type: "result", value: { authenticated: true } });
   assert.equal((await f.pending).value.authenticated, true);
   assert.equal(f.child.exitCode, 0);
+});
+
+test("check progress is ordered and preserves typed blocked errors across the helper boundary", async t => {
+  const phases = [];
+  const f = stagedHelper(t, { operation: "smoke", onCheck: phase => phases.push(phase) });
+  f.send({ type: "check", phase: "connection" });
+  f.send({ type: "error", name: "ChatGptWebAdapterError", message: "dispatch paused", code: "queue_blocked_send_outcome_unknown",
+    status: 503, retryable: false, errorType: "server_error", diagnosticRef: "diag-" + "a".repeat(24) });
+  await assert.rejects(f.pending, error => {
+    assert.equal(error.code, "queue_blocked_send_outcome_unknown");
+    assert.equal(error.status, 503);
+    assert.equal(error.retryable, false);
+    assert.equal(error.diagnosticRef, "diag-" + "a".repeat(24));
+    return true;
+  });
+  assert.deepEqual(phases, ["connection"]);
+  assert.equal(f.child.exitCode, 0);
+});
+
+test("out-of-order check progress cannot establish connection proof", async t => {
+  const f = stagedHelper(t, { operation: "smoke", onCheck: () => assert.fail("unverified progress") });
+  f.send({ type: "check", phase: "dispatch" });
+  await assert.rejects(f.pending, /out of order/);
+});
+
+test("cleanup observer failure retains the primary category and still stops the helper", async t => {
+  const f = stagedHelper(t, { onStage: stage => { if (stage === "cleanup") throw new Error("cleanup observer failed"); } });
+  f.send({ type: "error", message: "cancelled", name: "AbortError", status: 499, code: "client_cancelled", retryable: false });
+  await assert.rejects(f.pending, error => {
+    assert.equal(error.code, "client_cancelled");
+    assert.match(error.cleanupMessage, /cleanup observer failed/);
+    assert.match(error.operationId, /^inspect-/);
+    return true;
+  });
+  assert.equal(f.child.exitCode, 0);
+});
+
+test("malformed helper error fields cannot cross the public boundary", async t => {
+  const f = stagedHelper(t);
+  f.send({ type: "error", message: "token=private", code: { nested: "unsafe" }, status: 200, retryable: "yes", diagnosticRef: "private path" });
+  await assert.rejects(f.pending, error => {
+    assert.equal(error.message.includes("private"), false);
+    for (const field of ["code", "status", "retryable", "diagnosticRef"]) assert.equal(error[field], undefined);
+    return true;
+  });
 });
 
 test("running transfers timeout ownership to the worker without a maintenance or generation cap", async t => {
