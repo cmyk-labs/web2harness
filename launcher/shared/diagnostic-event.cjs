@@ -16,10 +16,13 @@ const QUEUE_ENUMS = {
   handoffScope: new Set(["top_level", "exec", "catalog", "invalid"]),
   state: new Set(["queued", "preparing", "running", "waiting-user", "waiting-tools", "stopping", "succeeded", "failed", "cancelled", "timed-out", "ready", "already_committed", "awaiting_intent", "activity_in_flight", "open", "submitted", "finished"]),
   pausedReason: new Set(["user", "account_rate_limited", "browser_unavailable", "send_outcome_unknown"]),
+  sendProgress: new Set(["preflight", "waiting_permit", "sending", "awaiting_ack", "reconciling", "confirmed", "not-sent", "unknown"]),
 };
 const TEXT = new Set(("message error reason code errorCode errorName errorDescription category status phase stage operation line stack cause detail signal model effort mode interactionMode browserInteractionMode checkpoint traceId requestId sessionId launcherSessionId processInstanceId operationId parentOperationId toolEventId toolName cellId event source component id eventId at capturedAt tag role ariaExpanded ariaChecked dataState dataHighlighted origin type channel connector timeBasis version currentVersion platform arch osRelease profile language electron node chrome outcome cancelSource deliveryState requestedModel verifiedModel requestedEffort verifiedEffort modelFamily budgetPolicy targetRole networkPhase systemCode endpoint reader transport severity tabId method purpose submission receiptId receiptStatus configRevision sandboxMode approvalMode observedDecision evidence verification changedKey previous next lastProgressAt").split(" "));
 function cleanText(input) {
   return String(input).slice(0, 16384)
+    // Playwright can wrap every action-log line in ANSI styling even in captured logs.
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
     .replace(/W2H1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[license]")
     .replace(/tunnel_[a-f0-9]{32}/g, "[tunnel-id]")
     .replace(/\bsk-[A-Za-z0-9_-]{12,}\b/g, "[runtime-key]")
@@ -28,6 +31,9 @@ function cleanText(input) {
     .replace(/\b[A-Za-z]:\\+Users\\+[^\\/\r\n"'`<>|]+/gi, "[user-home]")
     .replace(/\/(?:Users|home)\/[^/\r\n"'`<>]+/g, "[user-home]")
     .replace(/<codex_context_json>[\s\S]*?(?:<\/codex_context_json>|$)/gi, "[conversation removed]")
+    // Playwright actionability logs include DOM previews (attributes and visible text).
+    // Keep the failure reason after the preview, never the page content it embeds.
+    .replace(/(^[ \t]*(?:-\s+)?(?:\d+\s*[×x]\s+)?(?:locator resolved to\s+)?)(<[a-z!/][^\r\n]*>)/gim, "$1[DOM removed]")
     .replace(/\b(?:token|access_token|refresh_token|api[_-]?key|password|cookie|authorization|controlToken|runtimeKey|client_secret|licenseCode)\s*[=:]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/gi, "[credential removed]")
     .replace(/\b(?:turn|binding|call)_[A-Za-z0-9_-]{12,}\b/g, "[binding removed]")
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email]")

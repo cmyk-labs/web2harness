@@ -78,14 +78,18 @@ export function chatGptModelFamilyMatches(
 ): boolean {
   // An older Latest picker can still use 5.6 below Pro. That does not prove a GPT-6 request.
   const expectedName = family === "6" && effort === "max" ? "astra" : "sol";
+  // Adapted from miuuyy/codex-chatgpt-web 6f43747 (MIT): require the exact effort,
+  // and normalize only an identical version repeated across separate header labels.
+  const expectedMode = { low: "instant", medium: "medium", high: "high", xhigh: "extra high", max: "pro" }[effort];
   const states = descriptions.flatMap(text => {
-    const match = /^(?:GPT[-\s]?)?(\d+(?:\.\d+)?)(?:\s+(Sol|Astra))?\s+([^,，]+)(?:[,，]|$)/i
-      .exec(text.replace(/\s+/g, " ").trim());
+    const normalized = text.normalize("NFKC").replace(/\p{Cf}/gu, "").replace(/\s+/g, " ").trim()
+      .replace(/^((?:GPT[-\s]?)?(\d+(?:\.\d+)?)\s+(?:Sol|Astra))\s+(?:GPT[-\s]?)?\2\s+/i, "$1 ");
+    const match = /^(?:GPT[-\s]?)?(\d+(?:\.\d+)?)(?:\s+(Sol|Astra))?\s+([^\p{P}]+)(?:\p{P}|$)/iu.exec(normalized);
     return match ? [{ version: match[1], name: match[2]?.toLowerCase(), mode: match[3]!.trim() }] : [];
   });
   return states.length > 0 && states.every(state => state.version === family
     && (!state.name || state.name === expectedName)
-    && (effort === "max" ? /^Pro$/i.test(state.mode) : !/^Pro$/i.test(state.mode)));
+    && state.mode.toLowerCase() === expectedMode);
 }
 
 export async function assertChatGptModelFamily(

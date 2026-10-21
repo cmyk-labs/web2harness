@@ -133,6 +133,7 @@ class RequestQueue {
       if (action === "poll") result = { record: this.core.get(input.id) };
       else if (action === "cancel") result = this.core.cancel(input.id);
       else if (action === "phase") result = this.core.setPhase(input.id, lease, input.phase);
+      else if (action === "send-progress") result = this.core.setSendProgress(input.id, lease, input.progress);
       else if (action === "send-begin") result = this.core.beginSend(input.id, lease);
       else if (action === "send-end") result = this.core.endSend(input.id, lease, input.permit, input.outcome) ?? { acknowledged: true };
       else if (action === "settle") {

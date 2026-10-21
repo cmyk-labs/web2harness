@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { diagnosticContext, diagnosticEvent } from "../src/diagnostics";
-import { parseDiagnosticLine, safeDetail, type DiagnosticRecord } from "../launcher/shared/diagnostic-event.cjs";
+import { diagnosticError, parseDiagnosticLine, safeDetail, type DiagnosticRecord } from "../launcher/shared/diagnostic-event.cjs";
 import { ChatGptBrowserWorker } from "../src/adapters/chatgpt-web/browser/browser-worker";
 import { handoffRejectionDiagnostics } from "../src/adapters/chatgpt-web/tools/handoff-validation";
 
@@ -9,6 +9,17 @@ test("completion diagnostics retain only validated content-independent reference
     .toEqual({ sourceId: "a".repeat(64), roundRef: `diag-${"b".repeat(24)}`, state: "activity_in_flight", sealed: true });
   const redacted = safeDetail({ sourceId: "PRIVATE_SOURCE", roundRef: "PRIVATE_ROUND", state: "PRIVATE_STATE" });
   expect(JSON.stringify(redacted)).not.toContain("PRIVATE");
+});
+
+test.each([false, true])("Send errors retain actionability reasons without DOM previews (ANSI=%s)", styled => {
+  const lines = ['locator.click: Timeout 60000ms exceeded.', 'Call log:', '  - locator resolved to <button title="PRIVATE_ATTRIBUTE">PRIVATE_LABEL</button>',
+    '  - <div>PRIVATE_BODY</div> from <section>PRIVATE_ANCESTOR</section> subtree intercepts pointer events', '  2 × <span>PRIVATE_REPEATED</span> intercepts pointer events'];
+  const click = new Error(lines.map(line => styled ? `\u001b[2m${line}\u001b[22m` : line).join("\n"));
+  const result = diagnosticError(new AggregateError([click, new Error("acceptance timed out")], "Send not confirmed"));
+  expect(JSON.stringify(result)).not.toContain("PRIVATE");
+  expect(JSON.stringify(result)).toContain("intercepts pointer events");
+  expect(result).toMatchObject({ errors: [{ category: "timeout" }, { message: "acceptance timed out" }] });
+  expect(click.message).toContain("PRIVATE_BODY"); // The original cause is preserved in memory.
 });
 
 test("Markdown metadata survives the real logging pipeline without allowing arbitrary content", async () => {

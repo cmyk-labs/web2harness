@@ -19,6 +19,27 @@ function fixture(settings = {}, options = {}) {
   };
 }
 
+test("send progress cannot grant authority, confirm input or overwrite a terminal receipt", () => {
+  const f = fixture(); f.add("first"); f.add("next");
+  const lease = f.scheduler.lease("first");
+  f.scheduler.setSendProgress("first", lease, "preflight");
+  f.scheduler.setSendProgress("first", lease, "waiting_permit");
+  assert.equal(f.scheduler.get("first").sendAttemptedAt, undefined);
+  assert.throws(() => f.scheduler.setSendProgress("first", "foreign", "sending"));
+  assert.throws(() => f.scheduler.setSendProgress("first", lease, "confirmed"));
+  const permit = f.scheduler.beginSend("first", lease).permit;
+  for (const progress of ["sending", "awaiting_ack", "reconciling"]) f.scheduler.setSendProgress("first", lease, progress);
+  assert.throws(() => f.scheduler.setSendProgress("first", lease, "waiting_permit"), /retired/);
+  assert.equal(f.scheduler.beginSend("next", f.scheduler.lease("next")).reason, "send_in_progress");
+  assert.equal(f.scheduler.get("first").sendConfirmedAt, undefined);
+  f.scheduler.endSend("first", lease, permit, "unknown");
+  assert.equal(f.scheduler.get("first").sendProgress, "unknown");
+  assert.throws(() => f.scheduler.setSendProgress("first", lease, "awaiting_ack"), /retired/);
+  assert.equal(f.scheduler.snapshot().pausedReason, "send_outcome_unknown");
+  assert.ok(f.events.some(e => e.name === "queue.send_permit_granted"));
+  assert.equal(f.events.some(e => e.name === "queue.send_attempted"), false);
+});
+
 test("fifty mixed model/session requests share the same four slots", () => {
   const f = fixture();
   for (let i = 0; i < 50; i++) f.add(`job${i}`, `session${i % 5}`, { model: i % 2 ? "gpt-6-pro" : "gpt-5.6-sol" });

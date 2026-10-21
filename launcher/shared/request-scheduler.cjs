@@ -10,6 +10,7 @@ const DEFAULT_REQUEST_SCHEDULING = Object.freeze(requestScheduling.defaults);
 const QUEUE_TIMEOUT_CHOICES = Object.freeze(requestScheduling.queueTimeoutChoices);
 const TERMINAL = new Set(["succeeded", "failed", "cancelled", "timed-out"]);
 const PHASES = new Set(["preparing", "running", "waiting-user", "waiting-tools"]);
+const SEND_PROGRESS = ["preflight", "waiting_permit", "sending", "awaiting_ack", "reconciling"];
 
 function schedulingError(code, message) {
   return Object.assign(new Error(message), { code, retryable: false });
@@ -190,8 +191,23 @@ class RequestScheduler {
     const permit = randomUUID();
     this.sendOwner = { id, lease, permit };
     job.sendAttemptedAt = this.now();
-    this.event("queue.send_attempted", job);
+    this.event("queue.send_permit_granted", job);
     return { allowed: true, permit };
+  }
+
+  // Display-only progress. It cannot grant input authority, release a permit or confirm a send.
+  setSendProgress(id, lease, progress) {
+    if (!SEND_PROGRESS.includes(progress)) throw new Error("Invalid send progress");
+    const job = this.owned(id, lease);
+    if (job.state !== "preparing" || ["confirmed", "not-sent", "unknown"].includes(job.sendProgress)
+      || SEND_PROGRESS.indexOf(progress) < SEND_PROGRESS.indexOf(job.sendProgress)) {
+      throw new Error("Send progress is retired");
+    }
+    if (job.sendProgress !== progress) {
+      job.sendProgress = progress;
+      this.event("queue.send_progress", job);
+    }
+    return this.view(job);
   }
 
   // Hold the permit across the actual send. Unknown outcomes must stop dispatch until
@@ -203,6 +219,7 @@ class RequestScheduler {
     }
     if (!["confirmed", "not-sent", "unknown"].includes(outcome)) throw new Error("Invalid send outcome");
     this.sendOwner = null;
+    job.sendProgress = outcome;
     if (outcome !== "not-sent") this.lastSendAt = this.monotonicNow();
     if (outcome === "confirmed") job.sendConfirmedAt = this.now();
     if (outcome === "unknown") this.pause("send_outcome_unknown", job.id);
@@ -233,6 +250,7 @@ class RequestScheduler {
     if (job.mcpScope && job.state !== "stopping" && outcome !== "cancelled") this.recordMcp(job, outcome, remote);
     if (this.sendOwner?.id === id) {
       this.sendOwner = null;
+      job.sendProgress = "unknown";
       this.lastSendAt = this.monotonicNow();
       this.pause("send_outcome_unknown", job.id);
     }
@@ -342,6 +360,7 @@ class RequestScheduler {
       ...(job.blockedBy ? { blockedBy: { ...job.blockedBy } } : {}),
       queuedAt: job.queuedAt, deadlineAt: job.deadlineAt, startedAt: job.startedAt, endedAt: job.endedAt,
       sendAttemptedAt: job.sendAttemptedAt, sendConfirmedAt: job.sendConfirmedAt,
+      ...(job.sendProgress ? { sendProgress: job.sendProgress } : {}),
       waitMs: Math.max(0, (job.startedMonotonic ?? end) - job.queuedMonotonic),
       runMs: job.startedMonotonic === undefined ? null : Math.max(0, end - job.startedMonotonic),
     };

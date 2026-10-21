@@ -989,6 +989,7 @@ export const browserStageTimeouts = {
   composerReady: 120_000,
   fileAttachment: 300_000,
   send: 60_000,
+  sendEnable: CHATGPT_SEND_ENABLE_GRACE_MS,
   submissionAcknowledgement: 120_000,
 } as const;
 
@@ -2922,39 +2923,111 @@ export class ChatGptBrowserWorker {
     }
   }
 
-  private async sendAttachedPrompt(
-    page: Page,
-    baseline: ChatGptSubmissionBaseline,
-    captureDiagnostic?: (checkpoint: string) => Promise<void>,
-    abortSignal?: AbortSignal,
-    externalProgress?: ChatGptTurnProgressReader,
-    submissionLifecycle?: Pick<BrowserTurn, "onSendActivated" | "onSubmitted">,
-    completionTracker?: ChatGptCompletionTracker,
-    recoverObservation?: ChatGptObservationRecovery,
-    responseAccepted?: () => boolean,
-  ): Promise<ChatGptSubmissionEvidence> {
+  private sendControlState(button: Locator) {
+    return withChatGptBrowserObservationTimeout(button.evaluate(element => {
+      const visible = (node: Element) => node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+      const rect = element.getBoundingClientRect();
+      const x = Math.max(0, rect.left) + (Math.min(innerWidth, rect.right) - Math.max(0, rect.left)) / 2;
+      const y = Math.max(0, rect.top) + (Math.min(innerHeight, rect.bottom) - Math.max(0, rect.top)) / 2;
+      const inViewport = rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0
+        && rect.left < innerWidth && rect.top < innerHeight;
+      const hit = inViewport ? document.elementFromPoint(x, y) : null;
+      return { connected: element.isConnected, visible: visible(element), inViewport,
+        enabled: !element.matches(":disabled") && !element.closest('[aria-disabled="true"], [inert], [aria-hidden="true"]'),
+        modal: [...document.querySelectorAll('dialog[open], [aria-modal="true"], [role="dialog"]')].some(visible),
+        focused: element === document.activeElement,
+        blocked: !!hit && element !== hit && !element.contains(hit) };
+    }));
+  }
+
+  private async assertKeyboardSendReady(button: Locator) {
+    const ready = await this.sendControlState(button);
+    if (!ready.connected || !ready.visible || !ready.enabled || !ready.inViewport || ready.modal || !ready.focused) {
+      throw new Error("ChatGPT Send is not ready for keyboard activation; no Enter was dispatched");
+    }
+  }
+
+  /** A trial performs actionability checks without dispatching a click. Only that
+   * pre-input failure can choose another activation; a real click failure never can. */
+  private async prepareSendMethod(page: Page, abortSignal?: AbortSignal): Promise<"click" | "enter"> {
     const composer = await this.activeComposer(page);
-    const sendButton = composer
-      .locator("xpath=ancestor::form[1]")
-      .locator(CHATGPT_SEND_BUTTON_SELECTOR);
-    await sendButton.waitFor({ state: "visible", timeout: browserStageTimeouts.send });
-    await settleChatGptUi();
-    const sendEnableDeadline = Date.now() + CHATGPT_SEND_ENABLE_GRACE_MS;
-    for (;;) {
-      if (abortSignal?.aborted) throw new DOMException("ChatGPT web turn aborted", "AbortError");
+    const button = composer.locator("xpath=ancestor::form[1]").locator(CHATGPT_SEND_BUTTON_SELECTOR);
+    try {
+      // Keep the existing enable grace separate from pointer actionability. A new
+      // preflight must not shorten the time allowed for ChatGPT to enable Send.
+      await this.waitForSendReady(page, button, abortSignal);
+      await button.click({ trial: true, timeout: browserStageTimeouts.send, signal: abortSignal });
+      throwIfPromptAttachmentAborted(abortSignal);
+      return "click";
+    } catch (error) {
+      throwIfPromptAttachmentAborted(abortSignal);
       if (page.isClosed()) throw chatGptBrowserTabClosedError();
       await throwIfChatGptSessionFailureAlert(page);
       await throwIfChatGptRateLimitDialog(page);
-      if (await sendButton.isEnabled()) break;
+      const ready = await this.sendControlState(button).catch(() => undefined);
+      diagnosticEvent("warning", "browser.send_click_preflight_failed", { error: diagnosticError(error), control: ready });
+      throwIfPromptAttachmentAborted(abortSignal);
+      if (ready?.connected && ready.visible && ready.enabled && ready.inViewport && ready.blocked && !ready.modal) {
+        diagnosticEvent("info", "browser.send_fallback_selected", { method: "enter", reason: "click_not_dispatched" });
+        return "enter";
+      }
+      throw new ChatGptWebAdapterError("ChatGPT Send could not be prepared; the request was not sent.", {
+        status: 502, errorType: "server_error", code: "chatgpt_send_control_unavailable", retryable: false, cause: error,
+      });
+    }
+  }
+
+  private async waitForSendReady(page: Page, sendButton: Locator, abortSignal?: AbortSignal,
+    captureDiagnostic?: (checkpoint: string) => Promise<void>): Promise<void> {
+    await sendButton.waitFor({ state: "visible", timeout: browserStageTimeouts.send });
+    await settleChatGptUi();
+    const sendEnableDeadline = Date.now() + browserStageTimeouts.sendEnable;
+    for (;;) {
+      throwIfPromptAttachmentAborted(abortSignal);
+      if (page.isClosed()) throw chatGptBrowserTabClosedError();
+      await throwIfChatGptSessionFailureAlert(page);
+      await throwIfChatGptRateLimitDialog(page);
+      if (await sendButton.isEnabled()) return;
       if (Date.now() >= sendEnableDeadline) {
         await captureDiagnostic?.("send-disabled");
         throw new Error("ChatGPT send button remained disabled after the complete prompt was attached");
       }
       await settleChatGptUi();
     }
+  }
+
+  private async sendAttachedPrompt(
+    page: Page,
+    baseline: ChatGptSubmissionBaseline,
+    captureDiagnostic?: (checkpoint: string) => Promise<void>,
+    abortSignal?: AbortSignal,
+    externalProgress?: ChatGptTurnProgressReader,
+    submissionLifecycle?: Pick<BrowserTurn, "onSendActivated" | "onSubmitted"> & {
+      onInputProgress?: (progress: "sending" | "awaiting_ack") => Promise<void>;
+    },
+    completionTracker?: ChatGptCompletionTracker,
+    recoverObservation?: ChatGptObservationRecovery,
+    responseAccepted?: () => boolean,
+    inputMethod: "click" | "enter" = "click",
+  ): Promise<ChatGptSubmissionEvidence> {
+    const composer = await this.activeComposer(page);
+    const sendButton = composer
+      .locator("xpath=ancestor::form[1]")
+      .locator(CHATGPT_SEND_BUTTON_SELECTOR);
+    await this.waitForSendReady(page, sendButton, abortSignal, captureDiagnostic);
     await captureDiagnostic?.("send-ready");
-    const inputEvidence = await observeSendInput(page, CHATGPT_SEND_BUTTON_SELECTOR);
+    if (inputMethod === "enter") {
+      await sendButton.focus({ timeout: browserStageTimeouts.send });
+      throwIfPromptAttachmentAborted(abortSignal);
+      await this.assertKeyboardSendReady(sendButton);
+    }
     const initialToolBatchRevision = externalProgress?.snapshot().lastToolBatchRevision ?? 0;
+    let inputEvidence: (() => Promise<unknown>) | undefined;
+    let collectedInput: Promise<void> | undefined;
+    let inputFailed = false, inputFailure: unknown;
+    const collectInput = () => collectedInput ??= (async () => {
+      if (inputEvidence) diagnosticEvent("info", "browser.send_input_evidence", { activation: await inputEvidence() });
+    })();
     diagnosticEvent("info", "browser.send_activation_started", { phase: "send" });
     try {
       await withBrowserTurnAbort(withChatGptBrowserObservationTimeout(
@@ -2964,21 +3037,38 @@ export class ChatGptBrowserWorker {
       // after the caller has already classified this preparation as unsent/cancelled.
       throwIfPromptAttachmentAborted(abortSignal);
       if (page.isClosed()) throw chatGptBrowserTabClosedError();
+      inputEvidence = await observeSendInput(page, CHATGPT_SEND_BUTTON_SELECTOR);
+      await submissionLifecycle?.onInputProgress?.("sending");
+      // The permit/ready callback can yield to page changes. Never bypass a new modal,
+      // disabled control or lost focus with the selected keyboard fallback.
+      if (inputMethod === "enter") await this.assertKeyboardSendReady(sendButton);
+      throwIfPromptAttachmentAborted(abortSignal);
       const inputStartedAt = Date.now();
-      diagnosticEvent("info", "browser.send_input_started", { phase: "send" });
-      try { await sendButton.click({
-        noWaitAfter: true,
-        signal: abortSignal,
-        // A click owns its own limit. Failure can occur after submission; the semantic
-        // acknowledgement below still decides acceptance, without activating Send again.
-        timeout: browserStageTimeouts.send,
-      }); } catch (error) {
+      diagnosticEvent("info", "browser.send_input_started", { phase: "send", method: inputMethod });
+      try {
+        if (inputMethod === "enter") await sendButton.press("Enter", { signal: abortSignal, timeout: browserStageTimeouts.send });
+        else await sendButton.click({
+          // Preserve Playwright's post-input hit-target check. noWaitAfter also skips that
+          // result and can report a returned click whose input the interceptor suppressed.
+          signal: abortSignal,
+          // A click owns its own limit. Failure can occur after submission; the semantic
+          // acknowledgement below still decides acceptance, without activating Send again.
+          timeout: browserStageTimeouts.send,
+        });
+      } catch (error) {
         // A detached target/transport can fail after input reached the page. Never activate again.
         // The same semantic acknowledgement check below decides whether the send succeeded.
+        inputFailed = true; inputFailure = error;
+        diagnosticEvent("warning", "browser.send_input_failed", { phase: "send", method: inputMethod, error: diagnosticError(error) });
         if (abortSignal?.aborted || page.isClosed()) throw error;
-        diagnosticEvent("warning", "browser.send_input_failed", { phase: "send" });
+      } finally {
+        diagnosticEvent("info", "browser.send_input_completed", { phase: "send", method: inputMethod,
+          outcome: inputFailed ? "failed" : "returned", durationMs: Date.now() - inputStartedAt });
+        // Freeze page input facts as soon as the one original input operation settles.
+        // Acceptance may take longer than the listener lifetime; it is a separate observation.
+        await collectInput();
       }
-      diagnosticEvent("info", "browser.send_input_completed", { phase: "send", durationMs: Date.now() - inputStartedAt });
+      await submissionLifecycle?.onInputProgress?.("awaiting_ack");
       const traceId = diagnosticContext.getStore()?.traceId;
       const evidence = await this.runStage(typeof traceId === "string" ? traceId : "send", "send_acknowledgement",
         browserStageTimeouts.submissionAcknowledgement, stageSignal => this.waitForSubmissionAcceptedWithRecovery(
@@ -2994,8 +3084,14 @@ export class ChatGptBrowserWorker {
       throwIfPromptAttachmentAborted(abortSignal);
       await submissionLifecycle?.onSubmitted?.();
       return evidence;
+    } catch (error) {
+      if (inputFailed && inputFailure !== error && !abortSignal?.aborted
+        && !(error instanceof ChatGptWebAdapterError) && !(error instanceof ChatGptPersistentBrowserStateError)) {
+        throw new AggregateError([inputFailure, error], "ChatGPT Send input failed and acceptance could not be verified");
+      }
+      throw error;
     } finally {
-      diagnosticEvent("info", "browser.send_input_evidence", { activation: await inputEvidence() });
+      await collectInput();
     }
   }
 
@@ -3694,6 +3790,22 @@ export class ChatGptBrowserWorker {
       const completionTracker = new ChatGptCompletionTracker(completionAnnouncementKey);
       const recordFinalUsage = await usageSubmission();
       const queueTarget = turn.queueTicket ? await this.requestQueueTarget() : undefined;
+      const reportSendProgress = async (progress: "preflight" | "waiting_permit" | "sending" | "awaiting_ack" | "reconciling") => {
+        if (!turn.queueTicket) return;
+        try { await queueRequest(queueTarget!, "send-progress", { ...turn.queueTicket, progress }); }
+        catch (error) { diagnosticEvent("warning", "browser.send_progress_failed", { error: diagnosticError(error) }); }
+      };
+      await reportSendProgress("preflight");
+      let sendMethod: "click" | "enter" = "click";
+      // Model-menu preparation has no remote send effect and must not reserve the global
+      // send permit. The ready identity/selection check still runs immediately before input.
+      await this.runStage(turn.traceId, "send_preflight", undefined, async () => {
+        await this.assertSelectedEffort(page, mode);
+        assertSavedChatIdentity(page, expectedConversationId);
+        sendMethod = await this.prepareSendMethod(page, turn.abortSignal);
+      });
+      throwIfPromptAttachmentAborted(turn.abortSignal);
+      await reportSendProgress("waiting_permit");
       const queuePermit = turn.queueTicket ? await waitForSendPermit(queueTarget!, turn.queueTicket, turn.abortSignal) : undefined;
       let sendActivated = false, sendAcknowledged = false;
       let acknowledgementClosed = false;
@@ -3719,12 +3831,6 @@ export class ChatGptBrowserWorker {
         })();
       };
       const finalSubmissionEvidence = await (async () => {
-        // Reopening the model picker is preparation, not evidence that a send was attempted.
-        // Keep it out of the acknowledgement budget and settle a failure as definitely unsent.
-        await this.runStage(turn.traceId, "send_preflight", undefined, async () => {
-          await this.assertSelectedEffort(page, mode);
-          assertSavedChatIdentity(page, expectedConversationId);
-        });
         return this.runStage(
           turn.traceId,
           "send",
@@ -3735,7 +3841,7 @@ export class ChatGptBrowserWorker {
             checkpoint => diagnostics.capture(page, checkpoint),
             turn.abortSignal ? AbortSignal.any([stageSignal, turn.abortSignal]) : stageSignal,
             turn.externalProgress,
-            { ...turn, onSubmitted: acknowledgeSubmission, onSendActivated: async () => {
+            { ...turn, onInputProgress: reportSendProgress, onSubmitted: acknowledgeSubmission, onSendActivated: async () => {
               // Check the ready controls again without reopening the verified picker.
               await this.assertSelectedEffort(page, mode, false);
               assertSavedChatIdentity(page, expectedConversationId);
@@ -3758,6 +3864,7 @@ export class ChatGptBrowserWorker {
               }
               : undefined,
             useResponseSource ? () => responseSource.submissionAccepted() : undefined,
+            sendMethod,
           ),
         );
       })().catch(async error => {
@@ -3771,6 +3878,7 @@ export class ChatGptBrowserWorker {
         } else if (sendActivated && useResponseSource && !turn.abortSignal?.aborted
           && !(error instanceof ChatGptWebAdapterError) && !(error instanceof ChatGptPersistentBrowserStateError)) {
           diagnosticEvent("info", "browser.send_reconciliation_started", { traceId: turn.traceId, source: responseSource.snapshot() });
+          await reportSendProgress("reconciling");
           const reconciled = await reconcileSendAcceptance({
             read: () => responseSource.snapshot(), connected: () => !page.isClosed(), signal: turn.abortSignal,
           });
@@ -3796,7 +3904,7 @@ export class ChatGptBrowserWorker {
           && !turn.abortSignal?.aborted) {
           diagnosticEvent("error", "browser.send_outcome_unknown", { source: responseSource.snapshot() });
           throw new ChatGptWebAdapterError("ChatGPT send was activated but acceptance could not be confirmed. The request was not resent; inspect the browser task before resuming the queue.", {
-            status: 502, errorType: "server_error", code: "chatgpt_send_outcome_unknown", retryable: false,
+            status: 502, errorType: "server_error", code: "chatgpt_send_outcome_unknown", retryable: false, cause: error,
           });
         }
         throw error;

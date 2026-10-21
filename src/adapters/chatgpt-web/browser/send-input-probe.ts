@@ -50,11 +50,16 @@ export async function observeSendInput(page: Page, selector: string): Promise<()
   const key = `__w2hSendProbe_${crypto.randomUUID().replaceAll("-", "")}`;
   try {
     await withChatGptBrowserObservationTimeout(page.evaluate(({ key, selector }) => {
-      const state = { events: [] as Array<{ type: string; trusted: boolean; prevented: boolean; sendTarget: boolean; focused: boolean }>,
+      // A task owns one page. Retain one bounded result after the listener expires, until
+      // collection or the next owner replaces it; waiting for acceptance must not erase it.
+      const previous = (window as any).__w2hSendInput;
+      previous?.stop();
+      const state = { key, expired: false, droppedEvents: 0,
+        events: [] as Array<{ type: string; trusted: boolean; prevented: boolean; sendTarget: boolean; focused: boolean }>,
         settle: [] as Array<() => void>, stop: () => {} };
       const observe = (event: Event) => {
         if (event instanceof KeyboardEvent && event.key !== "Enter") return;
-        if (state.events.length >= 16) return;
+        if (state.events.length >= 16) { state.droppedEvents++; return; }
         const target = event.target instanceof Element ? event.target : undefined;
         const entry = { type: event.type, trusted: event.isTrusted, prevented: event.defaultPrevented,
           sendTarget: !!target?.closest(selector), focused: target === document.activeElement };
@@ -62,25 +67,26 @@ export async function observeSendInput(page: Page, selector: string): Promise<()
         // Read after the input operation settles, not at a capture-listener microtask checkpoint.
         state.settle.push(() => { entry.prevented = event.defaultPrevented; });
       };
-      const types = ["keydown", "keyup", "click", "submit"];
+      const types = ["keydown", "keyup", "pointerdown", "pointerup", "mousedown", "mouseup", "click", "submit"];
       for (const type of types) document.addEventListener(type, observe, true);
-      const timer = setTimeout(() => { state.stop(); delete (window as any)[key]; }, 120_000);
+      const timer = setTimeout(() => { state.expired = true; state.stop(); }, 120_000);
       state.stop = () => {
         clearTimeout(timer);
         for (const type of types) document.removeEventListener(type, observe, true);
+        for (const settle of state.settle.splice(0)) settle();
       };
-      (window as any)[key] = state;
+      (window as any).__w2hSendInput = state;
     }, { key, selector }), 1_000);
-  } catch { return async () => ({ available: false }); }
+  } catch { return async () => ({ available: false, reason: "install_failed" }); }
   return async () => {
     try {
       return await withChatGptBrowserObservationTimeout(page.evaluate(key => {
-        const state = (window as any)[key];
-        if (!state) return { available: false };
-        for (const settle of state.settle) settle();
-        state.stop(); delete (window as any)[key];
-        return { available: true, events: state.events };
+        const state = (window as any).__w2hSendInput;
+        if (!state) return { available: false, reason: "missing" };
+        if (state.key !== key) return { available: false, reason: "replaced" };
+        state.stop(); delete (window as any).__w2hSendInput;
+        return { available: true, expired: state.expired, droppedEvents: state.droppedEvents, events: state.events };
       }, key), 1_000);
-    } catch { return { available: false }; }
+    } catch { return { available: false, reason: "read_failed" }; }
   };
 }

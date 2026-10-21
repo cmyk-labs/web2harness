@@ -4,7 +4,7 @@ import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import {
   DEFAULT_REQUEST_SCHEDULING, RequestScheduler, validateRequestScheduling,
-  type QueueInput, type QueuePhase, type QueueRecord, type QueuePauseReason,
+  type QueueInput, type QueuePhase, type QueueRecord, type QueuePauseReason, type QueueSendProgress,
   type RequestSchedulingSettings, type McpQueueStatus, type McpQueueOutcome,
 } from "../../launcher/shared/request-scheduler.cjs";
 import { ChatGptWebAdapterError } from "../adapters/chatgpt-web/adapter-error";
@@ -235,7 +235,7 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
 
   request<T>(action: string, body: unknown, peer?: StandaloneQueuePeer): Promise<T> { return this.serial(async () => {
     if (this.closed || !body || typeof body !== "object") throw failure("queue_unavailable", "Standalone queue is unavailable");
-    const input = body as QueueTicket & { job: QueueInput; pid: number; traceId: string; phase: QueuePhase;
+    const input = body as QueueTicket & { job: QueueInput; pid: number; traceId: string; phase: QueuePhase; progress: QueueSendProgress;
       permit: string; outcome: Outcome | "confirmed" | "not-sent" | "unknown"; reason?: string; resourcesReleased?: boolean; remote?: McpQueueOutcome };
     let result: unknown;
     if (action === "cancel-client" && peer) {
@@ -266,6 +266,7 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
         this.core.pause("browser_unavailable"); result = { acknowledged: true };
       }
       else if (action === "phase") result = this.core.setPhase(input.id, lease, input.phase);
+      else if (action === "send-progress") result = this.core.setSendProgress(input.id, lease, input.progress);
       else if (action === "send-begin") {
         const interval = this.core.snapshot().settings.minSendIntervalSeconds * 1000;
         const remaining = this.lastSendMonotonic === undefined ? 0 : this.lastSendMonotonic + interval - performance.now();

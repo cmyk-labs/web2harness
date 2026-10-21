@@ -76,7 +76,29 @@ export async function runQueueSmoke({context,origin,out,check,errors}) {
     check('Session selector retains visible keyboard focus',await session.evaluate(el=>getComputedStyle(el).outlineStyle)==='solid');
     await session.selectOption(group);
     await panel.locator('td').filter({hasText:/^gpt-6-sol/}).first().waitFor();
-    await finish(first);
+    await queue.request('send-progress',{...first,progress:'preflight'});
+    await queue.request('send-progress',{...first,progress:'waiting_permit'});
+    await panel.getByText('内容已准备，等待发送许可',{exact:true}).waitFor();
+    check('Prepared content has a distinct waiting-for-send label',true);
+    await panel.screenshot({path:join(out,'queue-send-wait-zh.png')});
+    await page.locator('.language-toggle').click();
+    await panel.getByText('Ready, waiting to send',{exact:true}).waitFor();
+    const permit=(await queue.request('send-begin',first)).permit;
+    for(const progress of ['sending','awaiting_ack','reconciling']) await queue.request('send-progress',{...first,progress});
+    await panel.getByText('Reconciling the original send',{exact:true}).waitFor();
+    check('Reconciliation is distinct from ordinary preparation',true);
+    await panel.screenshot({path:join(out,'queue-send-reconcile-en.png')});
+    await queue.request('send-end',{...first,permit,outcome:'unknown'});
+    await queue.request('settle',{...first,outcome:'failed',reason:'chatgpt_send_outcome_unknown'});
+    await panel.getByRole('alert').getByText(/Send outcome unknown/).waitFor();
+    check('Unknown sends expose the blocking task and preserve recovery confirmation',
+      await panel.getByRole('button',{name:/Blocking task logs/}).count()===1
+      && await panel.getByRole('button',{name:'Confirm recovery',exact:true}).isEnabled());
+    await panel.screenshot({path:join(out,'queue-send-unknown-en.png')});
+    await page.locator('.language-toggle').click();
+    await panel.getByRole('alert').getByText(/发送结果未知/).waitFor();
+    await panel.screenshot({path:join(out,'queue-send-unknown-zh.png')});
+    await queue.control('recover');
     await panel.getByText('暂无任务',{exact:true}).waitFor();
     check('A session disappears when its last active task finishes',await session.isDisabled()&&await session.inputValue()==='');
     await state.selectOption('ended');

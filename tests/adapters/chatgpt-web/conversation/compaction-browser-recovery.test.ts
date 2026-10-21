@@ -49,6 +49,7 @@ test.each([[true, false, true], [false, false, true], [true, true, true], [true,
       actions.push(localTools ? "attach:tools" : "attach:plain");
     },
     attachFiles: async () => { actions.push("files"); },
+    prepareSendMethod: async () => { actions.push("preflight"); return "click"; },
     sendAttachedPrompt: async (...args: unknown[]) => {
       // Context ingestion cannot mistake tool activity for acknowledgement of a part.
       expect(args[4]).toBe(stage === "send" ? progress : undefined);
@@ -97,7 +98,7 @@ test.each([[true, false, true], [false, false, true], [true, true, true], [true,
     );
     expect(actions).toEqual([
       `effort:${effort}`,
-      tools ? "attach:tools" : "attach:plain", "files", "send", "observe",
+      tools ? "attach:tools" : "attach:plain", "files", "preflight", "send", "observe",
     ]);
     // Send activation and acknowledgement own their budgets inside the browser operation.
     expect(sendBudgets).toEqual([undefined]);

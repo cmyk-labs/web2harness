@@ -23,14 +23,15 @@ export class ChatGptSuspensionClock {
   constructor(
     private readonly tickIntervalMs = 1_000,
     private readonly gapThresholdMs = 5_000,
+    private readonly now: () => number = () => performance.now(),
   ) {
-    this.lastTickAt = Date.now();
+    this.lastTickAt = this.now();
   }
 
   start(): void {
     if (this.timer) return;
-    this.lastTickAt = Date.now();
-    this.timer = setInterval(() => this.tick(Date.now()), this.tickIntervalMs);
+    this.lastTickAt = this.now();
+    this.timer = setInterval(() => this.tick(this.now()), this.tickIntervalMs);
     this.timer.unref?.();
   }
 
@@ -42,6 +43,9 @@ export class ChatGptSuspensionClock {
   }
 
   suspendedMs(): number {
+    // Adapted from miuuyy/codex-chatgpt-web 6f43747 (MIT). An expired stage timer
+    // can run before the interval after resume; observe the gap on the same monotonic clock.
+    this.tick(this.now());
     return this.suspendedTotalMs;
   }
 }

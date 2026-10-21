@@ -274,8 +274,13 @@ test("unknown send and rate limits pause dispatch until offline recovery; settin
   try {
     expect(queue.snapshot().settings).toEqual(settings);
     const ticket = await admit(queue, "unknown");
+    await expect(queue.request("send-progress", { ...ticket, secret: "foreign", progress: "sending" })).rejects.toBeDefined();
+    await queue.request("send-progress", { ...ticket, progress: "waiting_permit" });
+    expect((await queue.request<{ record: QueueRecord }>("poll", ticket)).record.sendProgress).toBe("waiting_permit");
     const permit = await waitForSendPermit(queue, ticket);
+    await queue.request("send-progress", { ...ticket, progress: "awaiting_ack" });
     await queue.request("send-end", { ...ticket, permit, outcome: "unknown" });
+    await expect(queue.request("send-progress", { ...ticket, progress: "sending" })).rejects.toThrow("retired");
     await queue.request("settle", { ...ticket, outcome: "failed" });
     expect((await admit(queue, "blocked")).record).toMatchObject({ state: "failed", reason: "queue_blocked_send_outcome_unknown", blockedBy: { requestId: ticket.id } });
     await queue.close(); queue = await StandaloneRequestQueue.open(profile);

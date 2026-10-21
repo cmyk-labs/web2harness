@@ -849,7 +849,8 @@ test("send activation and semantic acknowledgement each receive an independent l
     1_000,
     stageSignal => worker.sendAttachedPrompt(page, {}, undefined, stageSignal),
   )).resolves.toBe("user_turn");
-  expect(clickOptions).toMatchObject({ noWaitAfter: true, timeout: 60_000 });
+  expect(clickOptions).toMatchObject({ timeout: 60_000 });
+  expect(clickOptions?.noWaitAfter).not.toBe(true);
   expect(clickOptions?.signal).toBeInstanceOf(AbortSignal);
 });
 
@@ -3486,6 +3487,7 @@ test("diagnostic capture serializes safe caret structure without draft or select
         isConnected: true, isContentEditable: kind !== "textarea", readOnly: false,
         textContent: "private draft", value: "private textarea draft", selectionStart: 3, selectionEnd: 3,
         matches: () => false, getAttribute: () => null,
+        closest: () => null,
         contains: (node: unknown) => node === inside,
         querySelectorAll: () => [],
         ownerDocument: { defaultView: { getSelection: () => selection } },
@@ -4197,15 +4199,29 @@ test("the bundled helper is adopted only for the packaged runtime layout", () =>
 });
 
 test("the suspension clock charges only tick gaps that mean the process was frozen", () => {
-  const clock = new ChatGptSuspensionClock(1_000, 5_000);
-  clock.tick(1_000);
-  clock.tick(2_000);
-  clock.tick(3_100);
+  let now = 0;
+  const clock = new ChatGptSuspensionClock(1_000, 5_000, () => now);
+  clock.tick(now = 1_000);
+  clock.tick(now = 2_000);
+  clock.tick(now = 3_100);
   expect(clock.suspendedMs()).toBe(0);
 
   // Fifteen minutes without a tick is a sleep; the ordinary interval is refunded from the charge.
-  clock.tick(3_100 + 15 * 60_000);
+  clock.tick(now = 3_100 + 15 * 60_000);
   expect(clock.suspendedMs()).toBe(15 * 60_000 - 1_000);
+});
+
+test("an overdue stage observes sleep before the interval gets its first resumed tick", () => {
+  let now = 0;
+  const clock = new ChatGptSuspensionClock(1_000, 5_000, () => now);
+  now = 15 * 60_000;
+  const suspended = clock.suspendedMs(); // No interval callback has run yet.
+  expect(suspended).toBe(15 * 60_000 - 1_000);
+  expect(remainingStageBudgetMs(120_000, now, suspended)).toBe(119_000);
+  clock.tick(now);
+  expect(clock.suspendedMs()).toBe(suspended); // Do not refund the same gap twice.
+  now += 1_000;
+  expect(clock.suspendedMs()).toBe(suspended);
 });
 
 test("remaining stage budget refunds slept time and stands once the awake budget is spent", () => {

@@ -140,9 +140,14 @@ test("fresh empty queries see arrivals and omit sessions after their last task f
 test("send permits authenticate the owner and unknown sends stop dispatch", async t => {
   const f = await fixture(t); const first = await f.add("main"); const second = await f.add("child");
   await assert.rejects(f.queue.request("send-begin", { ...first.ticket, secret: "invalid" }), /unavailable/);
+  await assert.rejects(f.queue.request("send-progress", { ...first.ticket, secret: "invalid", progress: "sending" }), /unavailable/);
+  await f.queue.request("send-progress", { ...first.ticket, progress: "waiting_permit" });
+  assert.equal((await f.queue.request("poll", first.ticket)).record.sendProgress, "waiting_permit");
   const permit = await f.queue.request("send-begin", first.ticket);
   assert.equal(permit.allowed, true);
+  await f.queue.request("send-progress", { ...first.ticket, progress: "awaiting_ack" });
   await f.queue.request("send-end", { ...first.ticket, permit: permit.permit, outcome: "unknown" });
+  await assert.rejects(f.queue.request("send-progress", { ...first.ticket, progress: "sending" }), /retired/);
   await f.queue.request("settle", { ...first.ticket, outcome: "failed" });
   assert.ok(f.queue.snapshot().pauseReasons.includes("send_outcome_unknown"));
   await assert.rejects(f.queue.control("resume"), /reconcile/);

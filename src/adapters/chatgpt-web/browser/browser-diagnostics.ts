@@ -14,6 +14,7 @@ import {
   CHATGPT_EFFORT_ITEM_SELECTOR,
   CHATGPT_EFFORT_SLIDER_CONTAINER_SELECTOR,
   CHATGPT_STOP_BUTTON_SELECTOR,
+  CHATGPT_SEND_BUTTON_SELECTOR,
   CHATGPT_USER_TURN_SELECTOR,
 } from "../../../browser/session";
 import { withChatGptBrowserObservationTimeout } from "./turn-observation";
@@ -154,6 +155,7 @@ export class ChatGptBrowserDiagnostics {
           assistantTurnSelector,
           userTurnSelector,
           stopButtonSelector,
+          sendButtonSelector,
           completionActionSelector,
           appName,
         }) => {
@@ -211,6 +213,20 @@ export class ChatGptBrowserDiagnostics {
             titleChars: document.title.length,
             documentComplete: document.readyState === "complete",
             viewport: { width: innerWidth, height: innerHeight },
+            visibility: { hidden: document.hidden, focused: document.hasFocus() },
+            sendControls: composers.flatMap(composer => [...(composer.closest("form")?.querySelectorAll(sendButtonSelector) ?? [])])
+              .slice(0, 4).map(element => {
+                const rect = element.getBoundingClientRect();
+                const x = Math.max(0, rect.left) + (Math.min(innerWidth, rect.right) - Math.max(0, rect.left)) / 2;
+                const y = Math.max(0, rect.top) + (Math.min(innerHeight, rect.bottom) - Math.max(0, rect.top)) / 2;
+                const inViewport = rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0
+                  && rect.left < innerWidth && rect.top < innerHeight;
+                const hit = inViewport ? document.elementFromPoint(x, y) : null;
+                return { connected: element.isConnected, rendered: rendered(element),
+                  enabled: !element.matches(":disabled") && element.getAttribute("aria-disabled") !== "true",
+                  rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, inViewport,
+                  receivesPointer: !!hit && (element === hit || element.contains(hit)) };
+              }),
             surfaceBound: typeof (globalThis as typeof globalThis & { __WEB2HARNESS_SURFACE_ID__?: unknown })
               .__WEB2HARNESS_SURFACE_ID__ === "string",
             // textContent avoids the synchronous layout forced by innerText on huge prompts.
@@ -319,6 +335,7 @@ export class ChatGptBrowserDiagnostics {
           assistantTurnSelector: CHATGPT_ASSISTANT_TURN_SELECTOR,
           userTurnSelector: CHATGPT_USER_TURN_SELECTOR,
           stopButtonSelector: CHATGPT_STOP_BUTTON_SELECTOR,
+          sendButtonSelector: CHATGPT_SEND_BUTTON_SELECTOR,
           completionActionSelector: CHATGPT_COMPLETION_ACTION_SELECTOR,
           appName: this.appName,
         })),

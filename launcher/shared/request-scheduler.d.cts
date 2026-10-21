@@ -20,6 +20,7 @@ export function validateRequestScheduling(value: unknown): RequestSchedulingSett
 export type QueuePhase = "preparing" | "running" | "waiting-user" | "waiting-tools";
 export type QueueState = QueuePhase | "queued" | "stopping" | "succeeded" | "failed" | "cancelled" | "timed-out";
 export type QueuePauseReason = "user" | "account_rate_limited" | "browser_unavailable" | "send_outcome_unknown";
+export type QueueSendProgress = "preflight" | "waiting_permit" | "sending" | "awaiting_ack" | "reconciling";
 export interface QueueInput {
   id: string;
   groupId: string;
@@ -43,6 +44,7 @@ export interface QueueRecord extends Omit<QueueInput, "bytes"> {
   endedAt?: number;
   sendAttemptedAt?: number;
   sendConfirmedAt?: number;
+  sendProgress?: QueueSendProgress | "confirmed" | "not-sent" | "unknown";
   waitMs: number;
   runMs: number | null;
 }
@@ -83,6 +85,7 @@ export class RequestScheduler {
   enqueue(input: QueueInput): QueueRecord;
   lease(id: string): string | undefined;
   setPhase(id: string, lease: string, phase: QueuePhase): QueueRecord;
+  setSendProgress(id: string, lease: string, progress: QueueSendProgress): QueueRecord;
   beginSend(id: string, lease: string): { allowed: true; permit: string } | { allowed: false; reason: string; retryAfterMs?: number };
   endSend(id: string, lease: string, permit: string, outcome: "confirmed" | "not-sent" | "unknown"): void;
   cancel(id: string): QueueRecord | null;

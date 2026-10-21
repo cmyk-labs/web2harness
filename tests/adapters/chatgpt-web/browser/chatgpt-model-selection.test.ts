@@ -40,3 +40,15 @@ test("family confirmation requires the requested version for every effort", () =
   expect(chatGptModelFamilyMatches(["6 Pro, 5 of 5."], "5.6", "max")).toBe(false);
   expect(chatGptModelFamilyMatches(["6 Pro, 5 of 5."], "6", "xhigh")).toBe(false);
 });
+
+test("family confirmation rejects a stale effort and accepts identical split-header versions only", () => {
+  for (const mode of ["Instant", "Medium", "Extra High", "Unknown"]) {
+    expect(chatGptModelFamilyMatches([`6 Sol ${mode}`], "6", "high")).toBe(false);
+  }
+  expect(chatGptModelFamilyMatches(["6 Sol High", "6 Sol Medium"], "6", "high")).toBe(false);
+  expect(chatGptModelFamilyMatches(["5.6 Sol 5.6 Pro"], "5.6", "max")).toBe(true);
+  expect(chatGptModelFamilyMatches(["6 Astra 6 Pro"], "6", "max")).toBe(true);
+  expect(chatGptModelFamilyMatches(["5.6 Sol 6 Pro"], "5.6", "max")).toBe(false);
+  expect(chatGptModelFamilyMatches(["6 Astra 5.6 Pro"], "6", "max")).toBe(false);
+  expect(chatGptModelFamilyMatches(["６ Sol\u200b High，3 of 5."], "6", "high")).toBe(true);
+});
