@@ -218,9 +218,10 @@ test.skipIf(!executable)('creation success is not completion; unrelated creation
   const page=await browser.newPage();await page.goto(base);const observer=await observeChatGptAttachmentUploads(page,['wanted.png']);
   try {
    await page.evaluate(async()=>{for(const file_name of ['other.png','wanted.png'])await fetch('/backend-api/files',{method:'POST',body:JSON.stringify({file_name})});});
-   await expect(observer.wait(undefined,100)).rejects.toThrow('processing timed out');
+   let completed=false;const pending=observer.wait(AbortSignal.timeout(5_000)).then(()=>{completed=true;});
+   await Bun.sleep(100);expect(completed).toBe(false);
    await page.evaluate(async()=>{await fetch('/backend-api/files/process_upload_stream',{method:'POST',body:JSON.stringify({file_name:'wanted.png'})});});
-   await observer.wait(AbortSignal.timeout(5_000));observer.throwIfFailed();
+   await pending;observer.throwIfFailed();
   }finally{await observer.dispose();}
  },async request=>{
   const body=await request.json() as any;

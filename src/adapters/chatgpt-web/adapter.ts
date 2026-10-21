@@ -1,4 +1,5 @@
 import { diagnosticEvent } from "../../diagnostics";
+import { ChatGptPublicTextEvidence } from "./public-text-evidence";
 import { chatGptWebQueueModel } from "../../models/chatgpt-web-queue-model";
 import { CompletionFenceWait } from "./tools/completion-fence";
 import { withQueuedRequest, queueRequest, type QueueTicket } from "../../browser/request-queue-client";
@@ -1396,12 +1397,31 @@ export function createChatGptWebAdapter(
           } : undefined,
         );
         const roundKey = nativeRoundKey ?? chatGptTurnRoundKey(parsed);
+        const publicTextEvidence = new ChatGptPublicTextEvidence(traceId, roundKey);
+        const deliverRoundEvents = (events: readonly AdapterEvent[]): void => {
+          const journal = session.roundEvents(roundKey).slice(-events.length);
+          for (const [index, event] of events.entries()) {
+            if (event.type !== "text_delta" || event.phase !== "commentary") { emit(event); continue; }
+            const saved = journal[index];
+            publicTextEvidence.record("journaled", {
+              source: "adapter_commentary", expectedText: event.text,
+              actualText: saved?.type === "text_delta" && saved.phase === "commentary" ? saved.text : "",
+              transformation: "identity_v1",
+            });
+            try { emit(event); }
+            catch (error) {
+              publicTextEvidence.record("emitter_failed", { source: "adapter_commentary", fragmentText: event.text });
+              throw error;
+            }
+            publicTextEvidence.record("emitter_returned", { source: "adapter_commentary", actualText: event.text });
+          }
+        };
         const emitRoundEvents = (events: readonly AdapterEvent[]): void => {
           // Journal the complete synchronous event batch before touching the HTTP observer. If the
           // observer disconnects midway through emission, an exact reconnect can replay the entire
           // canonical batch instead of losing the already-drained tail.
           session.appendRoundEvents(roundKey, events);
-          for (const event of events) emit(event);
+          deliverRoundEvents(events);
         };
         const emitRoundBatch = (
           produce: (buffer: (event: AdapterEvent) => void) => void,
@@ -1444,9 +1464,14 @@ export function createChatGptWebAdapter(
             session.appendRoundEvents(roundKey, events);
             session.completeRound(roundKey);
             session.setFinalEvents(session.roundEvents(roundKey));
+            publicTextEvidence.record("projected", {
+              source: "native_reply", sourceText: answer, expectedText: parsedReply.visibleText,
+              actualText: events.filter(event => event.type === "text_delta").map(event => event.text).join(""),
+              transformation: "native_tool_blocks_v1", complete: true,
+            });
             chatGptWebTurnRetryPolicy.clear(retryKey);
             clearNativeToolCallCorrection(retryKey);
-            for (const event of events) emit(event);
+            deliverRoundEvents(events);
           };
           const parsedReply = parseNativeToolCallReply(answer, parsed.context.tools ?? []);
           if (parsedReply.issues.length === 0) {

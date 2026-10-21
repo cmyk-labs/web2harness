@@ -1,4 +1,5 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import { parseDiagnosticLine, type DiagnosticRecord } from "../../../../launcher/shared/diagnostic-event.cjs";
 import { createHash } from "node:crypto";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -325,6 +326,26 @@ describe("native-tools adapter emission", () => {
     expect(streamedText).toBe("The project has three modules.");
     expect(events.filter(event => event.type === "tool_call_start")).toHaveLength(0);
     expect(events.at(-1)).toMatchObject({ type: "done", stopReason: "stop", endTurn: true });
+  });
+
+  test("native prose evidence covers projection, journal and emitter without exposing source or tool arguments", async () => {
+    const records: DiagnosticRecord[] = [];
+    const log = spyOn(console, "error").mockImplementation((line: unknown) => {
+      const record = parseDiagnosticLine(String(line));
+      if (record?.event === "browser.public_text_evidence") records.push(record);
+    });
+    try {
+      const answer = "PRIVATE_PROGRESS 已读取输入。\n```" + CODEX_TOOL_CALLS_FENCE
+        + '\n{"calls":[{"name":"exec_command","arguments":{"cmd":"echo PRIVATE_TOOL"}}]}\n```';
+      const { events } = await withFakeWorker(nativeProvider(), [answer]);
+      expect(events.filter(event => event.type === "text_delta")).toEqual([
+        { type: "text_delta", text: "PRIVATE_PROGRESS 已读取输入。", phase: "commentary" },
+      ]);
+      expect(records.map(record => record.detail.stage)).toEqual(["projected", "journaled", "emitter_returned"]);
+      expect(records.filter(record => record.detail.stage !== "emitter_returned").every(record => record.detail.matches === true)).toBeTrue();
+      expect(records.every(record => record.detail.clientAcknowledged === false)).toBeTrue();
+      expect(JSON.stringify(records)).not.toContain("PRIVATE");
+    } finally { log.mockRestore(); }
   });
 
   test.each([true, false])("Responses SSE preserves native phase and exact reconnects without duplication, tools=%s", async withTools => {

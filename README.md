@@ -5,9 +5,9 @@
 **Web2Harness** — Use ChatGPT web models, including Pro when available to your account, in Codex with native tool calls, task context, streaming, and image inputs. Optional experimental 3× context budget. Web-model requests follow ChatGPT's web limits without consuming Codex quota. Native Tools is the default; no MCP connector or tunnel required.
 
 <p align="center">
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.0/web2harness-2.5.0-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · Latest stable release"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.0/web2harness-2.5.0-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · Latest stable release"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.0/web2harness-2.5.0-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · Latest stable release"></a>
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.1/web2harness-2.5.1-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · Latest stable release"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.1/web2harness-2.5.1-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · Latest stable release"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.1/web2harness-2.5.1-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · Latest stable release"></a>
 </p>
 
 <p align="center">
@@ -150,6 +150,7 @@ User-visible features, fixes, and compatibility changes are recorded by version,
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 2.5.1 | 2026-10-21 | Distinguishes unconfirmed attachment observations from upload failures; adds bounded reads of the original processing response, protects cancellation and timeout states, avoids retries for permanent failures, and records attachment stages and public-text delivery fingerprints. Updates Vite to its security patch. Historical timeout root causes remain unproven. |
 | 2.5.0 | 2026-10-20 | Extracts complete answers after generation finishes; separates operation timeouts and retries a failed upload once; extends native search, attachments, original audio and WebSocket continuation; validates structured output, image editing and task steering; keeps controls at normal size in large windows and unifies browser window chrome. Documented compatibility limits remain. |
 | 2.4.0 | 2026-10-17 | Fixes hidden-window activation from tray and desktop shortcuts; automatically reclaims old runtimes while retaining the current version, one rollback and active/recovery references; adds storage usage and cache cleanup, bounded auxiliary logs and smaller packages. |
 | 2.3.1 | 2026-10-17 | Fixes full-data uninstall rejecting new application directories; handles missing default-directory ownership markers, already removed data and cleanup retries; avoids rewriting unchanged installation records; makes download buttons link directly to platform installers. |

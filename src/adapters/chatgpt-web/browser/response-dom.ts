@@ -8,6 +8,7 @@ import { chatGptHtmlToMarkdown, type ChatGptMarkdownSegment } from "../markdown"
 import { chatGptBrowserTabClosedError } from "../adapter-error";
 import { CHATGPT_STOPPED_THINKING_LABELS } from "./ui-labels";
 import { CHATGPT_ANSWER_ROOT_SELECTOR } from "../../../../launcher/shared/chatgpt-answer-dom.cjs";
+import { ChatGptPublicTextEvidence } from "../public-text-evidence";
 
 export const CHATGPT_DOM_REVISION_ATTRIBUTES = [
   "aria-hidden",
@@ -95,6 +96,7 @@ const absentResponseDomSnapshot = (): ChatGptResponseDomSnapshot => ({
 
 /** Convert the public ChatGPT turn DOM into append-only Codex reasoning summaries. */
 export class ChatGptVisibleTraceTracker {
+  private readonly evidence = new ChatGptPublicTextEvidence();
   private readonly emittedTrace = new Map<string, string>();
   private readonly traceCandidates = new Map<string, { text: string; changedAt: number }>();
 
@@ -123,6 +125,10 @@ export class ChatGptVisibleTraceTracker {
       if (!candidate || candidate.text !== text) {
         candidate = { text, changedAt: now };
         this.traceCandidates.set(slot, candidate);
+        if (block.kind === "commentary") this.evidence.record("observed", {
+          source: "dom_commentary", sourceText: block.text, expectedText: text, slot,
+          complete: block.complete === true || completionActionVisible, transformation: "dom_whitespace_v1",
+        });
         if (!completionActionVisible && this.traceStabilityMs > 0) continue;
       }
       // A commentary Markdown root remains mutable until ChatGPT appends the next reasoning item.
@@ -140,6 +146,15 @@ export class ChatGptVisibleTraceTracker {
         output.push({ kind, text: text.slice(previous.length), continuation: true });
       } else {
         output.push({ kind, text });
+      }
+      if (kind === "commentary") {
+        const emitted = output.at(-1)!;
+        this.evidence.record("projected", {
+          source: "dom_commentary", sourceText: block.text, expectedText: text,
+          actualText: emitted.continuation ? previous! + emitted.text : emitted.text,
+          fragmentText: emitted.text, continuation: emitted.continuation === true, slot,
+          complete: block.complete === true || completionActionVisible, transformation: "dom_whitespace_v1",
+        });
       }
     }
     return output;

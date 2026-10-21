@@ -44,21 +44,27 @@ export async function attachChatGptFilesWithRetry(
   };
   try {
     waiting.throwIfAborted();
+    for (const file of files) uploads.started(file.name);
     await input.setInputFiles(files, { timeout: 60_000 });
     waiting.throwIfAborted();
     // Read all owned cards together. Upload-byte failures can precede the processing endpoint,
     // so waiting on processing events alone misses the explicit terminal UI failure.
     watcher = (async () => {
       while (!waiting.aborted) {
-        const failures = await withChatGptBrowserObservationTimeout(form.evaluate((element, names) => {
-          const cards = [...element.querySelectorAll('[role="group"][aria-label], [class~="group/composer-attachment"]')];
-          return names.filter(name => cards.some(card => {
-            const owns = card.getAttribute("aria-label") === name || [...card.querySelectorAll("button")].some(button =>
-              button.getAttribute("aria-label") === `移除 ${name}` || button.getAttribute("aria-label") === `Remove ${name}`);
-            return owns && /上传未成功|上传失败|Upload failed|Upload unsuccessful|Unable to upload/i.test(card.textContent ?? "");
-          }));
+        const states = await withChatGptBrowserObservationTimeout(form.evaluate((element, names) => {
+          const cards = [...element.querySelectorAll('[role="group"][aria-label], [class~="group/composer-attachment"], .composer-attachment-surface:is(button, [role="button"])[aria-label]')];
+          return names.map(name => {
+            const owned = cards.filter(card => card.getAttribute("aria-label") === name || [...card.querySelectorAll("button")].some(button =>
+              button.getAttribute("aria-label") === `移除 ${name}` || button.getAttribute("aria-label") === `Remove ${name}`));
+            const outer = owned.filter(card => !owned.some(parent => parent !== card && parent.contains(card)));
+            return { name, count: outer.length, failedCount: outer.filter(card =>
+              /上传未成功|上传失败|Upload failed|Upload unsuccessful|Unable to upload/i.test(card.textContent ?? "")).length };
+          });
         }, files.map(file => file.name)));
-        for (const name of failures) if (!removing.has(name)) uploads.fail(name, "the attachment card reports upload failure");
+        for (const state of states) if (!removing.has(state.name)) {
+          uploads.recordCardState(state.name, state.count, state.failedCount);
+          if (state.failedCount > 0) uploads.fail(state.name, "the attachment card reports upload failure");
+        }
         await delay(250, undefined, { signal: waiting });
       }
     })();
@@ -68,8 +74,7 @@ export async function attachChatGptFilesWithRetry(
       } catch (firstError) {
         waiting.throwIfAborted();
         if (!(firstError instanceof ChatGptAttachmentUploadError)) throw firstError;
-        // Explicit quota exhaustion is not a transient upload failure (maintainer decision).
-        if (firstError.status === 429) throw firstError;
+        if (!firstError.recoverable) throw firstError;
         try {
           await mutate(async () => {
             await assertUnsubmitted();
@@ -87,6 +92,7 @@ export async function attachChatGptFilesWithRetry(
             await assertUnsubmitted();
             waiting.throwIfAborted();
             uploads.reset(file.name);
+            uploads.started(file.name);
             await input.setInputFiles([file], { timeout: 60_000 });
             removing.delete(file.name);
           });

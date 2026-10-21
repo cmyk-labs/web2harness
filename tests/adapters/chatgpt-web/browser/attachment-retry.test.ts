@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { chromium, type Page } from "playwright-core";
 import { attachChatGptFilesWithRetry, chatGptAttachmentCard } from "../../../../src/adapters/chatgpt-web/browser/attachment-retry";
 import { ChatGptAttachmentUploadError } from "../../../../src/adapters/chatgpt-web/browser/attachment-upload";
@@ -35,10 +35,11 @@ async function fixture(run: (page: Page) => Promise<void>) {
     const body = await request.json() as { file_name: string; attempt: number; mode: string };
     if (body.mode === "slow") await Bun.sleep(1_000);
     if (body.mode === "quota") return new Response("quota", { status: 429 });
+    if (body.mode.startsWith("http-")) return new Response("blocked", { status: Number(body.mode.slice(5)) });
     if (body.file_name === files[1]!.name && (body.mode === "twice" || body.mode === "network")) {
       return new Response("unavailable", { status: body.attempt === 1 ? 503 : 500 });
     }
-    return new Response(JSON.stringify({ event: "file.processing.completed", file_id: body.file_name }) + "\n",
+    return new Response(JSON.stringify({ event: body.mode === "unconfirmed" ? "file.processing.file_ready" : "file.processing.completed", file_id: body.file_name }) + "\n",
       { headers: { "content-type": "application/x-ndjson" } });
   } });
   const browser = await chromium.launch({ executablePath: executable, headless: true });
@@ -141,6 +142,19 @@ test.skipIf(!executable)("submission evidence during backoff prevents reupload a
   });
 }, 25_000);
 
+for (const status of [400, 401, 403, 413, 415, 422, 501]) test.skipIf(!executable)(`HTTP ${status} never removes or reuploads an owned attachment`, async () => {
+  await fixture(async page => {
+    await page.evaluate(mode => { (window as any).mode = mode; }, `http-${status}`);
+    const error = await attachChatGptFilesWithRetry(page, page.locator("form"), [files[0]!],
+      AbortSignal.timeout(5_000), 2_000, async () => { throw new Error("Permanent failures must not mutate"); }).catch(error => error);
+    expect(error).toBeInstanceOf(ChatGptAttachmentUploadError);
+    expect(error.status).toBe(status);
+    const result = await state(page);
+    expect(result.uploads).toHaveLength(1); expect(result.removed).toHaveLength(0); expect(result.sends).toBe(0);
+    expect(result.text).toBe("original message");
+  });
+}, 15_000);
+
 test.skipIf(!executable)("an unconfirmed processing timeout does not authorize removing or retrying an attachment", async () => {
   await fixture(async page => {
     await page.evaluate(() => { (window as any).mode = "pending"; });
@@ -149,3 +163,37 @@ test.skipIf(!executable)("an unconfirmed processing timeout does not authorize r
     const result = await state(page); expect(result.uploads).toHaveLength(1); expect(result.removed).toHaveLength(0);
   });
 }, 45_000);
+
+test.skipIf(!executable)("a completed response without processing confirmation preserves the card and does not reupload", async () => {
+  await fixture(async page => {
+    await page.evaluate(() => { (window as any).mode = "unconfirmed"; });
+    const error = await attachChatGptFilesWithRetry(page, page.locator("form"), [files[0]!], AbortSignal.timeout(10_000), 5_000,
+      async () => { throw new Error("Unconfirmed processing must not mutate the composer"); }).catch(error => error);
+    expect(error).toMatchObject({ code: "chatgpt_attachment_observation_failed", retryable: false });
+    const result = await state(page);
+    expect(result.uploads).toHaveLength(1); expect(result.removed).toHaveLength(0); expect(result.sends).toBe(0);
+    expect(result.text).toBe("original message");
+  });
+}, 15_000);
+
+test.skipIf(!executable)("CDP observation failure cannot remove or reupload an otherwise successful attachment", async () => {
+  await fixture(async page => {
+    const context = page.context(), create = context.newCDPSession.bind(context);
+    const observation = spyOn(context, "newCDPSession").mockImplementation(async target => {
+      const session = await create(target), send = session.send.bind(session);
+      session.send = (async (method: string, params?: any) => {
+        if (method === "Network.streamResourceContent" || method === "Network.getResponseBody") throw new Error("Fixture observation unavailable");
+        return send(method as never, params);
+      }) as typeof session.send;
+      return session;
+    });
+    try {
+      const error = await attachChatGptFilesWithRetry(page, page.locator("form"), [files[0]!], AbortSignal.timeout(10_000), 5_000,
+        async () => { throw new Error("Observation failure must not mutate the composer"); }).catch(error => error);
+      expect(error).toMatchObject({ code: "chatgpt_attachment_observation_failed", retryable: false });
+      const result = await state(page);
+      expect(result.uploads).toHaveLength(1); expect(result.removed).toHaveLength(0); expect(result.sends).toBe(0);
+      expect(result.text).toBe("original message");
+    } finally { observation.mockRestore(); }
+  });
+}, 15_000);
