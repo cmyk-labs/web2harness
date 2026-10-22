@@ -18,7 +18,7 @@ function candidateIdentity(root) {
     try { stat = lstatSync(absolute); } catch (error) { if (error.code === "ENOENT") return []; throw error; }
     if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Candidate path must be a regular file: ${path}`);
     const bytes = readFileSync(absolute);
-    const textFile = /\.(?:[cm]?[jt]sx?|json|lock|css|html|md|ya?ml|toml|ps1|sh|svg|txt|cts)$/.test(path) || /(?:^|\/)(?:LICENSE|\.gitattributes|\.gitignore)$/.test(path);
+    const textFile = /\.(?:[cm]?[jt]sx?|json|lock|css|html|md|ya?ml|toml|ps1|sh|nsh|patch|svg|txt|cts)$/.test(path) || /(?:^|\/)(?:LICENSE|\.gitattributes|\.gitignore)$/.test(path);
     const content = textFile ? Buffer.from(bytes.toString("utf8").replace(/\r\n/g, "\n")) : bytes;
     return [{ path, sha256: sha256(content) }];
   });

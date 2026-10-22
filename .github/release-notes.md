@@ -14,6 +14,8 @@ Web2Harness 2.5.5（`v2.5.5`）改进网页交互恢复、工具交付和并发�
 
 此前验收的初次失败、受控故障、同线程显式续跑和局部工具输入错误均保留；后续通过不改写历史。候选完整源码验证与依赖审计、五个原生目标构建和新包完整性以对应发布检查为准，跳过及未执行项不计通过。
 
+发布准备修复源码指纹对 NSIS 包含文件和打包补丁换行格式的误判，并为多轮上下文恢复集成用例设置明确的有限测试时限，保留全部功能断言。Windows CI 首轮的默认五秒超时失败另行留证。
+
 历史模型强度 unknown、缺少公开 final、部分点击／附件超时等底层原因仍未全部证实。最新静态审核提出的候选风险未在本次发布准备中逐项动态复现或自动应用；不宣称所有网页问题已根治。维护者已知的人工安装／升级／卸载、系统服务、其他操作系统认证、物理输入和跨 DPI 验收缺口继续保留；CI 包冒烟不能替代这些检查。
 
 遇到问题时记录版本和时间，通过“用量与诊断 → 日志 → 导出诊断包”保留现场。升级不会自动清除未知发送暂停；先在运行控制确认发送状态，再明确恢复，避免盲目重发。MCP v2 工具缺失时刷新并检查连接器目录，不通过改用 v1 工具绕过当前协议。
@@ -35,6 +37,8 @@ Web2Harness 2.5.5 (`v2.5.5`) improves browser recovery, tool delivery and concur
 Existing isolated authenticated DEV evidence covers Native Tools reads, patches, command assertions and final replies, recovery after cancellation, four concurrent pages and single-target isolation, and real tool chains for MCP Automatic and Zero Risk using both v1 and v2. A separate new main session delegated three GPT-6 (Web) high agents and aggregated their reviews: all 109 model requests were delivered, with complete child reports returned. The maintainer chose to reuse this result; source identity before version preparation matched that candidate. This complete task is not rerun for this release and does not establish the same task in MCP/Zero Risk or acceptance on every platform.
 
 Earlier initial failures, controlled faults, explicit continuation in the same thread and local tool-input errors remain recorded; later success does not overwrite them. Full candidate source verification and dependency audits, five native build targets and new-package integrity are established by the corresponding release checks. Skipped and unexecuted checks are not passes.
+
+Release preparation corrects source fingerprints for line-ending differences in NSIS includes and packaging patches, and gives the multi-turn context-recovery integration case an explicit bounded test timeout while preserving every functional assertion. The first Windows CI failure at the default five-second timeout remains recorded.
 
 The underlying causes of historical unknown-effort observations, missing public finals and some click/attachment timeouts remain unproven. Candidate risks from the latest static review were not individually reproduced or automatically applied during release preparation; this release does not claim to eliminate every browser issue. Known gaps in manual installation/upgrade/uninstall, system services, authenticated operation on other operating systems, physical input and cross-DPI acceptance remain. CI package smoke does not replace those checks.
 

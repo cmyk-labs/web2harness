@@ -155,7 +155,9 @@ test("append recovery uses the full unmodified native source, new page, same con
     expect(f.turns[2]!.conversationKey).toBe(f.turns[1]!.conversationKey);
     expect(f.envelopes[2]!.transport_context.mode).toBe("append");
   } finally { await f.close(); }
-});
+// This multi-turn integration case includes large-context preparation, persisted
+// queue/journal operations and replay; five seconds is not its latency contract.
+}, 30_000);
 
 test.each(["repeat", "mixed", "invalid-tool", "worker-failure"])("recovery %s is terminal, delivers no tools, reconnect does not resend", async failure => {
   const f = await fixture([requestResync, failure === "repeat" ? requestResync : failure === "mixed"

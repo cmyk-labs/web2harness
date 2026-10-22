@@ -14,11 +14,24 @@ test("candidate includes untracked source and is stable across line endings and 
     mkdirSync(join(root, "src"));
     writeFileSync(join(root, "package.json"), '{"version":"1.0.0"}\n');
     writeFileSync(join(root, "src/cli.ts"), "export const answer = 1;\n");
-    git("add", "package.json", "src/cli.ts");
+    mkdirSync(join(root, "launcher"));
+    const packagingText = {
+      "installer.nsh": "Section\nSectionEnd\n",
+      "runtime.patch": "--- original\n+++ updated\n@@ -1 +1 @@\n-old\n+new\n",
+    };
+    for (const [name, content] of Object.entries(packagingText)) writeFileSync(join(root, "launcher", name), content);
+    git("add", "package.json", "src/cli.ts", "launcher");
     git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "fixture");
     const initial = candidateIdentity(root);
     writeFileSync(join(root, "src/cli.ts"), "export const answer = 1;\r\n");
     expect(candidateIdentity(root).sourceId).toBe(initial.sourceId);
+    for (const [name, content] of Object.entries(packagingText)) {
+      writeFileSync(join(root, "launcher", name), content.replaceAll("\n", "\r\n"));
+      expect(candidateIdentity(root).sourceId).toBe(initial.sourceId);
+      writeFileSync(join(root, "launcher", name), `${content}; changed content\n`);
+      expect(candidateIdentity(root).sourceId).not.toBe(initial.sourceId);
+      writeFileSync(join(root, "launcher", name), content);
+    }
     mkdirSync(join(root, ".github/acceptance"), { recursive: true });
     writeFileSync(join(root, ".github/acceptance/current.json"), "{}");
     expect(candidateIdentity(root).sourceId).toBe(initial.sourceId);

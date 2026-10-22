@@ -37,6 +37,8 @@ Use the [standard isolated test procedure](development.md#standard-isolated-test
 
 For each candidate, record version, source commit/tag, artifact SHA-256, OS version/architecture, clean/upgrade path, previous installed version, Codex version, ChatGPT plan, enabled mode, and each result. Keep passed, failed, and not-executed checks separate. Include redacted failure logs and reproduction steps; never publish cookies, tunnel IDs, API keys, bearer tokens, credentials, or prompt contents. Keep raw evidence and production baselines in ignored local storage.
 
+Source identity normalizes CRLF in supported text files, including NSIS includes and packaging patches, so checkout line endings do not change the candidate identity. Artifact SHA-256 checks still cover the exact distributed bytes.
+
 The maintainer reviews completed checks, unresolved failures and unexecuted items before authorizing publication. Record any explicit decision to defer a manual check or accept a known limitation, including responsibility and follow-up; describe it accurately in the release notes instead of marking it passed. Dependency audit results remain separate from functional results. CI continues to enforce automated verification, native package smoke, signatures where applicable and asset integrity; it does not require a JSON capability manifest. A prior artifact does not establish the integrity of newly built bytes.
 
 <a id="source-preparation"></a>
