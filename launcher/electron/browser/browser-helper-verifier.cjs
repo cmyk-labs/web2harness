@@ -49,13 +49,14 @@ async function stopChild(child) {
   }
 }
 
-async function runBrowserHelperOperation({ helper, descriptorPath, appName, operation, payload = {}, logger, onStarted, onStage, onCheck, abortSignal }) {
+async function runBrowserHelperOperation({ helper, descriptorPath, appName, operation, useSavedChats = false, payload = {}, logger, onStarted, onStage, onCheck, abortSignal }) {
   if (!helper || typeof helper.executable !== "string" || typeof helper.script !== "string") {
     throw new Error("Browser helper verification command is invalid");
   }
   if (typeof descriptorPath !== "string" || !descriptorPath || typeof appName !== "string" || !appName) {
     throw new Error("Browser helper verification config is invalid");
   }
+  if (typeof useSavedChats !== "boolean") throw new Error("Browser helper chat-saving selection is invalid");
   if (!["verify", "inspect", "smoke", "limits"].includes(operation)) {
     throw new Error(`Unsupported browser helper operation: ${String(operation)}`);
   }
@@ -136,7 +137,8 @@ async function runBrowserHelperOperation({ helper, descriptorPath, appName, oper
           ...payload,
           type: operation,
           id,
-          config: { appName, browserHostDescriptorPath: descriptorPath },
+          config: { appName, browserHostDescriptorPath: descriptorPath,
+            ...(operation === "verify" ? { useSavedChats } : {}) },
         }).catch(error => finish(error instanceof Error ? error : new Error(String(error))));
         return;
       }

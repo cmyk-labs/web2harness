@@ -14,6 +14,7 @@ Do not perform general workspace cleanup or bulk deletion. Fixture teardown may 
 
 ## Implementation requirements
 
+- Treat historical approvals, requirements, conclusions, and decisions as revisable evidence, not permanent proof of correctness. When current conditions or new analysis conflict with them, report the original rationale, the new evidence, and the recommended change to the maintainer for clarification. Do not silently override an explicit requirement that remains in force; continue independent authorized work while clarification is pending.
 - Use the shared application implementation for production and DEV. Do not add a simplified DEV execution path to bypass a failure.
 - Preserve explicit model, effort, route, and connector selection. Report an unsupported choice or failed check; do not substitute another choice or return unverified success.
 - Keep tools bound to the active Codex task and its permissions. Browser responses do not grant additional filesystem or execution authority.
@@ -23,9 +24,11 @@ Do not perform general workspace cleanup or bulk deletion. Fixture teardown may 
 
 All development, regression, and live acceptance follows the [standard isolated test procedure](docs/development.md#standard-isolated-test-procedure).
 
-1. Use independent DEV configuration, credentials, browser profile, endpoints, process ownership, and fixture workspaces. Never copy production authentication.
+Whenever completed work is ready for release preparation, ask the maintainer whether to run the [complete independent-session review regression](docs/development.md#independent-review-regression). The maintainer decides for that release; prior authorization is not standing permission to rerun it. A new independent DEV main session must delegate the three specified tasks and aggregate their results. The implementation agent must not substitute itself as that main session. Record a declined or deferred run accurately; this decision does not replace other applicable checks or authorize publication.
+
+1. Use independent DEV configuration, credentials, browser profile, endpoints, process ownership, and fixture workspaces. If DEV has lost its ChatGPT web login, the maintainer authorizes reusing the local desktop ChatGPT web login state in the separate DEV profile. Keep the source profile unchanged; this exception does not cover production Codex authentication, configuration, history, or active task IDs.
 2. Start live testing with `bun run dev:launcher`. Verify the development profile and runtime ownership before controlling it. Run live Codex work through `bun run dev:codex` or `bun run dev:chat` in a dedicated DEV workspace.
-3. Before enabling MCP Bridge, obtain explicit confirmation that the tunnel belongs to DEV and verify the actual connector binding. A directory, alias, or display name does not prove remote isolation.
+3. Before running MCP Bridge tasks, use the built-in browser to verify DEV tunnel ownership on the website and the actual connector binding. The maintainer authorizes creating a new DEV tunnel, key, and connector when ownership cannot be established, including the separate Zero Risk configuration; another per-tunnel confirmation is unnecessary. A newly created, verified DEV tunnel may serve the tool catalog needed to create its connector before running tasks. Automatic and Zero Risk require distinct tunnels. A directory, alias, or display name does not prove remote isolation.
 4. After changing loaded runtime or helper code, restart only the verified DEV instance. Cancel turns or stop processes only when their DEV ownership is established. Never free a port by terminating an unrelated process or use process-name matching as ownership proof.
 5. Keep Codex sandbox enforcement and normal approval rules enabled. A necessary Windows sandbox override belongs only to the DEV child command, not to machine or production settings.
 6. Collect command execution and file-change evidence for real tool acceptance. A simulator, browser fixture, zero exit status, or model success statement alone is not live end-to-end proof.

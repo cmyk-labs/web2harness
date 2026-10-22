@@ -25,6 +25,21 @@ const {
   navigationOriginForLog,
 } = require("../../electron/browser/browser-host.cjs");
 
+test("send isolation binds exactly one live automatic surface and its helper", () => {
+  const tab = { id: "task-tab", surfaceId: "surface", traceId: "trace", helperPid: 42, status: "running",
+    view: { webContents: { isDestroyed: () => false, isCrashed: () => false } } };
+  const host = { turnTabs: new Map([[tab.id, tab]]) }, proof = { surfaceId: "surface", helperPid: 42 };
+  const check = p => BrowserHost.prototype.ownsIsolatedSendResource.call(host, "trace", p ?? proof);
+  assert.equal(check(), true);
+  assert.equal(check({ ...proof, helperPid: 43 }), false); assert.equal(check({ ...proof, surfaceId: "foreign" }), false);
+  assert.equal(check({ helperPid: 42 }), false);
+  host.turnTabs.set("foreign", { ...tab, id: "foreign", traceId: "foreign-trace" }); assert.equal(check(), false); host.turnTabs.delete("foreign");
+  host.turnTabs.set("duplicate", { ...tab, id: "duplicate" }); assert.equal(check(), false); host.turnTabs.delete("duplicate");
+  tab.manualState = "running"; assert.equal(check(), false); delete tab.manualState;
+  tab.status = "error"; assert.equal(check(), false); tab.status = "running";
+  tab.view.webContents.isCrashed = () => true; assert.equal(check(), false);
+});
+
 test("destroy tolerates released view contents and still closes remaining tabs and waiters", () => {
   const closed = [];
   const resolutions = [];
@@ -1709,7 +1724,7 @@ test("browser helper operations fail closed when the configured connector name i
   assert.equal(helperCalls, 0);
 });
 
-test("connector verification is effort-independent and works while the browser surface is hidden", async () => {
+for (const useSavedChats of [false, true]) test(`connector verification preserves chat-saving selection while hidden (saved=${useSavedChats})`, async () => {
   const calls = [];
   const fixture = {
     helper: { executable: "/runtime/electron", script: "/runtime/browser-helper.cjs" },
@@ -1717,7 +1732,8 @@ test("connector verification is effort-independent and works while the browser s
     logger: { info: (event, detail) => calls.push(["log", event, detail]) },
     setState: (patch) => calls.push(["state", patch]),
     show: () => calls.push(["show"]),
-    refreshChatGptHomeDocument: async () => calls.push(["refresh"]),
+    getUseSavedChats: () => useSavedChats,
+    refreshChatGptHomeDocument: async (options) => calls.push(["refresh", options]),
     selectHighEffort: async () => {
       throw new Error("connector verification must not select an effort");
     },
@@ -1734,11 +1750,12 @@ test("connector verification is effort-independent and works while the browser s
   assert.deepEqual(
     calls.filter(([type]) => ["refresh", "helper"].includes(type)),
     [
-      ["refresh"],
+      ["refresh", { useSavedChats }],
       ["helper", {
         helper: fixture.helper,
         descriptorPath: fixture.descriptorPath,
         appName: "Codex Native2",
+        useSavedChats,
         logger: fixture.logger,
       }],
     ],

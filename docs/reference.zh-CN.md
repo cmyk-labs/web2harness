@@ -56,8 +56,9 @@ CLI 的 `setup` 解析器在未传入模式参数时始终采用原生工具，�
 | `mode` | `native-tools` | `native-tools`：将结构化浏览器响应转换为 Codex 执行的工具调用。`mcp-bridge`：通过隧道将连接器调用转发到活动 Codex 任务。`browser-only`：仅浏览器模型响应，不提供本地工具或隧道。 |
 | `browserInteractionMode` | `automatic` | `automatic`：浏览器自动化负责选择、提交及观察 ChatGPT 回合。`manual`：界面中的 **Zero Risk** 模式，由用户选择模型、粘贴并提交，连接器传递回合、工具及完成消息。要求 `mode: "mcp-bridge"` 且 `browserHost: "launcher"`。 |
 | `subagentProtocol` | `compatibility-v1` | `compatibility-v1`：对任务中的原生与 Web 模型目录条目使用 V1 协作协议，保留原生明确禁用的能力。`native`：遵循原生模型目录的协作协议。切换协议后需要重启 Codex 和启动器。 |
+| `mcpHandoffProtocol` | 缺省为 `web2harness-handoff-v1` | 明确选择 MCP handoff 版本：`web2harness-handoff-v1` 或 `web2harness-handoff-v2`。v2由宿主派生提交身份并使用版本化提交工具，不改变模型、档位、连接器、工具权限或交互模式。待活动资源结算后应用，重启runtime/helper和隧道worker，再刷新并检查连接器目录。 |
 | `browserHost` | `managed-chrome` | `managed-chrome`：使用配置的 Chrome 可执行文件与已保存会话。`launcher`：通过描述文件连接启动器拥有的浏览器。 |
-| `autoApproveToolCalls` | `false` | 布尔值。允许自动点击浏览器中的 **Allow once** 提示，不替代 Codex 沙箱或审批策略。 |
+| `autoApproveToolCalls` | `false` | 布尔值。允许自动点击浏览器中的 **Allow once／允许一次** 提示。识别中英文审批卡片；默认等待逐次决定，绝不选择 **Always allow／始终允许**。不替代 Codex 沙箱或审批策略。 |
 | `zeroRiskProEnabled` | `false` | 布尔值。在手动模式中额外发布Pro专用模型条目。用户必须在每个回合选择 ChatGPT Pro，启动器不能验证该选择。 |
 
 自动和手动 MCP 配置使用不同的隧道 ID 与连接器身份。常规自动交互连接器为 `Codex Native2`，DEV 自动交互连接器为 `Codex Native2 DEV`，手动交互连接器为 `Codex Zero Risk`。当前 `appName` 和 `tunnel` 必须与所选交互方式一致。一条交互路径验证成功，不代表另一条也已验证。
@@ -177,7 +178,7 @@ CLI 读取所选应用目录的运行配置并输出 JSON。下列命令拒绝 L
 
 | 配置项 | 默认值 | 作用与限制 |
 | --- | --- | --- |
-| `useSavedChats` | `false` | 任务会话默认使用临时聊天；`true` 保存到 ChatGPT 历史记录。加载配置时保留已有明确选择。此设置与会话是否复用相互独立。 |
+| `useSavedChats` | `false` | 任务会话默认使用临时聊天；`true` 保存到 ChatGPT 历史记录。MCP 连接器验证遵守此选择，账号检查仍使用空白临时聊天；即使临时聊天没有插件入口，也保留已有明确选择。此设置与会话是否复用相互独立。 |
 | `experimentalFreshConversationPerTurn` | `false` | `false` 允许原生工具或 MCP Bridge 复用启动器宿主上符合条件的 Sol／Pro 会话；`true` 为每个自动回合新建浏览器会话。仅浏览器与 Luna 使用其他连续性机制。手动配置流程拒绝显式启用。参见[对话状态](architecture.zh-CN.md#conversation-state-and-compaction)。 |
 | `experimentalContextFiles` | 支持的自动模式下为 `true` | 对较大上下文启用实验性的 Context as File 文件传输，较小输入仍可内联发送。手动模式不可用。 |
 | `experimentalContextTripleBudget` | `false` | 文件传输开启时可选。各组配置的标准窗口乘三（Fast/非Fast默认240000/816000），可用与压缩仍为95%/90%。单次消息与账号限制不变，关闭文件清除该设置。 |
@@ -223,7 +224,7 @@ CLI 读取所选应用目录的运行配置并输出 JSON。下列命令拒绝 L
 | `profileDir` | tunnel-client 配置目录的绝对路径 |
 | `profileName`、`alias` | 仅含字母、数字、`.`、`_` 和 `-` 的非空字符串 |
 
-配置流程管理当前隧道对象和凭据文件。DEV MCP Bridge 的远程隔离不能仅由本地名称及路径证明：[开发流程](development.zh-CN.md)要求明确确认隧道属于 DEV，并验证连接器的实际绑定。
+配置流程管理当前隧道对象和凭据文件。DEV MCP Bridge 的远程隔离不能仅由本地名称及路径证明：[开发流程](development.zh-CN.md#mcp-bridge-isolation)要求从网页核实 DEV 归属及连接器的实际绑定；无法确认归属时，已授权自行新建 DEV 资源。
 
 <a id="launcher-preferences"></a>
 
@@ -370,6 +371,8 @@ Fast与非Fast标准上下文窗口默认分别为80,000/272,000 tokens；95%可
 这是本地声明预算，不是对每个网页模型实际容量的承诺。GPT-6 和 GPT-5.6 Sol 的 Extra High 在独立 DEV 中已验证约254k总估算量附近的原生自动压缩、分布事实和压缩后工具续接。两种模型的 Fast 另以80,000窗口在独立DEV中验证，原生显示76,000可用容量，合成材料的分布事实回忆及自动压缩后的原生工具执行通过。这些有界测试不证明其他任务、档位或账号具有相同容量或召回效果。上传成功不代表模型完整利用所有内容。单次消息与账号限制仍独立生效。
 
 <a id="message-budgets"></a>
+
+Responses用量由宿主估算（`estimated: true`），不是平台计费回执。估算包含所选MCP v1/v2 handoff契约、与宿主句柄形状一致的自动／手动绑定占位符，以及完整上下文与附件计数；实际随机句柄、浏览器处理和平台开销可能不同。模拟器占用量使用同一估算器及明确的协议／文件偏好。字节数、估算token、上传完成与模型完整读取上下文是不同事实，都不产生额外工具权限。
 
 ### 单条消息传输预算
 
@@ -524,6 +527,7 @@ DEV 拒绝与生产数据目录重叠，使用独立浏览器登录及 Codex 主
 | `--automatic-browser-interaction`、`--zero-risk-browser-interaction` | 互斥交互方式；手动方式要求 MCP Bridge 和启动器描述文件。 |
 | `--port NUMBER`、`--chrome PATH`、`--browser-host-descriptor PATH` | 端点与浏览器选择；描述文件选择启动器宿主，只有 Chrome 覆盖而没有描述文件时选择受管理 Chrome。 |
 | `--subagent-protocol compatibility-v1\|native` | 选择协作协议。 |
+| `--handoff-protocol web2harness-handoff-v1\|web2harness-handoff-v2` | 正常或DEV setup的明确MCP契约。省略时保留已有选择，新配置使用v1；配置MCP时明确传入`--mcp-bridge`。 |
 | `--refresh-account-capabilities`、`--login` | 重新检查账户能力或刷新受管理浏览器登录；手动模式不可用，启动器会话登录由其界面控制。 |
 | `--tunnel-id ID`、`--runtime-key-file PATH` | 为所选交互路径提供 MCP Bridge 连接凭据。 |
 | `--saved-chats` / `--temporary-chats` | 设置 `useSavedChats`。 |

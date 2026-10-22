@@ -2,18 +2,19 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const { RequestScheduler } = require("../../shared/request-scheduler.cjs");
+const { RequestScheduler, canIsolateNativeSend, sharedQueueFailure } = require("../../shared/request-scheduler.cjs");
 const { diagnosticReference } = require("../../shared/diagnostic-event.cjs");
 const TERMINAL = new Set(["succeeded", "failed", "cancelled", "timed-out"]);
 
 // One instance in the Launcher that owns the browser partition. No prompt bodies,
 // tool arguments, credentials or execution leases are written to the receipt file.
 class RequestQueue {
-  constructor({ directory, settings, revision = 1, logger, cancelResource, hasResource, isProcessAlive }) {
+  constructor({ directory, settings, revision = 1, logger, cancelResource, hasResource, ownsIsolatedSendResource, isProcessAlive }) {
     this.file = path.join(directory, "request-queue.json");
     this.logger = logger;
     this.cancelResource = cancelResource;
     this.hasResource = hasResource;
+    this.ownsIsolatedSendResource = ownsIsolatedSendResource;
     this.isProcessAlive = isProcessAlive ?? (pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } });
     this.owners = new Map();
     this.pages = new Map();
@@ -49,6 +50,8 @@ class RequestQueue {
           queuedMonotonic: performance.now() - Math.max(0, Date.now() - record.queuedAt),
           ...(record.startedAt ? { startedMonotonic: performance.now() - Math.max(0, Date.now() - record.startedAt) } : {}),
         });
+        // Persisted locality is a past observation, never proof of ownership after restart.
+        if (record.sendProgress === "unknown" && !TERMINAL.has(record.state)) this.core.pause("send_outcome_unknown", record.id);
       }
     } catch (error) { if (error.code !== "ENOENT") throw error; }
     this.dirty = true;
@@ -134,11 +137,18 @@ class RequestQueue {
       else if (action === "cancel") result = this.core.cancel(input.id);
       else if (action === "phase") result = this.core.setPhase(input.id, lease, input.phase);
       else if (action === "send-progress") result = this.core.setSendProgress(input.id, lease, input.progress);
+      else if (action === "native-delivery") result = this.core.setNativeDelivery(input.id, lease, input.delivery);
       else if (action === "send-begin") result = this.core.beginSend(input.id, lease);
-      else if (action === "send-end") result = this.core.endSend(input.id, lease, input.permit, input.outcome) ?? { acknowledged: true };
+      else if (action === "send-end") {
+        const isolated = input.outcome === "unknown" && canIsolateNativeSend(input.isolation, this.core.get(input.id)?.mode,
+          proof => this.hasResource(owner.traceId) && this.ownsIsolatedSendResource?.(owner.traceId, proof) === true);
+        this.core.endSend(input.id, lease, input.permit, input.outcome, isolated ? "task" : undefined);
+        result = { acknowledged: true };
+      }
       else if (action === "settle") {
         if (this.hasResource(owner.traceId)) throw new Error("Browser resources have not been released");
-        if (input.reason === "rate_limit_exceeded") this.core.pause("account_rate_limited", input.id);
+        const sharedFailure = sharedQueueFailure(input.reason);
+        if (sharedFailure) this.core.pause(sharedFailure, input.id);
         result = lease ? this.core.settle(input.id, lease, input.outcome, input.reason, input.remote) : this.core.cancel(input.id);
       } else throw new Error("Unknown queue action");
     }

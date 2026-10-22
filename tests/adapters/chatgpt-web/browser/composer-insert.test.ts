@@ -199,7 +199,7 @@ test("both evaluate entry points serialize with no module closure dependencies",
 
 // Each 65k multiline insertion can take tens of seconds on Windows Chromium. The
 // fixture ceiling must outlast independent write/read/cleanup operation limits.
-for (const modern of [false, true]) for (const hasStaleDraft of [false, true]) {
+for (const modern of [false, true, "plugin"] as const) for (const hasStaleDraft of [false, true]) {
   test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(
     "a selected connector never appends a new request to an old draft (modern=" + modern + ", stale=" + hasStaleDraft + ")",
     async () => {
@@ -210,7 +210,9 @@ for (const modern of [false, true]) for (const hasStaleDraft of [false, true]) {
           config: { appName: "Codex Native2" },
         });
         const prompt = "Task context\n".repeat(5_000) + "\nrequest_id: current";
-        const pill = modern
+        const pill = modern === "plugin"
+          ? '<span plugin-mention-path="plugin://fixture@openai-curated-remote" plugin-mention-display-name="Codex Native2" contenteditable="false">Codex Native2</span>'
+          : modern
           ? '<span app-mention-path="app://fixture" app-mention-display-name="Codex Native2" contenteditable="false">Codex Native2</span>'
           : '<span data-id="plugin:fixture" data-keyword="Codex Native2" contenteditable="false">Codex Native2</span>';
         const staleDraft = hasStaleDraft ? prompt.replace("current", "earlier") : "";

@@ -17,10 +17,15 @@ export interface RequestSchedulingSettings {
 export const DEFAULT_REQUEST_SCHEDULING: Readonly<RequestSchedulingSettings>;
 export const QUEUE_TIMEOUT_CHOICES: readonly number[];
 export function validateRequestScheduling(value: unknown): RequestSchedulingSettings;
+export interface NativeSendIsolationProof { version: 1; inputSettled: true; helperPid: number; surfaceId?: string }
+export function canIsolateNativeSend(proof: unknown, mode: string, ownsResource: (proof: NativeSendIsolationProof) => boolean): boolean;
+export function sharedQueueFailure(reason: unknown): "account_rate_limited" | "browser_unavailable" | undefined;
 export type QueuePhase = "preparing" | "running" | "waiting-user" | "waiting-tools";
 export type QueueState = QueuePhase | "queued" | "stopping" | "succeeded" | "failed" | "cancelled" | "timed-out";
 export type QueuePauseReason = "user" | "account_rate_limited" | "browser_unavailable" | "send_outcome_unknown";
 export type QueueSendProgress = "preflight" | "waiting_permit" | "sending" | "awaiting_ack" | "reconciling";
+export type NativeDeliveryState = "validation_failed" | "response_written" | "write_failed" | "delivery_failed";
+export interface NativeDeliveryUpdate { deliveryState: NativeDeliveryState; sequence: number }
 export interface QueueInput {
   id: string;
   groupId: string;
@@ -33,6 +38,7 @@ export interface QueueInput {
   retryAttempt?: number;
 }
 export interface QueueRecord extends Omit<QueueInput, "bytes"> {
+  nativeDelivery?: NativeDeliveryUpdate & { updatedAt: number };
   blockedBy?: { reason: QueuePauseReason; requestId?: string };
   state: QueueState;
   cooldownUntil?: number;
@@ -45,6 +51,7 @@ export interface QueueRecord extends Omit<QueueInput, "bytes"> {
   sendAttemptedAt?: number;
   sendConfirmedAt?: number;
   sendProgress?: QueueSendProgress | "confirmed" | "not-sent" | "unknown";
+  sendFailureScope?: "task" | "global";
   waitMs: number;
   runMs: number | null;
 }
@@ -87,8 +94,9 @@ export class RequestScheduler {
   lease(id: string): string | undefined;
   setPhase(id: string, lease: string, phase: QueuePhase): QueueRecord;
   setSendProgress(id: string, lease: string, progress: QueueSendProgress): QueueRecord;
+  setNativeDelivery(id: string, lease: string, update: NativeDeliveryUpdate): QueueRecord;
   beginSend(id: string, lease: string): { allowed: true; permit: string } | { allowed: false; reason: string; retryAfterMs?: number };
-  endSend(id: string, lease: string, permit: string, outcome: "confirmed" | "not-sent" | "unknown"): void;
+  endSend(id: string, lease: string, permit: string, outcome: "confirmed" | "not-sent" | "unknown", failureScope?: "task"): void;
   cancel(id: string): QueueRecord | null;
   settle(id: string, lease: string, outcome: "succeeded" | "failed" | "cancelled", reason?: string, remote?: McpQueueOutcome): QueueRecord;
   mcpStatus(): McpQueueStatus[];

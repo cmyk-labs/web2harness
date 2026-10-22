@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { RequestScheduler, validateRequestScheduling, DEFAULT_REQUEST_SCHEDULING } = require("../shared/request-scheduler.cjs");
+const { RequestScheduler, validateRequestScheduling, DEFAULT_REQUEST_SCHEDULING, canIsolateNativeSend, sharedQueueFailure } = require("../shared/request-scheduler.cjs");
 
 function fixture(settings = {}, options = {}) {
   let monotonic = 0, wall = 1_800_000_000_000;
@@ -18,6 +18,61 @@ function fixture(settings = {}, options = {}) {
     finish(id, outcome = "succeeded") { return scheduler.settle(id, scheduler.lease(id), outcome); },
   };
 }
+
+test("host-proven local send uncertainty keeps its slot and global interval without blocking siblings", () => {
+  const f = fixture({ maxConcurrent: 2, minSendIntervalSeconds: 1 });
+  f.add("uncertain"); f.add("sibling"); f.add("waiting");
+  const lease = f.scheduler.lease("uncertain");
+  const permit = f.scheduler.beginSend("uncertain", lease).permit;
+  f.scheduler.endSend("uncertain", lease, permit, "unknown", "task");
+  assert.equal(f.scheduler.snapshot().pausedReason, null);
+  assert.equal(f.scheduler.snapshot().active, 2);
+  assert.equal(f.scheduler.get("waiting").state, "queued");
+  assert.equal(f.scheduler.get("uncertain").sendFailureScope, "task");
+  assert.equal(f.scheduler.beginSend("sibling", f.scheduler.lease("sibling")).reason, "send_interval");
+  assert.throws(() => f.scheduler.endSend("uncertain", lease, permit, "confirmed"), { code: "send_permit_invalid" });
+  f.advance(1000);
+  assert.equal(f.scheduler.beginSend("sibling", f.scheduler.lease("sibling")).allowed, true);
+  f.scheduler.settle("uncertain", lease, "failed", "chatgpt_send_outcome_unknown");
+  assert.equal(f.scheduler.get("waiting").state, "preparing");
+  assert.equal(f.scheduler.settle("uncertain", lease, "succeeded").state, "failed");
+});
+
+test("send isolation requires worker settlement and independent resource-owner proof", () => {
+  const proof = { version: 1, inputSettled: true, helperPid: 45 };
+  assert.equal(canIsolateNativeSend(proof, "native-tools", () => true), true);
+  for (const value of [undefined, {}, { ...proof, version: 0 }, { ...proof, inputSettled: false }, { ...proof, helperPid: 0 }]) {
+    assert.equal(canIsolateNativeSend(value, "native-tools", () => true), false);
+  }
+  assert.equal(canIsolateNativeSend(proof, "mcp-bridge", () => true), false);
+  assert.equal(canIsolateNativeSend(proof, "native-tools", () => false), false);
+  assert.equal(canIsolateNativeSend(proof, "native-tools", () => { throw Error("owner unavailable"); }), false);
+  assert.equal(sharedQueueFailure("chatgpt_sign_in_required"), "browser_unavailable");
+  assert.equal(sharedQueueFailure("rate_limit_exceeded"), "account_rate_limited");
+  assert.equal(sharedQueueFailure("chatgpt_browser_unresponsive"), undefined);
+});
+
+test("local uncertainty cannot create capacity at concurrency one or bypass shared failure", () => {
+  const f = fixture({ maxConcurrent: 1 }); f.add("uncertain"); f.add("waiting");
+  const lease = f.scheduler.lease("uncertain"), permit = f.scheduler.beginSend("uncertain", lease).permit;
+  f.scheduler.endSend("uncertain", lease, permit, "unknown", "task");
+  assert.equal(f.scheduler.snapshot().active, 1); assert.equal(f.scheduler.get("waiting").state, "queued");
+  f.scheduler.pause("account_rate_limited", "uncertain");
+  assert.equal(f.scheduler.get("waiting").state, "failed");
+  f.scheduler.settle("uncertain", lease, "failed");
+  assert.equal(f.scheduler.snapshot().pausedReason, "account_rate_limited");
+  assert.equal(f.scheduler.get("waiting").state, "failed");
+});
+
+test("an unproven or MCP unknown send retains global protection", () => {
+  for (const extra of [{}, { mode: "mcp-bridge" }]) {
+    const f = fixture(); f.add("unknown", "unknown", extra);
+    const lease = f.scheduler.lease("unknown"), permit = f.scheduler.beginSend("unknown", lease).permit;
+    f.scheduler.endSend("unknown", lease, permit, "unknown", extra.mode ? "task" : undefined);
+    assert.equal(f.scheduler.snapshot().pausedReason, "send_outcome_unknown");
+    assert.equal(f.scheduler.get("unknown").sendFailureScope, "global");
+  }
+});
 
 test("send progress cannot grant authority, confirm input or overwrite a terminal receipt", () => {
   const f = fixture(); f.add("first"); f.add("next");

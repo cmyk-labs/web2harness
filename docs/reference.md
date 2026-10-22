@@ -56,8 +56,9 @@ The defaults in these tables describe a new runtime configuration. Setup may ret
 | `mode` | `native-tools` | `native-tools`: turn structured browser responses into tool calls executed by Codex. `mcp-bridge`: relay connector calls through a tunnel into the active Codex task. `browser-only`: browser model responses without local tools or a tunnel. |
 | `browserInteractionMode` | `automatic` | `automatic`: browser automation selects, submits and observes the ChatGPT turn. `manual`: the UI's **Zero Risk** mode; the user selects the model, pastes and submits, while the connector carries turn/tool/completion messages. Requires `mode: "mcp-bridge"` and `browserHost: "launcher"`. |
 | `subagentProtocol` | `compatibility-v1` | `compatibility-v1`: use the V1 collaboration surface for the task's native and Web catalog entries, retaining explicitly disabled native capabilities. `native`: follow the native catalog's collaboration protocol. A protocol change requires Codex and launcher restart. |
+| `mcpHandoffProtocol` | `web2harness-handoff-v1` when absent | Explicit MCP handoff version: `web2harness-handoff-v1` or `web2harness-handoff-v2`. V2 derives submission identity in the host and uses versioned submission tools. It does not change model, effort, connector, tool authority or interaction mode. Apply only after active resources settle, restart the runtime/helper and tunnel worker, then refresh and inspect the connector catalog. |
 | `browserHost` | `managed-chrome` | `managed-chrome`: use the configured Chrome executable and stored session. `launcher`: attach to the launcher's owned browser through its descriptor. |
-| `autoApproveToolCalls` | `false` | Boolean. Opts into automatic clicks on browser **Allow once** prompts. It does not replace Codex sandbox or approval policy. |
+| `autoApproveToolCalls` | `false` | Boolean. Opts into automatic clicks on browser **Allow once** prompts. English and Chinese approval cards are recognized; the default waits for a per-request decision and never selects **Always allow**. It does not replace Codex sandbox or approval policy. |
 | `zeroRiskProEnabled` | `false` | Boolean. In manual mode, also publish the Pro-specific manual model entry. The user must select Pro in ChatGPT for each turn; the launcher cannot verify that selection. |
 
 Automatic and manual MCP configurations use separate tunnel IDs and connector identities. The regular automatic connector is `Codex Native2`; the DEV automatic connector is `Codex Native2 DEV`; the manual connector is `Codex Zero Risk`. The active `appName` and `tunnel` must match the chosen interaction mode. A successful check for one interaction path does not verify the other.
@@ -177,7 +178,7 @@ Reservations remain charged while requests wait, execute and deliver responses; 
 
 | Setting | Default | Effect and constraints |
 | --- | --- | --- |
-| `useSavedChats` | `false` | Task conversations use Temporary Chat by default. `true` saves them in ChatGPT history. Explicit choices are retained when loading configuration. This setting is separate from conversation reuse. |
+| `useSavedChats` | `false` | Task conversations use Temporary Chat by default. `true` saves them in ChatGPT history. MCP connector verification follows this selection; account inspection still uses an empty Temporary Chat. Explicit choices are retained, including when Temporary Chat does not offer plugins. This setting is separate from conversation reuse. |
 | `experimentalFreshConversationPerTurn` | `false` | `false` allows eligible launcher-hosted Sol/Pro conversations to be reused with Native Tools or MCP Bridge. `true` starts a new browser conversation for each automatic turn. Browser-only and Luna use different continuity paths. Manual setup rejects an explicit request to enable it. See [conversation state](architecture.md#conversation-state-and-compaction). |
 | `experimentalContextFiles` | `true` in supported automatic modes | Enables experimental Context as File transport for large context. Smaller input can remain inline. Unavailable in manual mode. |
 | `experimentalContextTripleBudget` | `false` | Opt-in with file transport: triples each configured standard window (default Fast/non-Fast: 240000/816000), with 95% usable and 90% compaction. Message/account limits stay unchanged. Disabling files clears it. |
@@ -223,7 +224,7 @@ When `mode` is `"mcp-bridge"`, a valid active `tunnel` object is required. `auto
 | `profileDir` | Absolute path to the tunnel-client profile directory |
 | `profileName`, `alias` | Nonempty strings containing only letters, digits, `.`, `_` and `-` |
 
-Setup handles the active tunnel configuration and managed credential files. For DEV MCP Bridge, local names and paths do not establish remote isolation: the [development procedure](development.md) requires explicit DEV tunnel confirmation and verification of the actual connector binding.
+Setup handles the active tunnel configuration and managed credential files. For DEV MCP Bridge, local names and paths do not establish remote isolation: the [development procedure](development.md#mcp-bridge-isolation) requires website verification of DEV ownership and the actual connector binding, with authorized creation of fresh DEV resources when ownership cannot be established.
 
 <a id="launcher-preferences"></a>
 
@@ -370,6 +371,8 @@ The table shows defaults; usable capacity is 95% of the selected window and comp
 This is a local declared budget, not a guarantee of each web model's physical capacity. Isolated authenticated DEV checks on GPT-6 and GPT-5.6 Sol Extra High verified native automatic compaction near 254k total estimated tokens, distributed facts and post-compaction tools. Separate isolated DEV checks of GPT-6 and GPT-5.6 Sol Fast used the 80,000-token policy, reported 76,000 usable tokens, and passed synthetic distributed-fact recall plus native tool execution after automatic compaction. These bounded checks do not establish equivalent capacity or recall for other workloads, efforts or accounts. Upload acceptance does not establish full use of all content. Single-message and account limits remain independent.
 
 <a id="message-budgets"></a>
+
+Responses usage is host-estimated (`estimated: true`), not a provider billing receipt. It includes the selected MCP v1/v2 handoff contract and an automatic/manual binding placeholder with the host handle's shape, plus the complete context and attachment accounting. Real random handles, browser processing and platform overhead can differ. Simulator occupancy uses the same estimator and explicit protocol/file preferences. Byte counts, estimated tokens, upload completion and the model reading the whole context are separate observations; none grants tool authority.
 
 ### Single-message transport budgets
 
@@ -524,6 +527,7 @@ The installed executable is `web2harness`. From a source checkout, replace it wi
 | `--automatic-browser-interaction`, `--zero-risk-browser-interaction` | Mutually exclusive interaction modes; manual requires MCP Bridge and the launcher descriptor. |
 | `--port NUMBER`, `--chrome PATH`, `--browser-host-descriptor PATH` | Endpoint and browser selection. A descriptor selects the launcher host; a Chrome override without a descriptor selects managed Chrome. |
 | `--subagent-protocol compatibility-v1\|native` | Select the collaboration protocol. |
+| `--handoff-protocol web2harness-handoff-v1\|web2harness-handoff-v2` | Explicit MCP contract for regular or DEV setup. Omission preserves an existing selection; new configurations use v1. Specify `--mcp-bridge` when configuring MCP. |
 | `--refresh-account-capabilities`, `--login` | Recheck account capabilities or refresh managed-browser login; unavailable in manual mode. Launcher session login is controlled in its UI. |
 | `--tunnel-id ID`, `--runtime-key-file PATH` | Supply MCP Bridge credentials for the selected interaction path. |
 | `--saved-chats` / `--temporary-chats` | Set `useSavedChats`. |

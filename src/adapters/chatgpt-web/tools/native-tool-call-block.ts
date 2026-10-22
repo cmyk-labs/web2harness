@@ -29,6 +29,25 @@ export interface NativeToolCallIssue {
   callIndex: number | null;
   wireName?: string;
   problem: string;
+  /** Static classification only. problem/wireName are private corrective feedback, never logs. */
+  category?: "block_json" | "block_shape" | "call_shape" | "tool_name" | "tool_namespace"
+    | "tool_kind" | "call_fields" | "arguments_shape" | "arguments_schema" | "empty_block" | "batch_constraints";
+  schemaKeywords?: string[];
+}
+
+const SCHEMA_KEYWORDS = new Set("type required additionalProperties enum const anyOf oneOf allOf not if false schema maximum minimum exclusiveMaximum exclusiveMinimum multipleOf maxLength minLength pattern format maxItems minItems uniqueItems contains maxContains minContains maxProperties minProperties dependencies dependentRequired propertyNames additionalItems items".split(" "));
+
+/** No error messages, schema paths, property names, tool identities or argument values. */
+export function nativeToolCallIssueDiagnostics(issues: readonly NativeToolCallIssue[]) {
+  return {
+    issueCount: issues.length,
+    issues: issues.slice(0, 16).map(issue => ({
+      category: issue.category ?? "internal_error", callIndex: issue.callIndex,
+      ...(issue.schemaKeywords ? { keywords: [...new Set(issue.schemaKeywords)]
+        .filter(keyword => SCHEMA_KEYWORDS.has(keyword)).slice(0, 16).map(code => ({ code })) } : {}),
+    })),
+    omittedIssues: Math.max(0, issues.length - 16),
+  };
 }
 
 export interface ParsedNativeToolCallReply {
@@ -154,24 +173,27 @@ export function splitNativeToolCallBlocks(text: string): {
   return { visibleText: kept.join("\n"), blocks, unclosed };
 }
 
-function blockCalls(body: string): { calls: unknown[] } | { invalid: string } {
+function blockCalls(body: string): { calls: unknown[] } | { invalid: string; category: "block_json" | "block_shape" } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(body);
   } catch (error) {
-    return { invalid: `block is not valid JSON (${error instanceof Error ? error.message : String(error)})` };
+    return { invalid: `block is not valid JSON (${error instanceof Error ? error.message : String(error)})`, category: "block_json" };
   }
   if (Array.isArray(parsed)) return { calls: parsed };
   if (isObj(parsed) && Array.isArray(parsed.calls)) return { calls: parsed.calls };
-  return { invalid: 'block must be a JSON object of the shape {"calls":[…]} (or a JSON array of calls)' };
+  return { invalid: 'block must be a JSON object of the shape {"calls":[…]} (or a JSON array of calls)', category: "block_shape" };
 }
 
 function issueFor(
   callIndex: number | null,
   problem: string,
   wireName?: string,
+  category: NativeToolCallIssue["category"] = "call_shape",
+  schemaKeywords?: string[],
 ): NativeToolCallIssue {
-  return { callIndex, ...(wireName !== undefined ? { wireName } : {}), problem };
+  return { callIndex, ...(wireName !== undefined ? { wireName } : {}), problem, category,
+    ...(schemaKeywords ? { schemaKeywords } : {}) };
 }
 
 function compactAjvErrors(validate: ValidateFunction): string {
@@ -201,7 +223,7 @@ export function parseNativeToolCallReply(text: string, tools: readonly CodexTool
   for (const block of blocks) {
     const decoded = blockCalls(block.body);
     if ("invalid" in decoded) {
-      issues.push(issueFor(null, decoded.invalid));
+      issues.push(issueFor(null, decoded.invalid, undefined, decoded.category));
       continue;
     }
     for (const raw of decoded.calls) {
@@ -212,22 +234,23 @@ export function parseNativeToolCallReply(text: string, tools: readonly CodexTool
       }
       const name = raw.name;
       if (typeof name !== "string" || name.length === 0) {
-        issues.push(issueFor(callIndex, 'call entry is missing the required string field "name"'));
+        issues.push(issueFor(callIndex, 'call entry is missing the required string field "name"', undefined, "tool_name"));
         continue;
       }
       const namespace = raw.namespace;
       if (namespace !== undefined && (typeof namespace !== "string" || namespace.length === 0)) {
-        issues.push(issueFor(callIndex, "namespace must be a nonempty string when supplied", name));
+        issues.push(issueFor(callIndex, "namespace must be a nonempty string when supplied", name, "tool_namespace"));
         continue;
       }
       const entry = index.get(toolIdentityKey(namespace as string | undefined, name));
       if (!entry) {
-        issues.push(issueFor(callIndex, `unknown tool ${JSON.stringify(name)} — use an exact declared tool name`, name));
+        issues.push(issueFor(callIndex, `unknown tool ${JSON.stringify(name)} — use an exact declared tool name`, name,
+          tools.some(tool => tool.name === name) ? "tool_namespace" : "tool_name"));
         continue;
       }
       const expectedType = entry.tool.toolSearch ? "tool_search_call" : entry.tool.freeform ? "custom_tool_call" : "function_call";
       if (raw.type !== undefined && raw.type !== expectedType) {
-        issues.push(issueFor(callIndex, `tool requires type ${expectedType}`, name));
+        issues.push(issueFor(callIndex, `tool requires type ${expectedType}`, name, "tool_kind"));
         continue;
       }
       // Untyped, unnamespaced legacy calls remain readable; never infer a namespace from a name.
@@ -237,20 +260,21 @@ export function parseNativeToolCallReply(text: string, tools: readonly CodexTool
         ? ["type", "name", "namespace", "input"] : ["type", "name", "namespace", "arguments"];
       const unexpectedKeys = Object.keys(raw).filter(key => !fields.includes(key));
       if (unexpectedKeys.length) {
-        issues.push(issueFor(callIndex, `unsupported field(s): ${unexpectedKeys.join(", ")}`, name));
+        issues.push(issueFor(callIndex, `unsupported field(s): ${unexpectedKeys.join(", ")}`, name, "call_fields"));
         continue;
       }
       if (!isObj(args)) {
-        issues.push(issueFor(callIndex, entry.tool.freeform ? "custom tool requires raw string input" : '"arguments" must be a JSON object', name));
+        issues.push(issueFor(callIndex, entry.tool.freeform ? "custom tool requires raw string input" : '"arguments" must be a JSON object', name, "arguments_shape"));
         continue;
       }
       if (entry.tool.freeform && raw.type !== undefined && typeof raw.input !== "string") {
-        issues.push(issueFor(callIndex, "custom_tool_call requires input, not a synthetic arguments wrapper", name));
+        issues.push(issueFor(callIndex, "custom_tool_call requires input, not a synthetic arguments wrapper", name, "arguments_shape"));
         continue;
       }
       const validate = entry.validate;
       if (validate && !validate(args)) {
-        issues.push(issueFor(callIndex, `arguments for ${name} do not match its schema: ${compactAjvErrors(validate)}`, name));
+        issues.push(issueFor(callIndex, `arguments for ${name} do not match its schema: ${compactAjvErrors(validate)}`, name,
+          "arguments_schema", (validate.errors ?? []).map(error => error.keyword)));
         continue;
       }
       calls.push({
@@ -264,7 +288,7 @@ export function parseNativeToolCallReply(text: string, tools: readonly CodexTool
     }
   }
   if (blocks.length > 0 && calls.length === 0 && issues.length === 0) {
-    issues.push(issueFor(null, "tool-call block contained no calls — omit the block entirely when no tool is needed"));
+    issues.push(issueFor(null, "tool-call block contained no calls — omit the block entirely when no tool is needed", undefined, "empty_block"));
   }
   return { calls, issues, visibleText: visibleText.trim(), blockCount: blocks.length };
 }

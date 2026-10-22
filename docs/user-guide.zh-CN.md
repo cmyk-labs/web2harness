@@ -179,7 +179,7 @@ bun run app
 
 本地隧道运行不能单独证明远端绑定正确，工作区策略也可能限制连接器访问。更换凭据时使用**替换凭据**，应用新值后验证对应绑定。自动与手动交互分别保存连接配置。
 
-DEV MCP 测试还需独立登录、凭据和隧道资源，取得隧道属于 DEV 的明确确认，并验证实际 DEV 连接器绑定。名称不能证明隔离，详见[开发测试流程](development.zh-CN.md#standard-isolated-test-procedure)。
+DEV MCP 测试还需独立配置、凭据和隧道资源，从网页核实 DEV 归属及实际连接器绑定。归属不明时自行新建 DEV 资源、DEV 退出登录时复用桌面 ChatGPT 网页登录态，均按已授权的[开发测试流程](development.zh-CN.md#standard-isolated-test-procedure)执行；名称不能证明隔离。
 
 <a id="manual-handoff"></a>
 

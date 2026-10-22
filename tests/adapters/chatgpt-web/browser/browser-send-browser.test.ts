@@ -7,10 +7,53 @@ import { ChatGptBrowserWorker, browserStageTimeouts } from "../../../../src/adap
 import { observeSendInput } from "../../../../src/adapters/chatgpt-web/browser/send-input-probe";
 import { createDiagnosticRecord } from "../../../../launcher/shared/diagnostic-event.cjs";
 
+test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)("acceptance stops an actual pending click without a late click after the overlay disappears", async () => {
+  const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.route("**/*", route => route.abort());
+    await page.setContent('<form><textarea>Synthetic input</textarea><button data-testid="send-button">Send</button></form>'
+      + '<div id="cover" style="position:fixed;inset:0;z-index:100"></div>');
+    await page.evaluate(() => {
+      (window as any).submissions = 0;
+      document.querySelector("form")!.addEventListener("submit", event => {
+        event.preventDefault(); (window as any).submissions++;
+      });
+    });
+    let start!: () => void, accept!: () => void;
+    const started = new Promise<void>(resolve => { start = resolve; });
+    const receipt = new Promise<void>(resolve => { accept = resolve; });
+    let inputSettled = false, interrupted = false, submitted = 0;
+    const button = page.locator('[data-testid="send-button"]');
+    const worker: any = Object.create(ChatGptBrowserWorker.prototype);
+    worker.activeComposer = async () => ({ locator: () => ({ locator: () => ({
+      click: async (options: { signal: AbortSignal; timeout: number }) => {
+        options.signal.addEventListener("abort", () => { interrupted = true; }, { once: true });
+        start();
+        try { await button.click({ ...options, timeout: 5_000 }); }
+        finally { inputSettled = true; }
+      },
+    }) }) });
+    worker.waitForSendReady = async () => {};
+    worker.waitForSubmissionAccepted = async () => { await receipt; return "response_stream"; };
+    const sending = worker.sendAttachedPrompt(page, {}, undefined, undefined, undefined, {
+      onSubmitted: async () => { expect(inputSettled).toBe(true); submitted++; },
+    });
+    await started;
+    accept();
+    expect(await sending).toBe("response_stream");
+    expect(interrupted).toBe(true);
+    expect(submitted).toBe(1);
+    await page.locator("#cover").evaluate(element => element.remove());
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(await page.evaluate(() => (window as any).submissions)).toBe(0);
+  } finally { await browser.close(); }
+}, 15_000);
+
 // Real button activation and shared submission DOM observation in a fresh local browser.
 // Preparation/model selection and the queue endpoint are fixtures, not authenticated Web sends.
 for (const outcome of ["accepted", "enabled-late", "unchanged", "cleared", "covered", "covered-enter", "late-covered", "modal-covered", "disabled-covered", "late-modal"] as const) {
-  test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`real browser send ${outcome} is classified without a duplicate input`, async () => {
+  test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`real browser send ${outcome} uses bounded composer fallback and verified acceptance`, async () => {
     const root = mkdtempSync(join(tmpdir(), "web2harness-send-browser-"));
     const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
     const fixtureLimits = browserStageTimeouts as { send: number; sendEnable: number };
@@ -22,10 +65,11 @@ for (const outcome of ["accepted", "enabled-late", "unchanged", "cleared", "cove
         <button type="submit" data-testid="send-button">Send</button></form><main></main>
         <script>
         window.submissions=0;window.enterKeys=0;
-        // The client may reserve Enter for composer shortcuts, including when a button is focused.
+        // Simulate ChatGPT's composer Enter handler, and clients that prevent it.
         document.addEventListener('keydown',e=>{if(e.key==='Enter'){
           window.enterKeys++;
-          if (${JSON.stringify(outcome)}!=='covered-enter')e.preventDefault();
+          e.preventDefault();
+          if (${JSON.stringify(outcome)}==='covered-enter' && e.target.id==='prompt-textarea')e.target.form.requestSubmit();
         }},true);
         document.querySelector('form').onsubmit=e=>{
           e.preventDefault();window.submissions++;
@@ -40,7 +84,6 @@ for (const outcome of ["accepted", "enabled-late", "unchanged", "cleared", "cove
         </script>`);
       const blocked = !["accepted", "enabled-late", "unchanged", "cleared"].includes(outcome);
       const accepted = outcome === "accepted" || outcome === "enabled-late" || outcome === "covered-enter";
-      const unsent = outcome === "modal-covered" || outcome === "disabled-covered" || outcome === "late-modal";
       if (blocked) {
         fixtureLimits.send = 250;
         fixtureLimits.sendEnable = 250;
@@ -109,37 +152,34 @@ for (const outcome of ["accepted", "enabled-late", "unchanged", "cleared", "cove
         await worker.runBrowserTurnObserved({ traceId: `real-send-${outcome}`, modelId: "gpt-5.6-sol", reasoning: "xhigh",
           capabilities: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: false },
           queueTicket: { id: "owned-task", secret: "fixture-secret" },
+          ...(outcome === "unchanged" ? { nativeToolDefinitions: [] } : {}),
           prepare: async () => ({ text: "Synthetic input", images: [], release() { released++; } }),
           onSendActivated: async () => { activated++; },
         }, undefined, page);
       } catch (caught) { error = caught; }
       if (accepted) expect(error).toBe(afterAccepted);
-      else if (unsent) {
-        expect(error).toBeInstanceOf(Error);
-        if (outcome !== "late-modal") expect(error).toMatchObject({ code: "chatgpt_send_control_unavailable", retryable: false });
-        else expect((error as Error).message).toContain("no Enter was dispatched");
-      }
       else {
         expect(error).toBeInstanceOf(Error);
         expect(error).toMatchObject({ code: "chatgpt_send_outcome_unknown", retryable: false });
       }
       expect(await page.evaluate(() => (window as any).submissions)).toBe(accepted || !blocked ? 1 : 0);
-      expect(await page.evaluate(() => (window as any).enterKeys)).toBe(outcome === "covered" || outcome === "covered-enter" ? 1 : 0);
-      if (blocked && !unsent) {
+      expect(await page.evaluate(() => (window as any).enterKeys)).toBe(outcome === "accepted" || outcome === "enabled-late" ? 0 : 1);
+      if (blocked) {
         const diagnostic = join(root, "diagnostics", readdirSync(join(root, "diagnostics")).find(name => name.startsWith(`real-send-${outcome}-`))!);
         const ready = JSON.parse(readFileSync(join(diagnostic, readdirSync(diagnostic).find(name => name.endsWith("send-ready.json"))!), "utf8"));
-        expect(ready.state.sendControls[0]).toMatchObject({ enabled: true, rendered: true, inViewport: true, receivesPointer: outcome === "late-covered" });
+        expect(ready.state.sendControls[0]).toMatchObject({ enabled: outcome !== "disabled-covered", rendered: true, inViewport: true, receivesPointer: outcome === "late-covered" });
         expect(ready.state.visibility).toMatchObject({ hidden: false });
         if (outcome === "late-covered") {
           expect((error as any).cause).toBeInstanceOf(AggregateError);
           expect((error as any).cause.errors[0].message).toContain("intercepts pointer events");
         }
       }
-      expect(activated).toBe(unsent ? 0 : 1);
-      expect(permits).toBe(unsent && outcome !== "late-modal" ? 0 : 1);
+      expect(activated).toBe(1);
+      expect(permits).toBe(1);
       expect(stages).toContain("send_preflight");
-      expect(settlements).toEqual(unsent && outcome !== "late-modal" ? [] : [{ id: "owned-task", secret: "fixture-secret", permit: "fixture-permit",
-        outcome: accepted ? "confirmed" : unsent ? "not-sent" : "unknown" }]);
+      expect(settlements).toEqual([{ id: "owned-task", secret: "fixture-secret", permit: "fixture-permit",
+        outcome: accepted ? "confirmed" : "unknown",
+        ...(outcome === "unchanged" ? { isolation: { version: 1, inputSettled: true, helperPid: process.pid } } : {}) }]);
       expect(released).toBe(1);
     } finally {
       fixtureLimits.send = sendTimeout;
@@ -155,7 +195,7 @@ for (const outcome of ["accepted", "enabled-late", "unchanged", "cleared", "cove
 }
 
 for (const interrupted of ["focus", "cancel"] as const) {
-  test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`Enter fallback cannot activate after ${interrupted} changes during readiness`, async () => {
+  test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)(`Enter fallback handles ${interrupted} during readiness`, async () => {
     const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
     try {
       const page = await browser.newPage();
@@ -167,17 +207,19 @@ for (const interrupted of ["focus", "cancel"] as const) {
         document.querySelector("form")!.onsubmit = e => e.preventDefault();
       });
       const worker = Object.create(ChatGptBrowserWorker.prototype) as any;
+      worker.waitForSubmissionAcceptedWithRecovery = async () => "user_turn";
       const controller = new AbortController();
       const attempt = worker.sendAttachedPrompt(page, {}, undefined, controller.signal, undefined, {
         onSendActivated: async () => {
           if (interrupted === "cancel") controller.abort();
-          else await page.locator("textarea").focus();
+          else await page.locator("button").focus();
         },
       }, undefined, undefined, undefined, "enter");
       if (interrupted === "cancel") await expect(attempt).rejects.toMatchObject({ name: "AbortError" });
-      else await expect(attempt).rejects.toThrow("no Enter was dispatched");
+      else expect(await attempt).toBe("user_turn");
       await new Promise(resolve => setTimeout(resolve, 100));
-      expect(await page.evaluate(() => (window as any).enterKeys)).toBe(0);
+      expect(await page.evaluate(() => (window as any).enterKeys)).toBe(interrupted === "cancel" ? 0 : 1);
+      if (interrupted === "focus") expect(await page.locator("textarea").evaluate(element => element === document.activeElement)).toBe(true);
     } finally { await browser.close(); }
   }, 20_000);
 }

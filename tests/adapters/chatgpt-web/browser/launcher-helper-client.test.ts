@@ -105,6 +105,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
       turn.onReasoningSummary(" files", true);
       turn.onTextDelta("done");
       const fence = await turn.completionFence.begin();
+      if (fence.awaitingToolResults !== true) throw new Error("Sealed tool-only disposition lost in IPC");
       const committed = await turn.completionFence.commit(fence.revision, "正文\\nwith tool result");
       if (committed.state !== "committed" || committed.awaitingToolResults !== true) throw new Error("Completion disposition lost in IPC");
       if (turn.captureLunaCheckpoint) turn.onLunaCheckpoint({
@@ -173,7 +174,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
       nativeToolDefinitions: [{ name: "read_fixture", description: "read", parameters: {} }],
       externalProgress: new ChatGptExternalTurnProgress(),
       completionFence: {
-        begin: async () => ({ state: "ready", revision: 17 }),
+        begin: async () => ({ state: "ready", revision: 17, awaitingToolResults: true }),
         commit: async (revision, reply) => {
           expect(revision).toBe(17);
           expect(reply).toBe("正文\nwith tool result");

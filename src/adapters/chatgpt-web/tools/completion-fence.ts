@@ -1,8 +1,8 @@
 import { ChatGptWebAdapterError } from "../adapter-error";
 
 export type CompletionFenceState =
-  | { state: "ready"; revision: number }
-  | { state: "already_committed"; revision: number }
+  | { state: "ready"; revision: number; awaitingToolResults?: boolean }
+  | { state: "already_committed"; revision: number; awaitingToolResults?: boolean }
   | { state: "awaiting_intent"; activities: number; invocations: number; sealed: boolean }
   | { state: "activity_in_flight"; activities: number; invocations: number; sealed: boolean };
 export type CompletionFenceCommit =
@@ -14,7 +14,8 @@ const count = (value: unknown): value is number => Number.isSafeInteger(value) &
 export function isCompletionFenceState(value: unknown): value is CompletionFenceState {
   if (!value || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  if (item.state === "ready" || item.state === "already_committed") return count(item.revision);
+  if (item.state === "ready" || item.state === "already_committed") return count(item.revision)
+    && (item.awaitingToolResults === undefined || typeof item.awaitingToolResults === "boolean");
   return (item.state === "awaiting_intent" || item.state === "activity_in_flight")
     && count(item.activities) && count(item.invocations) && typeof item.sealed === "boolean";
 }

@@ -25,6 +25,7 @@ import {
 } from "./codex/integration";
 import { formatDoctorReport, runDoctor } from "./doctor";
 import { runChatGptMcpMain } from "./adapters/chatgpt-web/tools/mcp-main";
+import { handoffProtocol } from "../launcher/shared/handoff-protocol.cjs";
 import { runCommand } from "./runtime/process";
 import { startServer } from "./server";
 import { startLogMaintenance } from "../launcher/shared/log-retention.cjs";
@@ -87,6 +88,7 @@ Setup options:
   --runtime-key-file PATH      File containing a Tunnels Read+Use runtime key
   --replace-codex-route        Reversibly replace existing Responses or Voice route settings
   --subagent-protocol MODE     compatibility-v1 (default) or native (advanced)
+  --handoff-protocol PROTOCOL  web2harness-handoff-v1 (default) or web2harness-handoff-v2
   --restart-service            Explicitly restart this project's daemon after an update
   --login                      Refresh the stored ChatGPT login even if one exists
   --auto-approve-tool-calls    Opt in to per-call browser clicks on "Allow once" prompts
@@ -304,6 +306,8 @@ async function setupCommand(args: string[]): Promise<void> {
     options.browserInteractionMode = manualBrowserInteraction ? "manual" : "automatic";
   }
   const subagentProtocol = takeOption(args, "--subagent-protocol");
+  const mcpProtocol = takeOption(args, "--handoff-protocol");
+  if (mcpProtocol !== undefined) options.mcpHandoffProtocol = handoffProtocol(mcpProtocol);
   if (subagentProtocol !== undefined) {
     if (subagentProtocol !== "compatibility-v1" && subagentProtocol !== "native") {
       throw new Error("--subagent-protocol must be compatibility-v1 or native");

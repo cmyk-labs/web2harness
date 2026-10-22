@@ -72,7 +72,13 @@ try {
         compact: document.querySelector('.workspace-shell').classList.contains('is-compact'), width: innerWidth, height: innerHeight };
     });
     metrics.push({ native, layout });
-    check(`${width}x${height}: native size matches requested size`, native.bounds.width === width && native.bounds.height === height);
+    // Windows can enforce a native minimum one DIP above the configured height
+    // (observed on Electron 42/43). Keep ordinary sizes exact and never accept
+    // undersizing; do not change the application's minimum to satisfy a fixture.
+    const nativeMinimum = process.platform === 'win32' && height === MIN_WINDOW_BOUNDS.height
+      && native.bounds.height === height + 1;
+    check(`${width}x${height}: native size respects request and minimum constraint`,
+      native.bounds.width === width && (native.bounds.height === height || nativeMinimum));
     check(`${width}x${height}: application fills the logical viewport`, Math.abs(layout.root.x) < 1 && Math.abs(layout.root.y) < 1
       && Math.abs(layout.root.width - layout.width) < 1 && Math.abs(layout.root.height - layout.height) < 1);
     check(`${width}x${height}: compact scaling never magnifies controls`, native.zoom > 0 && native.zoom <= 1);
@@ -89,7 +95,7 @@ try {
     await page.evaluate(language => window.__fixture.patch({ language }), language);
     const connection = language === 'zh-CN' ? '连接与模型' : 'Connection & Models';
     const preferences = language === 'zh-CN' ? '偏好设置' : 'Preferences';
-    for (const [width, height] of [[1120, 720], [DEFAULT_WINDOW_STATE.bounds.width, DEFAULT_WINDOW_STATE.bounds.height], [MIN_WINDOW_BOUNDS.width, MIN_WINDOW_BOUNDS.height]]) {
+    for (const [width, height] of [[1120, 720], [DEFAULT_WINDOW_STATE.bounds.width, DEFAULT_WINDOW_STATE.bounds.height], [MIN_WINDOW_BOUNDS.width + 2, MIN_WINDOW_BOUNDS.height + 2], [MIN_WINDOW_BOUNDS.width, MIN_WINDOW_BOUNDS.height]]) {
       const layout = await resize(width, height);
       check(`${language}/${width}: sidebar stays open`, layout.sidebarWidth > 200);
       if (sizingOnly) {

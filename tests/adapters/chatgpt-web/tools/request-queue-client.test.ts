@@ -6,13 +6,42 @@ import { join, dirname, basename, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { withQueuedRequest, waitForSendPermit, queueRequest } from "../../../../src/browser/request-queue-client";
+import { withQueuedRequest, waitForSendPermit, queueRequest, NativeQueueDelivery } from "../../../../src/browser/request-queue-client";
 import { ChatGptWebAdapterError } from "../../../../src/adapters/chatgpt-web/adapter-error";
 import { LAUNCHER_BROWSER_HOST_KIND, LAUNCHER_BROWSER_IDLE_URL } from "../../../../src/browser/launcher-client";
 
 const require = createRequire(import.meta.url);
 const { RequestQueue } = require("../../../../launcher/electron/runtime/request-queue.cjs");
 const { BrowserControlServer } = require("../../../../launcher/electron/control-server.cjs");
+
+test.each(["reject", "stall"])("delivery metadata %s is bounded, private and never resends or rejects the committed reply", async outcome => {
+  const records: DiagnosticRecord[] = [], actions: string[] = [];
+  const log = spyOn(console, "error").mockImplementation((line: unknown) => {
+    const record = parseDiagnosticLine(String(line)); if (record) records.push(record);
+  });
+  const delivery = new NativeQueueDelivery();
+  const transport = { async request<T>(action: string): Promise<T> {
+    actions.push(action);
+    if (action === "enqueue") return { record: { state: "preparing" }, secret: "PRIVATE_TICKET" } as T;
+    if (action === "native-delivery") {
+      if (outcome === "stall") return await new Promise<T>(() => {});
+      throw new Error("PRIVATE_ERROR PRIVATE_TICKET");
+    }
+    return {} as T;
+  } };
+  try {
+    expect(await delivery.run(() => withQueuedRequest({ descriptorPath: transport, traceId: "delivery_fixture",
+      job: { id: "a".repeat(64), groupId: "fixture", model: "gpt-6", mode: "native-tools", bytes: 0 },
+      execute: async () => "reply",
+    }))).toBe("reply");
+    await delivery.report("response_written");
+    expect(actions).toEqual(["enqueue", "settle", "native-delivery"]);
+    expect(records.at(-1)).toMatchObject({ event: "browser.native_delivery_update_failed",
+      detail: { category: "queue_metadata_unavailable", deliveryState: "response_written", queueId: "a".repeat(64),
+        outcome: outcome === "stall" ? "timeout" : "failed" } });
+    expect(JSON.stringify(records)).not.toContain("PRIVATE");
+  } finally { log.mockRestore(); }
+});
 
 test.each([false, true])("an execution AbortError records caller signal=%s without inventing cancellation", async signalled => {
   const records: DiagnosticRecord[] = [], settlements: any[] = [];

@@ -116,7 +116,7 @@ test("helper process loss fails immediately, independently of its stage timer", 
   await assert.rejects(lost.pending, /exited with status 17/);
 });
 
-test("launcher verification delegates exact connector selection to the browser helper protocol", async (context) => {
+for (const useSavedChats of [false, true]) test(`launcher verification delegates exact connector and chat-saving selection (saved=${useSavedChats})`, async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "codex-browser-helper-verify-"));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const script = path.join(root, "helper.cjs");
@@ -130,6 +130,7 @@ test("launcher verification delegates exact connector selection to the browser h
       if (message.type !== "verify") return;
       if (message.config.appName !== "Codex Native2") process.exit(2);
       if (message.config.browserHostDescriptorPath !== "/runtime/launcher-browser.json") process.exit(3);
+      if (message.config.useSavedChats !== ${useSavedChats}) process.exit(4);
       send({ type: "result", id: message.id, text: message.config.appName });
     });
   `);
@@ -138,6 +139,7 @@ test("launcher verification delegates exact connector selection to the browser h
     helper: { executable: process.execPath, script },
     descriptorPath: "/runtime/launcher-browser.json",
     appName: "Codex Native2",
+    useSavedChats,
     logger: { info() {} },
   });
 

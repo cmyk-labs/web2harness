@@ -618,7 +618,7 @@ export class ChatGptTurnSessions {
           && session.conversationKey() !== undefined
           && session.conversationKey() !== nextConversation.key);
         if (stale.length) {
-          // Native rounds have request keys, not a single turn key. Compaction, revised history
+          // Tool-capable rounds have request keys, not a single turn key. Compaction, revised history
           // or a model switch can start a different page while the old tool page is retained.
           // Keep response receipts replayable, but release the superseded physical surfaces.
           const retirement = Promise.all(stale.map(async session => {

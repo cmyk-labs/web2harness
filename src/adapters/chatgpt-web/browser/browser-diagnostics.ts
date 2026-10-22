@@ -18,6 +18,7 @@ import {
   CHATGPT_USER_TURN_SELECTOR,
 } from "../../../browser/session";
 import { withChatGptBrowserObservationTimeout } from "./turn-observation";
+import { chatGptModelFailureEvidence } from "./model-selection";
 
 export function redactChatGptUiDiagnostic(value: string): string {
   return value
@@ -193,7 +194,7 @@ export class ChatGptBrowserDiagnostics {
           const composers = [...document.querySelectorAll(composerSelector)].filter(rendered);
           const assistantTurns = [...document.querySelectorAll(assistantTurnSelector)].filter(rendered);
           const selectedConnectors = composers.flatMap(composer => (
-            [...composer.querySelectorAll('[data-id^="plugin:"][data-keyword], [app-mention-path^="app://"][app-mention-display-name][contenteditable="false"]')]
+            [...composer.querySelectorAll('[data-id^="plugin:"][data-keyword], [app-mention-path^="app://"][app-mention-display-name][contenteditable="false"], [plugin-mention-path^="plugin://"][plugin-mention-display-name][contenteditable="false"]')]
           ))
             .filter(rendered);
           const exactConnectorRows = [...document.querySelectorAll('.__menu-item[tabindex="0"], [data-mention-list-scroll-area] button[data-list-navigation-item="true"]')]
@@ -277,7 +278,8 @@ export class ChatGptBrowserDiagnostics {
                 : [],
               selectedConnectorCount: selectedConnectors.length,
               exactSelectedConnectorCount: selectedConnectors.filter(
-                element => (element.getAttribute("data-keyword") ?? element.getAttribute("app-mention-display-name")) === appName,
+                element => (element.getAttribute("data-keyword") ?? element.getAttribute("app-mention-display-name")
+                  ?? element.getAttribute("plugin-mention-display-name")) === appName,
               ).length,
             },
             focus: {
@@ -373,7 +375,9 @@ export class ChatGptBrowserDiagnostics {
       };
       atomicWriteFile(join(this.directory, `${stem}.json`), `${JSON.stringify(artifact, null, 2)}\n`);
       if (error !== undefined && diagnosticError(error).category !== "cancelled") {
-        const reference = persistChatGptResponseEvidence(this.root, artifact, "browser-failure.private.json");
+        const modelVerification = chatGptModelFailureEvidence(error);
+        const reference = persistChatGptResponseEvidence(this.root,
+          { ...artifact, ...(modelVerification ? { modelVerification } : {}) }, "browser-failure.private.json");
         console.info(`[chatgpt-web] browser failure retained trace=${this.traceId} reference=${reference}`);
       }
       if (Object.keys(captureErrors).length > 0) {

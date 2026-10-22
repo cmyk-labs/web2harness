@@ -11,6 +11,7 @@ import {
   resolveChatGptWebContextLimits,
 } from "../models/chatgpt-web-models";
 import type { AppConfig } from "../config";
+import { handoffProtocol } from "../../launcher/shared/handoff-protocol.cjs";
 import { parseRequest } from "../responses/parser";
 import { compactRequest, responseRequest, routeChatGptWebRequest } from "../server";
 import { namespacedToolName, type AdapterEvent, type CodexProviderConfig } from "../types";
@@ -599,6 +600,12 @@ export class DevChatDriver {
       solAvailable: this.config.solAvailable,
       extraHighAvailable: this.config.extraHighAvailable === true,
       proAvailable: this.config.proAvailable,
+    }, {
+      experimentalContextFiles: this.config.experimentalContextFiles,
+      experimentalSkillAttachments: this.config.experimentalSkillAttachments,
+      ...(this.config.mode === "mcp-bridge" ? {
+        toolBatchHandoff: true, handoffProtocol: handoffProtocol(this.config.mcpHandoffProtocol),
+      } : {}),
     });
     const limits = resolveChatGptWebContextLimits(route.backendModel, route.adapterEffort, this.config);
     const autoCompactTokenLimit = limits.autoCompactTokenLimit;

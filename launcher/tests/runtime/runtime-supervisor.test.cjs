@@ -33,6 +33,25 @@ function recoveryFixture() {
     browserDescriptorPath: path.join(__dirname, "unused-fixture-descriptor.json") });
 }
 
+test("launcher tunnel command preserves explicit v2 and legacy v1 without fallback", async () => {
+  const supervisor = recoveryFixture();
+  const config = { browserInteractionMode: "automatic", brokerSocketPath: "fixture-broker", tunnel: {
+    alias: "fixture", profileName: "fixture", profileDir: "fixture-profile", binaryPath: "fixture-client",
+    tunnelId: "fixture-tunnel", runtimeKeyFile: "fixture-key",
+  } };
+  supervisor.runtimeCommand = args => ({ executable: process.execPath, args, cwd: __dirname });
+  let command;
+  supervisor.runTunnelCommand = async (_config, args) => {
+    command = args[args.indexOf("--mcp-command") + 1];
+    return { code: 0 };
+  };
+  await supervisor.runTunnelConnectCommand(config);
+  assert.ok(command.includes('"web2harness-handoff-v1"'));
+  await supervisor.runTunnelConnectCommand({ ...config, mcpHandoffProtocol: "web2harness-handoff-v2" });
+  assert.ok(command.includes('"web2harness-handoff-v2"'));
+  await assert.rejects(supervisor.runTunnelConnectCommand({ ...config, mcpHandoffProtocol: "latest" }), /Unsupported/);
+});
+
 test("daemon shutdown waits independently for every socket and browser cleanup owner", async t => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
   t.mock.method(performance, "now", () => Date.now());
@@ -271,6 +290,12 @@ test("launcher runtime ownership cannot cross production and DEV profiles", () =
     () => validateConfig({ ...production, subagentProtocol: "v0" }, descriptorPath),
     /invalid subagent protocol/,
   );
+  assert.throws(
+    () => validateConfig({ ...production, mcpHandoffProtocol: "latest" }, descriptorPath),
+    /Unsupported MCP handoff protocol/,
+  );
+  assert.equal(validateConfig({ ...production, mcpHandoffProtocol: "web2harness-handoff-v2" }, descriptorPath).mcpHandoffProtocol,
+    "web2harness-handoff-v2");
   assert.throws(
     () => validateConfig({ ...production, stallTimeoutSec: 0 }, descriptorPath),
     /invalid stallTimeoutSec/,
@@ -865,7 +890,8 @@ test("tunnel readiness accepts the official tmux status without inventing a PID"
     });
     assert.equal(health.ready, true);
     assert.equal(health.pid, null);
-    await supervisor.waitForTunnel({ tunnel: { alias: "web2harness" } }, 1);
+    // This asserts the official readiness shape, not a one-millisecond scheduler deadline.
+    await supervisor.waitForTunnel({ tunnel: { alias: "web2harness" } }, 1_000);
     assert.equal(supervisor.tunnel?.managed, true);
     assert.equal(supervisor.tunnel?.pid, null);
   } finally {
@@ -2240,6 +2266,12 @@ server.listen(config.port, config.host);
     const started = await supervisor.startIfConfigured();
     assert.equal(started.status, "ready");
     assert.notEqual(started.daemonPid, stale.pid);
+    // The old process can release its port before Node delivers its exit event.
+    if (stale.exitCode === null && !stale.killed) await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { stale.removeListener("exit", exited); reject(new Error("Owned stale fixture did not exit")); }, 5_000);
+      const exited = () => { clearTimeout(timer); resolve(); };
+      stale.once("exit", exited);
+    });
     assert.equal(stale.exitCode !== null || stale.killed, true);
   } finally {
     await supervisor.stopForSetup().catch(() => {});

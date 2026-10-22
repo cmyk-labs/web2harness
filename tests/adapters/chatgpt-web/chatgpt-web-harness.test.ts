@@ -25,6 +25,7 @@ import { chatGptReadOnlyContextWarning, compileChatGptWebPrompt, withoutSupersed
 import { MAX_CHATGPT_WEB_TURN_RETRIES } from "../../../src/adapters/chatgpt-web/retry-policy";
 import { ChatGptTextFeed, ChatGptTraceFeed, ChatGptTurnSessions, chatGptCompactionSourceExecutionKey, chatGptInstructionLineage, chatGptThreadOwnershipKey, chatGptTurnExecutionKey, chatGptTurnSessions } from "../../../src/adapters/chatgpt-web/tools/turn-execution";
 import { callTurnBroker, TurnBroker, type BrokerToolResult } from "../../../src/adapters/chatgpt-web/tools/turn-broker";
+import { HandoffDeliveryJournal } from "../../../src/adapters/chatgpt-web/tools/handoff-delivery-journal";
 import { ChatGptExternalTurnProgress, ChatGptMirroredTurnProgress, chatGptExternalProgressIsLive, chatGptExternalToolCallsAreInFlight } from "../../../src/adapters/chatgpt-web/tools/turn-progress";
 import { CHATGPT_WEB_MCP_INVOCATION_TIMEOUT_MS, chatGptMcpInvocationTimeout } from "../../../src/adapters/chatgpt-web/tools/mcp-server";
 import { defaultBrokerEndpoint } from "../../../src/config";
@@ -392,6 +393,54 @@ describe("ChatGPT outer-native harness v4", () => {
     } finally {
       (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = originalRun;
       await TurnBroker.forSocket(socketPath).close();
+    }
+  });
+
+  test.each(["mcp", "manual", "native", "fresh-mcp"])("%s admission retires superseded conversation epochs", async kind => {
+    const provider: CodexProviderConfig = {
+      adapter: "chatgpt-web",
+      baseUrl: `browser://retention-admission-${kind}`,
+      chatgptWeb: {
+        ...toolCapabilities,
+        localToolsEnabled: kind !== "native",
+        nativeToolsEnabled: kind === "native",
+        browserInteractionMode: kind === "manual" ? "manual" : "automatic",
+        browserHost: "launcher",
+        browserHostDescriptorPath: join(tempRoot, `admission-${kind}.json`),
+        runtimeParameters: DEFAULT_RUNTIME_PARAMETERS,
+        experimentalFreshConversationPerTurn: kind === "fresh-mcp",
+        brokerSocketPath: brokerTestEndpoint(`retention-admission-${kind}-${process.pid}`),
+      },
+    };
+    const request = rawWireRequest(environmentXml);
+    if (kind === "manual") request.modelId = "chatgpt-web-zero-risk";
+    const sessions = new ChatGptTurnSessions();
+    const owner = `${chatGptWebExecutionNamespace(provider)}:${chatGptThreadOwnershipKey(request)}`;
+    let released = 0;
+    const old = sessions.getOrCreate("old-request", () => ({
+      mode: "read-only", browser: Promise.resolve("old tool reply"),
+      physicalSettlement: Promise.resolve(), conversationKey: "old-epoch",
+      trace: new ChatGptTraceFeed(), text: new ChatGptTextFeed(), cancel() {},
+      releaseRetainedTurn: async () => { released += 1; },
+    }), "old-trace", owner);
+    await old.physicalSettlement;
+    const admission = spyOn(chatGptTurnSessions, "getOrCreateAfterOwnerRetirement").mockImplementation(
+      (key, ownerKey, _start, ...rest) => sessions.getOrCreateAfterOwnerRetirement(key, ownerKey, () => {
+        // Stop before any browser I/O, after the real admission/retirement boundary.
+        throw new Error("retention admission observed");
+      }, ...rest),
+    );
+    try {
+      await expect(createChatGptWebAdapter(provider).runTurn!(request, { headers: new Headers() }, () => {}))
+        .rejects.toThrow("retention admission observed");
+      expect(admission).toHaveBeenCalledTimes(1);
+      expect(released).toBe(1);
+      expect(old.conversationKey()).toBeUndefined();
+      expect(sessions.find("old-request")).toBe(old);
+      expect(old.settledOutcome()).toEqual({ type: "final", answer: "old tool reply" });
+    } finally {
+      admission.mockRestore();
+      sessions.clear();
     }
   });
 
@@ -3243,6 +3292,46 @@ describe("ChatGPT outer-native harness v4", () => {
       }
       expect(runs).toBe(1);
     } finally { worker.run = originalRun; chatGptTurnSessions.clear(); await broker.close(); }
+  });
+
+  test("automatic MCP journal I/O failure retains its safe cause across a changed reconnect body", async () => {
+    const socketPath = brokerTestEndpoint("journal-io-" + Date.now());
+    const provider: CodexProviderConfig = { adapter: "chatgpt-web", baseUrl: "browser://journal-io-" + Date.now(),
+      chatgptWeb: { brokerSocketPath: socketPath, localToolsEnabled: true, solAvailable: true } };
+    const broker = TurnBroker.forSocket(socketPath), worker = ChatGptBrowserWorker.forProvider(provider), originalRun = worker.run.bind(worker);
+    let runs = 0;
+    const persist = spyOn(HandoffDeliveryJournal.prototype, "record").mockImplementation(() => {
+      throw new Error("ENOSPC: private-fixture-path");
+    });
+    worker.run = async turn => {
+      runs++;
+      const prepared = await turn.prepare();
+      try {
+        await turn.onSubmitted?.();
+        const token = prepared.text.match(/turn_token (turn_[A-Za-z0-9_-]+)/)?.[1]!;
+        await sealBrowserRound(socketPath, token, turn, [{ name: "exec_command", arguments: { cmd: "must not execute" } }]);
+        return "";
+      } finally { prepared.release(); }
+    };
+    try {
+      const adapter = createChatGptWebAdapter(provider, { broker }), input = rawWireRequest(environmentXml);
+      const first: AdapterEvent[] = [];
+      await adapter.runTurn!(input, { headers: new Headers() }, event => first.push(event));
+      const reconnect = structuredClone(input);
+      reconnect.context.messages.push({ role: "assistant", content: [{ type: "text", text: "Earlier progress" }], timestamp: 3 });
+      (reconnect._rawBody as { input: unknown[] }).input.push({ type: "message", role: "assistant", phase: "commentary",
+        content: [{ type: "output_text", text: "Earlier progress" }] });
+      const repeated: AdapterEvent[] = [];
+      await adapter.runTurn!(reconnect, { headers: new Headers() }, event => repeated.push(event));
+      expect(runs).toBe(1);
+      expect(persist).toHaveBeenCalledTimes(1);
+      for (const events of [first, repeated]) {
+        expect(events.at(-1)).toMatchObject({ type: "error", code: "handoff_delivery_unknown", retryable: false });
+        expect(events.some(event => event.type === "tool_call_start")).toBeFalse();
+        expect(JSON.stringify(events)).not.toContain("private-fixture-path");
+      }
+      expect(repeated.at(-1)).toEqual(first.at(-1));
+    } finally { persist.mockRestore(); worker.run = originalRun; chatGptTurnSessions.clear(); await broker.close(); }
   });
 
   test("a retired staged MCP batch cannot cross the adapter tool boundary", async () => {

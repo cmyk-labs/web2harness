@@ -4,11 +4,24 @@ import { diagnosticError, parseDiagnosticLine, safeDetail, type DiagnosticRecord
 import { ChatGptBrowserWorker } from "../src/adapters/chatgpt-web/browser/browser-worker";
 import { handoffRejectionDiagnostics } from "../src/adapters/chatgpt-web/tools/handoff-validation";
 
+test("send failure scope retains only its structural enum", () => {
+  expect(safeDetail({ sendFailureScope: "task" })).toEqual({ sendFailureScope: "task" });
+  expect(safeDetail({ sendFailureScope: "global" })).toEqual({ sendFailureScope: "global" });
+  expect(JSON.stringify(safeDetail({ sendFailureScope: "PRIVATE_SURFACE_OR_RESPONSE" }))).not.toContain("PRIVATE");
+});
+
 test("completion diagnostics retain only validated content-independent references", () => {
   expect(safeDetail({ sourceId: "a".repeat(64), roundRef: `diag-${"b".repeat(24)}`, state: "activity_in_flight", sealed: true }))
     .toEqual({ sourceId: "a".repeat(64), roundRef: `diag-${"b".repeat(24)}`, state: "activity_in_flight", sealed: true });
   const redacted = safeDetail({ sourceId: "PRIVATE_SOURCE", roundRef: "PRIVATE_ROUND", state: "PRIVATE_STATE" });
   expect(JSON.stringify(redacted)).not.toContain("PRIVATE");
+});
+
+test("model node identity diagnostics accept only generated UUIDs, never DOM identifiers or references", () => {
+  const id = crypto.randomUUID();
+  expect(safeDetail({ nodeId: id, itemId: id, menuId: id })).toEqual({ nodeId: id, itemId: id, menuId: id });
+  expect(JSON.stringify(safeDetail({ nodeId: "PRIVATE_NODE", itemId: "PRIVATE_ITEM", menuId: "PRIVATE_MENU",
+    reference: "PRIVATE_REFERENCE", text: "PRIVATE_TEXT" }))).not.toContain("PRIVATE");
 });
 
 test.each([false, true])("Send errors retain actionability reasons without DOM previews (ANSI=%s)", styled => {

@@ -13,6 +13,7 @@ import { CURRENT_CONFIG_VERSION, migrateRuntimeConfig } from "../launcher/shared
 
 import { normalizeContextPreferences, type ContextPreferenceSources } from "../launcher/shared/context-preferences.cjs";
 import { normalizeContextWindows } from "../launcher/shared/context-budgets.cjs";
+import { handoffProtocol, type HandoffProtocol } from "../launcher/shared/handoff-protocol.cjs";
 
 export type RuntimeMode = "browser-only" | "native-tools" | "mcp-bridge";
 export type BrowserHostMode = "managed-chrome" | "launcher";
@@ -73,6 +74,8 @@ export interface AppConfig {
   releaseVersion: string;
   mode: RuntimeMode;
   subagentProtocol: SubagentProtocol;
+  /** Explicit MCP contract; absent legacy configurations remain v1. */
+  mcpHandoffProtocol?: HandoffProtocol;
   host: "127.0.0.1";
   port: number;
   contextWindow: number;
@@ -401,6 +404,7 @@ function parseConfig(value: unknown, path: string): AppConfig {
     throw new Error(`Invalid browserHost in ${path}`);
   }
   const browserInteractionMode = parsed.browserInteractionMode ?? "automatic";
+  handoffProtocol(parsed.mcpHandoffProtocol);
   if (browserInteractionMode !== "automatic" && browserInteractionMode !== "manual") {
     throw new Error(`Invalid browserInteractionMode in ${path}`);
   }
@@ -620,6 +624,7 @@ export function providerConfig(config: AppConfig): CodexProviderConfig {
     ),
     noReasoningModels: [],
     chatgptWeb: {
+      mcpHandoffProtocol: handoffProtocol(config.mcpHandoffProtocol),
       appName: manual ? config.manualAppName : config.automaticAppName,
       ...(config.mode === "mcp-bridge" && config.tunnel ? { mcpTunnelId: config.tunnel.tunnelId } : {}),
       browserInteractionMode: config.browserInteractionMode,

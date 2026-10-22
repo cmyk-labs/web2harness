@@ -1357,6 +1357,15 @@ test("selected connector identity does not depend on its visible pill text", asy
   expect(await selected(powerPill.replace('contenteditable="false"', 'contenteditable="true"'))).toBeFalse();
   expect(await selected(powerPill.replace('app-mention-display-name="Codex Native2"', 'app-mention-display-name="Other"'))).toBeFalse();
   await expect(selected(pill + powerPill)).rejects.toThrow("duplicate");
+  // Observed 2026-10-22: installed MCP apps are represented as plugin mentions.
+  const pluginPill = '<span plugin-mention-path="plugin://fixture@openai-curated-remote" plugin-mention-display-name="Codex Native2" contenteditable="false">表示名</span>';
+  expect(await selected(pluginPill)).toBeTrue();
+  expect(await selected(pluginPill.replace('plugin://', 'https://'))).toBeFalse();
+  expect(await selected(pluginPill.replace('contenteditable="false"', 'contenteditable="true"'))).toBeFalse();
+  expect(await selected(pluginPill.replace('plugin-mention-display-name="Codex Native2"', 'plugin-mention-display-name="Other"'))).toBeFalse();
+  expect(await selected(pluginPill.replace('<span ', '<span hidden '))).toBeFalse();
+  await expect(selected(pill + pluginPill)).rejects.toThrow("duplicate");
+  await expect(selected(powerPill + pluginPill)).rejects.toThrow("duplicate");
 });
 
 test("connector selection re-resolves the active composer after ChatGPT replaces it", async () => {
@@ -1770,7 +1779,7 @@ for (const captureScreenshots of [false, true]) test(`connector failure persists
   }
 });
 
-test("successful connector verification clears the proven selection before releasing the page", async () => {
+for (const useSavedChats of [false, true]) test(`connector verification preserves chat-saving choice and clears selection (saved=${useSavedChats})`, async () => {
   const diagnosticsRoot = mkdtempSync(join(tmpdir(), "cgw-connector-verification-success-"));
   const calls: string[] = [];
   const page = {
@@ -1786,9 +1795,10 @@ test("successful connector verification clears the proven selection before relea
 
   try {
     const result = await verifyConnectorExclusive.call({
-      config: { appName: "Codex Native2 DEV", browserDiagnosticsPath: diagnosticsRoot },
+      config: { appName: "Codex Native2 DEV", browserDiagnosticsPath: diagnosticsRoot, useSavedChats },
       ensurePage: async () => page,
-      prepareChatSurface: async (_page: unknown, capture: (checkpoint: string) => Promise<void>) => {
+      prepareChatSurface: async (_page: unknown, capture: (checkpoint: string) => Promise<void>, saved: boolean) => {
+        expect(saved).toBe(useSavedChats);
         calls.push("prepare");
         await capture("composer-ready");
       },
@@ -2716,6 +2726,15 @@ test("submission acceptance reports a rate-limit dialog that appears after Enter
   expect(fixture.pressed).toEqual(["Enter"]);
 });
 
+test("acceptance observed during input reports rate limits without pressing a modal button", async () => {
+  const fixture = dialogPage("Too many requests. You're making requests too quickly.");
+  const stop = new AbortController();
+  await expect((ChatGptBrowserWorker.prototype as any).waitForSubmissionAccepted.call(
+    {}, fixture.page, {}, undefined, undefined, 0, undefined, undefined, stop.signal,
+  )).rejects.toMatchObject({ status: 429, code: "rate_limit_exceeded" });
+  expect(fixture.pressed).toEqual([]);
+});
+
 test("prompt attachment reports a rate-limit modal before editing the composer", async () => {
   const fixture = dialogPage("Too many requests. You're making requests too quickly.");
   const attach = (ChatGptBrowserWorker.prototype as unknown as {
@@ -3196,8 +3215,10 @@ test("unrelated ChatGPT alerts are not terminal", async () => {
 
 function toolConfirmationPage(options: {
   disappearAfterReads?: number;
-  surface?: "dialog" | "card";
-  allowLabel?: "Allow once" | "Allow";
+  surface?: "dialog" | "card" | "codex-card";
+  allowLabel?: "Allow once" | "Allow" | "允许一次";
+  chinese?: boolean;
+  foreign?: boolean;
 } = {}): {
   page: Page;
   pressed: string[];
@@ -3205,7 +3226,7 @@ function toolConfirmationPage(options: {
   let reads = 0;
   let visible = true;
   const pressed: string[] = [];
-  const availableButtons = [options.allowLabel ?? "Allow once", "Deny"] as const;
+  const availableButtons = ["Always allow", "始终允许", options.allowLabel ?? "Allow once", options.chinese ? "拒绝" : "Deny"] as const;
   const button = (name: string | RegExp) => {
     const actualName = availableButtons.find(candidate => (
       typeof name === "string" ? candidate === name : name.test(candidate)
@@ -3223,8 +3244,9 @@ function toolConfirmationPage(options: {
     };
   };
   const dialog = {
-    filter: ({ hasText }: { hasText: string }) => {
-      expect(hasText).toBe("Allow ChatGPT to use Codex Native?");
+    filter: ({ hasText }: { hasText: RegExp }) => {
+      const app = options.foreign ? "Codex Native Other" : "Codex Native";
+      visible = hasText.test(options.chinese ? `允许 ChatGPT 使用 ${app}？` : `Allow ChatGPT to use ${app}?`);
       return dialog;
     },
     last: () => dialog,
@@ -3239,7 +3261,7 @@ function toolConfirmationPage(options: {
       expect(visible).toBeFalse();
     },
   };
-  const surfaceSelector = options.surface === "card"
+  const surfaceSelector = options.surface === "codex-card" ? '[data-codex-approval-surface="true"]' : options.surface === "card"
     ? '[data-testid="tool-approval-card"]'
     : '[role="dialog"]';
   const hiddenDialog = {
@@ -3290,6 +3312,27 @@ test("auto-approval recognizes the observed non-dialog approval card", async () 
 
   expect(await resolveChatGptToolConfirmation(fixture.page, "Codex Native", true)).toBeTrue();
   expect(fixture.pressed).toEqual(["Allow once:Enter"]);
+});
+
+test("Chinese codex approval cards pause without granting permissions", async () => {
+  const fixture = toolConfirmationPage({ surface: "codex-card", chinese: true, disappearAfterReads: 3 });
+  expect(await resolveChatGptToolConfirmation(fixture.page, "Codex Native", false, undefined, 100)).toBeTrue();
+  expect(fixture.pressed).toEqual([]);
+});
+
+test("Chinese approval expiry denies only that request", async () => {
+  const fixture = toolConfirmationPage({ surface: "codex-card", chinese: true });
+  expect(await resolveChatGptToolConfirmation(fixture.page, "Codex Native", false, undefined, 2)).toBeTrue();
+  expect(fixture.pressed).toEqual(["拒绝:Enter"]);
+});
+
+test("opt-in approval never selects persistent permission and ignores another connector", async () => {
+  const fixture = toolConfirmationPage({ surface: "codex-card", chinese: true, allowLabel: "允许一次" });
+  expect(await resolveChatGptToolConfirmation(fixture.page, "Codex Native", true)).toBeTrue();
+  expect(fixture.pressed).toEqual(["允许一次:Enter"]);
+  const foreign = toolConfirmationPage({ surface: "codex-card", chinese: true, foreign: true });
+  expect(await resolveChatGptToolConfirmation(foreign.page, "Codex Native", true)).toBeFalse();
+  expect(foreign.pressed).toEqual([]);
 });
 
 test("browser preflight separates model context from one-message transport limits", () => {

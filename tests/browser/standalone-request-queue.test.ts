@@ -40,6 +40,38 @@ async function child(profile: string, action: string) {
   return { exit, stdout, stderr };
 }
 
+test("local standalone ownership isolates one settled-input send without releasing its page slot", async () => {
+  const { profile } = await fixture(), queue = await StandaloneRequestQueue.open(profile);
+  let released = false;
+  try {
+    await queue.updateSettings({ ...settings, maxConcurrent: 2 });
+    const first = await admit(queue, "isolated"), sibling = await admit(queue, "sibling"), waiting = await admit(queue, "waiting");
+    await queue.holdResource(first, () => released);
+    const permit = (await queue.request<{ permit: string }>("send-begin", first)).permit;
+    await queue.request("send-end", { ...first, permit, outcome: "unknown", isolation: { version: 1, inputSettled: true, helperPid: process.pid } });
+    expect(queue.snapshot()).toMatchObject({ active: 2, waiting: 1, pausedReason: null });
+    expect((await queue.request<{ record: QueueRecord }>("poll", first)).record.sendFailureScope).toBe("task");
+    expect((await queue.request<{ record: QueueRecord }>("poll", sibling)).record.state).toBe("preparing");
+    released = true;
+    await queue.request("settle", { ...first, outcome: "failed", reason: "chatgpt_send_outcome_unknown" });
+    expect((await queue.request<{ record: QueueRecord }>("poll", waiting)).record.state).toBe("preparing");
+  } finally { released = true; await queue.close(); }
+});
+
+test("standalone uncertainty without a unique live local resource remains global", async () => {
+  for (const guards of [0, 2]) {
+    const { profile } = await fixture(), queue = await StandaloneRequestQueue.open(profile);
+    let released = false;
+    try {
+      const first = await admit(queue, "unproven");
+      for (let i = 0; i < guards; i++) await queue.holdResource(first, () => released);
+      const permit = (await queue.request<{ permit: string }>("send-begin", first)).permit;
+      await queue.request("send-end", { ...first, permit, outcome: "unknown", isolation: { version: 1, inputSettled: true, helperPid: process.pid } });
+      expect(queue.snapshot().pausedReason).toBe("send_outcome_unknown");
+    } finally { released = true; await queue.close(); }
+  }
+});
+
 test("canonical profile host is shared and another process cannot create a second pool", async () => {
   const { profile } = await fixture();
   const first = await getStandaloneRequestQueue(profile);

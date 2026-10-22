@@ -5,6 +5,9 @@ const root = path.resolve(__dirname, "..");
 const vitePackage = require.resolve("vite/package.json", { paths: [root] });
 const viteBin = path.join(path.dirname(vitePackage), "bin", "vite.js");
 const electronBin = require("electron");
+// Preparation uses the normal dependency entry points, but starts no application,
+// helper, or server. Its failure must reach dev:launcher before readiness polling.
+if (process.argv.includes("--prepare")) process.exit(0);
 const bun = process.env.WEB2HARNESS_BUN || process.execPath;
 
 const helperBuild = spawnSync(bun, ["run", "scripts/build-browser-helper.ts"], {

@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { estimateChatGptWebInputTokens } from "../../../src/adapters/chatgpt-web/usage";
+import { estimateChatGptWebInputTokens, estimateChatGptWebUsage } from "../../../src/adapters/chatgpt-web/usage";
+import { HANDOFF_V1, HANDOFF_V2 } from "../../../launcher/shared/handoff-protocol.cjs";
+import { CHATGPT_WEB_ZERO_RISK_BACKEND_MODEL } from "../../../src/models/chatgpt-web-models";
 import { compileChatGptWebPrompt } from "../../../src/adapters/chatgpt-web/prompt/compile";
 import { compiledChatGptWebMessages, estimateCompiledChatGptWebInputTokens, estimateCompiledChatGptWebMessageTokens } from "../../../src/adapters/chatgpt-web/prompt/input-tokens";
 import { assertChatGptWebInputWithinLimits } from "../../../src/adapters/chatgpt-web/browser/browser-worker";
@@ -8,6 +10,19 @@ import { resolveChatGptWebContextLimits, resolveChatGptWebTransportLimits } from
 import type { CodexParsedRequest } from "../../../src/types";
 
 const capabilities = { localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: true };
+
+for (const protocol of [HANDOFF_V1, HANDOFF_V2]) for (const manual of [false, true]) {
+  test(`usage includes the selected ${protocol} contract and ${manual ? "request" : "turn"} binding shape`, () => {
+    const parsed = request("Read the fixture and preserve its contents.");
+    if (manual) parsed.modelId = CHATGPT_WEB_ZERO_RISK_BACKEND_MODEL;
+    const caps = { ...capabilities, localToolsEnabled: true };
+    const compiled = compileChatGptWebPrompt(parsed, caps, `${manual ? "request" : "turn"}_${"0".repeat(48)}`,
+      { toolBatchHandoff: true, handoffProtocol: protocol, ...(manual ? { manualControl: true as const } : {}) });
+    const usage = estimateChatGptWebUsage(parsed, { answer: "done" }, caps, false, false, protocol);
+    expect(usage.inputTokens).toBe(estimateCompiledChatGptWebInputTokens(compiled, parsed.modelId));
+    expect(usage.estimated).toBeTrue();
+  });
+}
 
 function request(text: string): CodexParsedRequest {
   return {

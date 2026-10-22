@@ -8,7 +8,7 @@ import { ChatGptWebAdapterError } from "../../../../src/adapters/chatgpt-web/ada
 
 // Exercise the complete worker's send boundary with deterministic page/queue transports.
 // Browser readiness and answer extraction have their own DOM tests; these are not live sends.
-test.each(["preflight-failed", "ready-changed", "unknown", "confirmed", "duplicate-ack", "click-failed", "click-failed-accepted"])(
+test.each(["preflight-failed", "ready-changed", "unknown", "confirmed", "duplicate-ack", "click-failed", "click-failed-accepted", "native-unknown", "native-disconnected", "native-account-cause", "native-observation-lost", "native-http-denied"])(
   "send lifecycle keeps model verification outside acknowledgement and settles %s accurately", async scenario => {
     const root = mkdtempSync(join(tmpdir(), "web2harness-send-lifecycle-"));
     try {
@@ -17,18 +17,33 @@ test.each(["preflight-failed", "ready-changed", "unknown", "confirmed", "duplica
           extraHighAvailable: true, proAvailable: false, storageStatePath: join(root, "auth.json"),
           browserDiagnosticsPath: join(root, "diagnostics") } });
       const order: string[] = [], settlements: any[] = [], stages: Array<[string, number | undefined]> = [];
+      const isUnknown = ["unknown", "click-failed", "native-unknown", "native-disconnected", "native-account-cause", "native-observation-lost", "native-http-denied"].includes(scenario);
       let inputs = 0, activated = 0, released = 0;
       const absent: any = { filter() { return this; }, last() { return this; }, isVisible: async () => false };
+      const sourceSession = Object.assign(new EventEmitter(), { detach: async () => {},
+        send: async (method: string) => method === "Page.getFrameTree" ? { frameTree: { frame: { id: "fixture-frame" } } } : {} });
       const page: any = Object.assign(new EventEmitter(), { isClosed: () => false,
         url: () => "https://chatgpt.com/?temporary-chat=true", evaluate: async () => ({}),
-        locator: () => absent, context: () => ({ newCDPSession: async () => { throw Error("fixture has no CDP"); } }) });
+        locator: () => absent, context: () => ({ browser: () => ({ isConnected: () => scenario !== "native-disconnected" }),
+          newCDPSession: async () => {
+            if (!scenario.startsWith("native-") || scenario === "native-observation-lost") throw Error("fixture has no CDP");
+            return sourceSession;
+          } }) });
       const clickFailure = new Error("fixture click failed after possible input");
       const button = { waitFor: async () => {}, isEnabled: async () => true,
         click: async (options: { trial?: boolean }) => {
           if (options.trial) { order.push("trial"); return; }
           inputs++; order.push("input"); if (scenario.startsWith("click-failed")) throw clickFailure;
+          if (scenario === "native-http-denied") {
+            sourceSession.emit("Network.requestWillBeSent", { requestId: "fixture-request", frameId: "fixture-frame", request: {
+              method: "POST", url: "https://chatgpt.com/backend-api/conversation", postData: JSON.stringify({ action: "next",
+                messages: [{ id: "fixture-user", author: { role: "user" }, content: { parts: ["Synthetic input"] } }] }),
+            } });
+            sourceSession.emit("Network.responseReceived", { requestId: "fixture-request", response: { status: 401 } });
+          }
         } };
-      const composer = { locator: () => ({ locator: () => button }) };
+      const composer = { locator: () => ({ locator: () => button }), press: async () => { inputs++; order.push("enter"); } };
+      worker.currentSubmissionEvidence = async () => scenario === "click-failed-accepted" && inputs > 0 ? "user_turn" : undefined;
       worker.activeComposer = async () => composer;
       worker.prepareChatSurface = async () => composer;
       worker.selectModelAndEffort = async () => ({ effort: "xhigh", localTools: false });
@@ -45,9 +60,13 @@ test.each(["preflight-failed", "ready-changed", "unknown", "confirmed", "duplica
         order.push(family ? "family" : "ready");
         if (scenario === "preflight-failed" && family || scenario === "ready-changed" && !family) throw selectionFailure;
       };
-      const unknown = new Error("submission not confirmed");
+      const unknown = new Error("submission not confirmed", scenario === "native-account-cause" ? {
+        cause: new ChatGptWebAdapterError("account limit observed before a later local error", {
+          status: 429, errorType: "rate_limit_error", code: "rate_limit_exceeded", retryable: false,
+        }),
+      } : undefined);
       worker.waitForSubmissionAcceptedWithRecovery = async () => {
-        if (scenario === "unknown" || scenario === "click-failed") throw unknown;
+        if (isUnknown) throw unknown;
         order.push("accepted"); return "user_turn";
       };
       const extractionBoundary = new Error("fixture stops after confirmed send");
@@ -64,10 +83,11 @@ test.each(["preflight-failed", "ready-changed", "unknown", "confirmed", "duplica
       const attempt = worker.runBrowserTurnObserved({ traceId: `send-${scenario}`, modelId: "gpt-5.6-sol",
         reasoning: "xhigh", capabilities: { localToolsEnabled: false, solAvailable: true, extraHighAvailable: true, proAvailable: false },
         queueTicket: { id: "owned-task", secret: "fixture-secret" },
+        ...(scenario.startsWith("native-") ? { nativeToolDefinitions: [] } : {}),
         prepare: async () => ({ text: "Synthetic input", images: [], release() { released++; } }),
         onSendActivated: async () => { activated++; order.push("activated"); },
       }, undefined, page);
-      if (scenario === "unknown" || scenario === "click-failed") {
+      if (isUnknown) {
         await expect(attempt).rejects.toMatchObject({ code: "chatgpt_send_outcome_unknown", retryable: false });
         if (scenario === "click-failed") {
           const failure = await attempt.catch((error: any) => error);
@@ -79,10 +99,11 @@ test.each(["preflight-failed", "ready-changed", "unknown", "confirmed", "duplica
         scenario === "preflight-failed" || scenario === "ready-changed" ? selectionFailure
           : extractionBoundary);
       const unsent = scenario === "preflight-failed" || scenario === "ready-changed";
-      expect(inputs).toBe(unsent ? 0 : 1);
+      expect(inputs).toBe(unsent ? 0 : isUnknown ? 2 : 1);
       expect(activated).toBe(unsent ? 0 : 1);
       expect(settlements).toEqual(scenario === "preflight-failed" ? [] : [{ id: "owned-task", secret: "fixture-secret", permit: "owned-permit",
-        outcome: unsent ? "not-sent" : ["unknown", "click-failed"].includes(scenario) ? "unknown" : "confirmed" }]);
+        outcome: unsent ? "not-sent" : isUnknown ? "unknown" : "confirmed",
+        ...(scenario === "native-unknown" ? { isolation: { version: 1, inputSettled: true, helperPid: process.pid } } : {}) }]);
       expect(stages).toContainEqual(["send_preflight", undefined]);
       if (scenario !== "preflight-failed") expect(stages).toContainEqual(["send", undefined]);
       if (!unsent) expect(order.slice(0, 6)).toEqual(["family", "trial", "permit", "ready", "activated", "input"]);
@@ -94,7 +115,7 @@ test.each(["preflight-failed", "ready-changed", "unknown", "confirmed", "duplica
       }
       rmSync(root, { recursive: true, force: true });
     }
-  },
+  }, 40_000, // An intact source performs the production 30-second read-only reconciliation.
 );
 
 test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate-request", "cancelled", "disconnected", "delayed-source", "delayed-cancel", "consumer-failed", "complete-dom", "foreign-dom", "delayed-dom-source", "partial-dom", "no-final", "saved-no-final", "saved-recovered", "progress-source", "progress-dom", "progress-cancel", "progress-consumer"])("worker handles an identity-bound %s source without relying on a rendered answer", async state => {
@@ -154,7 +175,7 @@ test.each(["complete", "incomplete", "late-accepted", "late-timeout", "duplicate
         sessions.push(session); return session;
       } }) });
     let prompt = "", presses = 0;
-    const composer = { locator: () => ({ locator: () => ({ waitFor: async () => {}, isEnabled: async () => true, click: async (options: { trial?: boolean }) => {
+    const composer = { press: async () => {}, locator: () => ({ locator: () => ({ waitFor: async () => {}, isEnabled: async () => true, click: async (options: { trial?: boolean }) => {
       if (options.trial) return;
       presses++;
       const emitAcceptance = () => { for (const session of sessions) {

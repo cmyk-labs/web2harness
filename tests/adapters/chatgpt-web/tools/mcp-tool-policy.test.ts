@@ -15,3 +15,14 @@ test("manual visibility excludes app-prefixed bridge methods and their namespace
   expect(safeVisibleTools(environment, "safe")).toEqual(tools.slice(4));
   expect(safeVisibleTools(environment, "native")).toBe(tools);
 });
+
+test("manual visibility excludes v2 submission methods and their connector namespaces", () => {
+  const tools = [
+    { name: "_codex_submit_tool_call_v2", namespace: "v2_single" },
+    { name: "another_method", namespace: "v2_single" },
+    { name: "codex_submit_tool_batch_v2", namespace: "v2_batch" },
+    { name: "another_method", namespace: "v2_batch" },
+    { name: "_read_file", namespace: "unrelated" },
+  ].map(identity => ({ ...identity, description: "fixture", parameters: {} }));
+  expect(safeVisibleTools({ tools } as ChatGptTurnEnvironment, "safe")).toEqual(tools.slice(4));
+});

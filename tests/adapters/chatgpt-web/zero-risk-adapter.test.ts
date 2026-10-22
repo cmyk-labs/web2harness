@@ -1,6 +1,6 @@
 import { toolIdentityKey } from "../../../src/types";
 import { afterAll, expect, spyOn, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -119,6 +119,67 @@ async function provider(name: string): Promise<CodexProviderConfig> {
 function noManualTerminal(): Promise<never> {
   return new Promise<never>(() => {});
 }
+
+test("Zero Risk journal failure stays terminal when reconnect includes delivered commentary", async () => {
+  const config = await provider("journal-reconnect");
+  const socket = config.chatgptWeb!.brokerSocketPath!;
+  const broker = TurnBroker.forSocket(socket);
+  let token = "", starts = 0, newInstruction = false;
+  const partialReceipts: string[] = [];
+  const control: ChatGptZeroRiskManualControl = {
+    async waitFinished() {},
+    async start(_path, activity) { starts++; token = binding(activity.prompt).request_id; },
+    async waitSent() { broker.startSafeTurn(token); },
+    waitTerminal: noManualTerminal,
+    async markStarted() {
+      if (newInstruction) { await finishHandoff(broker, token, "New instruction completed"); return; }
+      const protocol = "web2harness-handoff-v1" as const;
+      const activityId = "activity_" + crypto.randomUUID().replaceAll("-", "");
+      const claim = await callTurnBroker<{ bindingId: string }>(socket, { method: "claim", token, contract: "safe", protocol, activityId });
+      const receipt = await callTurnBroker<{ batch_id: string; round_id: string }>(socket, {
+        method: "handoff_submit", bindingId: claim.bindingId, protocol, activityId,
+        submissionId: "journal-command", calls: [{ name: "exec_command", arguments: { cmd: "must not execute" } }],
+      });
+      const directory = join(root, "handoff-deliveries");
+      mkdirSync(directory, { recursive: true });
+      const path = join(directory, `${receipt.round_id}.json`);
+      writeFileSync(path, '{"incomplete":', { flag: "wx" });
+      partialReceipts.push(path);
+      await callTurnBroker(socket, { method: "handoff_yield", bindingId: claim.bindingId, protocol, activityId, batchId: receipt.batch_id });
+      await callTurnBroker(socket, { method: "activity_complete", token, activityId });
+    },
+    async end() {},
+    async cancel() {},
+  };
+  const adapter = createChatGptWebAdapter(config, { broker, zeroRiskManualControl: control });
+  const input = request("turn_journal_reconnect");
+  input.context.tools = [{ name: "exec_command", description: "Run a command", parameters: { type: "object" } }];
+  try {
+    const first: AdapterEvent[] = [];
+    await adapter.runTurn!(input, { headers: new Headers() }, event => first.push(event));
+    const reconnect = structuredClone(input);
+    const commentary = first.flatMap(event => event.type === "text_delta" && event.phase === "commentary" ? [event.text] : []).join("");
+    expect(commentary.length).toBeGreaterThan(0);
+    reconnect.context.messages.push({ role: "assistant", content: [{ type: "text", text: commentary }], timestamp: 3 });
+    (reconnect._rawBody as { input: unknown[] }).input.push({ type: "message", role: "assistant", phase: "commentary",
+      content: [{ type: "output_text", text: commentary }] });
+    const repeated: AdapterEvent[] = [];
+    await adapter.runTurn!(reconnect, { headers: new Headers() }, event => repeated.push(event));
+    expect(starts).toBe(1);
+    for (const events of [first, repeated]) {
+      expect(events.some(event => event.type === "tool_call_start")).toBeFalse();
+      expect(events.at(-1)).toMatchObject({ type: "error", code: "handoff_delivery_unknown", retryable: false });
+    }
+    expect(repeated.at(-1)).toEqual(first.at(-1));
+    expect(partialReceipts).toHaveLength(1);
+    expect(readFileSync(partialReceipts[0]!, "utf8")).toBe('{"incomplete":');
+    newInstruction = true;
+    const next: AdapterEvent[] = [];
+    await adapter.runTurn!(request("turn_after_journal_failure"), { headers: new Headers() }, event => next.push(event));
+    expect(starts).toBe(2);
+    expect(next.at(-1)).toMatchObject({ type: "done", endTurn: true });
+  } finally { chatGptTurnSessions.clear(); await broker.close(); }
+});
 
 for (const scenario of [
   { format: "v1", finalWins: false },

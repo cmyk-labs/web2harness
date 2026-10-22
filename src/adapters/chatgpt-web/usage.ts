@@ -10,10 +10,11 @@ import {
 } from "./prompt/compile";
 import { resolveChatGptWebModelMode, type ChatGptWebCapabilities } from "./model";
 import type { BrokerToolRequest } from "./tools/turn-broker";
+import type { HandoffProtocol } from "../../../launcher/shared/handoff-protocol.cjs";
 
-// The real capability has the same length. Keeping it out of usage accounting would make
-// estimates differ slightly between the prepared browser prompt and later Codex tool rounds.
-const ESTIMATE_TURN_TOKEN = "turn_00000000000000000000000000000000";
+// Match the host's 24-byte hex handle shape without reading a real capability. Token
+// counts remain estimates: random handle contents and platform processing can differ.
+const ESTIMATE_BINDING_SUFFIX = "0".repeat(48);
 
 export interface ChatGptWebRoundEvidence {
   answer?: string;
@@ -37,7 +38,7 @@ export function estimateChatGptWebInputTokens(
   const compiled = compileChatGptWebPrompt(
     parsed,
     capabilities,
-    mode.localTools ? ESTIMATE_TURN_TOKEN : undefined,
+    mode.localTools ? `${manual ? "request" : "turn"}_${ESTIMATE_BINDING_SUFFIX}` : undefined,
     {
       ...options,
       ...(manual ? { manualControl: true as const } : {}),
@@ -69,10 +70,12 @@ export function estimateChatGptWebUsage(
   capabilities: ChatGptWebCapabilities,
   experimentalContextFiles = false,
   experimentalSkillAttachments = false,
+  mcpHandoffProtocol?: HandoffProtocol,
 ): CodexUsage {
   const inputTokens = estimateChatGptWebInputTokens(parsed, capabilities, {
     experimentalSkillAttachments,
     experimentalContextFiles,
+    ...(mcpHandoffProtocol !== undefined ? { toolBatchHandoff: true, handoffProtocol: mcpHandoffProtocol } : {}),
   });
   const outputTokens = conservativeTextTokens(roundEvidenceText(evidence), parsed.modelId);
   return {

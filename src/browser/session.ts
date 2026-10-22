@@ -40,20 +40,26 @@ export async function readChatGptModelAnnouncements(slider: Locator): Promise<st
 
 /** Observe one picker revision without auto-waiting for a menu that may have closed. */
 export async function readChatGptModelSnapshot(slider: Locator) {
-  return slider.evaluateAll(elements => {
+  return slider.evaluateAll((elements, controlSelector) => {
     if (elements.length !== 1) return undefined;
     const element = elements[0]!;
     const doc = element.ownerDocument;
     // Ephemeral node identity detects remounts without writing DOM attributes or page text.
-    let controlId: string | undefined;
-    try {
-      const observedDoc = doc as Document & { __web2harnessModelControls?: WeakMap<Element, string> };
-      const controls = observedDoc.__web2harnessModelControls ??= new WeakMap<Element, string>();
-      controlId = controls.get(element);
-      if (!controlId) { controlId = crypto.randomUUID(); controls.set(element, controlId); }
-    } catch { /* Diagnostic identity is optional and cannot change model verification. */ }
-    const descriptions = (element.closest('[role="menuitem"]')?.getAttribute("aria-describedby") ?? "")
-      .split(/\s+/).filter(Boolean).map(id => doc.getElementById(id)?.textContent ?? "");
+    const nodeId = (node: Element | null): string | undefined => {
+      if (!node) return undefined;
+      try {
+        const observedDoc = doc as Document & { __web2harnessModelControls?: WeakMap<Element, string> };
+        const controls = observedDoc.__web2harnessModelControls ??= new WeakMap<Element, string>();
+        let id = controls.get(node);
+        if (!id) { id = crypto.randomUUID(); controls.set(node, id); }
+        return id;
+      } catch { return undefined; } // Optional diagnostic identity never changes verification.
+    };
+    const controlId = nodeId(element);
+    const item = element.closest('[role="menuitem"]');
+    const references = (item?.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
+    const descriptionNodes: (Element | null)[] = references.map(id => doc.getElementById(id));
+    const descriptions = descriptionNodes.map(node => node?.textContent ?? "");
     const descriptionSources = descriptions.map(() => "aria" as "aria" | "header");
     const menu = element.closest('[role="menu"]');
     const rendered = (node: Element): boolean => {
@@ -79,12 +85,34 @@ export async function readChatGptModelSnapshot(slider: Locator) {
       }
       descriptions.push(words.join(" "));
       descriptionSources.push("header");
+      descriptionNodes.push(headers[0]!);
     }
+    // Capture relationships from this same revision. Only a bounded private failure
+    // sample contains reference strings/text; ordinary diagnostics project predicates.
+    const descriptionEvidence = descriptions.slice(0, 8).map((text, index) => {
+      const node = descriptionNodes[index] ?? null;
+      return { source: descriptionSources[index]!, index, nodeId: nodeId(node), present: !!node,
+        connected: node?.isConnected ?? false, visible: !!node && rendered(node),
+        inMenu: !!menu && node?.closest('[role="menu"]') === menu,
+        textChars: text.length, text: text.slice(0, 512), truncated: text.length > 512,
+        ...(references[index] ? { reference: references[index]!.slice(0, 128) } : {}) };
+    });
+    const owners = [...doc.querySelectorAll(controlSelector)].filter(control => !!menu && (
+      !!menu.id && (control.getAttribute("aria-controls") ?? "").split(/\s+/).includes(menu.id)
+      || !!control.id && (menu.getAttribute("aria-labelledby") ?? "").split(/\s+/).includes(control.id)));
+    const language = doc.documentElement.lang.toLowerCase();
+    const relationships = { itemId: nodeId(item), menuId: nodeId(menu), ownerCount: owners.length,
+      menuPresent: !!menu, menuVisible: !!menu && rendered(menu),
+      owners: owners.slice(0, 4).map(owner => ({ nodeId: nodeId(owner), connected: owner.isConnected,
+        visible: rendered(owner), expanded: owner.getAttribute("aria-expanded") === "true",
+        closed: owner.getAttribute("aria-expanded") === "false" || owner.getAttribute("data-state") === "closed" })),
+      language: /^en(?:-|$)/.test(language) ? "en" : /^zh(?:-|$)/.test(language) ? "zh" : language ? "other" : "unknown" };
     return { descriptions, descriptionSources, controlId, headerCount: headers.length,
+      descriptionEvidence, relationships,
       connected: element.isConnected, visible: rendered(element), busy: menu?.getAttribute("aria-busy") === "true",
       min: element.getAttribute("aria-valuemin"),
       max: element.getAttribute("aria-valuemax"), value: element.getAttribute("aria-valuenow") };
-  });
+  }, CHATGPT_EFFORT_CONTROL_SELECTOR);
 }
 
 /** Resolve only inside the verified composer's form; multiple submitters are an error. */
@@ -175,9 +203,11 @@ async function waitForEffortSurface(
   page: Page,
   control: Locator,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<Omit<ChatGptEffortActivation, "method"> | undefined> {
   const deadline = Date.now() + timeoutMs;
   do {
+    signal?.throwIfAborted();
     const surface = await visibleEffortSurface(page, control);
     if (surface) return surface;
     if (Date.now() >= deadline) return undefined;
@@ -185,9 +215,10 @@ async function waitForEffortSurface(
   } while (true);
 }
 
-async function waitForEffortMenuOpen(page: Page, control: Locator, timeoutMs: number): Promise<boolean> {
+async function waitForEffortMenuOpen(page: Page, control: Locator, timeoutMs: number, signal?: AbortSignal): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   do {
+    signal?.throwIfAborted();
     const owner = await readEffortOwner(control);
     if (owner && owner.expanded !== "false" && owner.state !== "closed"
       && await effortMenuForOwner(page, owner).isVisible().catch(() => false)) return true;
@@ -196,9 +227,10 @@ async function waitForEffortMenuOpen(page: Page, control: Locator, timeoutMs: nu
   } while (true);
 }
 
-async function clearGhostEffortState(page: Page, control: Locator): Promise<void> {
+async function clearGhostEffortState(page: Page, control: Locator, signal?: AbortSignal): Promise<void> {
   const owner = await readEffortOwner(control);
   if (owner?.expanded === "true" || owner?.state === "open") {
+    signal?.throwIfAborted();
     await page.keyboard.press("Escape").catch(() => {});
   }
 }
@@ -206,30 +238,33 @@ async function clearGhostEffortState(page: Page, control: Locator): Promise<void
 export async function activateChatGptEffortMenu(
   page: Page,
   control: Locator,
-  options: { settleMs?: number } = {},
+  options: { settleMs?: number; signal?: AbortSignal } = {},
 ): Promise<ChatGptEffortActivation> {
+  options.signal?.throwIfAborted();
   const openSurface = await visibleEffortSurface(page, control);
   if (openSurface) return { method: "already-open", ...openSurface };
 
   const settleMs = options.settleMs ?? CHATGPT_MODEL_CONTROL_HYDRATION_MS;
   const menuSettleMs = options.settleMs ?? CHATGPT_MODEL_CONTROL_SETTLE_MS;
   const actionTimeout = options.settleMs === undefined ? CHATGPT_UI_ACTION_TIMEOUT_MS : Math.max(1, settleMs);
-  const waitForOpenedSurface = async () => await waitForEffortMenuOpen(page, control, menuSettleMs)
-    ? waitForEffortSurface(page, control, settleMs) : undefined;
-  await clearGhostEffortState(page, control);
+  const waitForOpenedSurface = async () => await waitForEffortMenuOpen(page, control, menuSettleMs, options.signal)
+    ? waitForEffortSurface(page, control, settleMs, options.signal) : undefined;
+  await clearGhostEffortState(page, control, options.signal);
   // This control opens an in-document menu. Its owned surface below proves readiness;
   // waiting for unrelated navigation can time out after the click already succeeded.
-  await control.click({ force: true, noWaitAfter: true, timeout: actionTimeout });
+  options.signal?.throwIfAborted();
+  await control.click({ force: true, noWaitAfter: true, timeout: actionTimeout, signal: options.signal });
   const clickedSurface = await waitForOpenedSurface();
   if (clickedSurface) return { method: "click", ...clickedSurface };
 
-  await clearGhostEffortState(page, control);
+  await clearGhostEffortState(page, control, options.signal);
+  options.signal?.throwIfAborted();
   await control.dispatchEvent("pointerdown", {
     button: 0,
     buttons: 1,
     pointerType: "mouse",
     isPrimary: true,
-  }, { timeout: actionTimeout });
+  }, { timeout: actionTimeout, signal: options.signal });
   const pointerSurface = await waitForOpenedSurface();
   if (pointerSurface) return { method: "pointerdown", ...pointerSurface };
   throw new Error(
@@ -241,8 +276,9 @@ export async function activateChatGptEffortMenu(
  * Retained Electron surfaces can ignore an unfocused Escape. A still-open owner may
  * be toggled through its own pointer handler; never toggle an already-closed picker. */
 export async function closeChatGptEffortMenu(
-  page: Page, control: Locator, options: { settleMs?: number } = {},
+  page: Page, control: Locator, options: { settleMs?: number; signal?: AbortSignal } = {},
 ): Promise<void> {
+  options.signal?.throwIfAborted();
   const settleMs = options.settleMs ?? CHATGPT_MODEL_CONTROL_SETTLE_MS;
   const closed = async () => {
     const owner = await readEffortOwner(control);
@@ -251,6 +287,7 @@ export async function closeChatGptEffortMenu(
   const waitClosed = async () => {
     const deadline = Date.now() + settleMs;
     do {
+      options.signal?.throwIfAborted();
       if (await closed()) return true;
       if (Date.now() >= deadline) return false;
       await new Promise(resolve => setTimeout(resolve, 50));
@@ -258,13 +295,15 @@ export async function closeChatGptEffortMenu(
   };
   if (await closed()) return;
   if ((await readEffortOwner(control))?.expanded !== "true") throw new Error("ChatGPT effort picker owner state is unavailable");
+  options.signal?.throwIfAborted();
   await page.keyboard.press("Escape");
   if (await waitClosed()) return;
   // Recheck immediately before acting: Escape may have committed after the wait.
   if (await closed()) return;
   if ((await readEffortOwner(control))?.expanded !== "true") throw new Error("ChatGPT effort picker owner changed while closing");
+  options.signal?.throwIfAborted();
   await control.dispatchEvent("pointerdown", { button: 0, buttons: 1, pointerType: "mouse", isPrimary: true },
-    { timeout: options.settleMs === undefined ? CHATGPT_UI_ACTION_TIMEOUT_MS : Math.max(1, settleMs) });
+    { timeout: options.settleMs === undefined ? CHATGPT_UI_ACTION_TIMEOUT_MS : Math.max(1, settleMs), signal: options.signal });
   if (!await waitClosed()) throw new Error("ChatGPT effort picker did not close; model selection was not confirmed");
 }
 
@@ -292,9 +331,11 @@ export function parseChatGptEffortSliderState(
 export async function readChatGptEffortSnapshot(
   sliderContainer: Locator,
   timeoutMs = CHATGPT_MODEL_CONTROL_SETTLE_MS,
+  signal?: AbortSignal,
 ): Promise<ChatGptEffortSliderState & { available: boolean[] }> {
   const deadline = Date.now() + timeoutMs;
   do {
+    signal?.throwIfAborted();
     // Read the range, selection and locks in one DOM revision. Separate Playwright
     // reads can straddle hydration and combine a five-step range with four ticks.
     const snapshot = await sliderContainer.evaluate(container => {
@@ -309,7 +350,7 @@ export async function readChatGptEffortSnapshot(
         locks: Array.from(container.querySelectorAll("[data-selected]"), tick =>
           tick.getAttribute("data-locked") ?? (power ? "false" : null)),
       };
-    }, undefined, { timeout: Math.max(1, deadline - Date.now()) });
+    }, undefined, { timeout: Math.max(1, deadline - Date.now()), signal });
     const state = parseChatGptEffortSliderState(snapshot.min, snapshot.max, snapshot.value);
     if (!state) throw new Error("ChatGPT effort slider exposed an invalid ARIA range");
     if (snapshot.locks.some(lock => lock !== "true" && lock !== "false")) break;

@@ -10,6 +10,7 @@ import {
 import { ChatGptWebAdapterError } from "../adapter-error";
 import { nativeToolCallContractLines } from "../tools/native-tool-call-block";
 import { handoffContract } from "../tools/handoff-contract";
+import { handoffSubmissionTools, type HandoffProtocol } from "../../../../launcher/shared/handoff-protocol.cjs";
 import { type CodexAssistantContentPart, type CodexContentPart, type CodexMessage, type CodexParsedRequest } from "../../../types";
 import { COMPACT_PROMPT, isReadableCompactionSummaryText } from "../../../responses/compaction";
 import { modelToolChoice } from "../../../responses/tool-choice";
@@ -36,6 +37,7 @@ export interface CompiledChatGptWebPrompt {
 
 export interface CompileChatGptWebPromptOptions {
   toolBatchHandoff?: boolean;
+  handoffProtocol?: HandoffProtocol;
   /** Accounting only: count complete retained history without imposing a one-message upload cap. */
   estimateOnly?: boolean;
   captureLunaCheckpoint?: boolean;
@@ -286,7 +288,7 @@ export function compileChatGptWebPrompt(
       "</codex_zero_risk_request_json>",
     ]
     : [];
-  if (options?.toolBatchHandoff) transportContract.push(...handoffContract(manualControl ? "request_id" : "turn_token"));
+  if (options?.toolBatchHandoff) transportContract.push(...handoffContract(manualControl ? "request_id" : "turn_token", options.handoffProtocol));
   const transportResume = parsed._compactionRequest
     ? manualControl
       ? [
@@ -306,7 +308,7 @@ export function compileChatGptWebPrompt(
       "Current binding (copy the exact JSON value, including every character; never reconstruct it from memory or earlier history):",
       JSON.stringify(manualControl ? { request_id: turnToken } : { turn_token: turnToken }),
       `Current Codex call controls: ${JSON.stringify({ tool_choice: modelToolChoice(parsed.options.toolChoice, parsed.context.tools ?? []), parallel_tool_calls: parsed.options.parallelToolCalls })}. Preserve these controls.`,
-      ...(parsed.options.parallelToolCalls === false ? ["Codex disabled parallel_tool_calls: use codex_submit_tool_call with one call object. Continue dependent work only after its actual result arrives in the next request."] : []),
+      ...(parsed.options.parallelToolCalls === false ? [`Codex disabled parallel_tool_calls: use ${handoffSubmissionTools(options.handoffProtocol).single} with one call object. Continue dependent work only after its actual result arrives in the next request.`] : []),
       ...(manualControl ? [] : [`Pass turn_token ${turnToken} unchanged to each connector action.`]),
       "Use the current inventory and real results above to continue the task under the bridge protocol. Submit declared calls with their advertised scope and separate name/namespace, or finish with the complete answer. Do not execute outer calls in ChatGPT-native tools.",
       "</codex_transport_resume>",

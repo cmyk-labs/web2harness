@@ -1393,10 +1393,13 @@ class BrowserHost {
 
   async refreshChatGptHomeDocument(options = {}) {
     // A navigation from the idle host already creates a fresh ChatGPT document. Reload only an
-    // existing Temporary Chat document so the helper observes one authoritative SPA bootstrap.
+    // existing document of the selected chat type so the helper observes one SPA bootstrap.
     options.onStage?.("page-load");
     try {
-      await this.hardRefreshHome(120_000, isTemporaryChatUrl(this.view.webContents.getURL()) ? undefined : TEMPORARY_CHAT_URL);
+      const useSavedChats = options.useSavedChats === true;
+      const currentUrl = this.view.webContents.getURL();
+      const alreadyHome = useSavedChats ? currentUrl === "https://chatgpt.com/" : isTemporaryChatUrl(currentUrl);
+      await this.hardRefreshHome(120_000, alreadyHome ? undefined : useSavedChats ? "https://chatgpt.com/" : TEMPORARY_CHAT_URL);
     } catch (error) {
       // A failed navigation is connection evidence, unlike a later connector/plan failure.
       if (browserFailureKind(error) === "failed") this.setState({ status: "error", loading: false, message: error.message });
@@ -2802,6 +2805,16 @@ class BrowserHost {
     }
   }
 
+  ownsIsolatedSendResource(traceId, proof) {
+    if (typeof proof.surfaceId !== "string" || !proof.surfaceId) return false;
+    const matches = [...this.turnTabs.values()].filter(tab => tab.traceId === traceId);
+    if (matches.length !== 1 || [...this.turnTabs.values()].filter(tab => tab.surfaceId === proof.surfaceId).length !== 1) return false;
+    const tab = matches[0];
+    return tab.surfaceId === proof.surfaceId && tab.helperPid === proof.helperPid && tab.status === "running"
+      && tab.interactionMode !== "manual" && !tab.manualState
+      && !tab.view.webContents.isDestroyed() && !tab.view.webContents.isCrashed();
+  }
+
   async endTurn(
     traceId,
     helperPid,
@@ -3504,12 +3517,14 @@ class BrowserHost {
     requireAutomaticBrowserInspection(this, "ChatGPT connector verification");
     const connectorName = validateConnectorName(appName);
     this.setState({ status: "testing", message: "Checking ChatGPT connector" });
-    await this.refreshChatGptHomeDocument();
+    const useSavedChats = this.getUseSavedChats?.() === true;
+    await this.refreshChatGptHomeDocument({ useSavedChats });
     try {
       const result = await this.verifyConnectorWithBrowserHelper({
         helper: this.helper,
         descriptorPath: this.descriptorPath,
         appName: connectorName,
+        useSavedChats,
         logger: this.logger,
       });
       this.logger.info("connector.verified", { appName: connectorName });

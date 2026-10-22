@@ -292,6 +292,7 @@ export interface CodexProviderConfig {
     appName?: string;
     /** Runtime-only tunnel identity used to scope MCP recovery; never sent in prompts. */
     mcpTunnelId?: string;
+    mcpHandoffProtocol?: import("../launcher/shared/handoff-protocol.cjs").HandoffProtocol;
     /** Whether ChatGPT DOM interaction is automatic or explicitly driven by the user. */
     browserInteractionMode?: "automatic" | "manual";
     /** Explicit browser owner. Launcher mode attaches to the embedded Electron ChatGPT surface. */

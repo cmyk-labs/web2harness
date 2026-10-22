@@ -16,7 +16,7 @@ import { CODEX_TOOL_CALLS_FENCE } from "../../../../src/adapters/chatgpt-web/too
 import { ChatGptBrowserWorker, type BrowserTurn } from "../../../../src/adapters/chatgpt-web/browser/browser-worker";
 import { createChatGptWebAdapter } from "../../../../src/adapters/chatgpt-web/adapter";
 import { TurnBroker } from "../../../../src/adapters/chatgpt-web/tools/turn-broker";
-import { StandaloneRequestQueue } from "../../../../src/browser/standalone-request-queue";
+import { StandaloneRequestQueue, inspectStandaloneRequestQueue } from "../../../../src/browser/standalone-request-queue";
 import { DEFAULT_RUNTIME_PARAMETERS } from "../../../../launcher/shared/runtime-parameters.cjs";
 import { withQueuedRequest } from "../../../../src/browser/request-queue-client";
 import { bridgeToResponsesSSE } from "../../../../src/responses/stream";
@@ -255,6 +255,7 @@ describe("native-tools adapter emission", () => {
     replies: string[],
     turnId = `turn_native_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     queue?: StandaloneRequestQueue,
+    configure?: (request: CodexParsedRequest) => void,
   ): Promise<{ events: AdapterEvent[]; prompts: string[] }> {
     const worker = ChatGptBrowserWorker.forProvider(provider);
     const originalRun = worker.run.bind(worker);
@@ -274,8 +275,10 @@ describe("native-tools adapter emission", () => {
     };
     const events: AdapterEvent[] = [];
     try {
+      const request = wireRequest(turnId);
+      configure?.(request);
       await createChatGptWebAdapter(provider).runTurn!(
-        wireRequest(turnId),
+        request,
         { headers: new Headers() },
         event => events.push(event),
       );
@@ -411,12 +414,16 @@ describe("native-tools adapter emission", () => {
       const record = parseDiagnosticLine(String(line)); if (record?.event === "browser.native_reply_delivery") delivery.push(record);
     });
     const provider = nativeProvider(), turnId = `atomic_native_${point}_${Date.now()}`;
+    const profile = join(tempRoot, `delivery-${point}.json`);
+    writeFileSync(profile, "{}");
+    const queue = await StandaloneRequestQueue.open(profile);
     const worker = ChatGptBrowserWorker.forProvider(provider), originalRun = worker.run.bind(worker);
     const withTools = point !== "plain-text", visible = "One visible reply.";
     const answer = visible + (withTools ? '\n```codex_tool_calls\n{"calls":[{"name":"exec_command","arguments":{"cmd":"echo once"}}]}\n```' : "");
     let starts = 0;
     (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = async turn => {
-      starts++; await turn.prepare(); turn.onTextDelta(answer); return answer;
+      return withQueuedRequest({ descriptorPath: queue, job: turn.scheduling!, traceId: turn.traceId,
+        execute: async () => { starts++; await turn.prepare(); turn.onTextDelta(answer); return answer; } });
     };
     const disconnect = new AbortController(), first: AdapterEvent[] = [];
     try {
@@ -428,9 +435,11 @@ describe("native-tools adapter emission", () => {
           }
         });
       await expect(attempt).rejects.toMatchObject({ name: "AbortError" });
+      expect((await inspectStandaloneRequestQueue(profile)).records[0]?.nativeDelivery?.deliveryState).toBe("write_failed");
       const replay: AdapterEvent[] = [];
       await createChatGptWebAdapter(provider).runTurn!(wireRequest(turnId), { headers: new Headers() }, event => replay.push(event));
       expect(starts).toBe(1);
+      expect((await inspectStandaloneRequestQueue(profile)).records[0]?.nativeDelivery?.deliveryState).toBe("response_written");
       expect(replay.filter(e => e.type === "text_delta")).toEqual([{ type: "text_delta", text: visible, phase: withTools ? "commentary" : "final_answer" }]);
       expect(replay.filter(e => e.type === "tool_call_start")).toHaveLength(withTools ? 1 : 0);
       expect(replay.filter(e => e.type === "done")).toHaveLength(1);
@@ -443,7 +452,7 @@ describe("native-tools adapter emission", () => {
         ["validating", "started"], ["journaled", "committed"], ["emitting", "failed"],
       ]);
       expect(delivery.at(-1)?.detail.observerAborted).toBe(true);
-    } finally { log.mockRestore(); (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = originalRun; }
+    } finally { log.mockRestore(); (worker as unknown as { run: (turn: BrowserTurn) => Promise<string> }).run = originalRun; await queue.close(); }
   });
 
   test("invalid native reply is diagnosed before any journal commit without retaining arguments", async () => {
@@ -458,6 +467,35 @@ describe("native-tools adapter emission", () => {
       expect(records.map(record => [record.detail.deliveryState, record.detail.outcome])).toEqual([
         ["validating", "started"], ["validating", "failed"],
       ]);
+      expect(records.at(-1)?.detail.failure).toMatchObject({ category: "native_tool_contract", issueCount: 1,
+        issues: [{ category: "tool_name", callIndex: 0 }] });
+      expect(records.at(-1)?.detail.contract).toMatchObject({ version: "native_tool_calls_v1", sourceId: expect.stringMatching(/^[a-f0-9]{64}$/) });
+      expect(JSON.stringify(records)).not.toContain("PRIVATE");
+    } finally { log.mockRestore(); }
+  });
+
+  test.each(["json", "schema", "batch", "structured"])("delivery diagnostics preserve safe failure cause: %s", async kind => {
+    const records: DiagnosticRecord[] = [];
+    const log = spyOn(console, "error").mockImplementation((line: unknown) => {
+      const record = parseDiagnosticLine(String(line)); if (record?.event === "browser.native_reply_delivery") records.push(record);
+    });
+    const call = { name: "exec_command", arguments: { cmd: "PRIVATE_COMMAND" } };
+    const body = kind === "json" ? "PRIVATE_BROKEN_JSON" : JSON.stringify({ calls: kind === "schema"
+      ? [{ ...call, arguments: { cmd: 1 } }] : [call, call] });
+    const answer = kind === "structured" ? "PRIVATE_BROKEN_JSON" : `\`\`\`codex_tool_calls\n${body}\n\`\`\``;
+    try {
+      const attempt = await withFakeWorker(nativeProvider(), [answer], undefined, undefined, request => {
+        if (kind === "batch") request.options.parallelToolCalls = false;
+        if (kind === "structured") request.options.outputFormat = { type: "json_object" };
+      });
+      expect(attempt.events.filter(event => ["text_delta", "tool_call_start", "done"].includes(event.type))).toHaveLength(0);
+      const failure = records.at(-1)?.detail.failure;
+      if (kind === "structured") expect(failure).toEqual({ category: "structured_output" });
+      else expect(failure).toMatchObject({ category: "native_tool_contract", issueCount: 1, issues: [{
+        category: kind === "json" ? "block_json" : kind === "schema" ? "arguments_schema" : "batch_constraints",
+        callIndex: kind === "schema" ? 0 : null,
+        ...(kind === "schema" ? { keywords: [{ code: "type" }] } : {}),
+      }] });
       expect(JSON.stringify(records)).not.toContain("PRIVATE");
     } finally { log.mockRestore(); }
   });
@@ -501,6 +539,8 @@ describe("native-tools adapter emission", () => {
       const first = await withFakeWorker(provider, [broken], turnId, queue);
       expect(first.events.find(e => e.type === "error")).toMatchObject({ code: "native_tool_call_invalid", retryable: true });
       expect(first.events.some(e => e.type === "tool_call_start")).toBe(false);
+      expect((await inspectStandaloneRequestQueue(profile)).records[0]).toMatchObject({ state: "succeeded",
+        nativeDelivery: { deliveryState: "validation_failed", sequence: 1 } });
       const corrected = "```" + CODEX_TOOL_CALLS_FENCE + '\n{"calls":[{"name":"exec_command","arguments":{"cmd":"echo ok"}}]}\n```';
       const retry = await withFakeWorker(provider, [corrected], turnId, queue);
       expect(retry.prompts).toHaveLength(1);
@@ -508,10 +548,57 @@ describe("native-tools adapter emission", () => {
       expect(retry.events.some(e => e.type === "error")).toBe(false);
       const call = retry.events.find(e => e.type === "tool_call_start");
       expect(call).toBeDefined();
+      const receipts = (await inspectStandaloneRequestQueue(profile)).records;
+      expect(receipts.map(item => item.nativeDelivery?.deliveryState).sort()).toEqual(["response_written", "validation_failed"]);
       const reconnect = await withFakeWorker(provider, ["must not send"], turnId, queue);
       expect(reconnect.prompts).toHaveLength(0);
       expect(reconnect.events.find(e => e.type === "tool_call_start")).toEqual(call);
+      expect((await inspectStandaloneRequestQueue(profile)).records).toHaveLength(2);
     } finally { await queue.close(); }
+  });
+
+  test("real worker outer admission binds native delivery before crossing the helper boundary", async () => {
+    const profile = join(tempRoot, "helper-boundary-queue.json");
+    writeFileSync(profile, "{}");
+    const queue = await StandaloneRequestQueue.open(profile);
+    const provider = nativeProvider();
+    const socketId = createHash("sha256").update(`${tempRoot}/helper-boundary`).digest("hex").slice(0, 24);
+    Object.assign(provider.chatgptWeb!, { browserHost: "launcher", experimentalFreshConversationPerTurn: true,
+      runtimeParameters: { ...DEFAULT_RUNTIME_PARAMETERS },
+      brokerSocketPath: process.platform === "win32" ? defaultBrokerEndpoint(join(tempRoot, "helper-boundary"))
+        : join(tmpdir(), `w2h-hb-${socketId}.sock`),
+      browserHostDescriptorPath: join(tempRoot, "unused-helper-boundary-descriptor.json") });
+    const worker = ChatGptBrowserWorker.forProvider(provider);
+    // Keep worker.run and its actual outer withQueuedRequest. Only the physical helper and
+    // fixture transport are replaced; no native delivery tracker is bound by the test itself.
+    const fixture = worker as unknown as { requestQueueTarget(): Promise<StandaloneRequestQueue>;
+      launcherHelper?: { run(turn: BrowserTurn): Promise<string> } };
+    const originalTarget = fixture.requestQueueTarget, originalHelper = fixture.launcherHelper;
+    fixture.requestQueueTarget = async () => queue;
+    let entered = 0;
+    fixture.launcherHelper = { async run(turn) {
+      entered++;
+      expect(turn.queueTicket).toBeDefined();
+      expect(queue.snapshot().active).toBe(1);
+      const prepared = await turn.prepare(); prepared.release();
+      turn.onTextDelta("Helper result.");
+      return "Helper result.";
+    } };
+    try {
+      const events: AdapterEvent[] = [];
+      await createChatGptWebAdapter(provider).runTurn!(wireRequest(`helper_delivery_${Date.now()}`),
+        { headers: new Headers() }, event => events.push(event));
+      expect(entered).toBe(1);
+      expect(events.some(event => event.type === "done")).toBe(true);
+      expect(queue.snapshot().active).toBe(0);
+      const receipts = (await inspectStandaloneRequestQueue(profile)).records;
+      expect(receipts).toHaveLength(1);
+      expect(receipts[0]).toMatchObject({ state: "succeeded", nativeDelivery: { deliveryState: "response_written" } });
+    } finally {
+      fixture.requestQueueTarget = originalTarget;
+      fixture.launcherHelper = originalHelper;
+      await queue.close();
+    }
   });
 
   test("queued corrective attempts retain the bounded retry budget", async () => {

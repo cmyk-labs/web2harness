@@ -2,6 +2,7 @@ import { ServerSentEventDecoder } from "./sse-decoder";
 import { ChatGptResponseEvidence, type ChatGptResponseEvidenceLimits } from "./response-evidence";
 import { ChatGptDeltaCursor, patchResponseValue } from "./response-protocol";
 import { responseContent } from "./response-content";
+import { responseCandidateDiagnostics } from "./response-candidate-diagnostics";
 
 type Json = Record<string, any>;
 type Message = { id: string; role: string; channel: unknown; recipient: unknown; status: unknown;
@@ -109,6 +110,7 @@ export class ChatGptResponseSource {
   facts() { const result = this.result(); return { frames: this.frames, messageCount: this.messages.size, inputBound: this.inputSeen,
     done: this.done, streamComplete: this.streamComplete, observedDone: this.observedDone, observedStreamComplete: this.observedStreamComplete,
     reason: result.state === "rejected" ? result.reason : this.failure, evidence: this.evidence?.summary(),
+    candidateAudit: responseCandidateDiagnostics([...this.messages.values()], this.binding.userMessageId),
     publicStates: [...this.messages.values()].filter(publicText).map(m => ({ channel: m.channel,
       finished: m.status === "finished_successfully", endTurn: m.endTurn === true,
       complete: m.complete === true, stopped: m.finishType === "stop",

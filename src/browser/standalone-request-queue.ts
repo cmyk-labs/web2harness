@@ -3,9 +3,9 @@ import { existsSync, realpathSync } from "node:fs";
 import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import {
-  DEFAULT_REQUEST_SCHEDULING, RequestScheduler, validateRequestScheduling,
+  DEFAULT_REQUEST_SCHEDULING, RequestScheduler, validateRequestScheduling, canIsolateNativeSend, sharedQueueFailure,
   type QueueInput, type QueuePhase, type QueueRecord, type QueuePauseReason, type QueueSendProgress,
-  type RequestSchedulingSettings, type McpQueueStatus, type McpQueueOutcome,
+  type RequestSchedulingSettings, type McpQueueStatus, type McpQueueOutcome, type NativeDeliveryUpdate,
 } from "../../launcher/shared/request-scheduler.cjs";
 import { ChatGptWebAdapterError } from "../adapters/chatgpt-web/adapter-error";
 import type { QueueTicket, RequestQueueTransport } from "./request-queue-client";
@@ -236,7 +236,7 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
   request<T>(action: string, body: unknown, peer?: StandaloneQueuePeer): Promise<T> { return this.serial(async () => {
     if (this.closed || !body || typeof body !== "object") throw failure("queue_unavailable", "Standalone queue is unavailable");
     const input = body as QueueTicket & { job: QueueInput; pid: number; traceId: string; phase: QueuePhase; progress: QueueSendProgress;
-      permit: string; outcome: Outcome | "confirmed" | "not-sent" | "unknown"; reason?: string; resourcesReleased?: boolean; remote?: McpQueueOutcome };
+      permit: string; outcome: Outcome | "confirmed" | "not-sent" | "unknown"; reason?: string; resourcesReleased?: boolean; remote?: McpQueueOutcome; delivery: NativeDeliveryUpdate; isolation?: unknown };
     let result: unknown;
     if (action === "cancel-client" && peer) {
       for (const [id, owner] of this.tickets) if (owner.clientId === peer.clientId && owner.pid === peer.pid) this.core.cancel(id);
@@ -267,6 +267,7 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
       }
       else if (action === "phase") result = this.core.setPhase(input.id, lease, input.phase);
       else if (action === "send-progress") result = this.core.setSendProgress(input.id, lease, input.progress);
+      else if (action === "native-delivery") result = this.core.setNativeDelivery(input.id, lease, input.delivery);
       else if (action === "send-begin") {
         const interval = this.core.snapshot().settings.minSendIntervalSeconds * 1000;
         const remaining = this.lastSendMonotonic === undefined ? 0 : this.lastSendMonotonic + interval - performance.now();
@@ -274,7 +275,14 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
           : this.core.beginSend(input.id, lease);
         if ((result as { allowed: boolean }).allowed) { this.pendingSend = true; this.dirty = true; }
       } else if (action === "send-end") {
-        this.core.endSend(input.id, lease, input.permit, input.outcome as "confirmed" | "not-sent" | "unknown");
+        const isolated = input.outcome === "unknown" && canIsolateNativeSend(input.isolation, this.core.get(input.id)?.mode ?? "", proof => {
+          // Joined clients provide only a remote resource bit, not a host-observed page count.
+          // Keep their unknown sends global until that stronger ownership proof is available.
+          const guards = this.resources.get(input.id);
+          return !peer && proof.helperPid === process.pid && !proof.surfaceId
+            && guards?.size === 1 && [...guards].filter(released => !released()).length === 1;
+        });
+        this.core.endSend(input.id, lease, input.permit, input.outcome as "confirmed" | "not-sent" | "unknown", isolated ? "task" : undefined);
         this.pendingSend = false;
         if (input.outcome !== "not-sent") { this.lastSendAt = Date.now(); this.lastSendMonotonic = performance.now(); }
         result = { acknowledged: true };
@@ -284,7 +292,8 @@ export class StandaloneRequestQueue implements RequestQueueTransport {
           this.core.pause("browser_unavailable"); await this.persist();
           throw failure("queue_resource_not_released", "Managed browser resources have not been physically released");
         }
-        if (input.reason === "rate_limit_exceeded") this.core.pause("account_rate_limited", input.id);
+        const sharedFailure = sharedQueueFailure(input.reason);
+        if (sharedFailure) this.core.pause(sharedFailure, input.id);
         if (this.pendingSend && this.core.get(input.id)?.sendAttemptedAt && !this.core.get(input.id)?.sendConfirmedAt) {
           this.lastSendAt = Date.now(); this.lastSendMonotonic = performance.now();
         }

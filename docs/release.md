@@ -23,6 +23,8 @@ Follow this manual to prepare, build, validate, publish and recover a release ca
 
 ## Validation environments and evidence
 
+Whenever development is complete and release preparation is next, ask the maintainer whether to run the [complete independent-session DEV review regression](development.md#independent-review-regression). The decision belongs to the maintainer for each release. If approved, a new main session must delegate the code-conventions, technical-design and open-source-research tasks to three GPT-6 (Web) high agents and aggregate their results. Record an explicit deferral as deferred, never as passed; previous approval is not standing permission. The implementation conversation cannot substitute for that new main session.
+
 Use the [standard isolated test procedure](development.md#standard-isolated-test-procedure) for development and account-bound runtime checks. Use a disposable VM or dedicated test OS for clean installation, upgrade, repair, uninstall, updater, and system-service acceptance. Give it independent Codex and browser state. Never install a test route into the user's normal Codex, modify their desktop installation, or use its credentials.
 
 | Evidence class | What it establishes | What remains separate |

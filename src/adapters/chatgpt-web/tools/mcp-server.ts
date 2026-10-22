@@ -11,7 +11,7 @@ import { CODEX_COMPACTION_CONTROL_WIRE_NAME } from "./native-compaction-control"
 import { callTurnBroker, TurnBrokerTimeoutError, type BrokerToolResult } from "./turn-broker";
 import { observeMcpToolCalls } from "./mcp-observation";
 import { BRIDGE_TOOL_NAMES, safeVisibleTools } from "./mcp-tool-policy";
-import { TOOL_BATCH_HANDOFF_PROTOCOL } from "./tool-batch-handoff";
+import { handoffProtocol, type HandoffProtocol } from "../../../../launcher/shared/handoff-protocol.cjs";
 import { createHandoffMcpServer, HANDOFF_TOOL_NAMES } from "./mcp-handoff-server";
 
 interface ClaimedTurn {
@@ -190,12 +190,12 @@ function gatewayToolCatalogPage(response: {
 export async function runChatGptMcpServer(options: {
   brokerSocketPath: string;
   contract?: ChatGptMcpContract;
-  protocol?: typeof TOOL_BATCH_HANDOFF_PROTOCOL;
+  protocol?: HandoffProtocol;
 }): Promise<void> {
   const contract = options.contract ?? "native";
   if (options.protocol !== undefined) {
-    if (options.protocol !== TOOL_BATCH_HANDOFF_PROTOCOL) throw new Error("Unsupported MCP handoff protocol");
-    const server = createHandoffMcpServer({ brokerSocketPath: options.brokerSocketPath, contract });
+    const protocol = handoffProtocol(options.protocol);
+    const server = createHandoffMcpServer({ brokerSocketPath: options.brokerSocketPath, contract, protocol });
     await server.connect(observeMcpToolCalls(new StdioServerTransport(), HANDOFF_TOOL_NAMES));
     return;
   }

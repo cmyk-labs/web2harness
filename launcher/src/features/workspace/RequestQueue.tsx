@@ -40,8 +40,14 @@ export function QueueOverview({ api, snapshot, navigate }: WorkspaceProps) {
 const labels: Record<string, [string, string]> = {
   queued: ["排队中", "Queued"], preparing: ["准备中", "Preparing"], running: ["执行中", "Running"],
   "waiting-user": ["等待用户", "Waiting for user"], "waiting-tools": ["等待工具", "Waiting for tools"],
-  stopping: ["停止中", "Stopping"], succeeded: ["成功", "Succeeded"], failed: ["失败", "Failed"],
+  stopping: ["停止中", "Stopping"], succeeded: ["网页完成", "Web completed"], failed: ["失败", "Failed"],
   cancelled: ["已取消", "Cancelled"], "timed-out": ["排队超时", "Queue timeout"],
+};
+const deliveryLabels: Record<string, [string, string]> = {
+  validation_failed: ["原生回复校验失败", "Native reply validation failed"],
+  response_written: ["响应已写出", "Response written"],
+  write_failed: ["响应写出失败", "Response write failed"],
+  delivery_failed: ["原生回复交付失败", "Native reply delivery failed"],
 };
 const sessionLabel = (id: string) => /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id) ? `${id.slice(0, 8)}…${id.slice(-8)}` : id;
 const sendLabels: Record<string, [string, string]> = {
@@ -162,8 +168,15 @@ export function RequestQueue({ api, snapshot, navigate }: WorkspaceProps) {
       <div className="queue-feedback" role="status">{confirmWaiting ? <div className="queue-actions"><span>{t("取消全部排队任务？正在执行的任务不受影响。", "Cancel all waiting tasks? Running tasks will continue.")}</span><Button onClick={() => void control("cancel-waiting")}>{t("确认取消", "Confirm")}</Button><Button onClick={() => setConfirmWaiting(false)}>{t("返回", "Back")}</Button></div> : error || loadError || notice}</div>
       <div className="queue-table-scroll"><table className="queue-table"><thead><tr>{[t("状态", "State"), t("会话／任务", "Session / task"), t("模型", "Model"), t("等待时长", "Wait"), t("执行时长", "Run"), t("操作", "Action")].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>
         {available && !loadError && page?.items.map(item => <tr key={item.id}><td>{t(...labels[item.state])}
+          {item.state === "succeeded" && item.mode === "native-tools" && <small title={t("写出仅表示响应回调已返回，不代表 Codex 已接收或执行工具。", "Written means the response callback returned; it does not confirm Codex receipt or tool execution.")}>
+            {item.nativeDelivery && deliveryLabels[item.nativeDelivery.deliveryState]
+              ? t(...deliveryLabels[item.nativeDelivery.deliveryState]) : t("交付未确认", "Delivery unconfirmed")}
+          </small>}
           {(item.state === "preparing" || item.sendProgress === "unknown" || item.sendProgress === "not-sent") && item.sendProgress && sendLabels[item.sendProgress]
             && <small>{t(...sendLabels[item.sendProgress])}</small>}
+          {item.sendFailureScope === "task" && <small title={t("发送结果仍未知；只隔离当前任务，页面清理完成前仍占用名额。不会自动重发。", "The send outcome remains unknown. Only this task is isolated; its slot remains occupied until page cleanup completes. No automatic resend.")}>
+            {t("当前任务隔离", "Task isolated")}
+          </small>}
           {item.state === "failed" && item.sendAttemptedAt === undefined && (item.reason === "send_outcome_unknown" || item.reason?.startsWith("queue_blocked_"))
             && <small>{t("未发送：队列已暂停", "Not sent: dispatch paused")}</small>}
           {item.retryAttempt !== undefined && <small className="muted">{t("恢复尝试", "Recovery attempt")} {item.retryAttempt}</small>}{(item.cooldownUntil ?? 0) > Date.now() && <small>{t("冷却等待", "Cooldown")} {Math.ceil((item.cooldownUntil! - Date.now()) / 1000)}s</small>}</td><td title={item.groupId}>{sessionLabel(item.groupId)}<small className="muted" title={item.id}>{item.id.slice(0, 12)}{item.reason ? ` · ${item.reason}` : ""}</small></td><td>{item.model}<small className="muted">{item.effort || "-"}</small></td><td>{duration(item.waitMs)}</td><td>{duration(item.runMs)}</td><td><Button onClick={() => { openRequestLogs(item.id); navigate("diagnostics"); }}>{t("日志", "Logs")}</Button>{["queued", "preparing", "running", "waiting-user", "waiting-tools"].includes(item.state) ? <Button disabled={working} onClick={() => void control("cancel", item.id)}>{item.state === "queued" ? t("取消", "Cancel") : t("停止", "Stop")}</Button> : "-"}</td></tr>)}

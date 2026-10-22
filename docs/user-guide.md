@@ -179,7 +179,7 @@ Start with a working automatic browser session and Codex catalog. Review the rem
 
 A running local tunnel alone does not prove a correct remote binding. Workspace policy can restrict connector access. When replacing credentials, use **Replace credentials**, apply the new values, and verify the corresponding binding. Automatic and manual interaction retain separate connection profiles.
 
-DEV MCP testing additionally requires independent login, credentials, and tunnel resources, explicit confirmation that the tunnel belongs to DEV, and verification of the actual DEV connector binding. Names alone do not establish isolation; follow the [development procedure](development.md#standard-isolated-test-procedure).
+DEV MCP testing additionally requires separate profiles, credentials, and tunnel resources, website verification of DEV ownership, and verification of the actual DEV connector binding. Creating fresh DEV resources when ownership is unclear and reusing the desktop ChatGPT web login if DEV logs out are authorized under the [development procedure](development.md#standard-isolated-test-procedure). Names alone do not establish isolation.
 
 <a id="manual-handoff"></a>
 

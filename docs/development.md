@@ -29,7 +29,7 @@ Use an existing checkout or obtain the source from the repository identified in 
 | Bun | Exactly `1.4.0`, as pinned by `packageManager`, `engines.bun`, and `@types/bun` in `package.json`. |
 | Node.js | Version 22.12.0 or later; CI uses Node 24. Required by the launcher test runner, Electron packaging tools, and browser helper checks. |
 | Codex CLI | Required for real tool acceptance; DEV launches it with an isolated child environment. |
-| ChatGPT account | Required only for authenticated browser acceptance. Sign in independently in DEV. |
+| ChatGPT account | Required only for authenticated browser acceptance. Keep a separate DEV profile; the authorized web-login reuse procedure below applies if it logs out. |
 | Native build host | Desktop packages must be built on the target operating system; see the release target matrix. |
 
 Check the existing tools before installing or updating anything. Development permission does not authorize changing global installations or machine settings.
@@ -212,9 +212,11 @@ bun run src/cli.ts dev status --json
 
 In a source checkout, the first command starts the working-tree Electron application and shared runtime with the development profile. It does not install over the desktop application. `bun run app` starts the regular source application and is not a development acceptance entry point.
 
+Source startup first prepares its local dependencies in a foreground child using the isolated DEV environment. Electron may download its binary on first use; this preparation finishes before the 30-second launcher-readiness deadline starts. Preparation errors or signal termination stop startup without launching the application. Packaged executable startup does not run source dependency preparation.
+
 An explicit `WEB2HARNESS_LAUNCHER_EXECUTABLE` can select a separate packaged executable. It must contain the DEV implementation being tested. A packaged CLI launches its selected launcher with `--dev-profile`. After changing loaded runtime or browser-helper code, rebuild as needed, fully close only the verified DEV instance, reopen it, and confirm readiness. Persistent helpers keep their loaded code across requests.
 
-Confirm the window is labelled **Web2Harness DEV**. Sign in to ChatGPT independently, run the browser smoke test, and apply the DEV configuration in **Connection & Models**. New configurations default to **Native Tools**. Use **Automatic** interaction for native tools; **Zero Risk** requires MCP Bridge. Finish active tasks before changing tool mode. Applying configuration refreshes the DEV route and runtime. Switching back to Native Tools stops the tunnel while retaining private MCP profiles.
+Confirm the window is labelled **Web2Harness DEV**. Sign in to ChatGPT in the separate DEV profile, using the authorized web-login reuse procedure below if it has logged out, run the browser smoke test, and apply the DEV configuration in **Connection & Models**. New configurations default to **Native Tools**. Use **Automatic** interaction for native tools; **Zero Risk** requires MCP Bridge. Finish active tasks before changing tool mode. Applying configuration refreshes the DEV route and runtime. Switching back to Native Tools stops the tunnel while retaining private MCP profiles.
 
 DEV setup writes the route and interrupt hook only into DEV's Codex home. It supervises the same daemon implementation and allocates its own loopback port. A busy selected port is an error, not permission to stop another process. Profiles still using the unbound legacy `17841` DEV setting require setup in the DEV window; the runtime refuses to bind that legacy port and does not probe or control it.
 
@@ -240,13 +242,15 @@ For focused window and sign-in presentation checks, run `node launcher/scripts/s
 
 ## Standard isolated test procedure
 
+The native window fixture keeps ordinary requested sizes exact and checks that the configured minimum remains unchanged. At the Windows minimum-height boundary only, it accepts a measured native height up to one DIP above the request; it never accepts undersizing. The adjacent size above the minimum remains exact. Viewport filling, scaling, browser bounds and clicks are checked against the actual content size. Record the platform and engine version; this bounded native constraint is not permission to overlook layout failures or relax other size checks.
+
 ![DEV and regular operation share code while keeping identities, data, endpoints, and fixtures separate](../assets/diagrams/isolation.svg)
 
 This is the required contract for development, regression, and live acceptance. Isolation changes configuration, credentials, browser data, endpoints, process ownership, and fixture workspaces; the runtime implementation remains shared.
 
 1. **Capture the baseline before live testing.** Record hashes of production Codex configuration and authentication, production bridge configuration existence/hash, and relevant process IDs, executable paths, start times, and service identities. Include configured non-default production paths. Record absent files/processes as absent. Never print credential contents. Save raw evidence only in ignored `output/` or private DEV storage.
 2. **Run applicable automated checks.** Use explicit test paths and temporary test homes. Optional headless DOM checks use fresh temporary browser profiles. Record audit failures independently of functional results and attempt the applicable verification gates.
-3. **Start and verify DEV ownership.** Use `bun run dev:launcher` and inspect `dev status --json`. Validate the current descriptor, `development` profile, PID, executable, DEV userData, both DEV homes, and independently allocated loopback listener. A familiar port, old log, title, or PID alone does not prove ownership. Complete independent DEV login if required.
+3. **Start and verify DEV ownership.** Use `bun run dev:launcher` and inspect `dev status --json`. Validate the current descriptor, `development` profile, PID, executable, DEV userData, both DEV homes, and independently allocated loopback listener. A familiar port, old log, title, or PID alone does not prove ownership. Complete DEV login if required, following the authorized web-login reuse procedure below when applicable.
 4. **Load the changed code and verify readiness.** Rebuild and restart only DEV after runtime/helper changes. Confirm the DEV doctor/readiness result and browser smoke before a real task. Do not test through a persistent daemon running stale code.
 5. **Prepare an owned fixture.** Put inputs under `DEV_HOME/workspaces/NAME` and use `bun run dev:chat` or `bun run dev:codex` with that explicit working directory and an available Web model. Keep Codex sandbox and approval enforcement enabled. Do not target the user's working project or production data.
 6. **Prove the changed behavior.** Execution changes require read → native patch → command assertion → final response evidence, including tool events and the resulting file. Lifecycle/cancellation changes require an active DEV cancellation, terminal cancellation with zero active turns, and a new real Codex request without restarting the service. Continuation/compaction changes additionally require the relevant real continuation/compaction path. Bound fault injection to one verified DEV browser target or owned transport. MCP tests also require the remote-isolation checks below.
@@ -255,13 +259,13 @@ This is the required contract for development, regression, and live acceptance. 
 
 ### Protected production boundary
 
-The installed Web2Harness application and every working Codex session are protected. Development permission does not authorize controlling them or changing their configuration, authentication, routes, hooks, browser profile, services, or processes. Never temporarily install a DEV route into production, copy production authentication, or use historical production-testing commands.
+The installed Web2Harness application and every working Codex session are protected. Development permission does not authorize controlling them or changing their configuration, authentication, routes, hooks, browser profile, services, or processes. Never temporarily install a DEV route into production, copy production Codex authentication, or use historical production-testing commands. The narrow ChatGPT web-login reuse exception below does not authorize modifying its source profile.
 
 Do not change global Codex/Bun/Electron installations, OS credentials, system sandbox users, services, firewall, proxy, DNS, shared network settings, or unrelated projects to make a test pass. Do not disconnect the computer or change a shared browser context for fault injection. Do not cancel by process name, sweep ports, or kill a process tree without verified DEV ownership.
 
 No bulk deletion or general workspace cleanup is authorized. Fixture teardown may remove only individually owned temporary artifacts created by that test, after checking resolved paths. Preserve existing profiles, workspaces, and evidence. Installer, updater, clean-install, upgrade, and system-service tests that cannot preserve these boundaries require a disposable VM or dedicated test OS.
 
-DEV credentials are independently obtained and file-based. Never copy production authentication, MCP configuration, plugins, history, or active task IDs. Windows sandbox overrides, if needed, belong only to the DEV child command; do not disable sandbox enforcement or change machine/production settings.
+DEV credentials are independently obtained and file-based. If the DEV ChatGPT web session logs out, the maintainer authorizes reusing the local desktop ChatGPT web login state in the separate DEV browser profile, including future DEV tests. Verify the source and destination, keep the source profile unchanged, transfer only the login state needed for this purpose, and retain any private evidence in ignored storage without printing credentials. A valid DEV session requires no transfer. This exception does not cover production Codex authentication, MCP configuration, plugins, history, or active task IDs. Windows sandbox overrides, if needed, belong only to the DEV child command; do not disable sandbox enforcement or change machine/production settings.
 
 Isolation does not reserve physical capacity. CPU, memory, bandwidth, and account quotas may still be shared. Run authenticated acceptance sequentially, keep workloads bounded, and avoid stress tests while the user is working.
 
@@ -269,9 +273,21 @@ Isolation does not reserve physical capacity. CPU, memory, bandwidth, and accoun
 
 ### MCP Bridge isolation
 
-Before enabling MCP Bridge, obtain explicit user confirmation that the selected tunnel ID is DEV and inspect the actual selected connector binding from the independently logged-in DEV browser. Both must match. A DEV path, alias, or connector display name alone does not establish remote isolation.
+Before running MCP Bridge tasks, use the built-in browser to verify the selected tunnel's DEV ownership on the website and inspect the actual selected connector binding. The maintainer authorizes this verification and, if ownership cannot be established, creating a new DEV tunnel, key, and connector without asking again for each ID. This includes configuring Zero Risk. A newly created, verified DEV tunnel may serve the tool catalog required to create its connector; run real Codex tasks only after verifying that binding. Keep Automatic and Zero Risk on separate tunnels and keep their private credentials in DEV storage; do not repurpose production resources. Record the actual tunnel/connector match and the account/workspace context privately. A DEV path, alias, or connector display name alone does not establish remote isolation. If the built-in browser is unavailable, report that limitation and use an available task-owned browser tab for the same checks; no browser name substitutes for evidence.
 
 If a supplied destination is identified as production, stop only the owned DEV connection immediately and verify its exit. Record possible remote impact separately from local file/process checks. Resume with Native Tools until a correct DEV destination is confirmed; never reuse stale MCP configuration during recovery.
+
+<a id="independent-review-regression"></a>
+
+## Complete review regression in an independent session
+
+At each release-preparation handoff, ask the maintainer whether to execute this complete DEV task. Wait for that release's decision before starting it. Record consent, deferral or refusal and the tested candidate; do not treat previous runs as permission for a new one. This gate concerns this full task, not every focused check.
+
+After approval, use the isolated procedure above and start a **new real Codex main session** through `dev:codex` or `dev:chat`, with no inherited implementation conversation or production task identity. Give it a dedicated copy of the current candidate source, including relevant uncommitted changes, and retain a file/hash inventory. Exclude credentials, browser state, raw evidence, dependencies and build outputs. Keep the main and child agents read-only; the outer operator records evidence separately.
+
+The new main agent creates three concurrent child agents: **(1) code conventions and maintainability review; (2) technical design review; (3) related technology and open-source research**. Each child must actually use **GPT-6 (Web), high** (`chatgpt-web/gpt-6-sol`, `high`). Record the main model and mode too; do not substitute a different child model/effort. The main agent must receive all three results and produce its own combined report. The implementation/verification conversation cannot perform that delegation or write the aggregate on its behalf.
+
+Apply [CAP-003](acceptance-tests.md#cap-003): require distinct native task IDs and overlapping execution, source-read evidence, real official upstream access and license evidence, actual model/effort records, three completed child results and the new main session's final report. Check source hashes and production boundaries after completion. Preserve failures and recovery attempts; a small fixture, successful spawn, zero exit code or operator-written summary does not establish a full pass. A declined run is maintainer-deferred, not passed. This task does not replace installer, other-platform or other applicable capability checks, and does not authorize release.
 
 <a id="real-codex-tasks"></a>
 

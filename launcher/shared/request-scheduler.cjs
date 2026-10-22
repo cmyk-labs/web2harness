@@ -30,6 +30,20 @@ function validateRequestScheduling(value) {
   return { maxConcurrent, queueTimeoutMinutes, minSendIntervalSeconds };
 }
 
+// The worker attests input settlement; the resource host independently proves ownership.
+// A model reply, a queue lease alone, or an unverified remote resource is insufficient.
+function canIsolateNativeSend(proof, mode, ownsResource) {
+  if (mode !== "native-tools" || !proof || proof.version !== 1 || proof.inputSettled !== true
+    || !Number.isSafeInteger(proof.helperPid) || proof.helperPid < 1) return false;
+  try { return ownsResource(proof) === true; } catch { return false; }
+}
+
+function sharedQueueFailure(reason) {
+  if (reason === "rate_limit_exceeded") return "account_rate_limited";
+  if (reason === "chatgpt_sign_in_required") return "browser_unavailable";
+  return undefined;
+}
+
 class RequestScheduler {
   constructor(options = {}) {
     this.settings = validateRequestScheduling(options.settings ?? DEFAULT_REQUEST_SCHEDULING);
@@ -216,9 +230,10 @@ class RequestScheduler {
     return this.view(job);
   }
 
-  // Hold the permit across the actual send. Unknown outcomes must stop dispatch until
-  // the host reconciles/terminates the owned browser; never expire this lock blindly.
-  endSend(id, lease, permit, outcome) {
+  // Hold the permit across the actual send. Only the resource host can supply task
+  // isolation proof; otherwise uncertainty keeps the global fence. The execution
+  // slot remains owned until host-confirmed physical settlement in either case.
+  endSend(id, lease, permit, outcome, failureScope) {
     const job = this.owned(id, lease);
     if (!this.sendOwner || this.sendOwner.id !== id || this.sendOwner.lease !== lease || this.sendOwner.permit !== permit) {
       throw schedulingError("send_permit_invalid", "Send permit is stale or unavailable");
@@ -228,7 +243,10 @@ class RequestScheduler {
     job.sendProgress = outcome;
     if (outcome !== "not-sent") this.lastSendAt = this.monotonicNow();
     if (outcome === "confirmed") job.sendConfirmedAt = this.now();
-    if (outcome === "unknown") this.pause("send_outcome_unknown", job.id);
+    if (outcome === "unknown") {
+      job.sendFailureScope = failureScope === "task" && job.mode === "native-tools" ? "task" : "global";
+      if (job.sendFailureScope === "global") this.pause("send_outcome_unknown", job.id);
+    }
     this.event(`queue.send_${outcome.replaceAll("-", "_")}`, job);
   }
 
@@ -257,6 +275,7 @@ class RequestScheduler {
     if (this.sendOwner?.id === id) {
       this.sendOwner = null;
       job.sendProgress = "unknown";
+      job.sendFailureScope = "global";
       this.lastSendAt = this.monotonicNow();
       this.pause("send_outcome_unknown", job.id);
     }
@@ -267,6 +286,28 @@ class RequestScheduler {
 
   mcpWait(job) {
     return Math.max(0, (this.mcpScopes.get(job.mcpScope)?.cooldownMonotonic ?? 0) - this.monotonicNow());
+  }
+
+  // Delivery evidence arrives AFTER physical browser settlement. It cannot hold a slot,
+  // reopen a receipt, or claim that the client received/executed a native tool call.
+  setNativeDelivery(id, lease, update) {
+    const job = this.jobs.get(id);
+    if (!lease || job?.lease !== lease || job.state !== "succeeded" || job.mode !== "native-tools") {
+      throw schedulingError("queue_delivery_owner_invalid", "Native delivery requires the settled browser owner");
+    }
+    if (!update || !["validation_failed", "response_written", "write_failed", "delivery_failed"].includes(update.deliveryState)
+      || !Number.isSafeInteger(update.sequence) || update.sequence < 1) throw new Error("Invalid native delivery update");
+    const previous = job.nativeDelivery;
+    if (previous && update.sequence <= previous.sequence) {
+      throw schedulingError("queue_delivery_stale", "Stale native delivery update");
+    }
+    // A failed validation needs a NEW bounded retry receipt. A successful write is not
+    // erased by a later disconnected observer; a failed write can recover by journal replay.
+    if (previous && ["validation_failed", "response_written", "delivery_failed"].includes(previous.deliveryState)
+      && previous.deliveryState !== update.deliveryState) return this.view(job);
+    job.nativeDelivery = { deliveryState: update.deliveryState, sequence: update.sequence, updatedAt: this.now() };
+    this.event("queue.native_delivery", job);
+    return this.view(job);
   }
 
   recordMcp(job, outcome, remote) {
@@ -374,6 +415,8 @@ class RequestScheduler {
       queuedAt: job.queuedAt, deadlineAt: job.deadlineAt, startedAt: job.startedAt, endedAt: job.endedAt,
       sendAttemptedAt: job.sendAttemptedAt, sendConfirmedAt: job.sendConfirmedAt,
       ...(job.sendProgress ? { sendProgress: job.sendProgress } : {}),
+      ...(["task", "global"].includes(job.sendFailureScope) ? { sendFailureScope: job.sendFailureScope } : {}),
+      ...(job.nativeDelivery ? { nativeDelivery: { ...job.nativeDelivery } } : {}),
       waitMs: Math.max(0, (job.startedMonotonic ?? end) - job.queuedMonotonic),
       runMs: job.startedMonotonic === undefined ? null : Math.max(0, end - job.startedMonotonic),
     };
@@ -453,4 +496,4 @@ class RequestScheduler {
   }
 }
 
-module.exports = { DEFAULT_REQUEST_SCHEDULING, QUEUE_TIMEOUT_CHOICES, validateRequestScheduling, RequestScheduler };
+module.exports = { DEFAULT_REQUEST_SCHEDULING, QUEUE_TIMEOUT_CHOICES, validateRequestScheduling, canIsolateNativeSend, sharedQueueFailure, RequestScheduler };

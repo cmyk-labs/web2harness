@@ -4,6 +4,7 @@ import {
   formatNativeToolCallCorrection,
   nativeToolCallContractLines,
   parseNativeToolCallReply,
+  nativeToolCallIssueDiagnostics,
   splitNativeToolCallBlocks,
 } from "../../../../src/adapters/chatgpt-web/tools/native-tool-call-block";
 import { buildResponseJSON } from "../../../../src/responses/json";
@@ -24,6 +25,36 @@ const execCommand: CodexTool = {
     additionalProperties: false,
   },
 };
+
+test("safe validation diagnostics distinguish contract failures without private identities or values", () => {
+  const privateTool: CodexTool = { name: "PRIVATE_TOOL", namespace: "PRIVATE_NAMESPACE", description: "private",
+    parameters: { type: "object", required: ["PRIVATE_PROPERTY"], properties: { PRIVATE_PROPERTY: { type: "number" } }, additionalProperties: false } };
+  const cases: Array<[unknown, string, number | null]> = [
+    ["PRIVATE_BAD_JSON", "block_json", null],
+    [JSON.stringify({ PRIVATE_FIELD: true }), "block_shape", null],
+    [JSON.stringify([null]), "call_shape", 0],
+    [JSON.stringify([{ name: "PRIVATE_UNKNOWN", arguments: {} }]), "tool_name", 0],
+    [JSON.stringify([{ name: privateTool.name, namespace: "PRIVATE_WRONG_NAMESPACE", arguments: {} }]), "tool_namespace", 0],
+    [JSON.stringify([{ name: privateTool.name, namespace: privateTool.namespace, type: "custom_tool_call", input: "PRIVATE_INPUT" }]), "tool_kind", 0],
+    [JSON.stringify([{ name: privateTool.name, namespace: privateTool.namespace, arguments: { PRIVATE_PROPERTY: "PRIVATE_VALUE" } }]), "arguments_schema", 0],
+    [JSON.stringify([]), "empty_block", null],
+  ];
+  for (const [body, category, callIndex] of cases) {
+    const parsed = parseNativeToolCallReply("```codex_tool_calls\n" + body + "\n```", [privateTool]);
+    const safe = nativeToolCallIssueDiagnostics(parsed.issues);
+    expect(safe).toMatchObject({ issueCount: 1, omittedIssues: 0, issues: [{ category, callIndex }] });
+    expect(JSON.stringify(safe)).not.toContain("PRIVATE");
+    if (category === "arguments_schema") expect(safe.issues[0]?.keywords).toEqual([{ code: "type" }]);
+  }
+  const bounded = nativeToolCallIssueDiagnostics(Array.from({ length: 20 }, (_, callIndex) => ({
+    callIndex, category: "arguments_schema", problem: "PRIVATE_ERROR", wireName: "PRIVATE_TOOL",
+    schemaKeywords: ["required", "PRIVATE_KEYWORD"],
+  })));
+  expect(bounded).toMatchObject({ issueCount: 20, omittedIssues: 4 });
+  expect(bounded.issues).toHaveLength(16);
+  expect(bounded.issues[15]).toEqual({ category: "arguments_schema", callIndex: 15, keywords: [{ code: "required" }] });
+  expect(JSON.stringify(bounded)).not.toContain("PRIVATE");
+});
 
 const applyPatch: CodexTool = {
   name: "apply_patch",

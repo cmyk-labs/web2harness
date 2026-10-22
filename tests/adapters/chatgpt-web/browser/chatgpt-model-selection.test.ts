@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from "bun:test";
-import { assertChatGptModelFamily, chatGptModelFamilyMatches, selectChatGptModelFamily } from "../../../../src/adapters/chatgpt-web/browser/model-selection";
+import { assertChatGptModelFamily, chatGptModelFamilyMatches, chatGptModelFailureEvidence, selectChatGptModelFamily } from "../../../../src/adapters/chatgpt-web/browser/model-selection";
 import { parseDiagnosticLine, type DiagnosticRecord } from "../../../../launcher/shared/diagnostic-event.cjs";
 
 test("model history distinguishes stale aria/header observations, remounts, deduplication and bounded loss", async () => {
@@ -55,7 +55,7 @@ test.each(["valid", "radio", "slider", "stale", "unknown", "read-error"])("model
     expect(JSON.stringify(records)).not.toContain("PRIVATE");
     expect(records[1]).toMatchObject({ event: "browser.model_verification_failed", detail: {
       modelFamily: "6", requestedEffort: "xhigh", attempts: 1, submission: "not-sent",
-      reason: scenario === "read-error" ? "observation_failed" : "selection_mismatch",
+      reason: scenario === "read-error" ? "observation_failed" : scenario === "unknown" ? "description_unknown" : "selection_mismatch",
     } });
     if (scenario === "read-error") expect(records[1]?.detail.stage).toBe("model_snapshot");
     else expect(records[1]?.detail.checks).toMatchObject({
@@ -64,6 +64,52 @@ test.each(["valid", "radio", "slider", "stale", "unknown", "read-error"])("model
       sliderMatches: scenario !== "slider", descriptionsMatch: !["stale", "unknown"].includes(scenario),
     });
   } finally { log.mockRestore(); }
+});
+
+test("bounded model diagnostics do not hide a conflicting description beyond the sample", async () => {
+  const records: DiagnosticRecord[] = [];
+  const log = spyOn(console, "error").mockImplementation(line => { const row = parseDiagnosticLine(String(line)); if (row) records.push(row); });
+  const menu = { menu: { getByRole: () => ({ evaluateAll: async () => ({ count: 1, checked: true }) }) },
+    slider: { evaluateAll: async () => ({ min: "0", max: "4", value: "3",
+      descriptions: [...Array(20).fill("6 Extra High, PRIVATE"), "5.6 Extra High, PRIVATE"] }) } };
+  try {
+    await expect(assertChatGptModelFamily(menu as never, "6", "xhigh", 3)).rejects.toMatchObject({ code: "model_version_unavailable" });
+    const failed = records.at(-1)!;
+    expect(failed.detail).toMatchObject({ reason: "selection_mismatch",
+      checks: { descriptionCount: 21, omittedDescriptions: 13, descriptionsMatch: false } });
+    expect((failed.detail.checks as any).descriptions).toHaveLength(8);
+    expect(JSON.stringify(records)).not.toContain("PRIVATE");
+  } finally { log.mockRestore(); }
+});
+
+test("unknown effort is diagnosed separately and private model evidence never enters error JSON", async () => {
+  for (const text of ["PRIVATE unknown control", "6 Sol Unknown, PRIVATE"]) {
+    const menu = { menu: { getByRole: () => ({ evaluateAll: async () => ({ count: 1, checked: true }) }) },
+      slider: { evaluateAll: async () => ({ min: "0", max: "4", value: "3", descriptions: [text],
+        descriptionEvidence: [{ source: "aria", index: 0, present: true, connected: true, visible: true,
+          inMenu: true, textChars: text.length, text, truncated: false, reference: "PRIVATE_REF" }] }) } };
+    const error = await assertChatGptModelFamily(menu as never, "6", "xhigh", 3).catch(error => error);
+    expect(error).toMatchObject({ code: "model_version_unavailable", retryable: false });
+    expect(chatGptModelFailureEvidence(error)).toMatchObject({ reason: "description_unknown", descriptions: [{ text }] });
+    expect(JSON.stringify(error)).not.toContain("PRIVATE");
+    expect(String(error)).not.toContain("PRIVATE");
+    const cancel = new AbortController(); cancel.abort();
+    const cancelled = await assertChatGptModelFamily(menu as never, "6", "xhigh", 3, 0, cancel.signal).catch(error => error);
+    expect(cancelled.name).toBe("AbortError");
+    expect(chatGptModelFailureEvidence(cancelled)).toBeUndefined();
+  }
+});
+
+test("a disappeared final snapshot preserves the prior readable sample with its own observation number", async () => {
+  let reads = 0;
+  const menu = { menu: { getByRole: () => ({ evaluateAll: async () => ({ count: 1, checked: true }) }) },
+    slider: { evaluateAll: async () => ++reads === 1
+      ? { min: "0", max: "4", value: "3", descriptions: ["UNKNOWN_PRIVATE"], descriptionEvidence: [] } : undefined } };
+  const error = await assertChatGptModelFamily(menu as never, "6", "xhigh", 3, 70).catch(error => error);
+  const evidence = chatGptModelFailureEvidence(error)!;
+  expect(evidence).toMatchObject({ reason: "observation_failed", sampledAttempt: 1, checks: { snapshotPresent: true } });
+  expect(evidence.terminalAttempt).toBeGreaterThan(evidence.sampledAttempt);
+  expect(error).toMatchObject({ code: "model_version_unavailable", retryable: false });
 });
 
 test("model selection recognizes Latest in the launcher languages without accepting other model names", async () => {

@@ -3,8 +3,19 @@ import { activateChatGptEffortMenu, CHATGPT_MODEL_CONTROL_SETTLE_MS, CHATGPT_UI_
   parseChatGptEffortSliderState, readChatGptModelSnapshot } from "../../../browser/session";
 import type { ChatGptWebAdapterEffort, ChatGptWebModelFamily } from "../../../models/chatgpt-web-models";
 import { ChatGptWebAdapterError } from "../adapter-error";
+import { ChatGptModelMenuObservationUnavailableError } from "./model-menu-recovery";
 
 type EffortMenu = Awaited<ReturnType<typeof activateChatGptEffortMenu>>;
+type ModelSnapshot = NonNullable<Awaited<ReturnType<typeof readChatGptModelSnapshot>>>;
+type PrivateModelEvidence = { version: 1; modelFamily: ChatGptWebModelFamily; requestedEffort: ChatGptWebAdapterEffort;
+  reason: string; checks: Record<string, unknown>; sampledAttempt: number; terminalAttempt: number;
+  descriptions: ModelSnapshot["descriptionEvidence"]; omittedDescriptions: number };
+// Keep raw control samples out of Error properties, JSON responses and ordinary logs.
+// The existing failure archive is the sole consumer; GC releases completed failures.
+const privateModelEvidence = new WeakMap<Error, PrivateModelEvidence>();
+export function chatGptModelFailureEvidence(error: unknown): PrivateModelEvidence | undefined {
+  return error instanceof Error ? privateModelEvidence.get(error) : undefined;
+}
 
 function familyError(family: ChatGptWebModelFamily, cause?: unknown): ChatGptWebAdapterError {
   return new ChatGptWebAdapterError(
@@ -28,8 +39,10 @@ export async function selectChatGptModelFamily(
   menu: EffortMenu,
   family: ChatGptWebModelFamily,
   activate: () => Promise<EffortMenu>,
+  signal?: AbortSignal,
 ): Promise<EffortMenu> {
   try {
+    signal?.throwIfAborted();
     const option = familyOption(menu, family);
     if (await option.count() > 1) throw familyError(family);
     if (await option.count() === 1 && await option.getAttribute("aria-checked", { timeout: CHATGPT_UI_ACTION_TIMEOUT_MS }) === "true") { diagnosticEvent("info", "browser.model_family_verified", { modelFamily: family, outcome: "already-selected" }); return menu; }
@@ -42,15 +55,20 @@ export async function selectChatGptModelFamily(
         const trigger = powerView.locator('[data-model-picker-view-toggle="true"]:not([hidden], [inert], [aria-hidden="true"], [hidden] *, [inert] *, [aria-hidden="true"] *)')
           .filter({ visible: true });
         if (await trigger.count() !== 1) throw familyError(family);
-        await trigger.click({ timeout: CHATGPT_UI_ACTION_TIMEOUT_MS });
+        signal?.throwIfAborted();
+        await trigger.click({ timeout: CHATGPT_UI_ACTION_TIMEOUT_MS, signal });
       } else if (view !== "advanced") throw familyError(family);
     } else {
       const trigger = menu.menu.locator('[role="menuitem"][aria-expanded][aria-hidden="false"]');
       if (await powerView.count() !== 0 || await trigger.count() !== 1) throw familyError(family);
-      if (await trigger.getAttribute("aria-expanded", { timeout: CHATGPT_UI_ACTION_TIMEOUT_MS }) === "false") await trigger.click({ timeout: CHATGPT_UI_ACTION_TIMEOUT_MS });
+      if (await trigger.getAttribute("aria-expanded", { timeout: CHATGPT_UI_ACTION_TIMEOUT_MS }) === "false") {
+        signal?.throwIfAborted();
+        await trigger.click({ timeout: CHATGPT_UI_ACTION_TIMEOUT_MS, signal });
+      }
     }
-    await option.waitFor({ state: "visible", timeout: CHATGPT_MODEL_CONTROL_SETTLE_MS });
-    await option.click({ timeout: CHATGPT_UI_ACTION_TIMEOUT_MS });
+    await option.waitFor({ state: "visible", timeout: CHATGPT_MODEL_CONTROL_SETTLE_MS, signal });
+    signal?.throwIfAborted();
+    await option.click({ timeout: CHATGPT_UI_ACTION_TIMEOUT_MS, signal });
     diagnosticEvent("info", "browser.model_family_action", { modelFamily: family, outcome: "action-returned" });
     // Choosing a family returns the open picker to its slider. Keep that surface:
     // Escape followed by an immediate reopen races the outgoing menu's cleanup.
@@ -58,6 +76,7 @@ export async function selectChatGptModelFamily(
     const selected = await activate();
     const deadline = Date.now() + 15_000;
     do {
+      signal?.throwIfAborted();
       const current = familyOption(selected, family);
       const state = await current.evaluateAll(rows => ({ count: rows.length, checked: rows[0]?.getAttribute("aria-checked") }));
       if (state.count > 1) throw familyError(family);
@@ -66,6 +85,7 @@ export async function selectChatGptModelFamily(
     } while (Date.now() < deadline);
     throw familyError(family);
   } catch (cause) {
+    signal?.throwIfAborted();
     if (cause instanceof ChatGptWebAdapterError) throw cause;
     throw familyError(family, cause);
   }
@@ -106,6 +126,7 @@ export async function assertChatGptModelFamily(
   effort: ChatGptWebAdapterEffort,
   effortIndex: number,
   settleMs = 0,
+  signal?: AbortSignal,
 ): Promise<void> {
   const deadline = Date.now() + settleMs;
   let checks: Record<string, unknown> = {};
@@ -114,6 +135,10 @@ export async function assertChatGptModelFamily(
   const started = performance.now();
   const history: Record<string, unknown>[] = [];
   let lastState = "", droppedStates = 0;
+  let sawReadableMismatch = false;
+  let menuObservationMissing = false;
+  let lastReadable: { snapshot: ModelSnapshot; checks: Record<string, unknown>; attempt: number } | undefined;
+  let reason = "selection_mismatch";
   const observe = () => {
     const state = JSON.stringify({ stage, checks });
     if (state === lastState) return;
@@ -126,6 +151,7 @@ export async function assertChatGptModelFamily(
   };
   try {
     do {
+      signal?.throwIfAborted();
       attempts++;
       stage = "family_radio";
       const option = familyOption(menu, family);
@@ -141,12 +167,24 @@ export async function assertChatGptModelFamily(
       const recognized = descriptions.filter(description => description.recognized);
       const descriptionsMatch = recognized.length > 0 && recognized.every(description =>
         description.familyMatches && description.nameMatches && description.effortMatches);
+      // An unrecognized description is uncertainty, not proof of another selection.
+      // This only improves diagnosis: the acceptance predicates remain unchanged.
+      reason = !snapshot ? "observation_failed" : radio.checked && sliderMatches && !descriptionsMatch
+        && !recognized.some(description => !description.familyMatches || !description.nameMatches
+          || description.effort !== "unknown" && !description.effortMatches)
+        ? "description_unknown" : "selection_mismatch";
       checks = { radio, snapshotPresent: !!snapshot, sliderValid: !!state,
         ...(snapshot ? { controlId: snapshot.controlId, headerCount: snapshot.headerCount, connected: snapshot.connected, visible: snapshot.visible, busy: snapshot.busy } : {}),
+        ...(snapshot?.relationships ? { relationships: snapshot.relationships } : {}),
+        ...(snapshot?.descriptionEvidence ? { descriptionNodes: snapshot.descriptionEvidence.map(({ text, reference, ...structure }) => structure) } : {}),
         ...(state ? { slider: { ...state, target: state.min + effortIndex } } : {}),
-        sliderMatches, descriptions, descriptionsMatch };
+        sliderMatches, descriptions: descriptions.slice(0, 8), descriptionCount: descriptions.length,
+        omittedDescriptions: Math.max(0, descriptions.length - 8), descriptionsMatch };
+      if (snapshot) lastReadable = { snapshot, checks, attempt: attempts };
       observe();
       if (radio.checked && sliderMatches && descriptionsMatch) return;
+      if (snapshot && radio.count > 0) sawReadableMismatch = true;
+      menuObservationMissing = !snapshot;
       if (Date.now() >= deadline) break;
       await new Promise(resolve => setTimeout(resolve, 50));
     } while (true);
@@ -156,7 +194,17 @@ export async function assertChatGptModelFamily(
       stage, reason: "observation_failed", attempts, checks, history, droppedStates, submission: "not-sent" });
     throw error;
   }
+  if (menuObservationMissing && !sawReadableMismatch) {
+    diagnosticEvent("warning", "browser.model_verification_failed", { modelFamily: family, requestedEffort: effort,
+      stage, reason: "observation_failed", attempts, checks, history, droppedStates, submission: "not-sent" });
+    throw new ChatGptModelMenuObservationUnavailableError("ChatGPT model menu disappeared before its selection could be read");
+  }
   diagnosticEvent("warning", "browser.model_verification_failed", { modelFamily: family, requestedEffort: effort,
-    stage: "selection_confirmation", reason: "selection_mismatch", attempts, checks, history, droppedStates, submission: "not-sent" });
-  throw familyError(family);
+    stage: "selection_confirmation", reason, attempts, checks, history, droppedStates, submission: "not-sent" });
+  const failure = familyError(family);
+  if (lastReadable) privateModelEvidence.set(failure, { version: 1, modelFamily: family, requestedEffort: effort,
+    reason, checks: lastReadable.checks, sampledAttempt: lastReadable.attempt, terminalAttempt: attempts,
+    descriptions: lastReadable.snapshot.descriptionEvidence ?? [],
+    omittedDescriptions: Math.max(0, lastReadable.snapshot.descriptions.length - (lastReadable.snapshot.descriptionEvidence?.length ?? 0)) });
+  throw failure;
 }

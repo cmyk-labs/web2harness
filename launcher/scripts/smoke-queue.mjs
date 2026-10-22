@@ -7,8 +7,10 @@ import { RequestQueue } from '../electron/runtime/request-queue.cjs';
 // Real host query + shared renderer, isolated receipts and mocked IPC. No browser model work.
 export async function runQueueSmoke({context,origin,out,check,errors}) {
   const directory=await mkdtemp(join(out,'queue-host-'));
+  const ownedResources=new Set();
   const queue=await new RequestQueue({directory,settings:{maxConcurrent:1,queueTimeoutMinutes:15,minSendIntervalSeconds:3},
-    logger:{info(){},error(){}},hasResource:()=>false,cancelResource:async()=>{}}).start();
+    logger:{info(){},error(){}},hasResource:trace=>ownedResources.has(trace),
+    ownsIsolatedSendResource:(trace,proof)=>trace==='queue_isolated'&&proof.surfaceId==='fixture-surface',cancelResource:async()=>{}}).start();
   const calls=[];
   let failQueries=false;
   const add=async(name,groupId,model='gpt-6-sol',effort='medium')=>{
@@ -23,6 +25,18 @@ export async function runQueueSmoke({context,origin,out,check,errors}) {
   };
   try {
     await finish(await add('old','launcher-smoke','gpt-5.6-sol'));
+    for (const deliveryState of ['validation_failed','response_written']) {
+      const ticket=await add(`native_${deliveryState}`,'launcher-smoke');
+      await finish(ticket);
+      await queue.request('native-delivery',{...ticket,delivery:{deliveryState,sequence:1}});
+    }
+    const isolated=await add('isolated','launcher-smoke');
+    ownedResources.add('queue_isolated');
+    const isolatedPermit=(await queue.request('send-begin',isolated)).permit;
+    await queue.request('send-end',{...isolated,permit:isolatedPermit,outcome:'unknown',
+      isolation:{version:1,inputSettled:true,helperPid:process.pid,surfaceId:'fixture-surface'}});
+    ownedResources.delete('queue_isolated');
+    await queue.request('settle',{...isolated,outcome:'failed',reason:'chatgpt_send_outcome_unknown'});
     const remoteId=createHash('sha256').update('remote-fixture').digest('hex'),remoteScope=createHash('sha256').update('fixture-tunnel').digest('hex');
     const remote=await queue.request('enqueue',{job:{id:remoteId,groupId:'launcher-smoke',model:'gpt-6-sol',mode:'mcp-bridge',bytes:0,mcpScope:remoteScope,connectorName:'Fixture DEV',retryAttempt:0},pid:process.pid,traceId:'queue_remote_fixture'});
     await queue.request('settle',{id:remoteId,secret:remote.secret,outcome:'failed',reason:'mcp_remote_rate_limited',remote:{failure:{kind:'rate_limit',source:'probe',status:429,retryAfterMs:120000}}});
@@ -98,7 +112,8 @@ export async function runQueueSmoke({context,origin,out,check,errors}) {
     await page.locator('.language-toggle').click();
     await panel.getByRole('alert').getByText(/发送结果未知/).waitFor();
     await panel.screenshot({path:join(out,'queue-send-unknown-zh.png')});
-    await queue.control('recover');
+    await queue.control('recover', undefined, queue.snapshot().recoveryToken);
+    await panel.getByRole('alert').waitFor({state:'detached'});
     await panel.getByText('暂无任务',{exact:true}).waitFor();
     check('A session disappears when its last active task finishes',await session.isDisabled()&&await session.inputValue()==='');
     await state.selectOption('ended');
@@ -106,6 +121,20 @@ export async function runQueueSmoke({context,origin,out,check,errors}) {
     check('Finished state exposes sessions with finished tasks',await session.locator('option').count()===3);
     await session.selectOption('launcher-smoke');
     await panel.locator('td').filter({hasText:/^gpt-5\.6-sol/}).first().waitFor();
+    await panel.getByText('原生回复校验失败',{exact:true}).waitFor();
+    check('Completed web work exposes native validation failure separately',await panel.locator('tbody tr').filter({hasText:'网页完成'}).count()===3);
+    check('Historical native receipts do not invent delivery success',await panel.getByText('交付未确认',{exact:true}).count()===1);
+    check('Writing the response is not claimed as Codex execution',(await panel.getByText('响应已写出',{exact:true}).getAttribute('title')).includes('不代表 Codex 已接收或执行工具'));
+    check('Chinese isolated-send label preserves unknown outcome and slot ownership',
+      (await panel.getByText('当前任务隔离',{exact:true}).getAttribute('title')).includes('发送结果仍未知'));
+    await panel.screenshot({path:join(out,'queue-native-delivery-zh.png')});
+    await page.locator('.language-toggle').click();
+    await panel.getByText('Native reply validation failed',{exact:true}).waitFor();
+    check('English distinguishes web completion from response delivery',await panel.getByText('Response written',{exact:true}).count()===1 && await panel.getByText('Delivery unconfirmed',{exact:true}).count()===1);
+    check('English isolated-send label does not claim remote completion',
+      (await panel.getByText('Task isolated',{exact:true}).getAttribute('title')).includes('outcome remains unknown'));
+    await panel.screenshot({path:join(out,'queue-native-delivery-en.png')});
+    await page.locator('.language-toggle').click();
     await state.selectOption('active');
     await panel.getByText('暂无任务',{exact:true}).waitFor();
     check('Changing state clears the previous session filter',await session.inputValue()==='');

@@ -17,6 +17,7 @@ const QUEUE_ENUMS = {
   state: new Set(["queued", "preparing", "running", "waiting-user", "waiting-tools", "stopping", "succeeded", "failed", "cancelled", "timed-out", "ready", "already_committed", "awaiting_intent", "activity_in_flight", "open", "submitted", "finished"]),
   pausedReason: new Set(["user", "account_rate_limited", "browser_unavailable", "send_outcome_unknown"]),
   sendProgress: new Set(["preflight", "waiting_permit", "sending", "awaiting_ack", "reconciling", "confirmed", "not-sent", "unknown"]),
+  sendFailureScope: new Set(["task", "global"]),
 };
 const TEXT = new Set(("message error reason code errorCode errorName errorDescription category status phase stage operation line stack cause detail signal model effort mode interactionMode browserInteractionMode checkpoint traceId requestId sessionId launcherSessionId processInstanceId operationId parentOperationId toolEventId toolName cellId event source component id eventId at capturedAt tag role ariaExpanded ariaChecked dataState dataHighlighted origin type channel connector timeBasis version currentVersion platform arch osRelease profile language electron node chrome outcome cancelSource deliveryState requestedModel verifiedModel requestedEffort verifiedEffort modelFamily budgetPolicy targetRole networkPhase systemCode endpoint reader transport severity tabId method purpose submission receiptId receiptStatus configRevision sandboxMode approvalMode observedDecision evidence verification changedKey previous next lastProgressAt").split(" "));
 function cleanText(input) {
@@ -51,7 +52,7 @@ function safeDetail(value, depth = 0) {
     key, SECRET.test(key) || CONTENT.test(key) ? "[removed]"
       : typeof item === "string" ? (Object.hasOwn(QUEUE_ENUMS, key) ? (QUEUE_ENUMS[key].has(item) ? item : "[text removed]")
         : ["groupId", "roundRef", "errorRef", "diagnosticRef"].includes(key) ? (/^diag-[a-f0-9]{24}$/.test(item) ? item : "[text removed]")
-        : ["attemptId", "queueId", "websocketRequestId", "websocketConnectionId", "firstEventId", "parentEventId", "triggerEventId", "controlId"].includes(key) ? (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(item) || key === "queueId" && /^[a-f0-9]{64}$/.test(item) ? item : "[text removed]")
+        : ["attemptId", "queueId", "websocketRequestId", "websocketConnectionId", "firstEventId", "parentEventId", "triggerEventId", "controlId", "nodeId", "itemId", "menuId"].includes(key) ? (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(item) || key === "queueId" && /^[a-f0-9]{64}$/.test(item) ? item : "[text removed]")
         : key === "helperRequestId" ? (/^[A-Za-z0-9_-]{6,128}$/.test(item) ? item : "[text removed]")
         : key === "sourceId" ? (/^[a-f0-9]{64}$/.test(item) ? item : "[text removed]")
         : TEXT.has(key) ? cleanText(item) : "[text removed]")

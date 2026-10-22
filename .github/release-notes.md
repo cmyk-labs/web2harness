@@ -1,43 +1,43 @@
 ## 简体中文
 
-Web2Harness 2.5.4（`v2.5.4`）修复公开进度尾段丢失，并补全后续故障定位所需的日志。
+Web2Harness 2.5.5（`v2.5.5`）改进网页交互恢复、工具交付和并发任务隔离，并补齐真实 MCP 与 Zero Risk 验收。
 
-- **完整交付进度尾段**：成功完成且正文证据完整时，交付尚未输出的公开进度尾段；保持续接去重，不把失败或取消当作完成。
-- **中断来源与传播**：记录本地首次观察到的中断及父事件引用，串联WebSocket、HTTP、任务/轮次、队列尝试和辅助进程；分别保留取消、关停、输入关闭、管道失败及进程退出证据。
-- **模型校验历史**：区分aria描述与可见标题，记录模型/强度匹配条件、滑块状态、控件重建及状态变化；失败最多保留32个变化状态，不保存未知页面文本。
-- **有界故障现场与导出**：桌面独立保存结构化故障上下文，保留首次绑定及近期观察，纳入现有诊断包；报告丢弃、淘汰和写入失败，不包含对话正文、工具载荷或凭据。
-- **保持Codex能力**：模型、强度、上下文、原生工具、权限、审批、等待、重试及点击/Enter策略保持原有行为；严格模型校验不放宽。
+- **发送与模型恢复**：点击失败后执行一次 Enter 兜底；已有接受证据时不重复发送。发送期间并行观察接受状态，明确输入结束与远端接受的区别；模型菜单可作有界恢复，始终保留指定模型和思考强度。
+- **响应与工具交付**：补充公开 final 候选、协议校验和交付失败的安全诊断；支持没有正文的有效 MCP 工具回合，改进中文工具确认识别。保留 Codex 原生工具、沙箱、审批及上下文边界，不用模型成功声明代替真实执行。
+- **队列与故障隔离**：仅状态查询在连接重置时进行一次受限重连；改进取消后的物理资源结算、可证明的单页面故障隔离，以及手动 MCP 错误重连，避免错误恢复另开网页。
+- **可选 MCP v2**：新增明确选择的 `web2harness-handoff-v2`，提交身份由宿主根据当前回合和准确调用派生，相同提交复用回执。缺省和既有 v1 选择保持兼容，不在当前回合自动降级或切换协议。切换前等待活动资源结算，随后重启运行时及隧道 worker，并刷新检查连接器工具目录。
+- **桌面与上下文**：Electron 升级至 43.8.3；完善交付阶段展示、故障证据和与所选契约一致的上下文估算。token 数仍为估算，不宣称已证明整体性能提升。
 
 ### 验证范围与已知限制
 
-确定性测试覆盖首因传播、独立错误、队列结算、helper真实子进程EOF/关停/取消/输出断管、模型状态历史、日志轮转与导出。真实Chrome模型夹具通过。认证隔离DEV确认主动取消及因果链，并在同一服务不重启的情况下完成GPT-6/xhigh的4次请求、2条原生命令、1次补丁和完整最终回答；实际诊断包包含首次中断及传播引用，覆盖完整。
+既有隔离认证 DEV 证据覆盖 Native Tools 读取、补丁、命令断言及最终回复，取消后恢复、四页面并发与单目标隔离，以及 MCP Automatic／Zero Risk 各 v1/v2 的真实工具链。另有新独立主会话实际委派三个 GPT-6（Web）高子 agent 完成审核和汇总：109 次模型请求成功交付，全部子报告完整回传。维护者选择本次复用该结果；版本准备前源码与该验收候选一致。本轮不重复运行该完整任务，也不把它视为 MCP／Zero Risk 同任务或全平台验收。
 
-完整源码验证、五个原生构建目标和新包完整性由对应CI检查。有效的既有验收证据继续沿用，跳过和未执行项不计通过。本轮未重新完成人工安装/升级/卸载、跨平台认证、远端MCP绑定、物理输入或跨DPI验收；CI包冒烟不替代这些检查。
+此前验收的初次失败、受控故障、同线程显式续跑和局部工具输入错误均保留；后续通过不改写历史。候选完整源码验证与依赖审计、五个原生目标构建和新包完整性以对应发布检查为准，跳过及未执行项不计通过。
 
-历史连接重置、模型校验失败及更早点击/附件超时的底层原因仍未证实，不能宣称全部根治。日志证明本地观察和传播，不保证确定远端服务或网络设备的内部原因；强杀或已断开的日志管道仍可能丢失末尾记录。既有Web模型协议兼容及偶发发送、缺正文、音频识别限制继续保留。
+历史模型强度 unknown、缺少公开 final、部分点击／附件超时等底层原因仍未全部证实。最新静态审核提出的候选风险未在本次发布准备中逐项动态复现或自动应用；不宣称所有网页问题已根治。维护者已知的人工安装／升级／卸载、系统服务、其他操作系统认证、物理输入和跨 DPI 验收缺口继续保留；CI 包冒烟不能替代这些检查。
 
-遇到问题时记录版本与发生时间，在“用量与诊断 → 日志 → 导出诊断包”保留现场后检查具体错误。升级不会自动恢复未知发送暂停；在运行控制核对发送状态并明确恢复，不要盲目重发结果未知的请求。此前未保存的历史证据无法由本版本补回。
+遇到问题时记录版本和时间，通过“用量与诊断 → 日志 → 导出诊断包”保留现场。升级不会自动清除未知发送暂停；先在运行控制确认发送状态，再明确恢复，避免盲目重发。MCP v2 工具缺失时刷新并检查连接器目录，不通过改用 v1 工具绕过当前协议。
 
-发布目标为Windows x64、macOS arm64/x64、Linux x64/arm64的七个包及`checksums.txt`。Windows无证书签名；macOS为ad-hoc签名，未作Developer ID签名或公证。
+发布目标为 Windows x64、macOS arm64/x64、Linux x64/arm64 的七个包及 `checksums.txt`。Windows 无证书签名；macOS 为 ad-hoc 签名，未作 Developer ID 签名或公证。
 
 ## English
 
-Web2Harness 2.5.4 (`v2.5.4`) fixes missing public progress tails and adds evidence for diagnosing future failures.
+Web2Harness 2.5.5 (`v2.5.5`) improves browser recovery, tool delivery and concurrent-task isolation, with authenticated MCP and Zero Risk acceptance evidence.
 
-- **Complete progress delivery**: Flush the remaining public progress tail after successful completion with complete text evidence. Preserve continuation deduplication and never treat failure or cancellation as completion.
-- **Interruption origin and propagation**: Record the first locally observed interruption and parent-event references across WebSocket, HTTP, task/turn, queue attempts and helpers. Distinguish cancellation, shutdown, closed input, pipe failure and process exit.
-- **Model verification history**: Separate aria descriptions from visible headers and record model/effort predicates, slider state, control remounts and state changes. Retain up to 32 changed states on failure without unknown page text.
-- **Bounded failure context and export**: Retain structural failure context separately on desktop, preserving initial binding and recent observations in existing diagnostic bundles. Report dropped/evicted records and write failures; exclude conversation bodies, tool payloads and credentials.
-- **Preserve Codex capabilities**: Keep model, effort, context, native tools, permissions, approvals, waits, retries and click/Enter behavior unchanged. Strict model verification remains enforced.
+- **Sending and model recovery**: Apply one Enter fallback after click failure, suppressing another send when acceptance evidence already exists. Observe acceptance during input and distinguish input settlement from remote acceptance. Bound model-menu recovery while preserving the explicitly selected model and effort.
+- **Response and tool delivery**: Add safe diagnostics for public final candidates, protocol validation and delivery failures. Support valid MCP tool turns without response text and improve Chinese tool-confirmation recognition. Preserve native Codex tools, sandbox, approvals and context boundaries; a model success statement is not execution evidence.
+- **Queue and fault isolation**: Retry only a status query once after a connection reset. Improve physical resource settlement after cancellation, provable per-page fault isolation and manual MCP error reconnection without opening another browser conversation.
+- **Optional MCP v2**: Add explicit selection of `web2harness-handoff-v2`. The host derives submission identity from the current round and exact calls; identical submissions reuse their receipt. Defaults and existing v1 selections remain compatible, without automatic protocol downgrade or switching within a round. Settle active resources before changing the protocol, then restart the runtime and tunnel worker and refresh and inspect the connector catalog.
+- **Desktop and context**: Update Electron to 43.8.3. Improve delivery-stage presentation, failure evidence and context estimates for the selected contract. Token counts remain estimates; no overall performance improvement is claimed from these checks.
 
 ### Validation scope and known limitations
 
-Deterministic tests cover first-event propagation, independent errors, queue settlement, real helper subprocess EOF/shutdown/cancellation/broken output, model history, log rotation and export. Real Chrome model fixtures passed. Authenticated isolated DEV confirmed cancellation and its causal chain, followed without a service restart by GPT-6/xhigh execution with four requests, two native commands, one patch and a complete final answer. The real diagnostic bundle retained the initial interruption and propagation references with complete coverage.
+Existing isolated authenticated DEV evidence covers Native Tools reads, patches, command assertions and final replies, recovery after cancellation, four concurrent pages and single-target isolation, and real tool chains for MCP Automatic and Zero Risk using both v1 and v2. A separate new main session delegated three GPT-6 (Web) high agents and aggregated their reviews: all 109 model requests were delivered, with complete child reports returned. The maintainer chose to reuse this result; source identity before version preparation matched that candidate. This complete task is not rerun for this release and does not establish the same task in MCP/Zero Risk or acceptance on every platform.
 
-The corresponding CI checks full source verification, five native build targets and new-package integrity. Valid existing acceptance evidence is reused; skipped and unexecuted checks are not passes. Manual installation/upgrade/uninstall, authenticated cross-platform operation, remote MCP binding, physical input and cross-DPI acceptance were not repeated in this round. CI package smoke does not replace these checks.
+Earlier initial failures, controlled faults, explicit continuation in the same thread and local tool-input errors remain recorded; later success does not overwrite them. Full candidate source verification and dependency audits, five native build targets and new-package integrity are established by the corresponding release checks. Skipped and unexecuted checks are not passes.
 
-The underlying causes of historical connection resets, model-check failures and earlier click/attachment timeouts remain unproven; this release does not claim to eliminate them all. Logs establish local observations and propagation, not necessarily the internal cause in a remote service or network device. Forced termination or a broken diagnostic pipe can still lose final records. Existing Web-model protocol limitations and intermittent send, missing-answer and audio-recognition risks remain.
+The underlying causes of historical unknown-effort observations, missing public finals and some click/attachment timeouts remain unproven. Candidate risks from the latest static review were not individually reproduced or automatically applied during release preparation; this release does not claim to eliminate every browser issue. Known gaps in manual installation/upgrade/uninstall, system services, authenticated operation on other operating systems, physical input and cross-DPI acceptance remain. CI package smoke does not replace those checks.
 
-If a problem occurs, record the version and time, export a diagnostic bundle from Usage & diagnostics → Logs, and inspect the specific error. Upgrade does not automatically clear an unknown-send pause: review send state in Runtime controls and explicitly recover without blindly resending an uncertain request. This release cannot reconstruct historical evidence that was never saved.
+After an error, record the version and time and export a diagnostic bundle from Usage & diagnostics → Logs. Upgrade does not automatically clear an unknown-send pause: review send state in Runtime controls before explicitly recovering, without blindly resending. If MCP v2 tools are missing, refresh and inspect the connector catalog instead of switching to v1 tools within the current protocol.
 
 Release targets are seven packages for Windows x64, macOS arm64/x64 and Linux x64/arm64, plus `checksums.txt`. Windows packages are not certificate-signed; macOS uses ad-hoc signing without Developer ID signing or notarization.

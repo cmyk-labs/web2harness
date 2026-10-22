@@ -51,6 +51,29 @@ function legacyFixture(home: string, interaction: "automatic" | "manual") {
 }
 
 describe("persisted runtime mode migration", () => {
+  test("explicit MCP handoff v2 persists for each interaction and unsupported versions are not repaired", () => {
+    withFixtureHome(home => {
+      const path = join(home, "config.json");
+      for (const interaction of ["automatic", "manual"] as const) {
+        const raw = { ...legacyFixture(home, interaction), mcpHandoffProtocol: "web2harness-handoff-v2" };
+        writeFileSync(path, JSON.stringify(raw));
+        for (const load of [loadConfig, loadConfigForSetup]) {
+          const config = load();
+          expect(config.mcpHandoffProtocol).toBe("web2harness-handoff-v2");
+          expect(providerConfig(config).chatgptWeb?.mcpHandoffProtocol).toBe("web2harness-handoff-v2");
+        }
+        saveConfig(loadConfig());
+        expect(loadConfig().mcpHandoffProtocol).toBe("web2harness-handoff-v2");
+        for (const unsupported of ["latest", "v2", null, 2]) {
+          writeFileSync(path, JSON.stringify({ ...raw, mcpHandoffProtocol: unsupported }));
+          expect(() => loadConfig()).toThrow("Unsupported MCP handoff protocol");
+          expect(() => loadConfigForSetup()).toThrow("Unsupported MCP handoff protocol");
+          expect(JSON.parse(readFileSync(path, "utf8")).mcpHandoffProtocol).toBe(unsupported);
+        }
+      }
+    });
+  });
+
   for (const interaction of ["automatic", "manual"] as const) {
     test(`upgrades ${interaction} state while preserving connector references and applying supported defaults`, () => {
       withFixtureHome(home => {

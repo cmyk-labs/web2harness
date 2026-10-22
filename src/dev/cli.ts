@@ -14,6 +14,7 @@ import {
   readLauncherBrowserHostDescriptor,
 } from "../browser/launcher-client";
 import { setupDevProfile } from "../setup";
+import { handoffProtocol } from "../../launcher/shared/handoff-protocol.cjs";
 import { tunnelStatus } from "../runtime/tunnel";
 import {
   createLauncherDevAdapter,
@@ -46,6 +47,7 @@ Usage:
   web2harness dev status [--json]
   web2harness dev setup [--native-tools|--browser-only] [--port PORT] [--automatic-browser-interaction]
   web2harness dev setup --mcp-bridge --tunnel-id ID --runtime-key-file PATH [--automatic-browser-interaction|--zero-risk-browser-interaction]
+    [--handoff-protocol web2harness-handoff-v1|web2harness-handoff-v2]
   web2harness dev codex -- [CODEX_ARGS...]
   web2harness dev chat NAME [--model MODEL] [MESSAGE]
   web2harness dev chat NAME --simulate [--model MODEL] [MESSAGE]
@@ -393,6 +395,7 @@ export async function runDevCommand(args: string[]): Promise<void> {
     const portText = takeOption(args, "--port");
     const port = portText === undefined ? undefined : Number(portText);
     const tunnelId = takeOption(args, "--tunnel-id");
+    const mcpProtocol = takeOption(args, "--handoff-protocol");
     const runtimeKeyFile = takeOption(args, "--runtime-key-file");
     const descriptorPath = takeOption(args, "--browser-host-descriptor") ?? paths.descriptorPath;
     const acknowledgedUnofficial = takeFlag(args, "--acknowledge-unofficial");
@@ -422,6 +425,7 @@ export async function runDevCommand(args: string[]): Promise<void> {
     rejectContextWindowOptions(takeOption(args, "--fast-context-window"), takeOption(args, "--standard-context-window"));
     if (args.length > 0) throw new Error(`Unknown DEV setup arguments: ${args.join(" ")}`);
     const result = await setupDevProfile({
+      ...(mcpProtocol !== undefined ? { mcpHandoffProtocol: handoffProtocol(mcpProtocol) } : {}),
       mode: mcpBridge ? "mcp-bridge" : browserOnly ? "browser-only" : "native-tools",
       ...(port === undefined ? {} : { port }),
       browserHostDescriptorPath: descriptorPath,

@@ -5,9 +5,9 @@
 **Web2Harness** — Use ChatGPT web models, including Pro when available to your account, in Codex with native tool calls, task context, streaming, and image inputs. Optional experimental 3× context budget. Web-model requests follow ChatGPT's web limits without consuming Codex quota. Native Tools is the default; no MCP connector or tunnel required.
 
 <p align="center">
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.4/web2harness-2.5.4-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · Latest stable release"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.4/web2harness-2.5.4-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · Latest stable release"></a>&nbsp;
-  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.4/web2harness-2.5.4-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · Latest stable release"></a>
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.5/web2harness-2.5.5-win-x64.exe"><img src="assets/readme/download-windows.svg" width="224" height="64" alt="Windows · x64 · Latest stable release"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.5/web2harness-2.5.5-mac-arm64.dmg"><img src="assets/readme/download-macos.svg" width="224" height="64" alt="macOS · Apple silicon · Latest stable release"></a>&nbsp;
+  <a href="https://github.com/cmyk-labs/web2harness/releases/download/v2.5.5/web2harness-2.5.5-linux-x64.AppImage"><img src="assets/readme/download-linux.svg" width="224" height="64" alt="Linux · x64 · Latest stable release"></a>
 </p>
 
 <p align="center">
@@ -150,6 +150,7 @@ User-visible features, fixes, and compatibility changes are recorded by version,
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 2.5.5 | 2026-10-22 | Improves send fallback and strict model-menu recovery, response/tool delivery diagnostics, queue reconnection and per-page failure isolation; adds optional host-derived MCP v2 submission identity and updates Electron. Authenticated Native Tools, MCP/Zero Risk and an independent main/three-agent task were exercised; historical unknown causes and manual installation gaps remain. |
 | 2.5.4 | 2026-10-22 | Preserves the complete public progress tail at successful completion; traces first-observed interruptions across requests, queue attempts and helpers; retains model-state history and bounded failure context in diagnostic exports. Preserves Codex tool, permission and wait behavior; historical reset and model-check causes remain unproven. |
 | 2.5.3 | 2026-10-21 | Separates browser connectivity from blocked send verification, preserves structured errors, invalidates stale check results, and adds guarded queue recovery with retained blocker summaries. Preserves native Codex tools and unknown-send protection. |
 | 2.5.2 | 2026-10-21 | Keeps click as the preferred send action with a guarded Enter fallback before any real input; retains input failure evidence, exposes queue send stages, and improves suspension timing and exact model-header checks. Historical incident root causes remain unproven. |

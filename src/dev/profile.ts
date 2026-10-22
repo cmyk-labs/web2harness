@@ -227,9 +227,24 @@ export async function launchDevProfile(
   if (!isAbsolute(executable) || !executableFile(executable)) {
     throw new Error(`DEV launcher executable is not an executable regular file: ${executable}`);
   }
+  const environment = devLauncherEnvironment(paths);
+  if (fromSource) {
+    // Electron downloads its binary on first use. Finish that foreground work
+    // before starting a detached application and its descriptor-ready deadline.
+    await new Promise<void>((resolvePreparation, rejectPreparation) => {
+      const preparation = spawn(executable, ["run", sourceScript, "--prepare"], {
+        env: environment, stdio: "inherit", windowsHide: true,
+      });
+      preparation.once("error", rejectPreparation);
+      preparation.once("exit", (code, signal) => {
+        if (code === 0) resolvePreparation();
+        else rejectPreparation(new Error(`DEV launcher dependency preparation failed (${signal ?? `exit ${code}`})`));
+      });
+    });
+  }
   const child = spawn(executable, fromSource ? ["run", sourceScript] : ["--dev-profile"], {
     detached: true,
-    env: devLauncherEnvironment(paths),
+    env: environment,
     stdio: "ignore",
     windowsHide: true,
   });

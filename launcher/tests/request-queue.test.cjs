@@ -26,6 +26,52 @@ async function fixture(t, options = {}) {
   };
 }
 
+test("only a verified native page can isolate an unknown send while retaining its resource slot", async t => {
+  const proof = { version: 1, inputSettled: true, helperPid: 912, surfaceId: "owned-surface" };
+  const f = await fixture(t, { settings: { maxConcurrent: 2, queueTimeoutMinutes: 15, minSendIntervalSeconds: 1 },
+    ownsIsolatedSendResource: (traceId, observed) => traceId === "trace_local" && observed.helperPid === 912 && observed.surfaceId === "owned-surface" });
+  const first = await f.add("local"), second = await f.add("independent"), waiting = await f.add("waiting");
+  f.resources.add("trace_local");
+  const permit = (await f.queue.request("send-begin", first.ticket)).permit;
+  await f.queue.request("send-end", { ...first.ticket, permit, outcome: "unknown", isolation: proof });
+  assert.equal(f.queue.snapshot().pausedReason, null); assert.equal(f.queue.snapshot().active, 2);
+  assert.equal(f.queue.core.get(waiting.ticket.id).state, "queued");
+  await assert.rejects(f.queue.request("settle", { ...first.ticket, outcome: "failed" }), /resources have not been released/);
+  assert.equal(f.queue.core.get(second.ticket.id).state, "preparing");
+  f.resources.delete("trace_local");
+  await f.queue.request("settle", { ...first.ticket, outcome: "failed", reason: "chatgpt_send_outcome_unknown" });
+  assert.equal(f.queue.core.get(first.ticket.id).sendFailureScope, "task");
+  assert.equal(f.queue.core.get(waiting.ticket.id).state, "preparing");
+  const receipt = JSON.parse(await fs.readFile(path.join(f.root, "request-queue.json"), "utf8"));
+  assert.equal(receipt.records.find(r => r.id === first.ticket.id).sendFailureScope, "task");
+  assert.equal(JSON.stringify(receipt).includes("owned-surface"), false);
+});
+
+test("a forged page proof and shared authentication failure retain global protection", async t => {
+  const f = await fixture(t, { ownsIsolatedSendResource: () => false });
+  const first = await f.add("forged");
+  const permit = (await f.queue.request("send-begin", first.ticket)).permit;
+  await f.queue.request("send-end", { ...first.ticket, permit, outcome: "unknown",
+    isolation: { version: 1, inputSettled: true, helperPid: 912, surfaceId: "not-owned" } });
+  assert.equal(f.queue.snapshot().pausedReason, "send_outcome_unknown");
+  await f.queue.request("settle", { ...first.ticket, outcome: "failed", reason: "chatgpt_sign_in_required" });
+  assert.ok(f.queue.snapshot().pauseReasons.includes("browser_unavailable"));
+});
+
+test("restart cannot trust a persisted unfinished task isolation receipt", async t => {
+  const f = await fixture(t);
+  const first = await f.add("old-isolation");
+  await f.queue.close();
+  const file = path.join(f.root, "request-queue.json"), saved = JSON.parse(await fs.readFile(file, "utf8"));
+  Object.assign(saved.records.find(r => r.id === first.ticket.id), { state: "preparing", sendProgress: "unknown", sendFailureScope: "task" });
+  saved.pauseReasons = []; saved.pauseSources = []; saved.pendingSend = false;
+  await fs.writeFile(file, JSON.stringify(saved));
+  await f.restart();
+  assert.equal(f.queue.snapshot().pausedReason, "send_outcome_unknown");
+  assert.equal(f.queue.core.get(first.ticket.id).state, "failed");
+  assert.equal(f.queue.core.get(first.ticket.id).reason, "runtime_restarted_outcome_unknown");
+});
+
 test("budget updates reserve an idle queue and release admission even after failure", async t => {
   const f = await fixture(t);
   await assert.rejects(f.queue.whileIdle(async () => {
@@ -51,6 +97,32 @@ test("host admits once, persists metadata before ACK, and refuses replay after r
   assert.equal(f.queue.snapshot().active, 0);
   assert.equal(f.queue.query({ state: "ended" }).items[0].reason, "runtime_restarted_outcome_unknown");
   await assert.rejects(f.queue.request("enqueue", first.input), /receipt/);
+});
+
+test("native delivery follows the settled owner, releases slots, rejects stale updates and survives restart", async t => {
+  const f = await fixture(t), first = await f.add("delivery_first"), next = await f.add("delivery_next");
+  const update = (ticket, deliveryState, sequence) => f.queue.request("native-delivery", { ...ticket, delivery: { deliveryState, sequence } });
+  await assert.rejects(update(first.ticket, "response_written", 1), { code: "queue_delivery_owner_invalid" });
+  await f.queue.request("settle", { ...first.ticket, outcome: "succeeded" });
+  assert.equal((await f.queue.request("poll", next.ticket)).record.state, "preparing");
+  await assert.rejects(update({ ...first.ticket, secret: next.ticket.secret }, "response_written", 1), /owner/);
+  await assert.rejects(update(first.ticket, "PRIVATE_ERROR", 1), /Invalid native delivery/);
+  let receipt = await update(first.ticket, "write_failed", 1);
+  assert.equal(receipt.state, "succeeded");
+  assert.equal(receipt.nativeDelivery.deliveryState, "write_failed");
+  receipt = await update(first.ticket, "response_written", 2);
+  assert.equal(receipt.nativeDelivery.deliveryState, "response_written");
+  await assert.rejects(update(first.ticket, "write_failed", 1), { code: "queue_delivery_stale" });
+  assert.equal((await update(first.ticket, "write_failed", 3)).nativeDelivery.deliveryState, "response_written");
+  await f.queue.request("settle", { ...next.ticket, outcome: "succeeded" });
+  await update(next.ticket, "validation_failed", 1);
+  assert.equal((await update(next.ticket, "response_written", 2)).nativeDelivery.deliveryState, "validation_failed");
+  const saved = await fs.readFile(path.join(f.root, "request-queue.json"), "utf8");
+  assert.ok(!saved.includes(first.ticket.secret) && !saved.includes("PRIVATE_ERROR") && !saved.includes('"lease"'));
+  await f.restart();
+  assert.equal(f.queue.core.get(first.ticket.id).nativeDelivery.deliveryState, "response_written");
+  assert.equal(f.queue.core.get(next.ticket.id).nativeDelivery.deliveryState, "validation_failed");
+  await assert.rejects(update(first.ticket, "response_written", 4), /owner/);
 });
 
 test("cancelling an active owner retains its slot until physical resources are released", async t => {

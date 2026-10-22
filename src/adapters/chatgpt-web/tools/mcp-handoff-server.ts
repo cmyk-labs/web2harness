@@ -9,13 +9,15 @@ import { callTurnBroker } from "./turn-broker";
 import { safeVisibleTools } from "./mcp-tool-policy";
 import { execGateway } from "./mcp-gateway";
 import { CODEX_COMPACTION_CONTROL_WIRE_NAME } from "./native-compaction-control";
-import { TOOL_BATCH_HANDOFF_PROTOCOL, type HandoffReceipt, type ToolBatchHandoff } from "./tool-batch-handoff";
+import { type HandoffReceipt, type ToolBatchHandoff } from "./tool-batch-handoff";
 import { HandoffValidationError } from "./handoff-validation";
 import { handoffContract, HANDOFF_ROUTING_INSTRUCTIONS } from "./handoff-contract";
 import { searchToolInventory } from "./tool-inventory-search";
+import { HANDOFF_V2, handoffProtocol, handoffSubmissionTools, type HandoffProtocol } from "../../../../launcher/shared/handoff-protocol.cjs";
 
 export const HANDOFF_TOOL_NAMES = new Set([
   "codex_tool_inventory", "codex_submit_tool_call", "codex_submit_tool_batch", "codex_yield_turn", "codex_finish_turn", "codex_turn_start",
+  "codex_submit_tool_call_v2", "codex_submit_tool_batch_v2",
 ]);
 
 function result(value: Record<string, unknown>) {
@@ -23,13 +25,17 @@ function result(value: Record<string, unknown>) {
 }
 
 /** Explicit protocol endpoint. None of these tools executes a Codex tool inline. */
-export function createHandoffMcpServer(options: { brokerSocketPath: string; contract: "native" | "safe" }): McpServer {
-  const protocol = TOOL_BATCH_HANDOFF_PROTOCOL;
+export function createHandoffMcpServer(options: { brokerSocketPath: string; contract: "native" | "safe"; protocol?: HandoffProtocol }): McpServer {
+  const protocol = handoffProtocol(options.protocol);
+  const submissionTools = handoffSubmissionTools(protocol);
+  const submissionIdentity = protocol === HANDOFF_V2
+    ? "Do not supply submission_id. The host derives it; identical calls in this round reuse the receipt. If these v2 tools are absent, refresh the connector catalog; never use a v1 submission tool or switch protocol in this round."
+    : "Identical retries reuse the caller's stable submission_id.";
   const { contract, brokerSocketPath } = options;
   const reference = contract === "safe" ? "request_id" : "turn_token";
   const tokenSchema = { [reference]: z.string().min(20).max(256) };
-  const server = new McpServer({ name: contract === "safe" ? "codex-safe-handoff" : "codex-native-handoff", version: VERSION }, {
-    instructions: handoffContract(reference).join(" "),
+  const server = new McpServer({ name: `codex-${contract === "safe" ? "safe" : "native"}-handoff${protocol === HANDOFF_V2 ? "-v2" : ""}`, version: VERSION }, {
+    instructions: handoffContract(reference, protocol).join(" "),
   });
   type Claim = { bindingId: string; traceId?: string; environment: ChatGptTurnEnvironment;
     callControls: ToolBatchHandoff["callControls"]; roundState: ToolBatchHandoff["roundState"] };
@@ -92,7 +98,8 @@ export function createHandoffMcpServer(options: { brokerSocketPath: string; cont
     });
     return result({ protocol, ...claim.roundState,
     call_controls: claim.callControls,
-    submission_tool: claim.callControls.max_calls_per_batch === 1 ? "codex_submit_tool_call" : "codex_submit_tool_batch",
+    submission_tool: claim.callControls.max_calls_per_batch === 1 ? submissionTools.single : submissionTools.batch,
+    submission_identity: protocol === HANDOFF_V2 ? "host" : "caller",
     submission_field: claim.callControls.max_calls_per_batch === 1 ? "call" : "calls",
     catalog_scope: "currently_loaded_tools",
     discovery_tools: visible.filter(tool => tool.toolSearch).map(tool => ({
@@ -124,13 +131,14 @@ export function createHandoffMcpServer(options: { brokerSocketPath: string; cont
     scope: z.enum(["top_level", "exec", "catalog"]).optional(),
     arguments: z.record(z.string(), z.unknown()).optional(), input: z.string().optional(),
   });
-  const submissionSchema = { ...tokenSchema, submission_id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/) };
-  const submit = (input: Record<string, unknown> & { submission_id: string; calls: z.infer<typeof callSchema>[] }, signal: AbortSignal) =>
+  const submissionSchema: Record<string, z.ZodType> = { ...tokenSchema };
+  if (protocol !== HANDOFF_V2) submissionSchema.submission_id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+  const submit = (input: Record<string, unknown> & { calls: z.infer<typeof callSchema>[] }, signal: AbortSignal) =>
     claimed(input, signal, async (claim, activityId) => {
     try {
       const receipt = await callTurnBroker<HandoffReceipt>(brokerSocketPath, {
         method: "handoff_submit", bindingId: claim.bindingId, protocol, activityId,
-        submissionId: input.submission_id, calls: input.calls, sealOnSubmit: true,
+        ...(protocol !== HANDOFF_V2 ? { submissionId: input.submission_id as string } : {}), calls: input.calls, sealOnSubmit: true,
       }, 5_000, signal);
       if (!receipt.sealed) throw new Error("Restart the Web2Harness runtime to enable atomic handoff submission");
       diagnosticEvent("info", "tool.handoff_response_prepared", { traceId: claim.traceId,
@@ -141,18 +149,18 @@ export function createHandoffMcpServer(options: { brokerSocketPath: string; cont
       if (!(error instanceof HandoffValidationError)) throw error;
       return { ...result({ accepted: false, execution_state: "not_executed", code: error.code,
         message: error.message, call_controls: claim.callControls,
-        submission_tool: claim.callControls.max_calls_per_batch === 1 ? "codex_submit_tool_call" : "codex_submit_tool_batch" }), isError: true };
+        submission_tool: claim.callControls.max_calls_per_batch === 1 ? submissionTools.single : submissionTools.batch }), isError: true };
     }
   });
-  server.registerTool("codex_submit_tool_call", {
+  server.registerTool(submissionTools.single, {
     title: "Submit one Codex call and end this Web round", annotations,
-    description: "Use when inventory submission_tool is codex_submit_tool_call, including parallel_tool_calls=false. Pass exactly one call object with the declared name, separate namespace and scope; custom tools use input, functions use arguments. Validates, registers and seals atomically WITHOUT executing. After success END this Web response immediately. Codex executes after physical completion and returns the real result in the next request. No yield or polling is needed. A validation error means not accepted; inspect the error without changing permissions. Identical retries reuse submission_id.",
-    inputSchema: { ...submissionSchema, call: callSchema },
+    description: `Use when inventory submission_tool is ${submissionTools.single}, including parallel_tool_calls=false. Pass exactly one call object with the declared name, separate namespace and scope; custom tools use input, functions use arguments. Validates, registers and seals atomically WITHOUT executing. After success END this Web response immediately. Codex executes after physical completion and returns the real result in the next request. No yield or polling is needed. A validation error means not accepted; inspect the error without changing permissions. ${submissionIdentity}`,
+    inputSchema: z.strictObject({ ...submissionSchema, call: callSchema }),
   }, (input, extra) => submit({ ...input, calls: [input.call] }, extra.signal));
-  server.registerTool("codex_submit_tool_batch", {
+  server.registerTool(submissionTools.batch, {
     title: "Submit a parallel Codex batch and end this Web round", annotations,
-    description: "Use only when inventory submission_tool is codex_submit_tool_batch. If it selects codex_submit_tool_call, use that single-call interface instead. Pass independent declared calls within call_controls. Custom tools use input, functions use arguments. Validation, registration and sealing are atomic, but execution waits for physical Web completion. After success END this response. A validation error means not accepted; inspect the error without changing permissions. Identical retries reuse submission_id.",
-    inputSchema: { ...submissionSchema, calls: z.array(callSchema).min(1).max(32) },
+    description: `Use only when inventory submission_tool is ${submissionTools.batch}. If it selects ${submissionTools.single}, use that single-call interface instead. Pass independent declared calls within call_controls. Custom tools use input, functions use arguments. Validation, registration and sealing are atomic, but execution waits for physical Web completion. After success END this response. A validation error means not accepted; inspect the error without changing permissions. ${submissionIdentity}`,
+    inputSchema: z.strictObject({ ...submissionSchema, calls: z.array(callSchema).min(1).max(32) }),
   }, (input, extra) => submit(input, extra.signal));
 
   server.registerTool("codex_yield_turn", {

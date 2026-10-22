@@ -1,11 +1,13 @@
 import { expect, spyOn, test } from "bun:test";
 import * as childProcess from "node:child_process";
+import { EventEmitter } from "node:events";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import {
   devLauncherEnvironment,
   installedLauncherCandidates,
+  launchDevProfile,
   readDevChatExperimentalFeatures,
   resolveDevProfilePaths,
 } from "../../src/dev/profile";
@@ -148,5 +150,80 @@ test("DEV launcher child cannot inherit production home or browser-profile overr
   })).toEqual({
     KEEP_ME: "yes",
     WEB2HARNESS_DEV_HOME: paths.home,
+  });
+});
+
+async function withLauncherSpawnFixture(
+  executable: string | undefined,
+  check: (calls: { args: string[]; options: childProcess.SpawnOptions; child: EventEmitter }[], result: Promise<Error | null>) => Promise<void>,
+) {
+  const root = mkdtempSync(join(tmpdir(), "web2harness-dev-prepare-"));
+  const paths = resolveDevProfilePaths({ homeDirectory: root, environment: { WEB2HARNESS_DEV_HOME: join(root, "dev") } });
+  const override = process.env.WEB2HARNESS_LAUNCHER_EXECUTABLE;
+  delete process.env.WEB2HARNESS_LAUNCHER_EXECUTABLE;
+  const calls: { args: string[]; options: childProcess.SpawnOptions; child: EventEmitter }[] = [];
+  const spawn = spyOn(childProcess, "spawn").mockImplementation(((_command: string, args: string[], options: childProcess.SpawnOptions) => {
+    const child = Object.assign(new EventEmitter(), { unref() {} });
+    calls.push({ args, options, child });
+    return child;
+  }) as unknown as typeof childProcess.spawn);
+  const result = launchDevProfile(paths, { executable, timeoutMs: 1 }).then(() => null, (error: Error) => error);
+  try {
+    await check(calls, result);
+  } finally {
+    // Keep the mock installed until all asynchronous launch work is finished.
+    // A failed assertion must never let cleanup start a real launcher.
+    for (const call of calls) call.child.emit("exit", 1, null);
+    await result;
+    spawn.mockRestore();
+    if (override === undefined) delete process.env.WEB2HARNESS_LAUNCHER_EXECUTABLE;
+    else process.env.WEB2HARNESS_LAUNCHER_EXECUTABLE = override;
+    if (dirname(resolve(root)) !== resolve(tmpdir()) || !basename(root).startsWith("web2harness-dev-prepare-")) {
+      throw new Error("Refusing to remove an unowned DEV preparation fixture");
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test("source DEV waits for dependency preparation before starting its readiness deadline", async () => {
+  await withLauncherSpawnFixture(undefined, async (calls, result) => {
+    expect(calls).toHaveLength(1);
+    expect(calls[0].args.at(-1)).toBe("--prepare");
+    expect(calls[0].options.detached).not.toBe(true);
+    expect(calls[0].options.stdio).toBe("inherit");
+    expect(calls[0].options.windowsHide).toBe(true);
+    expect(calls[0].options.env?.WEB2HARNESS_HOME).toBeUndefined();
+    expect(calls[0].options.env?.CODEX_HOME).toBeUndefined();
+    // This exceeds the 1ms readiness timeout but must not time out preparation.
+    await Bun.sleep(20);
+    expect(calls).toHaveLength(1);
+    calls[0].child.emit("exit", 0, null);
+    expect((await result)?.message).toContain("DEV launcher did not become ready within 1ms");
+    expect(calls).toHaveLength(2);
+    expect(calls[1].args.at(-1)).not.toBe("--prepare");
+    expect(calls[1].options.detached).toBe(true);
+    expect(calls[1].options.env).toEqual(calls[0].options.env);
+  });
+});
+
+for (const failure of ["exit", "error", "signal"] as const) {
+  test(`source DEV preparation ${failure} fails without starting the runtime`, async () => {
+    await withLauncherSpawnFixture(undefined, async (calls, result) => {
+      expect(calls[0].args.at(-1)).toBe("--prepare");
+      if (failure === "error") calls[0].child.emit("error", new Error("fixture spawn failed"));
+      else calls[0].child.emit("exit", failure === "exit" ? 7 : null, failure === "signal" ? "SIGTERM" : null);
+      const error = await result;
+      expect(error?.message).toContain(failure === "error" ? "fixture spawn failed" : "DEV launcher dependency preparation failed");
+      expect(calls).toHaveLength(1);
+    });
+  });
+}
+
+test("an explicit packaged DEV executable does not run source dependency preparation", async () => {
+  await withLauncherSpawnFixture(process.execPath, async (calls, result) => {
+    expect(calls).toHaveLength(1);
+    expect(calls[0].args).toEqual(["--dev-profile"]);
+    expect(calls[0].options.detached).toBe(true);
+    expect((await result)?.message).toContain("DEV launcher did not become ready within 1ms");
   });
 });

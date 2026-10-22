@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { probeTunnelTransport } from "../../launcher/shared/tunnel-transport-health.cjs";
+import { handoffProtocol } from "../../launcher/shared/handoff-protocol.cjs";
 import { unzipSync } from "fflate";
 import type { AppConfig, BrowserInteractionMode, TunnelConfig } from "../config";
 import { atomicWriteFile, getConfigDir } from "../config";
@@ -258,7 +259,7 @@ export function mcpCommand(config: AppConfig, platform = process.platform): stri
   const command = [
     ...config.runtimeCommand,
     "mcp",
-    "--protocol", "web2harness-handoff-v1",
+    "--protocol", handoffProtocol(config.mcpHandoffProtocol),
     "--contract",
     contract,
     "--broker-socket",

@@ -33,7 +33,7 @@ function exhaustedError(entry: RetryBudgetEntry): ChatGptWebAdapterError {
 }
 
 /**
- * Tracks only retryable ChatGPT browser failures across adapter instances. The HTTP bridge creates
+ * Tracks retry budgets and terminal ChatGPT tool-turn failures across adapter instances. The HTTP bridge creates
  * one adapter per request, so this process-local budget must live outside createChatGptWebAdapter.
  */
 export class ChatGptWebTurnRetryPolicy {
@@ -67,8 +67,8 @@ export class ChatGptWebTurnRetryPolicy {
     return entry && (entry.terminal || entry.retries > entry.maxRetries) ? exhaustedError(entry) : undefined;
   }
 
-  /** A permanent remote failure remains terminal for this native turn, even when the client
-   * adds partially delivered prose to its reconnect body and changes the browser-round hash. */
+  /** A permanent tool-turn failure remains terminal for this native turn, even when the client
+   * adds delivered prose/manual progress to its reconnect body and changes the browser-round hash. */
   recordTerminalFailure(key: string, error: ChatGptWebAdapterError, now = Date.now()): void {
     this.prune(now);
     const previous = this.entries.get(key);

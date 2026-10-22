@@ -6,6 +6,7 @@ export const BRIDGE_TOOL_NAMES = new Set([
   "codex_turn_start", "codex_exec", "codex_write_stdin", "codex_apply_patch", "codex_view_image",
   "codex_tool_inventory", "codex_tool_call", "codex_turn_complete",
   "codex_submit_tool_call", "codex_submit_tool_batch", "codex_yield_turn", "codex_finish_turn",
+  "codex_submit_tool_call_v2", "codex_submit_tool_batch_v2",
 ]);
 
 // App connectors may expose the same method with one leading underscore.

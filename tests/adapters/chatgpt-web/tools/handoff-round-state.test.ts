@@ -62,11 +62,11 @@ test("owner transport distinguishes missing intent from sealed but unsettled act
     expect(() => broker.confirmHandoffPhysicalSettlement(token)).toThrow("fence");
     await callTurnBroker(broker.socketPath, { method: "activity_complete", token, activityId: claim.activityId });
     const ready = await owner.beginCompletionFence(token);
-    expect(ready).toMatchObject({ state: "ready" });
+    expect(ready).toMatchObject({ state: "ready", awaitingToolResults: true });
     if (!("revision" in ready)) throw new Error("Expected revision");
     expect(await owner.commitCompletionFence(token, 0)).toMatchObject({ state: "revision_changed" });
     expect(await owner.commitCompletionFence(token, ready.revision)).toEqual({ state: "committed", revision: ready.revision, awaitingToolResults: true });
-    expect(await owner.beginCompletionFence(token)).toEqual({ state: "already_committed", revision: ready.revision });
+    expect(await owner.beginCompletionFence(token)).toEqual({ state: "already_committed", revision: ready.revision, awaitingToolResults: true });
   } finally { await broker.close(); f.cleanup(); }
 });
 

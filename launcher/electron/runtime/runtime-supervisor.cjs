@@ -14,6 +14,7 @@ const {
   terminateOwnedProcessTree,
 } = require("../common/process-tree.cjs");
 const { runtimeInvocation } = require("./runtime-command.cjs");
+const { handoffProtocol } = require("../../shared/handoff-protocol.cjs");
 const {
   CURRENT_CONFIG_VERSION,
   migrateRuntimeConfig,
@@ -212,6 +213,7 @@ function validateConfig(config, descriptorPath, platform = process.platform, lau
   if (config.browserInteractionMode === undefined) {
     config.browserInteractionMode = "automatic";
   }
+  handoffProtocol(config.mcpHandoffProtocol);
   if (config.mode !== "browser-only" && config.mode !== "native-tools" && config.mode !== "mcp-bridge") {
     throw new Error("Runtime configuration has an invalid mode");
   }
@@ -1045,7 +1047,7 @@ class RuntimeSupervisor {
     const contract = config.browserInteractionMode === "manual" ? "safe" : "native";
     const invocation = this.runtimeCommand([
       "mcp",
-      "--protocol", "web2harness-handoff-v1",
+      "--protocol", handoffProtocol(config.mcpHandoffProtocol),
       "--contract",
       contract,
       "--broker-socket",

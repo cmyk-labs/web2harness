@@ -46,11 +46,13 @@ import { rejectContextWindowEdits } from "../launcher/shared/context-budgets.cjs
 import { VERSION } from "./version";
 import { assertDevRuntimeIsolation, canonicalDevPath } from "./dev/isolation";
 import { operationStage, operationStageRelay, operationStageSync } from "./runtime/operation-stage";
+import { handoffProtocol, type HandoffProtocol } from "../launcher/shared/handoff-protocol.cjs";
 
 export interface SetupOptions {
   mode: RuntimeMode;
   browserInteractionMode?: BrowserInteractionMode;
   subagentProtocol?: SubagentProtocol;
+  mcpHandoffProtocol?: HandoffProtocol;
   port?: number;
   chromeExecutablePath?: string;
   browserHostDescriptorPath?: string;
@@ -137,6 +139,7 @@ function meaningfulRuntimeChange(before: AppConfig, after: AppConfig): boolean {
   return JSON.stringify({
     mode: before.mode,
     subagentProtocol: before.subagentProtocol,
+    mcpHandoffProtocol: handoffProtocol(before.mcpHandoffProtocol),
     releaseVersion: before.releaseVersion,
     host: before.host,
     port: before.port,
@@ -170,6 +173,7 @@ function meaningfulRuntimeChange(before: AppConfig, after: AppConfig): boolean {
   }) !== JSON.stringify({
     mode: after.mode,
     subagentProtocol: after.subagentProtocol,
+    mcpHandoffProtocol: handoffProtocol(after.mcpHandoffProtocol),
     releaseVersion: after.releaseVersion,
     host: after.host,
     port: after.port,
@@ -206,6 +210,7 @@ function meaningfulRuntimeChange(before: AppConfig, after: AppConfig): boolean {
 export function tunnelWorkerRuntimeChanged(before: AppConfig | undefined, after: AppConfig): boolean {
   if (!before || before.mode !== "mcp-bridge" || after.mode !== "mcp-bridge") return false;
   return before.releaseVersion !== after.releaseVersion
+    || handoffProtocol(before.mcpHandoffProtocol) !== handoffProtocol(after.mcpHandoffProtocol)
     || JSON.stringify(before.runtimeCommand) !== JSON.stringify(after.runtimeCommand)
     || before.brokerSocketPath !== after.brokerSocketPath
     || before.browserInteractionMode !== after.browserInteractionMode
@@ -268,6 +273,7 @@ function baseConfig(
 ): AppConfig {
   const config = existing ? structuredClone(existing) : defaultConfig(options.mode);
   config.mode = options.mode;
+  if (options.mcpHandoffProtocol !== undefined) config.mcpHandoffProtocol = handoffProtocol(options.mcpHandoffProtocol);
   if (options.browserInteractionMode) config.browserInteractionMode = options.browserInteractionMode;
   Object.assign(config, resolveInteractionConnectorIdentities(
     config.browserInteractionMode,

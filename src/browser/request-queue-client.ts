@@ -1,5 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
-import type { QueueInput, QueueRecord } from "../../launcher/shared/request-scheduler.cjs";
+import { AsyncLocalStorage } from "node:async_hooks";
+import type { QueueInput, QueueRecord, NativeDeliveryState } from "../../launcher/shared/request-scheduler.cjs";
 import { readLauncherBrowserHostDescriptor } from "./launcher-client";
 import { ChatGptWebAdapterError } from "../adapters/chatgpt-web/adapter-error";
 import { validMcpRemoteFailure } from "../../launcher/shared/mcp-remote-error.cjs";
@@ -10,13 +11,65 @@ export interface QueueTicket { id: string; secret: string }
 /** Launcher transport or the in-process owner of a standalone browser profile. */
 export interface RequestQueueTransport { request<T>(action: string, body: unknown): Promise<T> }
 export type RequestQueueTarget = string | RequestQueueTransport;
+
+const deliveryScope = new AsyncLocalStorage<NativeQueueDelivery>();
+/** Capture the actual queue admission (including context resync), never infer its owner by ID.
+ * Credentials stay in this runtime object and are never serialized into events or receipts. */
+export class NativeQueueDelivery {
+  private binding?: { target: RequestQueueTarget; ticket: QueueTicket; attemptId: string };
+  private sequence = 0;
+  run<T>(execute: () => T): T { return deliveryScope.run(this, execute); }
+  bind(target: RequestQueueTarget, ticket: QueueTicket, attemptId: string): void {
+    this.binding = { target, ticket, attemptId };
+    this.sequence = 0;
+  }
+  context(): { queueId?: string; attemptId?: string } {
+    return this.binding ? { queueId: this.binding.ticket.id, attemptId: this.binding.attemptId } : {};
+  }
+  async report(deliveryState: NativeDeliveryState): Promise<void> {
+    if (!this.binding) return;
+    const { target, ticket, attemptId } = this.binding;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
+    try {
+      await Promise.race([
+        queueRequest(target, "native-delivery", { ...ticket, delivery: { deliveryState, sequence: ++this.sequence } }),
+        // Includes an in-process host blocked on persistence, not just HTTP fetch timeouts.
+        new Promise<never>((_resolve, reject) => { timer = setTimeout(() => {
+          timedOut = true; reject(new Error("Delivery metadata timeout"));
+        }, 2000); }),
+      ]);
+    } catch {
+      // A metadata outage must neither resend the web generation nor invalidate the committed reply.
+      diagnosticEvent("warning", "browser.native_delivery_update_failed", {
+        queueId: ticket.id, attemptId, deliveryState, category: "queue_metadata_unavailable", outcome: timedOut ? "timeout" : "failed",
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
 export async function queueRequest<T>(descriptorPath: RequestQueueTarget, action: string, body: unknown): Promise<T> {
   if (typeof descriptorPath !== "string") return descriptorPath.request<T>(action, body);
   const descriptor = readLauncherBrowserHostDescriptor(descriptorPath);
-  const response = await fetch(`${descriptor.control.endpoint}/v1/queue/${action}`, {
+  const endpoint = `${descriptor.control.endpoint}/v1/queue/${action}`;
+  const options = {
     method: "POST", headers: { authorization: `Bearer ${descriptor.control.token}`, "content-type": "application/json" },
     body: JSON.stringify(body), signal: AbortSignal.timeout(10_000),
-  });
+  };
+  let response: Response;
+  try { response = await fetch(endpoint, options); }
+  catch (error) {
+    const code = error instanceof Error
+      ? (error as NodeJS.ErrnoException).code ?? (error.cause as NodeJS.ErrnoException | undefined)?.code : undefined;
+    // Poll only refreshes the same owner's status/heartbeat. A dropped loopback socket
+    // must not immediately cancel its browser work; mutating operations are never replayed.
+    // Keep the captured endpoint, ticket bytes and original deadline across this one retry.
+    if (action !== "poll" || code !== "ECONNRESET" || options.signal.aborted) throw error;
+    diagnosticEvent("warning", "browser.queue_poll_transport_retry", { error: diagnosticError(error) });
+    await delay(100, undefined, { signal: options.signal });
+    response = await fetch(endpoint, options);
+  }
   const result = await response.json() as { error?: string; code?: string };
   if (!response.ok) throw new ChatGptWebAdapterError(result.error ?? "Request queue unavailable", {
     status: 503, errorType: "server_error", code: result.code ?? "queue_unavailable", retryable: false,
@@ -52,6 +105,7 @@ export async function withQueuedRequest<T>(options: {
   });
   const ticket = { id: options.job.id, secret: admitted.secret };
   const context = { ...diagnosticContext.getStore(), traceId: options.traceId, queueId: ticket.id, attemptId: crypto.randomUUID() };
+  if (options.job.mode === "native-tools") deliveryScope.getStore()?.bind(options.descriptorPath, ticket, context.attemptId);
   return diagnosticContext.run(context, async () => {
   diagnosticEvent("info", "browser.queue_attempt_admitted", { state: admitted.record.state });
   const abort = new AbortController();

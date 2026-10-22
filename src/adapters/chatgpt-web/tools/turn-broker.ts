@@ -16,6 +16,7 @@ import {
 } from "../conversation/compaction-transaction";
 import type { ChatGptTurnEnvironment } from "../prompt/environment";
 import { safeVisibleTools } from "./mcp-tool-policy";
+import { HANDOFF_V1, HANDOFF_V2, handoffProtocol, type HandoffProtocol } from "../../../../launcher/shared/handoff-protocol.cjs";
 import {
   ToolBatchHandoff, TOOL_BATCH_HANDOFF_PROTOCOL,
   type HandoffCall, type HandoffToolPolicy, type HandoffTerminal, type HandoffDeliveryReceipt, type HandoffRoundState,
@@ -155,7 +156,7 @@ interface BrokerRequest {
   contract?: "native" | "safe";
   allowBrowserReply?: boolean;
   browserReply?: string;
-  protocol?: typeof TOOL_BATCH_HANDOFF_PROTOCOL;
+  protocol?: HandoffProtocol;
   submissionId?: string;
   sealOnSubmit?: boolean;
   calls?: HandoffCall[];
@@ -239,7 +240,7 @@ function assertSurfaceNonce(value: unknown): asserts value is string {
 }
 
 export interface TurnBrokerOwner {
-  registerHandoff(environment: ChatGptTurnEnvironment, options?: { surfaceNonce?: string; ttlMs?: number; traceId?: string; policy?: HandoffToolPolicy; allowBrowserReply?: boolean }): Promise<string>;
+  registerHandoff(environment: ChatGptTurnEnvironment, options?: { protocol?: HandoffProtocol; surfaceNonce?: string; ttlMs?: number; traceId?: string; policy?: HandoffToolPolicy; allowBrowserReply?: boolean }): Promise<string>;
   waitForHandoffIntent(token: string, signal?: AbortSignal): Promise<HandoffTerminal>;
   deliverHandoff(token: string): Promise<{ terminal: HandoffTerminal; requests: BrokerToolRequest[] }>;
   register(environment: ChatGptTurnEnvironment, ttlMs?: number, traceId?: string): Promise<string>;
@@ -387,8 +388,9 @@ export class TurnBroker implements TurnBrokerOwner {
 
   /** Explicit opt-in. Legacy synchronous channels never acquire handoff semantics. */
   async registerHandoff(environment: ChatGptTurnEnvironment, options: {
-    surfaceNonce?: string; ttlMs?: number; traceId?: string; policy?: HandoffToolPolicy; allowBrowserReply?: boolean;
+    protocol?: HandoffProtocol; surfaceNonce?: string; ttlMs?: number; traceId?: string; policy?: HandoffToolPolicy; allowBrowserReply?: boolean;
   } = {}, externalOwner = false): Promise<string> {
+    const protocol = handoffProtocol(options.protocol);
     if (options.allowBrowserReply !== undefined && typeof options.allowBrowserReply !== "boolean") throw new Error("Invalid browser reply mode");
     if (options.surfaceNonce !== undefined && options.allowBrowserReply) throw new Error("Manual rounds require explicit reply submission");
     const trusted = ownerEnvironment(environment);
@@ -396,7 +398,8 @@ export class TurnBroker implements TurnBrokerOwner {
       ? await this.registerSafe(trusted, options.surfaceNonce, options.ttlMs, options.traceId, externalOwner)
       : await this.register(trusted, options.ttlMs, options.traceId, externalOwner);
     const channel = this.channels.get(token)!;
-    channel.handoff = new ToolBatchHandoff(trusted.tools, options.policy, options.allowBrowserReply);
+    channel.handoff = new ToolBatchHandoff(trusted.tools, options.policy, options.allowBrowserReply,
+      { protocol, contract: options.surfaceNonce === undefined ? "native" : "safe" });
     channel.handoffWaiters = new Set();
     diagnosticEvent("info", "tool.handoff_controls", {
       traceId: channel.traceId, toolCount: trusted.tools.length,
@@ -413,8 +416,19 @@ export class TurnBroker implements TurnBrokerOwner {
   async deliverHandoff(token: string): Promise<{ terminal: HandoffTerminal; requests: BrokerToolRequest[] }> {
     this.confirmHandoffPhysicalSettlement(token);
     const terminal = this.channels.get(token)!.handoff!.terminalIntent!;
-    if (terminal.kind === "tools" && !this.handoffJournal) throw new Error("Handoff journal is not configured by the runtime owner");
-    return { terminal, requests: terminal.kind === "tools" ? this.takeHandoffBatch(token, receipt => this.handoffJournal!.record(receipt)) : [] };
+    return { terminal, requests: terminal.kind === "tools" ? this.takeHandoffBatch(token, receipt => {
+      try {
+        if (!this.handoffJournal) throw new Error("Handoff journal is not configured by the runtime owner");
+        this.handoffJournal.record(receipt);
+      } catch (cause) {
+        // Preserve the durable-delivery cause through both automatic and manual adapters.
+        // A new browser request must never be used to recover an uncertain tool delivery.
+        throw new ChatGptWebAdapterError(
+          "The MCP tool handoff could not be durably recorded. Its execution state is unknown; check the task before retrying.",
+          { status: 502, errorType: "server_error", code: "handoff_delivery_unknown", retryable: false, cause },
+        );
+      }
+    }) : [] };
   }
 
   waitForHandoffIntent(token: string, signal?: AbortSignal): Promise<HandoffTerminal> {
@@ -562,7 +576,10 @@ export class TurnBroker implements TurnBrokerOwner {
     this.prune();
     const channel = this.channels.get(token);
     if (!channel) throw new Error("turn token is invalid or expired");
-    if (channel.completionCommitted) return { state: "already_committed", revision: channel.completionRevision! };
+    // Only the owner broker can prove that an absent prose answer belongs to a sealed
+    // tool handoff. Liveness/progress revisions also include inventory and cannot do so.
+    const toolBatch = channel.handoff?.terminalIntent?.kind === "tools" ? { awaitingToolResults: true } : {};
+    if (channel.completionCommitted) return { state: "already_committed", revision: channel.completionRevision!, ...toolBatch };
     const facts = { activities: channel.activities.size, invocations: channel.invocations.size,
       sealed: channel.handoff?.canFinishWebRound ?? true };
     const state = facts.activities > 0 || facts.invocations > 0 ? "activity_in_flight"
@@ -574,7 +591,7 @@ export class TurnBroker implements TurnBrokerOwner {
         revision: channel.activityRevision });
     }
     if (state !== "ready") return { state, ...facts };
-    return { state: "ready", revision: channel.activityRevision };
+    return { state: "ready", revision: channel.activityRevision, ...toolBatch };
   }
 
   commitCompletionFence(token: string, revision: number, browserReply?: string): CompletionFenceCommit {
@@ -831,7 +848,7 @@ export class TurnBroker implements TurnBrokerOwner {
   }
 
   private assertHandoffProtocol(channel: TurnChannel | undefined, protocol: unknown): void {
-    const expected = channel?.handoff ? TOOL_BATCH_HANDOFF_PROTOCOL : undefined;
+    const expected = channel?.handoff?.protocol;
     if (protocol !== expected) throw new Error("MCP handoff protocol mismatch; refresh the connector for this round");
   }
 
@@ -1090,12 +1107,13 @@ export class TurnBroker implements TurnBrokerOwner {
       return { submitted: true };
     }
     if (request.method === "owner_status") {
-      return { protocolVersion: 5, handoffProtocol: TOOL_BATCH_HANDOFF_PROTOCOL, browserReplyFence: true, acceptingExternalOwners: this.acceptingExternalOwners };
+      return { protocolVersion: 5, handoffProtocol: TOOL_BATCH_HANDOFF_PROTOCOL,
+        handoffProtocols: [HANDOFF_V1, HANDOFF_V2], browserReplyFence: true, acceptingExternalOwners: this.acceptingExternalOwners };
     }
     if (request.method === "owner_register_handoff") {
       const environment = ownerEnvironment(request.environment);
       return { token: await this.registerHandoff(environment, { surfaceNonce: request.surfaceNonce,
-        ttlMs: request.ttlMs, traceId: request.traceId, policy: request.policy, allowBrowserReply: request.allowBrowserReply }, true) };
+        protocol: request.protocol, ttlMs: request.ttlMs, traceId: request.traceId, policy: request.policy, allowBrowserReply: request.allowBrowserReply }, true) };
     }
     if (request.method === "owner_wait_handoff") {
       if (!request.token) throw new Error("Owner token is required");
@@ -1300,13 +1318,14 @@ export class TurnBroker implements TurnBrokerOwner {
       if (!handoff) throw new Error("Not a handoff round");
       if (!request.activityId || !binding.channel.activities.has(request.activityId)) throw new Error("Handoff requires an active MCP activity");
       if (request.method === "handoff_submit") {
-        if (typeof request.submissionId !== "string" || !Array.isArray(request.calls)) throw new Error("Invalid handoff batch");
+        if (!Array.isArray(request.calls)) throw new Error("Invalid handoff batch");
         if (request.sealOnSubmit !== undefined && typeof request.sealOnSubmit !== "boolean") throw new Error("Invalid handoff seal option");
         diagnosticEvent("info", "tool.handoff_received", { traceId: binding.channel.traceId,
           roundRef: diagnosticReference(handoff.roundState.round_id), count: request.calls.length,
           state: handoff.roundState.round_state, activityCount: binding.channel.activities.size });
         try {
-          const receipt = handoff.submit(request.submissionId, handoffCalls(binding.channel.environment, binding.channel.safe ? "safe" : "native", request.calls));
+          const receipt = handoff.submit(request.submissionId,
+            handoffCalls(binding.channel.environment, binding.channel.safe ? "safe" : "native", request.calls));
           diagnosticEvent("info", "tool.handoff_submitted", { traceId: binding.channel.traceId, count: receipt.call_ids.length, outcome: "not_executed" });
           if (request.sealOnSubmit) {
             // No await between validation, registration and sealing: a single explicit MCP
@@ -1334,7 +1353,7 @@ export class TurnBroker implements TurnBrokerOwner {
       else throw new Error("Handoff protocol does not support synchronous invoke; submit and yield a batch");
       this.resolveSafeWaiters(binding.channel.handoffWaiters!, terminal);
       diagnosticEvent("info", "tool.handoff_sealed", { traceId: binding.channel.traceId, outcome: terminal.kind === "tools" ? "tools_awaiting_web_settlement" : "final_awaiting_web_settlement" });
-      return { protocol: TOOL_BATCH_HANDOFF_PROTOCOL, ...handoff.roundState, execution_state: "not_executed", kind: terminal.kind };
+      return { protocol: handoff.protocol, ...handoff.roundState, execution_state: "not_executed", kind: terminal.kind };
     }
     if (binding.channel.compactionRequested) {
       const result = binding.channel.compactionResult;
@@ -1542,11 +1561,12 @@ export async function callTurnBroker<T>(
 export class RemoteTurnBroker implements TurnBrokerOwner {
   constructor(readonly socketPath: string) {}
 
-  async registerHandoff(environment: ChatGptTurnEnvironment, options: { surfaceNonce?: string; ttlMs?: number; traceId?: string; policy?: HandoffToolPolicy; allowBrowserReply?: boolean } = {}): Promise<string> {
-    const status = await callTurnBroker<{ handoffProtocol?: string; browserReplyFence?: boolean }>(this.socketPath, { method: "owner_status" });
-    if (status.handoffProtocol !== TOOL_BATCH_HANDOFF_PROTOCOL) throw new Error("Restart the Launcher to enable the Web round handoff protocol");
+  async registerHandoff(environment: ChatGptTurnEnvironment, options: { protocol?: HandoffProtocol; surfaceNonce?: string; ttlMs?: number; traceId?: string; policy?: HandoffToolPolicy; allowBrowserReply?: boolean } = {}): Promise<string> {
+    const protocol = handoffProtocol(options.protocol);
+    const status = await callTurnBroker<{ handoffProtocol?: string; handoffProtocols?: string[]; browserReplyFence?: boolean }>(this.socketPath, { method: "owner_status" });
+    if (!(status.handoffProtocols ?? [status.handoffProtocol]).includes(protocol)) throw new Error("Restart the Launcher to enable the selected Web round handoff protocol");
     if (options.allowBrowserReply && status.browserReplyFence !== true) throw new Error("Restart the Launcher to enable completed browser replies");
-    const result = await callTurnBroker<{ token: string }>(this.socketPath, { method: "owner_register_handoff", environment, ...options });
+    const result = await callTurnBroker<{ token: string }>(this.socketPath, { method: "owner_register_handoff", environment, ...options, protocol });
     if (typeof result.token !== "string") throw new Error("Invalid handoff owner token");
     return result.token;
   }

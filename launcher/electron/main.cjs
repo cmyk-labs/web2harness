@@ -1403,6 +1403,7 @@ async function start() {
     logger,
     hasResource: traceId => [...browserHost.turnTabs.values()].some(tab => tab.traceId === traceId &&
       (tab.status === "running" || ["awaiting-user", "sent", "running", "awaiting-finish"].includes(tab.manualState))),
+    ownsIsolatedSendResource: (traceId, proof) => browserHost.ownsIsolatedSendResource(traceId, proof),
     cancelResource: async traceId => {
       await runtimeSupervisor.cancelBrowserTurn(traceId);
     },
