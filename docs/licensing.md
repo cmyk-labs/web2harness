@@ -2,7 +2,7 @@
 
 [English](licensing.md) | [简体中文](licensing.zh-CN.md)
 
-Version 2.0.0 requires activation, including when upgrading from 1.x. Without a valid license, the application opens the Product license page; other pages remain available for browsing, expanding explanations and switching preview views. Configuration, sign-in and runtime actions are disabled. Activation precedes first-time language selection and setup. Backend checks protect desktop actions, protected CLI commands and new Web/MCP work; no publisher server is contacted. ChatGPT and connector features still need their own network connections.
+Version 2.0.0 requires activation, including when upgrading from 1.x. Without a valid license, the application opens the Product license page; other pages remain available for browsing, expanding explanations and switching preview views. Preferences and Runtime parameters remain editable and saveable; ordinary shell preferences apply immediately, while conversation and execution settings wait for activation, connection setup and explicit application. Sign-in and runtime actions remain disabled. Activation still precedes first-time onboarding and connection setup. Backend checks protect desktop actions, protected CLI commands and new Web/MCP work; no publisher server is contacted. ChatGPT and connector features still need their own network connections.
 
 ## Customer flow
 

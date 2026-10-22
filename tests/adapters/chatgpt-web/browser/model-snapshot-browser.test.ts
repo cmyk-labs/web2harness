@@ -7,6 +7,49 @@ import { readChatGptModelSnapshot } from "../../../../src/browser/session";
 import { assertChatGptModelFamily, chatGptModelFailureEvidence } from "../../../../src/adapters/chatgpt-web/browser/model-selection";
 import { ChatGptBrowserDiagnostics } from "../../../../src/adapters/chatgpt-web/browser/browser-diagnostics";
 
+test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER).each([
+  ["即时", "Instant", "low", 0], ["中", "Medium", "medium", 1],
+  ["高", "High", "high", 2], ["极高", "Extra High", "xhigh", 3], ["Pro", "Pro", "max", 4],
+] as const)("the Chinese %s picker validates actual DOM descriptions and still rejects selection conflicts", async (label, english, effort, index) => {
+  const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.route("**/*", route => route.fulfill({ contentType: "text/html", body: "<!doctype html>" }));
+    await page.goto("https://model-fixture.invalid");
+    await page.setContent(`<html lang="zh-CN"><body>
+      <button id="owner" data-tone="neutral" aria-haspopup="menu" aria-controls="picker" aria-expanded="true">${label}</button>
+      <div id="picker" role="menu" aria-labelledby="owner">
+        <div id="family" role="menuitemradio" aria-checked="true">最新</div>
+        <button data-model-picker-view-toggle="true"><span data-menu-row-content id="header">6 ${label}</span></button>
+        <div role="menuitem" aria-describedby="status instruction">
+          <div data-model-picker-power-slider><span role="slider" aria-hidden="true" aria-valuemin="0" aria-valuemax="4" aria-valuenow="${index}"></span></div>
+        </div><span id="status">6 ${label}，第 ${index + 1} 项，共 5 项。</span><span id="instruction">使用左右方向键调整强度</span>
+      </div></body></html>`);
+    const slider = page.locator('[role="slider"]');
+    const menu = { menu: page.locator("#picker"), slider } as never;
+    const snapshot = await readChatGptModelSnapshot(slider);
+    expect(snapshot?.descriptions).toEqual([`6 ${label}，第 ${index + 1} 项，共 5 项。`, "使用左右方向键调整强度", `6 ${label}`]);
+    expect(snapshot?.descriptionSources).toEqual(["aria", "aria", "header"]);
+    await assertChatGptModelFamily(menu, "6", effort, index);
+    // English/Chinese observations may overlap while the picker updates.
+    await page.locator("#header").evaluate((element, value) => { element.textContent = value; }, `6 ${english}`);
+    await assertChatGptModelFamily(menu, "6", effort, index);
+    await page.locator("#status").evaluate((element, value) => { element.textContent = value; }, `6 ${english}, ${index + 1} of 5.`);
+    await page.locator("#header").evaluate((element, value) => { element.textContent = value; }, `6 ${label}`);
+    await assertChatGptModelFamily(menu, "6", effort, index);
+    for (const text of [effort === "high" ? "6 中" : "6 高", `5.6 ${english}`, "6 未知", `6 ${label}强度`]) {
+      await page.locator("#header").evaluate((element, value) => { element.textContent = value; }, text);
+      await expect(assertChatGptModelFamily(menu, "6", effort, index)).rejects.toMatchObject({ code: "model_version_unavailable" });
+    }
+    await page.locator("#header").evaluate((element, value) => { element.textContent = value; }, `6 ${label}`);
+    await page.locator("#family").evaluate(element => element.setAttribute("aria-checked", "false"));
+    await expect(assertChatGptModelFamily(menu, "6", effort, index)).rejects.toMatchObject({ code: "model_version_unavailable" });
+    await page.locator("#family").evaluate(element => element.setAttribute("aria-checked", "true"));
+    await slider.evaluate((element, value) => element.setAttribute("aria-valuenow", value), String((index + 1) % 5));
+    await expect(assertChatGptModelFamily(menu, "6", effort, index)).rejects.toMatchObject({ code: "model_version_unavailable" });
+  } finally { await browser.close(); }
+}, 15_000);
+
 test.skipIf(!process.env.CHATGPT_DOM_TEST_BROWSER)("model snapshot binds references, owners and remounted nodes without expanding private samples", async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHATGPT_DOM_TEST_BROWSER, headless: true });
   const parent = realpathSync(tmpdir()), root = mkdtempSync(join(parent, "web2harness-model-evidence-"));

@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { runQueueSmoke } from './smoke-queue.mjs';
 import { runBrowserCheckSmoke } from './smoke-browser-check.mjs';
 import { runRuntimeParametersSmoke } from './smoke-runtime-parameters.mjs';
+import { runPendingSettingsSmoke } from './smoke-pending-settings.mjs';
 import { runStorageSmoke } from './smoke-storage.mjs';
 import { runWindowLayoutSmoke } from './smoke-window-layout.mjs';
 import { resolve } from 'node:path';
@@ -40,6 +41,12 @@ await context.addInitScript(installWorkspaceFixture);if(process.env.WORKSPACE_SM
  check('Queue renderer has no JavaScript errors',errors.length===0);
  await writeFile(out+'/results.json',JSON.stringify({scope:'queue',passed:checks.length,checks,errors},null,2));
  console.log(JSON.stringify({scope:'queue',passed:checks.length,errors}));
+}else if(process.env.WORKSPACE_SMOKE_SCOPE==='pending-settings'){
+ await runRuntimeParametersSmoke({context,origin,out,check,errors});
+ await runPendingSettingsSmoke({context,origin,out,check,errors});
+ check('Settings renderer has no JavaScript errors',errors.length===0);
+ await writeFile(out+'/results.json',JSON.stringify({scope:'pending-settings',passed:checks.length,checks,errors},null,2));
+ console.log(JSON.stringify({scope:'pending-settings',passed:checks.length,errors}));
 }else if(process.env.WORKSPACE_SMOKE_SCOPE==='runtime-parameters'){
  await runRuntimeParametersSmoke({context,origin,out,check,errors});
  check('Runtime parameters renderer has no JavaScript errors',errors.length===0);

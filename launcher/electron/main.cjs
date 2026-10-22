@@ -29,6 +29,7 @@ const { BrowserControlServer } = require("./control-server.cjs");
 const { RequestQueue } = require("./runtime/request-queue.cjs");
 const { currentMcpScope } = require("../shared/mcp-scope.cjs");
 const { createQueueSettingsSaver } = require("./runtime/queue-settings.cjs");
+const { createPendingSettings } = require("./runtime/pending-settings.cjs");
 const { BROWSER_SURFACE_ACTIVE_CHANNEL, validateBrowserSurfaceActive } = require("../shared/browser-surface-ipc.cjs");
 let requestQueue = null;
 const { LimitsController } = require("./limits/limits-controller.cjs");
@@ -589,7 +590,24 @@ function registerIpc({ logger, stateStore }) {
   const saveQueueSettings = createQueueSettingsSaver({ stateStore, getQueue: () => requestQueue,
     applyRuntimeParameters: () => browserHost?.writeDescriptor(),
     publish: state => send("launcher:state-changed", state), assertActive: () => licenseController.assertActive() });
-  handle("launcher:queue-settings", (_event, value, expectedRevision, parameters, parameterEdits) => saveQueueSettings(value, expectedRevision, parameters, parameterEdits));
+  const preferenceOperations = new Map();
+  const pendingSettings = createPendingSettings({ stateStore, license: licenseController,
+    ready: () => startup.snapshot().status === "ready" && runtimeHost?.runtimeConfigSnapshot().configured === true,
+    assertIdle: () => {
+      const queue = requestQueue?.snapshot();
+      if (browserHost?.activeTraceId || browserHost?.currentOperation() || runtimeHost?.currentOperation()
+        || queue?.active || queue?.waiting) throw new Error("Apply saved settings when tasks are idle / 请在任务空闲时应用已保存设置");
+    },
+    publish: state => send("launcher:state-changed", state),
+    applyPreference: (key, value) => preferenceOperations.get(key)(null, value),
+    applyQueue: saveQueueSettings,
+  });
+  const preference = (channel, key, operation) => {
+    preferenceOperations.set(key, operation);
+    handle(channel, (_event, value) => pendingSettings.preference(key, value));
+  };
+  handle("launcher:queue-settings", (_event, ...args) => pendingSettings.queue(...args));
+  handle("launcher:apply-pending-settings", () => pendingSettings.apply());
   handle("launcher:queue-control", async (_event, action, id, recoveryToken) => {
     // Stopping remains available after license expiry. Resume requires a fresh check.
     if (action === "resume" || action === "recover") await licenseController.assertActive();
@@ -927,15 +945,16 @@ function registerIpc({ logger, stateStore }) {
 
   handle("launcher:autostart", (_event, enabled) => {
     if (IS_DEV_PROFILE) throw new Error("The isolated DEV launcher is started explicitly from the repository CLI");
-    const desired = enabled === true;
+    if (typeof enabled !== "boolean") throw new Error("Invalid autostart preference");
+    const desired = enabled;
     const autostart = setAutostart(app, desired);
     return {
-      state: stateStore.update({ autoStart: desired }),
+      state: autostart.supported ? stateStore.update({ autoStart: autostart.enabled }) : stateStore.read(),
       ...autostart,
     };
   });
   for (const [channel, method] of [["launcher:context-files", "setContextFiles"], ["launcher:context-triple-budget", "setContextTripleBudget"]]) {
-    handle(channel, async (_event, enabled) => {
+    preference(channel, method === "setContextFiles" ? "experimentalContextFiles" : "experimentalContextTripleBudget", async (_event, enabled) => {
       if (browserHost.activeTraceId || browserHost.currentOperation()) {
         throw new Error("Finish or cancel active ChatGPT turns before changing context file transport");
       }
@@ -954,7 +973,7 @@ function registerIpc({ logger, stateStore }) {
   handle("launcher:context-windows", () => {
     throw new Error("Context windows are fixed; select standard or triple budget / 上下文窗口为固定值，只能选择标准或三倍预算");
   });
-  handle("launcher:context-budget", async (_event, tripleBudget) => {
+  preference("launcher:context-budget", "experimentalContextTripleBudget", async (_event, tripleBudget) => {
     await licenseController.assertActive();
     const queue = requestQueue?.snapshot();
     if (browserHost.activeTraceId || browserHost.currentOperation() || runtimeHost.currentOperation()
@@ -970,7 +989,7 @@ function registerIpc({ logger, stateStore }) {
     if (result.budgetChanged) startCatalogVerificationMonitor({ logger, stateStore });
     return state;
   });
-  handle("launcher:skill-attachments", async (_event, enabled) => {
+  preference("launcher:skill-attachments", "experimentalSkillAttachments", async (_event, enabled) => {
     if (browserHost.activeTraceId || browserHost.currentOperation()) {
       throw new Error("Finish or cancel active ChatGPT turns before changing Skills as files");
     }
@@ -979,14 +998,14 @@ function registerIpc({ logger, stateStore }) {
     send("launcher:state-changed", state);
     return state;
   });
-  handle("launcher:fresh-conversation-per-turn", async (_event, enabled) => {
+  preference("launcher:fresh-conversation-per-turn", "experimentalFreshConversationPerTurn", async (_event, enabled) => {
     if (browserHost.activeTraceId || browserHost.currentOperation()) {
       throw new Error("Finish or cancel active ChatGPT turns before changing browser conversation retention");
     }
     await runtimeHost.setFreshConversationPerTurn(enabled);
     return syncFreshConversationPreference(stateStore, runtimeHost.runtimeConfigSnapshot().config);
   });
-  handle("launcher:use-saved-chats", async (_event, enabled) => {
+  preference("launcher:use-saved-chats", "useSavedChats", async (_event, enabled) => {
     if (browserHost.activeTraceId || browserHost.currentOperation()) {
       throw new Error("Finish or cancel active ChatGPT turns before changing saved chats");
     }
@@ -1091,7 +1110,8 @@ function registerIpc({ logger, stateStore }) {
     if (key === "logPageSize") return stateStore.update({ logPageSize: validateLogPageSize(value) });
     const ordinary = key === "keepRunningOnClose" || key === "showBrowserDuringTurns";
     if (!ordinary) throw new Error("Unknown preference");
-    return stateStore.update({ [key]: value === true });
+    if (typeof value !== "boolean") throw new Error("Invalid preference value");
+    return stateStore.update({ [key]: value });
   });
   handle("launcher:sidebar-state", (_event, value) => stateStore.update(validateSidebarState(value)));
   handle("launcher:logs", (_event, limit) => logger.recent(limit));

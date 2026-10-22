@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld("codexWebLauncher", {
   setContextFiles: (enabled) => ipcRenderer.invoke("launcher:context-files", enabled),
   setContextTripleBudget: (enabled) => ipcRenderer.invoke("launcher:context-triple-budget", enabled),
   setContextBudget: tripleBudget => ipcRenderer.invoke("launcher:context-budget", tripleBudget),
+  applyPendingSettings: () => ipcRenderer.invoke("launcher:apply-pending-settings"),
   setSkillAttachments: (enabled) => ipcRenderer.invoke("launcher:skill-attachments", enabled),
   setFreshConversationPerTurn: (enabled) => ipcRenderer.invoke("launcher:fresh-conversation-per-turn", enabled),
   setUseSavedChats: (enabled) => ipcRenderer.invoke("launcher:use-saved-chats", enabled),

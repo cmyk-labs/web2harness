@@ -3777,9 +3777,9 @@ test("off-on-off fresh conversation changes retire completed history before it c
       createTurnTab: async () => ({ id: "new-chat", surfaceId: "new-surface" }),
     });
     vm.runInNewContext(main.slice(main.indexOf("function syncFreshConversationPreference("), main.indexOf("function registerIpc(")) +
-      main.slice(main.indexOf(`handle("${channel}",`),
-      main.indexOf(`handle("${nextChannel}",`)), {
-      handle: (_channel, callback) => { handler = callback; }, browserHost: fixture, releaseRetainedConversation,
+      main.slice(main.indexOf(`preference("${channel}",`),
+      main.indexOf(`${savedChats ? "handle" : "preference"}("${nextChannel}",`)), {
+      preference: (_channel, _key, callback) => { handler = callback; }, browserHost: fixture, releaseRetainedConversation,
       runtimeHost: { currentOperation: () => null, runtimeConfigSnapshot: () => ({ config }), [method]: async enabled => {
         if (failSetup) throw new Error("setup rejected");
         await new Promise(resolve => { commit = resolve; });

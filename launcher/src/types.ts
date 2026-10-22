@@ -31,6 +31,7 @@ export interface BrowserCheck {
 
 export interface LauncherState {
   version: 1;
+  pendingSettings?: import("../shared/pending-settings.cjs").PendingSettings;
   requestScheduling: RequestSchedulingSettings;
   requestSchedulingRevision: number;
   runtimeParameters: RuntimeParameters;
@@ -239,7 +240,7 @@ export interface LauncherApi {
   queryQueue(query?: QueueQuery & { snapshotId?: string }): Promise<QueuePage & { snapshotId: string }>;
   saveQueueSettings(settings: RequestSchedulingSettings, expectedRevision: number, parameters?: RuntimeParameters, parameterEdits?: RuntimeParameterEdits): Promise<{
     state: LauncherState; persistedRevision: number; appliedRevision: number | null;
-    applyState: "applied" | "pending-start" | "apply-failed";
+    applyState: "applied" | "pending-start" | "pending-activation" | "apply-failed";
   }>;
   controlQueue(action: "pause" | "resume" | "recover" | "cancel" | "cancel-waiting" | "cancel-all", id?: string, recoveryToken?: string): Promise<QueueSnapshot>;
   licenseStatus(): Promise<import("../../src/licensing/schema").LicenseStatus>;
@@ -291,6 +292,7 @@ export interface LauncherApi {
   setContextFiles(enabled: boolean): Promise<LauncherState>;
   setContextTripleBudget(enabled: boolean): Promise<LauncherState>;
   setContextBudget(tripleBudget: boolean): Promise<LauncherState>;
+  applyPendingSettings(): Promise<LauncherState>;
   setSkillAttachments(enabled: boolean): Promise<LauncherState>;
   setFreshConversationPerTurn(enabled: boolean): Promise<LauncherState>;
   setUseSavedChats(enabled: boolean): Promise<LauncherState>;

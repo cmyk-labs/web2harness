@@ -1,51 +1,43 @@
 ## 简体中文
 
-Web2Harness 2.5.5（`v2.5.5`）改进网页交互恢复、工具交付和并发任务隔离，并补齐真实 MCP 与 Zero Risk 验收。
+Web2Harness 2.5.6（`v2.5.6`）补齐中文模型档位识别，开放未授权时的参数配置，并改进附件与响应事件兼容。
 
-- **发送与模型恢复**：点击失败后执行一次 Enter 兜底；已有接受证据时不重复发送。发送期间并行观察接受状态，明确输入结束与远端接受的区别；模型菜单可作有界恢复，始终保留指定模型和思考强度。
-- **响应与工具交付**：补充公开 final 候选、协议校验和交付失败的安全诊断；支持没有正文的有效 MCP 工具回合，改进中文工具确认识别。保留 Codex 原生工具、沙箱、审批及上下文边界，不用模型成功声明代替真实执行。
-- **队列与故障隔离**：仅状态查询在连接重置时进行一次受限重连；改进取消后的物理资源结算、可证明的单页面故障隔离，以及手动 MCP 错误重连，避免错误恢复另开网页。
-- **可选 MCP v2**：新增明确选择的 `web2harness-handoff-v2`，提交身份由宿主根据当前回合和准确调用派生，相同提交复用回执。缺省和既有 v1 选择保持兼容，不在当前回合自动降级或切换协议。切换前等待活动资源结算，随后重启运行时及隧道 worker，并刷新检查连接器工具目录。
-- **桌面与上下文**：Electron 升级至 43.8.3；完善交付阶段展示、故障证据和与所选契约一致的上下文估算。token 数仍为估算，不宣称已证明整体性能提升。
+- **中文模型档位**：将“即时／中／高／极高”正确识别为 low／medium／high／xhigh，继续严格核对所选模型家族和档位。
+- **配置与授权**：授权码缺失或失效时，偏好设置和运行参数仍可编辑、保存及恢复默认。需要运行时支持的设置暂存，恢复有效授权并就绪后可在空闲时显式应用；执行任务、服务操作和应用设置仍受授权检查。
+- **窗口与启动文案**：明确“关闭窗口后在后台运行”“自动任务开始时显示内置浏览器”和“开机启动（登录后）”。自启动发生在用户登录系统后，任务仍需有效授权。
+- **附件识别**：识别附件身份时兼容悬停前隐藏的移除按钮，仍要求外层卡片可见且唯一，实际删除保留正常可操作性检查。
+- **响应事件**：兼容五类已知元数据路径的顶层无值 `remove`，同步诊断保留与回放；未知路径、身份冲突及缺失完成证据仍拒绝。
 
 ### 验证范围与已知限制
 
-既有隔离认证 DEV 证据覆盖 Native Tools 读取、补丁、命令断言及最终回复，取消后恢复、四页面并发与单目标隔离，以及 MCP Automatic／Zero Risk 各 v1/v2 的真实工具链。另有新独立主会话实际委派三个 GPT-6（Web）高子 agent 完成审核和汇总：109 次模型请求成功交付，全部子报告完整回传。维护者选择本次复用该结果；版本准备前源码与该验收候选一致。本轮不重复运行该完整任务，也不把它视为 MCP／Zero Risk 同任务或全平台验收。
+候选已完成针对性单元、界面及隔离认证DEV验证。新的独立主会话实际委派三个GPT-6（Web）高子agent并自行汇总：70次请求全部原生交付，70次模型档位检查匹配，三份子报告和主报告均完整返回。版本准备仅更改版本与发布元数据，复用该实现的验收证据。完整源码验证、依赖审计、五目标原生构建和新包完整性以对应发布工作流结果为准；跳过与未执行项不计通过。
 
-此前验收的初次失败、受控故障、同线程显式续跑和局部工具输入错误均保留；后续通过不改写历史。候选完整源码验证与依赖审计、五个原生目标构建和新包完整性以对应发布检查为准，跳过及未执行项不计通过。
+**以下审查问题尚未在本版本修复：** 应用待保存设置时可能与新任务入队交错；热应用失败后持久配置与运行组件可能不一致；响应数组补丁对等于数组长度的删除／替换索引校验不足。前两项为尚待故障注入确认的风险，第三项已由源码复核。请在确认任务空闲、暂停外部新任务提交后应用设置；若显示应用失败，先检查运行状态及诊断，再在空闲时明确重试，不将“保存成功”当作“全部运行组件已应用”。这些操作提示不代表上述风险已经消除。
 
-发布准备修复源码指纹对 NSIS 包含文件和打包补丁换行格式的误判，并为多轮上下文恢复集成用例设置明确的有限测试时限，保留全部功能断言。Windows CI 首轮的默认五秒超时失败另行留证。
+历史附件超时及不支持响应事件的原始载荷不完整，本次修复针对独立复现的实现缺口，不宣称证明所有历史故障的唯一根因。审核agent的工具查询错误、环境限制及此前验收失败继续留档。本轮没有重新执行MCP／Zero Risk全组合、人工安装／升级／卸载、系统登录自启动或其它操作系统的认证验收；CI包冒烟不替代这些检查。
 
-完整验证先通过现有准备入口确保 Electron 依赖就绪，不启动应用或服务，避免首次导入的二进制下载占用单个测试时限。后续 Windows CI 首次下载触发的测试超时及关联用例失败也保留记录。
+遇到问题时记录版本和时间，通过“用量与诊断 → 日志 → 导出诊断包”保留现场。未知发送状态应先检查再明确恢复，避免盲目重发。
 
-历史模型强度 unknown、缺少公开 final、部分点击／附件超时等底层原因仍未全部证实。最新静态审核提出的候选风险未在本次发布准备中逐项动态复现或自动应用；不宣称所有网页问题已根治。维护者已知的人工安装／升级／卸载、系统服务、其他操作系统认证、物理输入和跨 DPI 验收缺口继续保留；CI 包冒烟不能替代这些检查。
-
-遇到问题时记录版本和时间，通过“用量与诊断 → 日志 → 导出诊断包”保留现场。升级不会自动清除未知发送暂停；先在运行控制确认发送状态，再明确恢复，避免盲目重发。MCP v2 工具缺失时刷新并检查连接器目录，不通过改用 v1 工具绕过当前协议。
-
-发布目标为 Windows x64、macOS arm64/x64、Linux x64/arm64 的七个包及 `checksums.txt`。Windows 无证书签名；macOS 为 ad-hoc 签名，未作 Developer ID 签名或公证。
+发布目标为Windows x64、macOS arm64/x64、Linux x64/arm64的七个包及`checksums.txt`。Windows无证书签名；macOS为ad-hoc签名，未作Developer ID签名或公证。
 
 ## English
 
-Web2Harness 2.5.5 (`v2.5.5`) improves browser recovery, tool delivery and concurrent-task isolation, with authenticated MCP and Zero Risk acceptance evidence.
+Web2Harness 2.5.6 (`v2.5.6`) recognizes Chinese model-effort labels, permits configuration without a valid license, and improves attachment and response-event compatibility.
 
-- **Sending and model recovery**: Apply one Enter fallback after click failure, suppressing another send when acceptance evidence already exists. Observe acceptance during input and distinguish input settlement from remote acceptance. Bound model-menu recovery while preserving the explicitly selected model and effort.
-- **Response and tool delivery**: Add safe diagnostics for public final candidates, protocol validation and delivery failures. Support valid MCP tool turns without response text and improve Chinese tool-confirmation recognition. Preserve native Codex tools, sandbox, approvals and context boundaries; a model success statement is not execution evidence.
-- **Queue and fault isolation**: Retry only a status query once after a connection reset. Improve physical resource settlement after cancellation, provable per-page fault isolation and manual MCP error reconnection without opening another browser conversation.
-- **Optional MCP v2**: Add explicit selection of `web2harness-handoff-v2`. The host derives submission identity from the current round and exact calls; identical submissions reuse their receipt. Defaults and existing v1 selections remain compatible, without automatic protocol downgrade or switching within a round. Settle active resources before changing the protocol, then restart the runtime and tunnel worker and refresh and inspect the connector catalog.
-- **Desktop and context**: Update Electron to 43.8.3. Improve delivery-stage presentation, failure evidence and context estimates for the selected contract. Token counts remain estimates; no overall performance improvement is claimed from these checks.
+- **Chinese effort labels**: Recognize 即时／中／高／极高 as low／medium／high／xhigh while retaining strict checks of the selected model family and effort.
+- **Configuration and licensing**: Preferences and Runtime parameters remain editable, saveable and resettable when a license is missing or invalid. Settings that require a ready runtime are saved for explicit idle application after authorization and setup; task execution, service operations and applying settings remain license-gated.
+- **Window and startup labels**: Clarify background operation after window close, showing the embedded browser when automatic tasks start, and startup after signing in to the computer. Starting the app at sign-in does not remove task licensing requirements.
+- **Attachment identification**: Include remove controls hidden until hover when identifying a visible, unique attachment card. Actual removal retains normal actionability checks.
+- **Response events**: Accept top-level valueless `remove` only for five known metadata paths, with matching evidence retention and replay. Unknown paths, identity conflicts and missing completion evidence remain rejected.
 
 ### Validation scope and known limitations
 
-Existing isolated authenticated DEV evidence covers Native Tools reads, patches, command assertions and final replies, recovery after cancellation, four concurrent pages and single-target isolation, and real tool chains for MCP Automatic and Zero Risk using both v1 and v2. A separate new main session delegated three GPT-6 (Web) high agents and aggregated their reviews: all 109 model requests were delivered, with complete child reports returned. The maintainer chose to reuse this result; source identity before version preparation matched that candidate. This complete task is not rerun for this release and does not establish the same task in MCP/Zero Risk or acceptance on every platform.
+The candidate completed focused unit, UI and isolated authenticated DEV checks. A new independent main session delegated three GPT-6 (Web) high agents and aggregated their results: all 70 requests were delivered natively, all 70 model/effort checks matched, and all three child reports plus the main report arrived completely. Version preparation changes only version and release metadata and reuses acceptance evidence for the same implementation. Full source verification, dependency audits, five native build targets and new-package integrity are established by the release workflow results; skipped and unexecuted checks are not passes.
 
-Earlier initial failures, controlled faults, explicit continuation in the same thread and local tool-input errors remain recorded; later success does not overwrite them. Full candidate source verification and dependency audits, five native build targets and new-package integrity are established by the corresponding release checks. Skipped and unexecuted checks are not passes.
+**Review findings remain unresolved in this version:** applying saved settings may interleave with a newly admitted task; a failed hot application may leave persisted settings and runtime components inconsistent; response-array patch validation permits a remove/replace index equal to the array length. The first two are risks awaiting fault injection; the third was confirmed by source inspection. Apply settings after confirming idle state and pausing external task submissions. If application fails, inspect runtime state and diagnostics before an explicit idle retry; saved settings do not prove every runtime component has applied them. These precautions do not establish that the risks are eliminated.
 
-Release preparation corrects source fingerprints for line-ending differences in NSIS includes and packaging patches, and gives the multi-turn context-recovery integration case an explicit bounded test timeout while preserving every functional assertion. The first Windows CI failure at the default five-second timeout remains recorded.
+Historical attachment timeouts and unsupported response events lack complete original payloads. These fixes address independently reproducible implementation gaps, without claiming the unique cause of every historical failure. Agent tool-query errors, environment limitations and earlier acceptance failures remain recorded. This release does not rerun all MCP/Zero Risk combinations, manual installation/upgrade/uninstall, system-login startup or authenticated acceptance on other operating systems. CI package smoke does not replace those checks.
 
-Full verification prepares Electron through the existing dependency entry point before tests, without starting an application or server, so a first-import binary download cannot consume an individual test's timeout. The subsequent Windows CI test timeout during that first download and related case failure also remain recorded.
-
-The underlying causes of historical unknown-effort observations, missing public finals and some click/attachment timeouts remain unproven. Candidate risks from the latest static review were not individually reproduced or automatically applied during release preparation; this release does not claim to eliminate every browser issue. Known gaps in manual installation/upgrade/uninstall, system services, authenticated operation on other operating systems, physical input and cross-DPI acceptance remain. CI package smoke does not replace those checks.
-
-After an error, record the version and time and export a diagnostic bundle from Usage & diagnostics → Logs. Upgrade does not automatically clear an unknown-send pause: review send state in Runtime controls before explicitly recovering, without blindly resending. If MCP v2 tools are missing, refresh and inspect the connector catalog instead of switching to v1 tools within the current protocol.
+After an error, record the version and time and export a diagnostic bundle from Usage & diagnostics → Logs. Inspect an unknown-send state before explicitly recovering; do not blindly resend.
 
 Release targets are seven packages for Windows x64, macOS arm64/x64 and Linux x64/arm64, plus `checksums.txt`. Windows packages are not certificate-signed; macOS uses ad-hoc signing without Developer ID signing or notarization.

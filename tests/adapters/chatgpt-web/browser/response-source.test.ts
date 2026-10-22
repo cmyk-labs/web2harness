@@ -246,6 +246,22 @@ test("removing optional completion metadata restores absence, not explicit failu
   }
 });
 
+test("top-level remove without v follows the same semantics as a nested removal", () => {
+  for (const key of ["citations", "content_references", "is_complete", "finish_details", "model_dil_v2"]) {
+    const prefix = [...begin(), { p: "/message/content/parts/0", o: "append", v: "complete answer" }, terminal];
+    const remove = { p: `/message/metadata/${key}`, o: "remove" };
+    const tail = [{ type: "message_stream_complete", conversation_id: binding.conversationId }, "[DONE]"];
+    expect(project([...prefix, remove, ...tail]).result()).toEqual(
+      project([...prefix, { p: "", o: "patch", v: [remove] }, ...tail]).result());
+  }
+  // A missing value is not generally valid and cannot turn arbitrary frames into no-ops.
+  for (const frame of [{}, { p: "/message/metadata/citations" }, { o: "remove" },
+    { p: "/message/metadata/citations", o: "replace" }, { p: "/message/metadata/citations", o: "remove", unknown: true }]) {
+    expect(project([...begin(), frame, ...end()]).result()).toMatchObject({ state: "rejected" });
+  }
+  expect(project([...begin(), { p: "/unsupported", o: "remove" }, ...end()]).result()).toMatchObject({ state: "rejected" });
+});
+
 test("request binding compares all text parts and retains edge whitespace and attachment parts", () => {
   const request = (parts: unknown[]) => ({ method: "POST", url: "https://chatgpt.com/backend-api/f/conversation",
     postData: JSON.stringify({ action: "next", conversation_id: binding.conversationId,

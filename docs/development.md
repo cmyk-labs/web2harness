@@ -203,7 +203,7 @@ For conversation changes, assess impact on real tool-result rounds, later user t
 
 ## DEV profile and startup
 
-Prepare a device-bound test license first with `bun run scripts/prepare-license-dev.ts`, then set the printed `WEB2HARNESS_DEV_HOME` and `WEB2HARNESS_LICENSE_KEYS_FILE`. DEV uses the shared runtime and the same activation checks. Without activation, Product license opens first and other pages remain available for browsing; first-time language selection follows activation. See [offline licensing](licensing.md). Tests and `bun run verify` prepare their own temporary test resources.
+Prepare a device-bound test license first with `bun run scripts/prepare-license-dev.ts`, then set the printed `WEB2HARNESS_DEV_HOME` and `WEB2HARNESS_LICENSE_KEYS_FILE`. DEV uses the shared runtime and the same activation checks. Without activation, Product license opens first; Preferences and Runtime parameters support local saving without starting the runtime. First-time onboarding follows activation. See [offline licensing](licensing.md). Tests and `bun run verify` prepare their own temporary test resources.
 
 Start runtime development with:
 

@@ -17,7 +17,9 @@ export function chatGptAttachmentCard(page: Page, form: Locator, name: string): 
   // The current page nests a named surface button inside the attachment wrapper.
   // Select its outer card once; keep standalone surfaces for older layouts. Do not
   // use first(), which could conceal two genuinely distinct same-name cards.
-  return form.locator(wrapper).filter({ has: page.getByRole("button", { name: removeLabel(name) }) }).or(
+  // Card identity must not depend on a hover-only remove control being exposed to
+  // accessibility. The outer card still has to be visible; removal still uses actionability.
+  return form.locator(wrapper).filter({ has: page.getByRole("button", { name: removeLabel(name), includeHidden: true }) }).or(
     form.getByRole("group", { name, exact: true }).and(form.locator(`:not(${wrapper} *)`)),
   ).or(form.locator(`.composer-attachment-surface:is(button, [role="button"])[aria-label=${JSON.stringify(name)}]:not(${wrapper} *, ${group} *)`));
 }
@@ -80,7 +82,7 @@ export async function attachChatGptFilesWithRetry(
             await assertUnsubmitted();
             waiting.throwIfAborted();
             const card = chatGptAttachmentCard(page, form, file.name);
-            const remove = card.getByRole("button", { name: removeLabel(file.name) });
+            const remove = card.getByRole("button", { name: removeLabel(file.name), includeHidden: true });
             if (await remove.count() !== 1) throw new Error("The failed attachment has no unique remove control");
             removing.add(file.name);
             await card.hover({ timeout: 60_000 });

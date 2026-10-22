@@ -1,3 +1,14 @@
+const removableMetadataPaths = new Set(["citations", "content_references", "model_dil_v2", "is_complete", "finish_details"]
+  .map(key => `/message/metadata/${key}`));
+export function isResponseMetadataRemoval(path: unknown, operation: unknown): boolean {
+  return operation === "remove" && typeof path === "string" && removableMetadataPaths.has(path);
+}
+// These removals already work inside patch arrays. Their top-level form has no value.
+// Do not infer removal from an inherited operation or accept arbitrary empty frames.
+export function isValuelessResponseRemoval(frame: Record<string, unknown>): boolean {
+  return isResponseMetadataRemoval(frame.p, frame.o) && Object.keys(frame).every(key => ["p", "o", "c"].includes(key));
+}
+
 /** Observed v1 frame context and inherited operation cursor. No payload is retained here. */
 export class ChatGptDeltaCursor<T> {
   path = "";

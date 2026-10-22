@@ -3,6 +3,8 @@ const SHELL_CHANNELS = new Set([
   "license-status", "license-import",
   "snapshot", "workspace-status", "set-language", "complete-onboarding", "open-social",
   "open-external", "set-preference", "sidebar-state", "autostart", "limits",
+  "queue-status", "queue-settings", "context-files", "context-triple-budget", "context-budget",
+  "skill-attachments", "fresh-conversation-per-turn", "use-saved-chats",
   "retry-startup", "logs", "query-logs", "export-logs", "storage-usage", "window-state", "browser-bounds", "browser-surface-active",
 ]);
 

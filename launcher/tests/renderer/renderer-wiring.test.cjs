@@ -436,8 +436,8 @@ test("fresh-conversation IPC commits only after setup succeeds and refuses activ
     const channel = savedChats ? "launcher:use-saved-chats" : "launcher:fresh-conversation-per-turn";
     const nextChannel = savedChats ? "launcher:zero-risk-pro" : "launcher:use-saved-chats";
     const source = electronMain.slice(
-      electronMain.indexOf(`handle("${channel}",`),
-      electronMain.indexOf(`handle("${nextChannel}",`),
+      electronMain.indexOf(`preference("${channel}",`),
+      electronMain.indexOf(`${savedChats ? "handle" : "preference"}("${nextChannel}",`),
     );
     const state = { experimentalFreshConversationPerTurn: false, useSavedChats: false };
     const config = { experimentalFreshConversationPerTurn: false, useSavedChats: false };
@@ -446,7 +446,7 @@ test("fresh-conversation IPC commits only after setup succeeds and refuses activ
     const browserHost = { activeTraceId: "running-turn", currentOperation: () => null, turnTabs: new Map() };
     const syncSource = electronMain.slice(electronMain.indexOf("function syncFreshConversationPreference("), electronMain.indexOf("function registerIpc("));
     vm.runInNewContext(syncSource + source, {
-      handle: (_channel, callback) => { handler = callback; }, browserHost,
+      preference: (_channel, _key, callback) => { handler = callback; }, browserHost,
       releaseRetainedConversation: require("../../electron/runtime/retained-turn-release.cjs").releaseRetainedConversation,
       runtimeHost: { currentOperation: () => null, runtimeConfigSnapshot: () => ({ config }), [method]: async enabled => {
         calls++;
@@ -500,6 +500,7 @@ test("fresh-conversation snapshot uses runtime configuration and mode switching 
   const sandbox = {
     startupFailed: false, startup: { snapshot: () => ({ status: "ready" }) },
     createQueueSettingsSaver: require("../../electron/runtime/queue-settings.cjs").createQueueSettingsSaver,
+    createPendingSettings: require("../../electron/runtime/pending-settings.cjs").createPendingSettings, licenseController: {},
     handle: (name, handler) => handlers.set(name, handler), runtimeHost,
     releaseRetainedConversation: require("../../electron/runtime/retained-turn-release.cjs").releaseRetainedConversation,
     stateStore: { read: () => ({ ...state }), update: patch => Object.assign(state, patch) },
@@ -541,13 +542,14 @@ test("conversation reuse persists the inverse setting and stays disabled in manu
     let invoked, saved;
     const sandbox = {element:(type,props,...children)=>({type,props:props??{},children}),Fragment:'Fragment',useState:value=>[value,()=>{}],useFeedback:()=>[null,()=>{},()=>{}],translate:language=>(zh,en)=>language==='en'?en:zh,copyFor:()=>({}),workspaceBusy:()=>false};
     sandbox.useLicense = () => ({ active: licensed });
+    sandbox.settingsForEditing = require("../../shared/pending-settings.cjs").settingsForEditing;
+    sandbox.PendingSettings = "PendingSettings";
     for(const name of ['PageIntro','Section','Row','Segment','Toggle','Button'])sandbox[name]=name;
     vm.runInNewContext(code+'\nrender=Preferences;',sandbox);
     const tree=sandbox.render({api:{setFreshConversationPerTurn:async value=>{invoked=value;return {experimentalFreshConversationPerTurn:value}}},snapshot:{startup:{status:"ready"},state:{language,browserInteractionMode:manual?'manual':'automatic',coreSetupComplete:configured,experimentalFreshConversationPerTurn:false},urls:{},update:{}},updateState:state=>saved=state,setError:error=>{if(error)throw Error(error)},refresh:async()=>{}});
     const control=visit(tree).find(node=>node.type==='Segment' && node.props.label===(language==='en'?'Conversation reuse':'会话复用'));
-    assert.ok(control);assert.equal(control.props.value,true);assert.equal(control.props.disabled,!licensed||manual||!configured);
+    assert.ok(control);assert.equal(control.props.value,true);assert.equal(control.props.disabled,manual);
     if(!control.props.disabled){control.props.onChange(false);await new Promise(resolve=>setImmediate(resolve));assert.equal(invoked,true);assert.equal(saved.experimentalFreshConversationPerTurn,true);}
-    if(!licensed){control.props.onChange(false);await new Promise(resolve=>setImmediate(resolve));assert.equal(invoked,undefined);assert.equal(saved,undefined);}
   }
 });
 

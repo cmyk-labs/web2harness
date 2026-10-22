@@ -29,7 +29,9 @@ export function WorkspaceContent(props: WorkspaceProps) {
         className={`content content-scroll${page === "preferences" ? " is-narrow" : ""}`}
       >
         {!licensed && page !== "license" && page !== "overview" && <div className="note" role="status">
-          {t("当前仅供查看，填写有效授权码后可使用功能。", "View only. Activate a valid license to use these features.")}
+          {page === "preferences" || page === "runtime-parameters"
+            ? t("可以修改并保存设置；执行任务需要有效授权。", "You can edit and save settings. Tasks require a valid license.")
+            : t("当前仅供查看，填写有效授权码后可使用功能。", "View only. Activate a valid license to use these features.")}
         </div>}
         {props.statusError && (
           <div className="note warn" role="alert">

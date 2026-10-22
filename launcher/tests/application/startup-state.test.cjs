@@ -22,6 +22,7 @@ test("initial shell snapshot is available without runtime or browser constructio
   const state = { language: "en", onboardingComplete: true };
   vm.runInNewContext(main.slice(main.indexOf('handle("launcher:snapshot",'), main.indexOf('handle("launcher:set-language",')), {
     createQueueSettingsSaver: require("../../electron/runtime/queue-settings.cjs").createQueueSettingsSaver,
+    createPendingSettings: require("../../electron/runtime/pending-settings.cjs").createPendingSettings, licenseController: {},
     handle: (channel, handler) => { if (channel === "launcher:snapshot") snapshot = handler; },
     startup: new StartupState(), startupFailed: false, runtimeHost: null, browserHost: null, requestQueue: null,
     LAUNCHER_PROFILE: { kind: "development", codexHome: "/fixture/codex" }, CORE_HOME: "/fixture/core",

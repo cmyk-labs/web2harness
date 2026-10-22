@@ -10,9 +10,11 @@ const SESSION_REFRESH_REMINDER_INTERVAL_MS = 48 * 60 * 60 * 1000;
 
 const { normalizeContextPreferences } = require("../shared/context-preferences.cjs");
 const { normalizeContextWindows } = require("../shared/context-budgets.cjs");
+const { validatePendingSettings } = require("../shared/pending-settings.cjs");
 
 const DEFAULT_STATE = Object.freeze({
   version: 1,
+  pendingSettings: {},
   requestScheduling: DEFAULT_REQUEST_SCHEDULING,
   requestSchedulingRevision: 1,
   ...normalizeRuntimeParameters(),
@@ -54,6 +56,8 @@ function readState(filePath) {
     catch { state.requestScheduling = { ...DEFAULT_REQUEST_SCHEDULING }; }
     if (!Number.isSafeInteger(state.requestSchedulingRevision) || state.requestSchedulingRevision < 1) state.requestSchedulingRevision = 1;
     Object.assign(state, normalizeRuntimeParameters(parsed.runtimeParameters, parsed.runtimeParameterSources));
+    try { state.pendingSettings = validatePendingSettings(parsed.pendingSettings ?? {}); }
+    catch { state.pendingSettings = {}; }
     delete state.bridgeEnabled;
     delete state.xOpened;
     delete state.experimentalBiggerContext;

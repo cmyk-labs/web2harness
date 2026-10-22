@@ -111,12 +111,20 @@ function modelDescriptionChecks(descriptions: readonly string[], family: ChatGpt
     const normalized = text.normalize("NFKC").replace(/\p{Cf}/gu, "").replace(/\s+/g, " ").trim()
       .replace(/^((?:GPT[-\s]?)?(\d+(?:\.\d+)?)\s+(?:Sol|Astra))\s+(?:GPT[-\s]?)?\2\s+/i, "$1 ");
     const match = /^(?:GPT[-\s]?)?(\d+(?:\.\d+)?)(?:\s+(Sol|Astra))?\s+([^\p{P}]+)(?:\p{P}|$)/iu.exec(normalized);
+    let mode = match?.[3]?.trim().toLowerCase();
+    // Exact Simplified Chinese picker labels share the existing English effort checks.
+    switch (mode) {
+      case "即时": mode = "instant"; break;
+      case "中": mode = "medium"; break;
+      case "高": mode = "high"; break;
+      case "极高": mode = "extra high"; break;
+    }
     return { recognized: !!match, familyMatches: match?.[1] === family,
       modelFamily: match?.[1] === "6" || match?.[1] === "5.6" ? match[1] : "unknown",
       model: ["sol", "astra"].includes(match?.[2]?.toLowerCase() ?? "") ? match![2]!.toLowerCase() : "unknown",
-      effort: ["instant", "medium", "high", "extra high", "pro"].includes(match?.[3]?.trim().toLowerCase() ?? "") ? match![3]!.trim().toLowerCase() : "unknown",
+      effort: ["instant", "medium", "high", "extra high", "pro"].includes(mode ?? "") ? mode : "unknown",
       nameMatches: !!match && (!match[2] || match[2].toLowerCase() === expectedName),
-      effortMatches: match?.[3]?.trim().toLowerCase() === expectedMode };
+      effortMatches: mode === expectedMode };
   });
 }
 

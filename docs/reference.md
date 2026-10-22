@@ -233,10 +233,12 @@ Setup handles the active tunnel configuration and managed credential files. For 
 | Preference | Default | Effect |
 | --- | --- | --- |
 | `language` | Unset before onboarding | `en` or `zh-CN`; launcher interface language. It does not change ChatGPT's language. |
-| `autoStart` | `true` in regular launcher state | Controls OS login startup through the launcher. DEV disables this control and starts explicitly. |
+| `autoStart` | `true` in regular launcher state | **Start automatically at sign-in** launches Web2Harness in the background after signing in to the desktop account, not before sign-in. Tasks still require activation. DEV disables this control and starts explicitly. |
 | `keepRunningOnClose` | `true` | Closing the window hides it when a tray is available; otherwise the normal close behavior applies. |
 | `showBrowserDuringTurns` | `true` | Shows the browser when an automatic task starts. Manual turns show their browser independently of this preference. |
 | `sidebarOpen` / `sidebarWidth` | `true` / `252` | Saved sidebar layout. Width is constrained to `240`–`420`. |
+
+Both **Preferences** and **Runtime parameters** allow editing, saving and available default restoration without a valid license. Language and window/startup preferences take effect immediately. Conversation and execution settings are stored separately in `pendingSettings` while unlicensed or not configured; active runtime values stay unchanged. After activation and connection setup, use **Apply saved settings** while tasks are idle. Successfully applied items are cleared; failures retain the remaining items for retry. Context-budget application still requires restarting the corresponding Codex. Mode/platform restrictions, validation and revision checks remain in force. Connection application, service startup and new tasks still require activation.
 
 Setup completion, catalog verification, browser checks and restart indicators are launcher-maintained status fields. They are not configuration shortcuts to mark a failed check as passed.
 
@@ -282,7 +284,7 @@ GPT-5.6 Sol and GPT-6 provide Fast, Medium, High and Extra High subject to the a
 
 Catalog gating records general Sol/Extra High/Pro capability, not a separate availability flag for every model family. Before submitting a named automatic route, the adapter selects and verifies both the browser family and effort. A generic Pro label alone is insufficient. Failure to verify the requested family produces `model_version_unavailable` and leaves the pending message unsent; the adapter does not silently substitute another family.
 
-`browser.model_verification_failed` distinguishes observation failure from selection mismatch. It records the requested family/effort, radio count and checked state, numeric slider position/target, and description-match predicates without retaining picker text. A matching slider alone cannot establish the selected model; the same strict checks still apply.
+`browser.model_verification_failed` distinguishes observation failure from selection mismatch. It records the requested family/effort, radio count and checked state, numeric slider position/target, and description-match predicates without retaining picker text. The exact Simplified Chinese labels `即时`, `中`, `高` and `极高` are recognized as Instant (`low`), Medium (`medium`), High (`high`) and Extra High (`xhigh`) in both slider announcements and active headers, including mixed English/Chinese observations. The existing `Pro` (`max`) label remains supported. Unknown or conflicting descriptions still fail verification. A matching slider alone cannot establish the selected model; the same strict checks still apply.
 
 Failure correlation uses independent WebSocket, HTTP and physical-attempt IDs plus hashed task/turn references. Helper IPC carries only validated correlation and interruption references; `helperRequestId` is separate from HTTP `requestId`. `firstEventId` identifies the first locally observed interruption, not a proven external root cause. Model verification retains up to 32 distinct structural observations. The desktop failure recorder retains up to 32 histories of 48 records / 32 KiB, with 30-minute idle expiry and explicit loss counts; its snapshots use normal managed log retention and diagnostics export. See [fault diagnosis and coverage](troubleshooting.md#support-report).
 

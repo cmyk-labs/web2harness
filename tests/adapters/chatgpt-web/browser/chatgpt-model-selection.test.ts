@@ -163,3 +163,48 @@ test("family confirmation rejects a stale effort and accepts identical split-hea
   expect(chatGptModelFamilyMatches(["6 Astra 5.6 Pro"], "6", "max")).toBe(false);
   expect(chatGptModelFamilyMatches(["６ Sol\u200b High，3 of 5."], "6", "high")).toBe(true);
 });
+
+test("the retained Simplified Chinese Extra High descriptions verify the exact requested family and effort", () => {
+  // Both v2.5.5 failures retained this complete aria/status/header sample.
+  const descriptions = ["6 极高，第 4 项，共 5 项。", "使用左右方向键调整强度", "6 极高"];
+  expect(chatGptModelFamilyMatches(descriptions, "6", "xhigh")).toBe(true);
+  expect(chatGptModelFamilyMatches(descriptions, "5.6", "xhigh")).toBe(false);
+  for (const effort of ["low", "medium", "high", "max"] as const) {
+    expect(chatGptModelFamilyMatches(descriptions, "6", effort)).toBe(false);
+  }
+  expect(chatGptModelFamilyMatches(["GPT-6 Sol 极高", "6 Extra High"], "6", "xhigh")).toBe(true);
+  expect(chatGptModelFamilyMatches(["5.6 Sol 极高"], "5.6", "xhigh")).toBe(true);
+  expect(chatGptModelFamilyMatches(["6 Astra 极高"], "6", "xhigh")).toBe(false);
+});
+
+test("localized Extra High never hides conflicting, unknown or misleading descriptions", () => {
+  for (const descriptions of [
+    ["6 极高", "6 High"], ["6 Extra High", "6 高"], ["6 极高", "5.6 Extra High"],
+    ["6 极高", "6 未知"], ["6 极高", "6 Astra Extra High"], ["6 极高", "6 Pro"],
+    ["6 极高强度"], ["6 建议使用极高"], ["6 极高 High"], ["极高"],
+  ]) expect(chatGptModelFamilyMatches(descriptions, "6", "xhigh")).toBe(false);
+});
+
+test.each([
+  ["即时", "Instant", "low"], ["中", "Medium", "medium"],
+  ["高", "High", "high"], ["极高", "Extra High", "xhigh"],
+] as const)("Chinese %s verifies only its requested family and effort alongside English %s", (label, english, effort) => {
+  for (const family of ["5.6", "6"] as const) {
+    const descriptions = [`${family} ${label}，第 3 项，共 5 项。`, "使用左右方向键调整强度", `GPT-${family} Sol ${label}`];
+    expect(chatGptModelFamilyMatches(descriptions, family, effort)).toBe(true);
+    expect(chatGptModelFamilyMatches([...descriptions, `${family} ${english}`], family, effort)).toBe(true);
+    expect(chatGptModelFamilyMatches([`${family} ${english}`, `${family} ${label}`], family, effort)).toBe(true);
+    expect(chatGptModelFamilyMatches([`${family} Sol ${family} ${label}`], family, effort)).toBe(true);
+    expect(chatGptModelFamilyMatches(descriptions, family === "6" ? "5.6" : "6", effort)).toBe(false);
+    expect(chatGptModelFamilyMatches([`${family} Astra ${label}`], family, effort)).toBe(false);
+    for (const other of ["low", "medium", "high", "xhigh", "max"] as const) {
+      if (other !== effort) expect(chatGptModelFamilyMatches(descriptions, family, other)).toBe(false);
+    }
+    for (const other of ["即时", "中", "高", "极高", "Pro"]) {
+      if (other !== label) expect(chatGptModelFamilyMatches([...descriptions, `${family} ${other}`], family, effort)).toBe(false);
+    }
+    for (const unknown of ["未知", `${label}强度`, `建议使用${label}`, `${label} High`, "constructor"]) {
+      expect(chatGptModelFamilyMatches([...descriptions, `${family} ${unknown}`], family, effort)).toBe(false);
+    }
+  }
+});

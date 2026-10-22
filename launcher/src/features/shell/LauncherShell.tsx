@@ -98,7 +98,7 @@ export function LauncherShell({
     if (!transaction || navigationSaving.current || guard?.busy) return;
     let allowed = action === "discard";
     if (action === "save") {
-      if (!guard?.canSave || !licensed) return;
+      if (!guard?.canSave) return;
       navigationSaving.current = true; setSavingNavigation(true);
       try { allowed = await guard.save(); }
       catch (error) { setError(messageOf(error)); }
@@ -380,7 +380,7 @@ export function LauncherShell({
       </AnimatePresence>
       {pendingNavigation && <UnsavedChangesDialog language={language}
         busy={savingNavigation || navigationGuard.current?.busy === true}
-        canSave={licensed && navigationGuard.current?.canSave === true}
+        canSave={navigationGuard.current?.canSave === true}
         onSave={() => { void resolveNavigation("save"); }}
         onDiscard={() => { void resolveNavigation("discard"); }}
         onContinue={() => { void resolveNavigation("continue"); }} />}

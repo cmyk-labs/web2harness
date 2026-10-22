@@ -1,6 +1,6 @@
 import { ServerSentEventDecoder } from "./sse-decoder";
 import { ChatGptResponseEvidence, type ChatGptResponseEvidenceLimits } from "./response-evidence";
-import { ChatGptDeltaCursor, patchResponseValue } from "./response-protocol";
+import { ChatGptDeltaCursor, patchResponseValue, isValuelessResponseRemoval } from "./response-protocol";
 import { responseContent } from "./response-content";
 import { responseCandidateDiagnostics } from "./response-candidate-diagnostics";
 
@@ -275,7 +275,7 @@ export class ChatGptResponseSource {
       && (value.input_message?.id !== this.binding.userMessageId || value.input_message?.author?.role !== "user")) {
       throw new Error("response_identity_mismatch");
     }
-    if (Object.hasOwn(value, "v")) {
+    if (Object.hasOwn(value, "v") || isValuelessResponseRemoval(value)) {
       if (typeof value.p === "string") this.observedPath = value.p;
       if (typeof value.o === "string") this.observedOperation = value.o;
       this.observePatchBoundary(this.observedPath, this.observedOperation, value.v, 0);
@@ -323,7 +323,7 @@ export class ChatGptResponseSource {
       this.inputSeen = true; return;
     }
     if (value.message) { this.readMessage(value.message); return; }
-    if (Object.hasOwn(value, "v")) {
+    if (Object.hasOwn(value, "v") || isValuelessResponseRemoval(value)) {
       this.apply(this.cursor.path, this.cursor.operation, value.v, 0); return;
     }
     throw new Error("response_event_unsupported");

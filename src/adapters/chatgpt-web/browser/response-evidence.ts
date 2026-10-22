@@ -1,5 +1,5 @@
 import type { ChatGptResponseBinding } from "./response-source";
-import { ChatGptDeltaCursor } from "./response-protocol";
+import { ChatGptDeltaCursor, isResponseMetadataRemoval, isValuelessResponseRemoval } from "./response-protocol";
 
 export interface ChatGptResponseEvidenceLimits { maxBytes?: number; maxEvents?: number }
 type ResponseEvidenceEvent = "message" | "delta_encoding" | "delta";
@@ -84,8 +84,8 @@ export class ChatGptResponseEvidence {
         try { v = JSON.parse(data); } catch { shape = "malformed"; throw Error(); }
         if (v === "v1" && event !== "delta") { shape = "encoding"; safe = data; }
         else if (object(v) && event !== "delta_encoding") {
-          if (event === "delta" && !Object.hasOwn(v, "v")) throw Error();
-          shape = v.message || v.type === "input_message" ? "message" : Object.hasOwn(v, "v") ? "patch" : "control";
+          if (event === "delta" && !Object.hasOwn(v, "v") && !isValuelessResponseRemoval(v)) throw Error();
+          shape = v.message || v.type === "input_message" ? "message" : Object.hasOwn(v, "v") || isValuelessResponseRemoval(v) ? "patch" : "control";
           const projected = this.frame(v, owners);
           safe = JSON.stringify(v) === JSON.stringify(projected) ? data : JSON.stringify(projected);
         } else throw Error();
@@ -226,7 +226,7 @@ export class ChatGptResponseEvidence {
       return out;
     }
     if (v.message) return this.envelope(v, owners);
-    if (!Object.hasOwn(v, "v")) throw Error();
+    if (!Object.hasOwn(v, "v") && !isValuelessResponseRemoval(v)) throw Error();
     const value = this.patch(this.#cursor.path, this.#cursor.operation, v.v, owners, 0);
     for (const key of Object.keys(v)) {
       if (key === "p" || key === "o" || key === "c") out[key] = v[key];
@@ -259,6 +259,10 @@ export class ChatGptResponseEvidence {
     if (path === "/conversation_id") return id(value);
     const m = this.#current;
     if (!m) throw Error();
+    if (isResponseMetadataRemoval(path, operation)) {
+      if (path === "/message/metadata/content_references") { m.codeReferences = new Set(); m.referenceCount = 0; }
+      return undefined;
+    }
     if (["/message/update_time", "/message/create_time", "/message/weight"].includes(path)) {
       if (value !== null && (typeof value !== "number" || !Number.isFinite(value))) throw Error();
       return value;

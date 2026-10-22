@@ -3,12 +3,12 @@ const assert = require("node:assert/strict");
 const { guardLicensedIpc } = require("../../electron/license-access.cjs");
 const { BrowserControlServer } = require("../../electron/control-server.cjs");
 
-test("direct IPC cannot start or configure features without a current valid license", async () => {
+test("direct IPC cannot start or apply runtime features without a current valid license", async () => {
   let state = "active", effects = 0, checks = 0;
   const controller = { async assertActive() { checks++; if (state !== "active") throw new Error(`license: ${state}`); } };
   const actions = ["setup-core", "setup-mcp", "complete-onboarding", "browser-show", "browser-login", "browser-authentication",
-    "browser-navigate", "browser-input-override", "browser-smoke", "tool-mode", "skill-attachments", "fresh-conversation-per-turn",
-    "use-saved-chats", "zero-risk-pro", "autostart", "manual-prompt-sent", "limits-setup", "future-feature"];
+    "browser-navigate", "browser-input-override", "browser-smoke", "tool-mode", "apply-pending-settings",
+    "zero-risk-pro", "manual-prompt-sent", "limits-setup", "future-feature"];
   for (const action of actions) {
     const execute = guardLicensedIpc(controller, `launcher:${action}`, () => ++effects);
     for (state of ["missing", "invalid", "wrong-device", "expired", "clock-error"]) {

@@ -122,7 +122,7 @@ export function WorkspaceSidebar({
         <button
           type="button"
           className="language-toggle"
-          disabled={changingLanguage || !licensed}
+          disabled={changingLanguage}
           aria-label={t("切换为英文", "Switch to Chinese")}
           title={t("切换为英文", "Switch to Chinese")}
           onClick={() =>

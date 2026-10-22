@@ -8,22 +8,24 @@ import { translate } from "../labels";
 import { workspaceBusy } from "../status";
 import type { WorkspaceProps } from "../types";
 import { useFeedback } from "../useFeedback";
+import { settingsForEditing } from "../settings";
+import { PendingSettings } from "../PendingSettings";
 
 export function Preferences(p: WorkspaceProps) {
   const { api, snapshot, updateState, setError, refresh, browser, operation } =
     p;
   const { active: licensed } = useLicense();
+  const settings = settingsForEditing(snapshot.state);
   const t = translate(snapshot.state.language ?? "en"),
     copy = copyFor(snapshot.state.language ?? "en");
   const [working, setWorking] = useState(false),
     [message, setMessage, dismissMessage] = useFeedback();
   const busy =
-      !licensed || snapshot.startup.status !== "ready" ||
-      working ||
-      workspaceBusy(browser, operation),
+      working,
     manual = snapshot.state.browserInteractionMode === "manual",
-    configured = snapshot.state.coreSetupComplete === true;
-  const run = async (action: () => Promise<LauncherState | void>) => {
+    runtimeBusy = licensed && snapshot.startup.status === "ready" && snapshot.state.coreSetupComplete === true
+      && !Object.keys(snapshot.state.pendingSettings ?? {}).length && workspaceBusy(browser, operation);
+  const run = async (action: () => Promise<LauncherState | void>, runtime = false) => {
     if (busy) return;
     setWorking(true);
     setError(null);
@@ -32,7 +34,8 @@ export function Preferences(p: WorkspaceProps) {
       const state = await action();
       if (state) updateState(state);
       await refresh();
-      setMessage(t("偏好已更新", "Preferences updated"));
+      setMessage(runtime && state && Object.keys(state.pendingSettings ?? {}).length
+        ? t("偏好已保存，待应用。", "Preferences saved; waiting to be applied.") : t("偏好已更新", "Preferences updated"));
     } catch (error) {
       setError(String(error));
     } finally {
@@ -59,6 +62,7 @@ export function Preferences(p: WorkspaceProps) {
           "Make conversations and the window work your way.",
         )}
       />
+      <PendingSettings p={p} disabled={working} />
       <Section title={t("聊天行为", "Conversation behavior")} />
       <div className="panel">
         <Row
@@ -74,14 +78,14 @@ export function Preferences(p: WorkspaceProps) {
         >
           <Segment
             label={t("会话复用", "Conversation reuse")}
-            value={!snapshot.state.experimentalFreshConversationPerTurn}
-            disabled={busy || manual || !configured}
+            value={!settings.experimentalFreshConversationPerTurn}
+            disabled={busy || manual || runtimeBusy}
             options={[
               { value: true, label: t("继续已有聊天", "Reuse conversation") },
               { value: false, label: t("每轮新建", "New each turn") },
             ]}
             onChange={(value) =>
-              void run(() => api.setFreshConversationPerTurn(!value))
+              void run(() => api.setFreshConversationPerTurn(!value), true)
             }
           />
         </Row>
@@ -94,48 +98,48 @@ export function Preferences(p: WorkspaceProps) {
         >
           <Segment
             label={t("聊天记录", "Chat history")}
-            value={snapshot.state.useSavedChats}
-            disabled={busy || !configured}
+            value={settings.useSavedChats}
+            disabled={busy || runtimeBusy}
             options={[
               { value: false, label: t("临时聊天", "Temporary") },
               { value: true, label: t("保存到历史", "Save to history") },
             ]}
-            onChange={(value) => void run(() => api.setUseSavedChats(value))}
+            onChange={(value) => void run(() => api.setUseSavedChats(value), true)}
           />
         </Row>
       </div>
       <Section title={t("窗口与启动", "Window & startup")} />
       <div className="panel">
         <Row
-          title={t("关闭窗口后继续运行", "Keep running after closing")}
+          title={t("关闭窗口后在后台运行", "Keep running in the background after closing")}
           description={
             snapshot.profile === "development"
               ? copy.devKeepRunningBody
               : t(
-                  "关闭窗口后保留后台服务。",
-                  "Keep the background service running when the window closes.",
+                  "有系统托盘时，关闭窗口后程序继续在后台运行；关闭此选项则退出程序。",
+                  "When a system tray is available, closing the window keeps the app running in the background. Turn this off to quit when closing.",
                 )
           }
         >
           {toggle(
             "keepRunningOnClose",
-            t("关闭窗口后继续运行", "Keep running after closing"),
+            t("关闭窗口后在后台运行", "Keep running in the background after closing"),
           )}
         </Row>
         <Row
-          title={t("任务开始时显示浏览器", "Show browser when a task starts")}
+          title={t("自动任务开始时显示内置浏览器", "Show the built-in browser when an automatic task starts")}
           description={t(
-            "方便查看浏览器中的当前操作。",
-            "Follow the current browser activity.",
+            "自动任务开始时显示内置 ChatGPT 页面；关闭只取消自动显示，任务仍会执行。手动模式始终显示。",
+            "Show the built-in ChatGPT page for automatic tasks. Turning this off only stops automatic display. Manual tasks always show it.",
           )}
         >
           {toggle(
             "showBrowserDuringTurns",
-            t("任务开始时显示浏览器", "Show browser when a task starts"),
+            t("自动任务开始时显示内置浏览器", "Show the built-in browser when an automatic task starts"),
           )}
         </Row>
         <Row
-          title={t("登录系统时启动", "Launch at sign-in")}
+          title={t("开机启动（登录后）", "Start automatically at sign-in")}
           description={
             snapshot.profile === "development"
               ? t(
@@ -143,13 +147,13 @@ export function Preferences(p: WorkspaceProps) {
                   "DEV starts explicitly from the repository; this option is unavailable.",
                 )
               : t(
-                  "启动后保持上次的工具模式。",
-                  "Keep the previously selected tool mode.",
+                  "登录电脑账户后，在后台启动 Web2Harness；执行任务仍需要有效授权。",
+                  "Start Web2Harness in the background when you sign in to your computer. Tasks still require a valid license.",
                 )
           }
         >
           <Toggle
-            label={t("登录系统时启动", "Launch at sign-in")}
+            label={t("开机启动（登录后）", "Start automatically at sign-in")}
             value={snapshot.state.autoStart}
             disabled={busy || snapshot.profile === "development"}
             onChange={(value) =>
@@ -180,9 +184,9 @@ export function Preferences(p: WorkspaceProps) {
         >
           <Toggle
             label={copy.contextFiles}
-            value={snapshot.state.experimentalContextFiles}
-            disabled={busy || manual || !configured}
-            onChange={(value) => void run(() => api.setContextFiles(value))}
+            value={settings.experimentalContextFiles}
+            disabled={busy || manual || runtimeBusy}
+            onChange={(value) => void run(() => api.setContextFiles(value), true)}
           />
         </Row>
         <p className="muted">{t("上下文窗口和标准／三倍预算请在“运行参数”中设置。", "Configure context windows and standard/triple budgets in Runtime parameters.")}</p>
@@ -196,9 +200,9 @@ export function Preferences(p: WorkspaceProps) {
         >
           <Toggle
             label={copy.skillAttachments}
-            value={snapshot.state.experimentalSkillAttachments}
-            disabled={busy || manual || !configured}
-            onChange={(value) => void run(() => api.setSkillAttachments(value))}
+            value={settings.experimentalSkillAttachments}
+            disabled={busy || manual || runtimeBusy}
+            onChange={(value) => void run(() => api.setSkillAttachments(value), true)}
           />
         </Row>
       </details>

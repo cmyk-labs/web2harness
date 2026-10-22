@@ -10,11 +10,14 @@ import { workspaceBusy } from "../status";
 import { translate } from "../labels";
 import type { WorkspaceProps } from "../types";
 import "./queue.css";
+import { settingsForEditing } from "../settings";
+import { PendingSettings } from "../PendingSettings";
 import { usePageNavigationGuard } from "../../shell/PageNavigationGuard";
 
 type Draft = RequestSchedulingSettings & { runtimeParameters: ExecutionParameters; tripleBudget: boolean };
 const defaults: Draft = { ...parameterOptions.requestScheduling.defaults, runtimeParameters: parameterOptions.defaults, tripleBudget: false };
-function stateDraft(state: LauncherState): Draft {
+function stateDraft(raw: LauncherState): Draft {
+  const state = settingsForEditing(raw);
   return { ...(state.requestScheduling ?? defaults), runtimeParameters: state.runtimeParameters ?? parameterOptions.defaults,
     tripleBudget: state.experimentalContextTripleBudget };
 }
@@ -48,7 +51,9 @@ function loadDraft(settings: Draft, revision: number) {
   } catch { /* Storage may be unavailable; in-memory navigation protection still applies. */ }
   return { baseline: settings, draft: settings, revision, parameterEdits: {} as RuntimeParameterEdits };
 }
-export function RuntimeParameters({ api, snapshot, updateState, browser, operation }: WorkspaceProps) {
+export function RuntimeParameters(p: WorkspaceProps) {
+  const { api, snapshot, updateState, browser, operation } = p;
+  const settings = settingsForEditing(snapshot.state);
   const t = translate(snapshot.state.language ?? "en");
   const { active: licensed } = useLicense();
   const [initial] = useState(() => loadDraft(stateDraft(snapshot.state), snapshot.state.requestSchedulingRevision));
@@ -68,7 +73,8 @@ export function RuntimeParameters({ api, snapshot, updateState, browser, operati
     return () => { disposed = true; };
   }, [api]);
   const budgetChanged = draft.tripleBudget !== baseline.settings.tripleBudget;
-  const contextBusy = !snapshot.state.coreSetupComplete || snapshot.startup.status !== "ready" || workspaceBusy(browser, operation);
+  const contextBusy = licensed && snapshot.state.coreSetupComplete === true && snapshot.startup.status === "ready"
+    && !Object.keys(snapshot.state.pendingSettings ?? {}).length && workspaceBusy(browser, operation);
   const changed = JSON.stringify(draft) !== JSON.stringify(baseline.settings) || Object.keys(parameterEdits).length > 0 || budgetChanged;
   useEffect(() => {
     try {
@@ -78,7 +84,7 @@ export function RuntimeParameters({ api, snapshot, updateState, browser, operati
   }, [draft, baseline, changed, parameterEdits]);
   useEffect(() => {
     if (!changed && !working && (baseline.revision !== snapshot.state.requestSchedulingRevision
-      || baseline.settings.tripleBudget !== snapshot.state.experimentalContextTripleBudget)) {
+      || baseline.settings.tripleBudget !== settings.experimentalContextTripleBudget)) {
       setDraft(stateDraft(snapshot.state));
       setBaseline({ settings: stateDraft(snapshot.state), revision: snapshot.state.requestSchedulingRevision });
     }
@@ -86,20 +92,20 @@ export function RuntimeParameters({ api, snapshot, updateState, browser, operati
   const valid = Number.isInteger(draft.minSendIntervalSeconds) && draft.minSendIntervalSeconds >= 1 && draft.minSendIntervalSeconds <= 60 && validParameters(draft.runtimeParameters)
     && typeof draft.tripleBudget === "boolean";
   async function save() {
-    if (!licensed || saving.current || !changed || !valid || (budgetChanged && contextBusy)) return false;
+    if (saving.current || !changed || !valid || (budgetChanged && contextBusy)) return false;
     saving.current = true;
     setWorking(true); setFeedback(""); setFailed(false);
     try {
       const { runtimeParameters, tripleBudget, ...scheduling } = draft;
       if (budgetChanged && (baseline.revision !== snapshot.state.requestSchedulingRevision
-        || baseline.settings.tripleBudget !== snapshot.state.experimentalContextTripleBudget)) {
+        || baseline.settings.tripleBudget !== settings.experimentalContextTripleBudget)) {
         throw new Error(t("设置已在其他位置修改，请放弃草稿后重新编辑。", "Settings changed elsewhere. Discard the draft and edit again."));
       }
       if (budgetChanged) {
         const state = await api.setContextBudget(tripleBudget);
         updateState(state);
         // Preserve successful budget persistence if the subsequent scheduling save fails.
-        setBaseline(value => ({ ...value, settings: { ...value.settings, tripleBudget: state.experimentalContextTripleBudget } }));
+        setBaseline(value => ({ ...value, settings: { ...value.settings, tripleBudget: settingsForEditing(state).experimentalContextTripleBudget } }));
       }
       const result = await api.saveQueueSettings(scheduling, baseline.revision, runtimeParameters, parameterEdits);
       updateState(result.state);
@@ -110,6 +116,7 @@ export function RuntimeParameters({ api, snapshot, updateState, browser, operati
       setFeedback(result.applyState === "applied" ? budgetChanged
         ? { zh: "已保存。请重启对应 Codex，使上下文容量和压缩阈值生效。", en: "Saved. Restart the corresponding Codex to load the context windows and compaction thresholds." }
         : { zh: "已保存并生效", en: "Saved and applied" }
+        : result.applyState === "pending-activation" ? { zh: "已保存，尚未应用。请使用上方的应用按钮。", en: "Saved but not applied. Use the apply button above." }
         : result.applyState === "pending-start" ? { zh: "已保存，服务启动后生效", en: "Saved; applies when the service starts" }
         : { zh: "设置已保存，但运行时应用未完成。请检查运行状态，重启服务后生效。", en: "Settings saved, but runtime application did not complete. Check runtime status; settings apply after the service restarts." });
       // Show a failed-apply result on this page before allowing another navigation.
@@ -117,7 +124,7 @@ export function RuntimeParameters({ api, snapshot, updateState, browser, operati
     } catch (error) { setFeedback(String(error)); setFailed(true); return false; }
     finally { saving.current = false; setWorking(false); }
   }
-  usePageNavigationGuard({ dirty: changed, canSave: licensed && valid && changed && !(budgetChanged && contextBusy), busy: working, save,
+  usePageNavigationGuard({ dirty: changed, canSave: valid && changed && !(budgetChanged && contextBusy), busy: working, save,
     discard: () => {
       setDraft(stateDraft(snapshot.state));
       setParameterEdits({});
@@ -126,7 +133,7 @@ export function RuntimeParameters({ api, snapshot, updateState, browser, operati
     } });
   const parameter = (key: keyof ExecutionParameters, title: string, description: string, unit: string) => (
     <Row key={key} title={title} description={description}>
-      <select aria-label={title} disabled={!licensed || working} value={draft.runtimeParameters[key]}
+      <select aria-label={title} disabled={working} value={draft.runtimeParameters[key]}
         onChange={event => {
           setDraft({ ...draft, runtimeParameters: { ...draft.runtimeParameters, [key]: Number(event.target.value) } });
           setParameterEdits({ ...parameterEdits, [key]: "user" });
@@ -149,20 +156,21 @@ export function RuntimeParameters({ api, snapshot, updateState, browser, operati
   };
   return <>
     <PageIntro title={t("运行参数", "Runtime parameters")} subtitle={t("设置所有会话共享的运行参数。", "Configure runtime parameters shared by all sessions.")} />
+    <PendingSettings p={p} disabled={working || changed} />
     <form className="panel queue-settings" onSubmit={event => { event.preventDefault(); void save(); }}>
       <Section title={t("请求调度", "Request scheduling")} />
       <Row title={t("Web 同时执行数", "Concurrent Web turns")} description={t("所有会话共享，超出后排队。", "Shared by all sessions. Additional requests wait in the queue.")}>
-        <select aria-label={t("Web 同时执行数", "Concurrent Web turns")} disabled={!licensed || working} value={draft.maxConcurrent} onChange={event => setDraft({ ...draft, maxConcurrent: Number(event.target.value) })}>
+        <select aria-label={t("Web 同时执行数", "Concurrent Web turns")} disabled={working} value={draft.maxConcurrent} onChange={event => setDraft({ ...draft, maxConcurrent: Number(event.target.value) })}>
           {[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value}</option>)}
         </select>
       </Row>
       <Row title={t("排队超时", "Queue timeout")} description={t("超过期限仍未开始的请求将结束。", "Requests expire if they have not started by this deadline.")}>
-        <select aria-label={t("排队超时", "Queue timeout")} disabled={!licensed || working} value={draft.queueTimeoutMinutes} onChange={event => setDraft({ ...draft, queueTimeoutMinutes: Number(event.target.value) })}>
+        <select aria-label={t("排队超时", "Queue timeout")} disabled={working} value={draft.queueTimeoutMinutes} onChange={event => setDraft({ ...draft, queueTimeoutMinutes: Number(event.target.value) })}>
           {[5, 10, 15, 30, 60].map(value => <option key={value} value={value}>{value} {t("分钟", "minutes")}</option>)}
         </select>
       </Row>
       <Row title={t("最小发送间隔", "Minimum send interval")} description={t("自动发送的最短间隔；手动点击不受此项限制。", "Minimum interval between automatic sends; manual clicks are not controlled.")}>
-        <div className="queue-number"><input type="number" min={1} max={60} step={1} aria-label={t("最小发送间隔", "Minimum send interval")} disabled={!licensed || working} value={Number.isNaN(draft.minSendIntervalSeconds) ? "" : draft.minSendIntervalSeconds} onChange={event => setDraft({ ...draft, minSendIntervalSeconds: event.target.valueAsNumber })} /><span>{t("秒", "seconds")}</span></div>
+        <div className="queue-number"><input type="number" min={1} max={60} step={1} aria-label={t("最小发送间隔", "Minimum send interval")} disabled={working} value={Number.isNaN(draft.minSendIntervalSeconds) ? "" : draft.minSendIntervalSeconds} onChange={event => setDraft({ ...draft, minSendIntervalSeconds: event.target.valueAsNumber })} /><span>{t("秒", "seconds")}</span></div>
       </Row>
       <Section title={t("标签页自动回收", "Automatic tab cleanup")} />
       {parameter("retainedTabTarget", t("标签页保留数量", "Tab retention target"), t("达到目标后，新任务优先回收旧的空闲标签；执行中或等待工具结果的页面受保护，实际数量可能超过目标。", "New tasks reclaim older idle tabs at this target. Running tabs and tabs awaiting tool results are protected, so the actual count may be higher."), t("个", "tabs"))}
@@ -182,7 +190,7 @@ export function RuntimeParameters({ api, snapshot, updateState, browser, operati
         <Section title={t("上下文预算", "Context budget")} />
         <div className="context-budget-mode">
           <Segment label={t("上下文预算", "Context budget")} value={draft.tripleBudget}
-            disabled={!licensed || working || !snapshot.state.experimentalContextFiles || snapshot.state.browserInteractionMode === "manual"}
+            disabled={working || !settings.experimentalContextFiles || snapshot.state.browserInteractionMode === "manual"}
             options={[{ value: false, label: t("标准预算", "Standard budget") }, { value: true, label: t("三倍预算（实验性）", "Triple budget (experimental)") }]}
             onChange={value => setDraft({ ...draft, tripleBudget: value })} />
         </div>
@@ -200,13 +208,13 @@ export function RuntimeParameters({ api, snapshot, updateState, browser, operati
         <div className="context-budget-notes muted">
           <p id="context-budget-unit">1k = 1,000 tokens</p>
           <p>{t("可用容量：95%；自动压缩阈值：90%。三倍预算按标准窗口×3计算。", "Usable capacity: 95%; auto-compaction threshold: 90%. Triple budget uses the standard window ×3.")}</p>
-          <p>{t("请在任务空闲时保存，保存后重启对应 Codex。", "Save while tasks are idle, then restart the corresponding Codex.")}</p>
+          <p>{t("应用上下文预算需要任务空闲；生效后请重启对应 Codex。", "Apply context budgets while tasks are idle, then restart the corresponding Codex.")}</p>
         </div>
       </div>
       <div className="queue-settings-footer">
         <p className="muted">{t("修改不打断已有任务。执行等待用于新请求，保留时间用于下一次进入空闲的标签；排队超时仅用于新入队请求。", "Changes do not interrupt running tasks. Execution waits apply to new requests, retention to newly idle tabs, and queue timeout to newly queued requests.")}</p>
-        <div className="queue-actions"><Button type="submit" disabled={!licensed || working || !changed || !valid || (budgetChanged && contextBusy)}>{working ? t("保存中…", "Saving…") : t("保存设置", "Save settings")}</Button>
-          <Button type="button" disabled={!licensed || working} onClick={() => {
+        <div className="queue-actions"><Button type="submit" disabled={working || !changed || !valid || (budgetChanged && contextBusy)}>{working ? t("保存中…", "Saving…") : t("保存设置", "Save settings")}</Button>
+          <Button type="button" disabled={working} onClick={() => {
             setDraft({ ...defaults });
             setParameterEdits(Object.fromEntries(Object.keys(parameterOptions.defaults).map(key => [key, "default"])));
             setFeedback({ zh: "已恢复默认值，保存后生效", en: "Defaults restored; save to apply" }); setFailed(false);

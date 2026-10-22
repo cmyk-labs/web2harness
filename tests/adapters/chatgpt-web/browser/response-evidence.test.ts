@@ -55,6 +55,20 @@ test("non-public text ancestors and patches replay without retaining their bodie
   }
 });
 
+test("known valueless removals retain exact delta framing for diagnostic replay", () => {
+  for (const key of ["citations", "content_references", "is_complete", "finish_details", "model_dil_v2"]) {
+    const remove = { p: `/message/metadata/${key}`, o: "remove" };
+    const source = captureNamed([...namedFrames(frames().slice(0, -3)), { event: "delta", value: remove }, ...namedFrames(tail)]);
+    expect(source.result()).toMatchObject({ state: "complete" });
+    const artifact = source.takeEvidence()!;
+    expect(artifact.records.find(r => r.data === JSON.stringify(remove))).toMatchObject({ kind: "original", shape: "patch", event: "delta" });
+    expect(replayChatGptResponseEvidence(artifact)).toMatchObject({ state: "replayed", result: source.result() });
+  }
+  const unknown = captureNamed([{ event: "delta", value: { p: "/message/metadata/SECRET_UNKNOWN", o: "remove" } }]).takeEvidence()!;
+  expect(unknown.records[0]).toMatchObject({ kind: "withheld" });
+  expect(JSON.stringify(unknown)).not.toContain("SECRET");
+});
+
 test("opt-in original event data replays exact tables, code and repetition at arbitrary UTF-8 boundaries", () => {
   for (const size of [1, 2, 17, 65536]) {
     const source = capture(frames(), true, size), result = source.result(), artifact = source.takeEvidence()!;

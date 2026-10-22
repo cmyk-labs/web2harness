@@ -52,6 +52,21 @@ const state = (page: Page): Promise<any> => page.evaluate(() => ({
   text: document.querySelector("#prompt-textarea")?.textContent,
 }));
 
+test.skipIf(!executable)("visible cards remain identifiable when their remove control is hidden until hover", async () => {
+  await fixture(async page => {
+    await page.evaluate(() => {
+      (window as any).mode = "hidden-remove";
+      const style = document.createElement("style");
+      style.textContent = '[class~="group/composer-attachment"] button[aria-label^="移除 "] {visibility:hidden} [class~="group/composer-attachment"]:hover button {visibility:visible}';
+      document.head.append(style);
+    });
+    await attachChatGptFilesWithRetry(page, page.locator("form"), [files[0]!], AbortSignal.timeout(5000), 3000, async () => {});
+    expect(await chatGptAttachmentCard(page, page.locator("form"), files[0]!.name).count()).toBe(1);
+    expect((await state(page)).uploads).toHaveLength(1);
+    expect((await state(page)).sends).toBe(0);
+  });
+}, 10_000);
+
 test.skipIf(!executable)("attachment lookup uses the outer card while preserving legacy surfaces and real duplicates", async () => {
   await fixture(async page => {
     const form = page.locator("form"), name = files[1]!.name;
