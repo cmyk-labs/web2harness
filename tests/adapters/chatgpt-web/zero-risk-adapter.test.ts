@@ -188,6 +188,8 @@ for (const scenario of [
 ] as const) test(`Zero Risk ${scenario.format} compaction resumes with exact launcher ownership (final wins: ${scenario.finalWins})`, async () => {
   // Real adapter, broker, and launcher lifecycle. Only the Electron view/clipboard and the
   // human/model actions are simulated: a mock start/end that omits tombstones misses #318.
+  // Three serial broker turns plus replay can exceed Bun's default 5s on Windows CI.
+  // Give this integration lifecycle a bounded budget so cleanup finishes before the next case.
   const require = createRequire(import.meta.url);
   const { BrowserHost } = require("../../../launcher/electron/browser/browser-host.cjs");
   const { BrowserControlServer } = require("../../../launcher/electron/control-server.cjs");
@@ -322,7 +324,7 @@ for (const scenario of [
     await broker.close();
     await server.close();
   }
-});
+}, 30_000);
 
 test("Zero Risk adapter never starts the automatic browser worker and completes only through Zero Risk MCP", async () => {
   const config = await provider("complete");

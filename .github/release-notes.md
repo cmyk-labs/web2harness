@@ -12,6 +12,8 @@ Web2Harness 2.5.6（`v2.5.6`）补齐中文模型档位识别，开放未授权�
 
 候选已完成针对性单元、界面及隔离认证DEV验证。新的独立主会话实际委派三个GPT-6（Web）高子agent并自行汇总：70次请求全部原生交付，70次模型档位检查匹配，三份子报告和主报告均完整返回。版本准备仅更改版本与发布元数据，复用该实现的验收证据。完整源码验证、依赖审计、五目标原生构建和新包完整性以对应发布工作流结果为准；跳过与未执行项不计通过。
 
+发布前Windows CI暴露Zero Risk三轮集成用例超过默认5秒时限、收尾影响下一用例的问题；该用例组改用30秒有限测试预算，保留全部断言，产品等待时限和执行行为不变。原失败和后续验证分别保留。
+
 **以下审查问题尚未在本版本修复：** 应用待保存设置时可能与新任务入队交错；热应用失败后持久配置与运行组件可能不一致；响应数组补丁对等于数组长度的删除／替换索引校验不足。前两项为尚待故障注入确认的风险，第三项已由源码复核。请在确认任务空闲、暂停外部新任务提交后应用设置；若显示应用失败，先检查运行状态及诊断，再在空闲时明确重试，不将“保存成功”当作“全部运行组件已应用”。这些操作提示不代表上述风险已经消除。
 
 历史附件超时及不支持响应事件的原始载荷不完整，本次修复针对独立复现的实现缺口，不宣称证明所有历史故障的唯一根因。审核agent的工具查询错误、环境限制及此前验收失败继续留档。本轮没有重新执行MCP／Zero Risk全组合、人工安装／升级／卸载、系统登录自启动或其它操作系统的认证验收；CI包冒烟不替代这些检查。
@@ -33,6 +35,8 @@ Web2Harness 2.5.6 (`v2.5.6`) recognizes Chinese model-effort labels, permits con
 ### Validation scope and known limitations
 
 The candidate completed focused unit, UI and isolated authenticated DEV checks. A new independent main session delegated three GPT-6 (Web) high agents and aggregated their results: all 70 requests were delivered natively, all 70 model/effort checks matched, and all three child reports plus the main report arrived completely. Version preparation changes only version and release metadata and reuses acceptance evidence for the same implementation. Full source verification, dependency audits, five native build targets and new-package integrity are established by the release workflow results; skipped and unexecuted checks are not passes.
+
+Pre-release Windows CI exposed a three-turn Zero Risk integration case exceeding the default five-second test deadline, with its late cleanup affecting the next case. That case group now has a bounded 30-second test budget with every assertion retained; product deadlines and execution behavior are unchanged. The original failures and subsequent validation remain recorded separately.
 
 **Review findings remain unresolved in this version:** applying saved settings may interleave with a newly admitted task; a failed hot application may leave persisted settings and runtime components inconsistent; response-array patch validation permits a remove/replace index equal to the array length. The first two are risks awaiting fault injection; the third was confirmed by source inspection. Apply settings after confirming idle state and pausing external task submissions. If application fails, inspect runtime state and diagnostics before an explicit idle retry; saved settings do not prove every runtime component has applied them. These precautions do not establish that the risks are eliminated.
 
