@@ -27,6 +27,9 @@ try {
   await run(["run", "check-version"]);
   await run(["run", "audit"]);
   await run(["run", "launcher:audit"]);
+  // Electron may download its binary on first import. Complete that dependency
+  // preparation before any test deadline; --prepare starts no app or server.
+  await run(["run", "launcher/scripts/dev.cjs", "--prepare"]);
   await run(["run", "typecheck"]);
   await run(["run", "test"]);
   await run(["run", "launcher:typecheck"]);

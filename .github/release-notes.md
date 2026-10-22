@@ -16,6 +16,8 @@ Web2Harness 2.5.5（`v2.5.5`）改进网页交互恢复、工具交付和并发�
 
 发布准备修复源码指纹对 NSIS 包含文件和打包补丁换行格式的误判，并为多轮上下文恢复集成用例设置明确的有限测试时限，保留全部功能断言。Windows CI 首轮的默认五秒超时失败另行留证。
 
+完整验证先通过现有准备入口确保 Electron 依赖就绪，不启动应用或服务，避免首次导入的二进制下载占用单个测试时限。后续 Windows CI 首次下载触发的测试超时及关联用例失败也保留记录。
+
 历史模型强度 unknown、缺少公开 final、部分点击／附件超时等底层原因仍未全部证实。最新静态审核提出的候选风险未在本次发布准备中逐项动态复现或自动应用；不宣称所有网页问题已根治。维护者已知的人工安装／升级／卸载、系统服务、其他操作系统认证、物理输入和跨 DPI 验收缺口继续保留；CI 包冒烟不能替代这些检查。
 
 遇到问题时记录版本和时间，通过“用量与诊断 → 日志 → 导出诊断包”保留现场。升级不会自动清除未知发送暂停；先在运行控制确认发送状态，再明确恢复，避免盲目重发。MCP v2 工具缺失时刷新并检查连接器目录，不通过改用 v1 工具绕过当前协议。
@@ -39,6 +41,8 @@ Existing isolated authenticated DEV evidence covers Native Tools reads, patches,
 Earlier initial failures, controlled faults, explicit continuation in the same thread and local tool-input errors remain recorded; later success does not overwrite them. Full candidate source verification and dependency audits, five native build targets and new-package integrity are established by the corresponding release checks. Skipped and unexecuted checks are not passes.
 
 Release preparation corrects source fingerprints for line-ending differences in NSIS includes and packaging patches, and gives the multi-turn context-recovery integration case an explicit bounded test timeout while preserving every functional assertion. The first Windows CI failure at the default five-second timeout remains recorded.
+
+Full verification prepares Electron through the existing dependency entry point before tests, without starting an application or server, so a first-import binary download cannot consume an individual test's timeout. The subsequent Windows CI test timeout during that first download and related case failure also remain recorded.
 
 The underlying causes of historical unknown-effort observations, missing public finals and some click/attachment timeouts remain unproven. Candidate risks from the latest static review were not individually reproduced or automatically applied during release preparation; this release does not claim to eliminate every browser issue. Known gaps in manual installation/upgrade/uninstall, system services, authenticated operation on other operating systems, physical input and cross-DPI acceptance remain. CI package smoke does not replace those checks.
 

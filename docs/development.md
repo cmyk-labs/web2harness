@@ -156,9 +156,11 @@ On About, reserve stable scrollbar space so expanding or collapsing **How it wor
 | `bun run build` | Relocatable runtime bundle in `dist/runtime`. |
 | `bun run launcher:build` | Launcher typecheck and renderer build. |
 | `bun run smoke` | Relocated runtime and resource checks using isolated smoke data. |
-| `bun run verify` | Version check, both audits, typechecks, tests, renderer build, temporary runtime build, notices generation, and runtime smoke. |
+| `bun run verify` | Version check, both audits, Electron dependency preparation, typechecks, tests, renderer build, temporary runtime build, notices generation, and runtime smoke. |
 
 `verify` stops at the first failure. If it fails, record the failing stage and explicitly identify later stages that did not run. Run independently useful remaining checks separately when appropriate; do not describe a partial run as a full verification pass. It does not perform all platform packaging or authenticated release gates.
+
+Electron preparation uses `bun run launcher/scripts/dev.cjs --prepare` before test deadlines begin. It may download the pinned dependency on first use, but starts no application, helper, or server. Preparation failure stops verification before tests.
 
 The core command runs `bun test ./tests`, restricting recursive discovery to the maintained core test tree. Desktop tests use `launcher/scripts/test.cjs`, which recursively collects only `.test.cjs` files under `launcher/tests/` and passes that list to Node. These entry points do not scan generated packages, evidence directories, or other source copies. Keep new tests in the matching responsibility group without merging the Bun and Node execution boundaries.
 

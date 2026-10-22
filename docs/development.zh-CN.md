@@ -156,9 +156,11 @@ bun run check-version
 | `bun run build` | 在 `dist/runtime` 构建可迁移运行时包。 |
 | `bun run launcher:build` | 启动器类型检查和渲染器构建。 |
 | `bun run smoke` | 使用独立冒烟数据检查迁移后的运行时和资源。 |
-| `bun run verify` | 版本检查、两处 audit、类型检查、测试、渲染器构建、临时运行时构建、许可声明生成和运行时冒烟。 |
+| `bun run verify` | 版本检查、两处 audit、Electron依赖准备、类型检查、测试、渲染器构建、临时运行时构建、许可声明生成和运行时冒烟。 |
 
 `verify` 在首个失败处停止。失败时记录具体阶段，并明确后续哪些阶段未执行。适当情况下单独执行仍有价值的剩余检查；部分通过不得表述为完整验证通过。该命令不包含全部平台打包与登录态发布门禁。
+
+Electron依赖通过 `bun run launcher/scripts/dev.cjs --prepare` 在测试计时开始前准备。首次使用时可能下载锁定的依赖，但不启动应用、辅助进程或服务；准备失败会在测试前停止验证。
 
 核心命令执行 `bun test ./tests`，递归发现范围限定在持续维护的核心测试树。桌面测试通过 `launcher/scripts/test.cjs`，只递归收集 `launcher/tests/` 下的 `.test.cjs` 文件，再将清单交给 Node。这些入口不扫描生成包、证据目录或其他源码副本。新增测试放入对应职责分组，保留 Bun 与 Node 各自的执行边界。
 
